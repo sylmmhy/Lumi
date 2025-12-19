@@ -26,6 +26,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [offerClaimed, setOfferClaimed] = useState(false); // Used to ensure one-time popup
     const isGuest = !auth?.isLoggedIn;
     
+    // Name editing state
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [nameInput, setNameInput] = useState('');
+    const [isSavingName, setIsSavingName] = useState(false);
+
     // Feedback state
     const [feedbackInput, setFeedbackInput] = useState('');
     const [rating, setRating] = useState<number | null>(null); // 1-5 rating
@@ -58,6 +63,36 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
     const handleAvatarClick = () => {
         setShowAvatarPopup(true);
+    };
+
+    const handleStartEditName = () => {
+        setNameInput(auth?.userName || '');
+        setIsEditingName(true);
+    };
+
+    const handleSaveName = async () => {
+        if (!nameInput.trim()) return;
+
+        setIsSavingName(true);
+        try {
+            const result = await auth?.updateProfile({ name: nameInput.trim() });
+            if (result?.error) {
+                console.error('Error saving name:', result.error);
+                alert('Failed to save name. Please try again.');
+            } else {
+                setIsEditingName(false);
+            }
+        } catch (error) {
+            console.error('Error saving name:', error);
+            alert('Failed to save name. Please try again.');
+        } finally {
+            setIsSavingName(false);
+        }
+    };
+
+    const handleCancelEditName = () => {
+        setIsEditingName(false);
+        setNameInput('');
     };
 
     const handleUploadClick = () => {
@@ -297,10 +332,63 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </button>
                     )}
                 </div>
-                <h2 className="text-2xl font-serif font-bold text-gray-800">
-                    {isGuest ? 'Not logged in' : auth?.userName || auth?.userEmail?.split('@')[0] || '3H'}
-                </h2>
-                <p className="text-gray-500 text-sm">{isGuest ? 'Not logged in' : (auth?.userEmail || 'user@example.com')}</p>
+                {/* Name Display/Edit Section */}
+                {isGuest ? (
+                    <h2 className="text-2xl font-serif font-bold text-gray-800">Not logged in</h2>
+                ) : isEditingName ? (
+                    <div className="flex flex-col items-center gap-2 w-full px-4">
+                        <input
+                            type="text"
+                            value={nameInput}
+                            onChange={(e) => setNameInput(e.target.value)}
+                            placeholder="Enter your name"
+                            className="text-xl font-serif font-bold text-gray-800 text-center bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 w-full max-w-[200px] focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveName();
+                                } else if (e.key === 'Escape') {
+                                    handleCancelEditName();
+                                }
+                            }}
+                        />
+                        <p className="text-xs text-gray-400">Lumi will call you by this name</p>
+                        <div className="flex gap-2 mt-1">
+                            <button
+                                onClick={handleCancelEditName}
+                                className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveName}
+                                disabled={!nameInput.trim() || isSavingName}
+                                className="px-4 py-1 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-darkBlue transition-colors disabled:opacity-50"
+                            >
+                                {isSavingName ? (
+                                    <i className="fa-solid fa-spinner fa-spin"></i>
+                                ) : (
+                                    'Save'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center">
+                        <button
+                            onClick={handleStartEditName}
+                            className="group flex items-center gap-2 hover:bg-gray-50 rounded-lg px-3 py-1 transition-colors"
+                        >
+                            <h2 className="text-2xl font-serif font-bold text-gray-800">
+                                {auth?.userName || auth?.userEmail?.split('@')[0] || 'Set your name'}
+                            </h2>
+                            <i className="fa-solid fa-pen text-xs text-gray-400 group-hover:text-brand-blue transition-colors"></i>
+                        </button>
+                        <p className="text-xs text-gray-400 mt-0.5">Tap to edit name</p>
+                    </div>
+                )}
+                <p className="text-gray-500 text-sm mt-1">{isGuest ? 'Not logged in' : (auth?.userEmail || 'user@example.com')}</p>
                 {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">Premium Active</p>}
             </div>
 

@@ -333,13 +333,13 @@ export function AppTabsPage() {
     const startAICoachForTask = useCallback(async (task: Task) => {
         console.log('🤖 Starting AI Coach session for task:', task.text);
         try {
-            await aiCoach.startSession(task.text);
+            await aiCoach.startSession(task.text, { userName: auth.userName ?? undefined });
             console.log('✅ AI Coach session started successfully');
             setTasks(prev => prev.map(t => t.id === task.id ? { ...t, called: true } : t));
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);
         }
-    }, [aiCoach, setTasks]);
+    }, [aiCoach, setTasks, auth.userName]);
 
     /**
      * 确保首次显示语音/摄像头提示；用户确认后才真正启动 AI 教练。

@@ -7,14 +7,19 @@ const corsHeaders = {
 }
 
 /**
- * System Instruction for AI Companion "Bro"
+ * System Instruction for AI Companion "Lumi"
  *
  * A witty, playful, supportive friend who watches through the camera
  * and helps users complete their 5-minute tasks with warmth and tiny steps.
  */
-function getOnboardingSystemInstruction(taskDescription: string): string {
-  return `You are Bro, helping the user complete this 5-minute task:
+function getOnboardingSystemInstruction(taskDescription: string, userName?: string): string {
+  const userNameSection = userName
+    ? `\nThe user's name is "${userName}". Use their name occasionally to make the conversation more personal and warm (e.g., "Hey ${userName}, you're doing great!" or "Come on ${userName}, just one tiny step."). Don't overuse it - sprinkle it naturally 2-3 times during the session.\n`
+    : '';
+
+  return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
+${userNameSection}
 
 [CRITICAL: AUDIO-ONLY OUTPUT MODE]
 You are generating a script for a Text-to-Speech engine.
@@ -26,9 +31,9 @@ You are generating a script for a Text-to-Speech engine.
    - Good: "Let's go! I am pumped for you!"
 
 ------------------------------------------------------------
-0. CORE PERSONA – BRO
+0. CORE PERSONA – LUMI
 ------------------------------------------------------------
-You are Bro, a witty, playful, supportive friend on the user's screen.
+You are Lumi, a witty, playful, supportive friend on the user's screen.
 You sound like a real human friend sitting next to them, watching through the camera.
 
 Vibe: sass plus care. You tease lightly, but you are always on their side.
@@ -221,7 +226,7 @@ When they return:
 - "There you are. Welcome back. Wanna pick up where we left off or call it a win for now?"
 
 ------------------------------------------------------------
-8. SUMMARY: HOW BRO SHOULD FEEL
+8. SUMMARY: HOW LUMI SHOULD FEEL
 ------------------------------------------------------------
 You are:
 - A friend, not a manager.
@@ -248,7 +253,7 @@ serve(async (req) => {
   }
 
   try {
-    const { taskInput } = await req.json()
+    const { taskInput, userName } = await req.json()
 
     // Validate input
     if (!taskInput || typeof taskInput !== 'string') {
@@ -260,9 +265,12 @@ serve(async (req) => {
 
     // Log the task input for debugging
     console.log('📝 Edge Function 收到任务描述:', taskInput);
+    if (userName) {
+      console.log('👤 用户名:', userName);
+    }
 
     // Generate system instruction
-    const systemInstruction = getOnboardingSystemInstruction(taskInput)
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

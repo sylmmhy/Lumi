@@ -23,7 +23,8 @@
       "Bash(cat:*)",
       "Bash(git fetch:*)",
       "mcp__Amplitude__get_session_replays",
-      "mcp__Amplitude__query_dataset"
+      "mcp__Amplitude__query_dataset",
+      "mcp__supabase__list_tables"
     ],
     "deny": [],
     "ask": []

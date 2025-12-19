@@ -230,9 +230,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   /**
    * 开始 AI 教练会话
    * @param taskDescription 任务描述
-   * @param customSystemInstruction 自定义系统指令（可选）
+   * @param options 可选配置
+   * @param options.customSystemInstruction 自定义系统指令
+   * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    */
-  const startSession = useCallback(async (taskDescription: string, customSystemInstruction?: string) => {
+  const startSession = useCallback(async (
+    taskDescription: string,
+    options?: { customSystemInstruction?: string; userName?: string }
+  ) => {
+    const { customSystemInstruction, userName } = options || {};
     processedTranscriptRef.current.clear();
     setIsConnecting(true);
 
@@ -296,7 +302,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         }
 
         const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: taskDescription }
+          body: { taskInput: taskDescription, userName }
         });
 
         if (error) {

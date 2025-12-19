@@ -23,6 +23,8 @@ interface NativeAuthPayload {
 declare global {
   interface Window {
     MindBoatNativeAuth?: NativeAuthPayload;
+    /** Native Auth Bridge 就绪标志：网页已准备好接收登录态 */
+    __MindBoatAuthReady?: boolean;
     AndroidBridge?: {
       onTaskCreated: (taskJson: string) => void;
       cancelTaskReminder: (taskId: string) => void;
@@ -40,6 +42,14 @@ declare global {
         };
         userLogout?: {
           postMessage: (message: any) => void;
+        };
+        /** 通知 Native 端网页已收到登录态，停止重试 */
+        authConfirmed?: {
+          postMessage: (message: { success: boolean; reason: string }) => void;
+        };
+        /** 网页主动向 Native 请求登录态 */
+        requestNativeAuth?: {
+          postMessage: (message: Record<string, never>) => void;
         };
       };
     };
@@ -168,6 +178,39 @@ function notifyNativeLogout(): void {
     }
   } catch (error) {
     console.error('❌ 通知原生端登出失败:', error);
+  }
+}
+
+/**
+ * 通知 Native 端网页已确认收到登录态，Native 可以停止重试
+ * @param reason - 确认原因（用于调试）
+ */
+function notifyAuthConfirmed(reason: string = 'confirmed'): void {
+  try {
+    if (window.webkit?.messageHandlers?.authConfirmed) {
+      window.webkit.messageHandlers.authConfirmed.postMessage({
+        success: true,
+        reason,
+      });
+      console.log('🔐 Web: 已通知 Native 停止重试, reason:', reason);
+    }
+  } catch (error) {
+    console.error('❌ 通知 Native authConfirmed 失败:', error);
+  }
+}
+
+/**
+ * 向 Native 端主动请求登录态
+ * 当网页加载完成但没有发现 MindBoatNativeAuth 时调用
+ */
+function requestNativeAuth(): void {
+  try {
+    if (window.webkit?.messageHandlers?.requestNativeAuth) {
+      window.webkit.messageHandlers.requestNativeAuth.postMessage({});
+      console.log('🔐 Web: 已向 Native 请求登录态');
+    }
+  } catch (error) {
+    console.error('❌ 向 Native 请求登录态失败:', error);
   }
 }
 
@@ -553,6 +596,10 @@ export function AuthProvider({
       void setUserProperties({ email });
     }
     checkLoginState();
+
+    // 通知 Native 端网页已成功处理登录态，可以停止重试
+    notifyAuthConfirmed('session_set');
+    console.log('🔐 Web: 登录态设置成功, userId:', userId);
   }, [checkLoginState]);
 
   /**
@@ -573,16 +620,32 @@ export function AuthProvider({
       void applyNativeLogout();
     };
 
-    const consumeInjectedAuth = () => {
+    /**
+     * 初始化 Native Auth Bridge：
+     * 1. 设置 __MindBoatAuthReady 标志，告诉 Native 网页已准备好
+     * 2. 检查是否已有 Native 设置的登录态（Native 可能先于网页设置）
+     * 3. 如果没有登录态，主动向 Native 请求
+     */
+    const initNativeAuthBridge = () => {
+      // 标记网页已准备好接收登录态
+      window.__MindBoatAuthReady = true;
+      console.log('🔐 Web: Native Auth Bridge 已初始化');
+
+      // 检查是否已经有 Native 设置的登录态
       if (window.MindBoatNativeAuth) {
+        console.log('🔐 Web: 发现已设置的登录态，立即处理');
         void applyNativeLogin(window.MindBoatNativeAuth);
+      } else {
+        // 没有登录态，主动向 Native 请求
+        console.log('🔐 Web: 没有登录态，向 Native 请求...');
+        requestNativeAuth();
       }
     };
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      consumeInjectedAuth();
+      initNativeAuthBridge();
     } else {
-      document.addEventListener('DOMContentLoaded', consumeInjectedAuth);
+      document.addEventListener('DOMContentLoaded', initNativeAuthBridge);
     }
 
     window.addEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
@@ -591,7 +654,7 @@ export function AuthProvider({
     return () => {
       window.removeEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
       window.removeEventListener('mindboat:nativeLogout', handleNativeLogout);
-      document.removeEventListener('DOMContentLoaded', consumeInjectedAuth);
+      document.removeEventListener('DOMContentLoaded', initNativeAuthBridge);
     };
   }, [applyNativeLogin, applyNativeLogout]);
 
@@ -647,6 +710,8 @@ export function AuthProvider({
         // 非阻塞绑定分析工具
         bindAnalyticsUser(session.user.id, session.user.email);
         checkLoginState();
+        // 通知 Native 端网页已有有效 session，可以停止重试
+        notifyAuthConfirmed('existing_session');
         return;
       }
 
@@ -676,6 +741,8 @@ export function AuthProvider({
           // 非阻塞绑定分析工具
           bindAnalyticsUser(restoredSession.session.user.id, restoredSession.session.user.email);
           checkLoginState();
+          // 通知 Native 端 session 已从本地存储恢复，可以停止重试
+          notifyAuthConfirmed('restored_session');
         } else {
           console.warn('⚠️ Stored tokens invalid, clearing local auth state');
           clearAuthStorage();

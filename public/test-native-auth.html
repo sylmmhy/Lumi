@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原生登录桥接测试工具</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 8px 8px 8px 0;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button.danger {
+      background: #FF3B30;
+    }
+    button.danger:hover {
+      background: #cc2f26;
+    }
+    button.secondary {
+      background: #8E8E93;
+    }
+    button.secondary:hover {
+      background: #636366;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 500;
+      color: #555;
+    }
+    .log {
+      background: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .log-entry {
+      margin: 4px 0;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    .status {
+      padding: 12px;
+      border-radius: 4px;
+      margin: 12px 0;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .status.warning {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔐 原生登录桥接测试工具</h1>
+
+  <div class="card">
+    <h2>📝 测试场景</h2>
+
+    <div>
+      <h3>场景 1: 完整 Token 登录（推荐）</h3>
+      <p>模拟 iOS 原生提供完整的 Supabase JWT token</p>
+      <label>User ID (UUID):</label>
+      <input type="text" id="userId1" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+
+      <label>Email:</label>
+      <input type="text" id="email1" placeholder="user@example.com" />
+
+      <label>Access Token (JWT):</label>
+      <textarea id="accessToken1" rows="3" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+
+      <label>Refresh Token (JWT):</label>
+      <textarea id="refreshToken1" rows="3" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+
+      <label>Name (可选):</label>
+      <input type="text" id="name1" placeholder="张三" />
+
+      <label>Picture URL (可选):</label>
+      <input type="text" id="picture1" placeholder="https://example.com/avatar.jpg" />
+
+      <button onclick="testFullLogin()">🚀 触发完整登录</button>
+      <button class="secondary" onclick="fillSample1()">📋 填充示例数据</button>
+    </div>
+
+    <hr style="margin: 32px 0; border: none; border-top: 1px solid #e0e0e0;" />
+
+    <div>
+      <h3>场景 2: 仅 UserId/Email 登录（无 Token）</h3>
+      <p>模拟原生仅提供用户信息，不提供 Supabase token（调试用）</p>
+      <label>User ID (UUID):</label>
+      <input type="text" id="userId2" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+
+      <label>Email:</label>
+      <input type="text" id="email2" placeholder="user@example.com" />
+
+      <label>Name (可选):</label>
+      <input type="text" id="name2" placeholder="张三" />
+
+      <button onclick="testBasicLogin()">🔑 触发基础登录</button>
+      <button class="secondary" onclick="fillSample2()">📋 填充示例数据</button>
+    </div>
+
+    <hr style="margin: 32px 0; border: none; border-top: 1px solid #e0e0e0;" />
+
+    <div>
+      <h3>场景 3: 预注入方式（window 对象）</h3>
+      <p>模拟原生在页面加载前注入 <code>window.MindBoatNativeAuth</code></p>
+      <button onclick="testPreInjection()">⚡ 预注入并刷新页面</button>
+      <p style="color: #666; font-size: 13px;">点击后会刷新页面，AuthContext 会在 DOMContentLoaded 时自动读取</p>
+    </div>
+
+    <hr style="margin: 32px 0; border: none; border-top: 1px solid #e0e0e0;" />
+
+    <div>
+      <h3>场景 4: 原生登出</h3>
+      <button class="danger" onclick="testNativeLogout()">🚪 触发原生登出</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 当前状态</h2>
+    <button onclick="checkStatus()">🔄 刷新状态</button>
+    <button class="secondary" onclick="clearLogs()">🗑️ 清空日志</button>
+    <div id="statusDisplay"></div>
+  </div>
+
+  <div class="card">
+    <h2>📝 控制台日志</h2>
+    <div class="log" id="logDisplay"></div>
+  </div>
+
+  <script>
+    // 拦截 console 输出
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    const logs = [];
+
+    function addLog(type, ...args) {
+      const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      const message = args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      logs.push({ type, timestamp, message });
+      updateLogDisplay();
+    }
+
+    console.log = (...args) => {
+      originalLog(...args);
+      addLog('log', ...args);
+    };
+
+    console.warn = (...args) => {
+      originalWarn(...args);
+      addLog('warn', ...args);
+    };
+
+    console.error = (...args) => {
+      originalError(...args);
+      addLog('error', ...args);
+    };
+
+    function updateLogDisplay() {
+      const logDisplay = document.getElementById('logDisplay');
+      logDisplay.innerHTML = logs.slice(-50).reverse().map(log => {
+        const color = log.type === 'error' ? '#dc3545' : log.type === 'warn' ? '#ffc107' : '#333';
+        return `<div class="log-entry" style="color: ${color}">
+          <strong>[${log.timestamp}]</strong> ${log.message}
+        </div>`;
+      }).join('');
+    }
+
+    function clearLogs() {
+      logs.length = 0;
+      updateLogDisplay();
+    }
+
+    // 填充示例数据
+    function fillSample1() {
+      document.getElementById('userId1').value = 'a1234567-b123-c123-d123-e12345678901';
+      document.getElementById('email1').value = 'test@firego.app';
+      document.getElementById('accessToken1').value = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      document.getElementById('refreshToken1').value = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      document.getElementById('name1').value = '测试用户';
+      document.getElementById('picture1').value = 'https://api.dicebear.com/7.x/avataaars/svg?seed=test';
+    }
+
+    function fillSample2() {
+      document.getElementById('userId2').value = 'a1234567-b123-c123-d123-e12345678901';
+      document.getElementById('email2').value = 'test@firego.app';
+      document.getElementById('name2').value = '测试用户';
+    }
+
+    // 场景 1: 完整登录
+    function testFullLogin() {
+      const payload = {
+        userId: document.getElementById('userId1').value,
+        email: document.getElementById('email1').value,
+        accessToken: document.getElementById('accessToken1').value,
+        refreshToken: document.getElementById('refreshToken1').value,
+        name: document.getElementById('name1').value,
+        pictureUrl: document.getElementById('picture1').value,
+      };
+
+      if (!payload.userId) {
+        alert('请填写 User ID');
+        return;
+      }
+
+      console.log('🚀 触发 mindboat:nativeLogin 事件', payload);
+      const event = new CustomEvent('mindboat:nativeLogin', { detail: payload });
+      window.dispatchEvent(event);
+
+      setTimeout(checkStatus, 500);
+    }
+
+    // 场景 2: 基础登录
+    function testBasicLogin() {
+      const payload = {
+        userId: document.getElementById('userId2').value,
+        email: document.getElementById('email2').value,
+        name: document.getElementById('name2').value,
+      };
+
+      if (!payload.userId) {
+        alert('请填写 User ID');
+        return;
+      }
+
+      console.log('🔑 触发 mindboat:nativeLogin 事件（无 token）', payload);
+      const event = new CustomEvent('mindboat:nativeLogin', { detail: payload });
+      window.dispatchEvent(event);
+
+      setTimeout(checkStatus, 500);
+    }
+
+    // 场景 3: 预注入
+    function testPreInjection() {
+      const payload = {
+        userId: 'a1234567-b123-c123-d123-e12345678901',
+        email: 'preinjected@firego.app',
+        name: '预注入用户',
+      };
+
+      console.log('⚡ 设置 window.MindBoatNativeAuth 并刷新页面', payload);
+      window.MindBoatNativeAuth = payload;
+
+      // 刷新页面以触发 DOMContentLoaded 逻辑
+      setTimeout(() => {
+        location.reload();
+      }, 500);
+    }
+
+    // 场景 4: 登出
+    function testNativeLogout() {
+      console.log('🚪 触发 mindboat:nativeLogout 事件');
+      const event = new CustomEvent('mindboat:nativeLogout');
+      window.dispatchEvent(event);
+
+      setTimeout(checkStatus, 500);
+    }
+
+    // 检查状态
+    function checkStatus() {
+      const status = {
+        localStorage: {
+          user_id: localStorage.getItem('user_id'),
+          user_email: localStorage.getItem('user_email'),
+          user_name: localStorage.getItem('user_name'),
+          session_token: localStorage.getItem('session_token')?.substring(0, 20) + '...',
+          refresh_token: localStorage.getItem('refresh_token')?.substring(0, 20) + '...',
+          native_login: localStorage.getItem('native_login'),
+          is_new_user: localStorage.getItem('is_new_user'),
+        },
+        window: {
+          MindBoatNativeAuth: window.MindBoatNativeAuth,
+        }
+      };
+
+      const display = document.getElementById('statusDisplay');
+
+      let html = '';
+
+      // 判断登录状态
+      const isNativeLogin = status.localStorage.native_login === 'true';
+      const hasSession = !!status.localStorage.session_token && status.localStorage.session_token !== 'null...';
+      const hasUserId = !!status.localStorage.user_id && status.localStorage.user_id !== 'null';
+
+      if (isNativeLogin && hasUserId) {
+        html += `<div class="status success">
+          ✅ <strong>原生登录成功</strong><br>
+          用户: ${status.localStorage.user_email || status.localStorage.user_id}<br>
+          姓名: ${status.localStorage.user_name || '(未设置)'}<br>
+          ${hasSession ? '✅ 已同步 Supabase 会话' : '⚠️ 仅前端登录态（无 Supabase token）'}
+        </div>`;
+      } else if (hasSession && hasUserId) {
+        html += `<div class="status success">
+          ✅ <strong>常规登录状态</strong><br>
+          用户: ${status.localStorage.user_email || status.localStorage.user_id}
+        </div>`;
+      } else if (hasUserId) {
+        html += `<div class="status warning">
+          ⚠️ <strong>部分登录状态</strong><br>
+          有 userId 但无 session_token，可能被误清除
+        </div>`;
+      } else {
+        html += `<div class="status info">
+          ℹ️ <strong>未登录状态</strong>
+        </div>`;
+      }
+
+      // LocalStorage 详情
+      html += '<h3 style="margin-top: 20px;">LocalStorage:</h3>';
+      html += '<div style="background: #f9f9f9; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 13px;">';
+      for (const [key, value] of Object.entries(status.localStorage)) {
+        if (value && value !== 'null' && value !== 'null...') {
+          html += `<div><strong>${key}:</strong> ${value}</div>`;
+        }
+      }
+      html += '</div>';
+
+      // Window 对象
+      if (status.window.MindBoatNativeAuth) {
+        html += '<h3 style="margin-top: 20px;">window.MindBoatNativeAuth:</h3>';
+        html += `<div style="background: #f9f9f9; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 13px;">
+          <pre>${JSON.stringify(status.window.MindBoatNativeAuth, null, 2)}</pre>
+        </div>`;
+      }
+
+      display.innerHTML = html;
+      console.log('📊 当前状态', status);
+    }
+
+    // 页面加载时检查状态
+    window.addEventListener('DOMContentLoaded', () => {
+      checkStatus();
+      console.log('✅ 测试工具已加载');
+    });
+  </script>
+</body>
+</html>

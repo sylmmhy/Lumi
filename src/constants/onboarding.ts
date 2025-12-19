@@ -1,0 +1,1 @@
+export const ONBOARDING_COUNTDOWN_SECONDS = 300;

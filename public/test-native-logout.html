@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原生登出通知测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #F25F3A;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        .section.warning {
+            border-left-color: #FF9800;
+            background: #fff3e0;
+        }
+        .section.info {
+            border-left-color: #2196F3;
+            background: #e3f2fd;
+        }
+        button {
+            background: #F25F3A;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #d94f2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        #log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #333;
+        }
+        .log-entry.success {
+            color: #4CAF50;
+        }
+        .log-entry.error {
+            color: #f44336;
+        }
+        .log-entry.info {
+            color: #2196F3;
+        }
+        .log-entry.warning {
+            color: #FF9800;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.logged-in {
+            background: #4CAF50;
+            color: white;
+        }
+        .status.logged-out {
+            background: #f44336;
+            color: white;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        code {
+            color: #d73a49;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 原生登出通知测试页面</h1>
+
+        <div class="section info">
+            <h3>🎯 测试目的</h3>
+            <p>本页面用于测试 Web 端向原生 App 发送登出通知的机制。</p>
+            <p>原生开发者可以在 WebView 中加载此页面，验证是否能正确接收到登出事件。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔄 当前状态 <span id="status" class="status logged-out">未登录</span></h3>
+            <p>User ID: <code id="userId">null</code></p>
+            <p>Email: <code id="userEmail">null</code></p>
+        </div>
+
+        <div class="section">
+            <h3>🧪 操作按钮</h3>
+            <button onclick="simulateLogin()">1️⃣ 模拟登录</button>
+            <button onclick="triggerLogout()">2️⃣ 触发登出事件</button>
+            <button onclick="checkStatus()">3️⃣ 检查状态</button>
+            <button onclick="clearLog()">🗑️ 清空日志</button>
+        </div>
+
+        <div class="section warning">
+            <h3>⚠️ 原生端集成提示</h3>
+            <p><strong>iOS 开发者</strong>：在 WKWebView 的 <code>didFinish</code> 中注入监听脚本：</p>
+            <pre><code>window.addEventListener('mindboat:nativeLogout', function() {
+    window.location.href = 'mindboat://logout';
+});</code></pre>
+
+            <p style="margin-top: 15px;"><strong>Android 开发者</strong>：使用 <code>addJavascriptInterface</code> 添加 <code>NativeApp</code> 对象，然后注入：</p>
+            <pre><code>window.addEventListener('mindboat:nativeLogout', function() {
+    if (window.NativeApp) {
+        window.NativeApp.onLogout();
+    }
+});</code></pre>
+        </div>
+
+        <div class="section">
+            <h3>📋 事件日志</h3>
+            <div id="log"></div>
+        </div>
+
+        <div class="section info">
+            <h3>💡 使用说明</h3>
+            <ol>
+                <li>点击 "模拟登录" 创建一个测试用户</li>
+                <li>点击 "触发登出事件" 发送登出通知</li>
+                <li>观察原生端是否收到通知（查看 Xcode/Android Studio 日志）</li>
+                <li>点击 "检查状态" 验证 localStorage 已被清除</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // 日志工具
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('日志已清空', 'info');
+        }
+
+        // 模拟登录
+        function simulateLogin() {
+            const testUser = {
+                userId: 'test-' + Math.random().toString(36).substring(7),
+                email: 'test@example.com',
+                name: '测试用户'
+            };
+
+            localStorage.setItem('user_id', testUser.userId);
+            localStorage.setItem('user_email', testUser.email);
+            localStorage.setItem('user_name', testUser.name);
+            localStorage.setItem('native_login', 'true');
+
+            log('✅ 模拟登录成功', 'success');
+            log(`用户ID: ${testUser.userId}`, 'info');
+            updateStatus();
+        }
+
+        // 触发登出事件
+        function triggerLogout() {
+            log('🚀 准备触发 mindboat:nativeLogout 事件...', 'info');
+
+            try {
+                // 1. 清除 localStorage（模拟真实登出逻辑）
+                localStorage.removeItem('user_id');
+                localStorage.removeItem('user_email');
+                localStorage.removeItem('user_name');
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('native_login');
+                log('🗑️ localStorage 已清除', 'info');
+
+                // 2. 触发自定义事件
+                const event = new CustomEvent('mindboat:nativeLogout', {
+                    bubbles: true,
+                    cancelable: false,
+                });
+                window.dispatchEvent(event);
+
+                log('📱 已触发 mindboat:nativeLogout 事件', 'success');
+                log('⚠️ 请检查原生端日志是否收到通知', 'warning');
+
+                // 3. 更新 UI
+                updateStatus();
+
+            } catch (error) {
+                log('❌ 触发事件失败: ' + error.message, 'error');
+            }
+        }
+
+        // 检查状态
+        function checkStatus() {
+            const userId = localStorage.getItem('user_id');
+            const userEmail = localStorage.getItem('user_email');
+            const nativeLogin = localStorage.getItem('native_login');
+
+            log('📊 当前 localStorage 状态:', 'info');
+            log(`  user_id: ${userId || '(null)'}`, 'info');
+            log(`  user_email: ${userEmail || '(null)'}`, 'info');
+            log(`  native_login: ${nativeLogin || '(null)'}`, 'info');
+
+            updateStatus();
+        }
+
+        // 更新页面状态显示
+        function updateStatus() {
+            const userId = localStorage.getItem('user_id');
+            const userEmail = localStorage.getItem('user_email');
+            const statusEl = document.getElementById('status');
+            const userIdEl = document.getElementById('userId');
+            const userEmailEl = document.getElementById('userEmail');
+
+            if (userId) {
+                statusEl.textContent = '已登录';
+                statusEl.className = 'status logged-in';
+            } else {
+                statusEl.textContent = '未登录';
+                statusEl.className = 'status logged-out';
+            }
+
+            userIdEl.textContent = userId || 'null';
+            userEmailEl.textContent = userEmail || 'null';
+        }
+
+        // 监听登出事件（验证事件是否正确触发）
+        window.addEventListener('mindboat:nativeLogout', function(event) {
+            log('✅ Web 端收到 mindboat:nativeLogout 事件', 'success');
+        });
+
+        // 页面加载时检查状态
+        window.addEventListener('DOMContentLoaded', function() {
+            log('🎉 测试页面已加载', 'success');
+            log('💡 点击"模拟登录"开始测试', 'info');
+            updateStatus();
+        });
+
+        // 为原生端提供的测试接口
+        window.testNativeLogout = triggerLogout;
+    </script>
+</body>
+</html>

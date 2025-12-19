@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Quicksand:wght@400;500;600;700&family=Caveat:wght@400;700&family=Sansita+One&display=swap');
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css');
+
+@font-face {
+  font-family: 'Sansita';
+  src: url('./assets/fonts/Sansita-ExtraBoldItalic.ttf') format('truetype');
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sansita';
+  src: url('./assets/fonts/Sansita-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* 官方 Sansita 字体类，覆盖正常体与斜体各字重 */
+.sansita-regular {
+  font-family: "Sansita", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.sansita-bold {
+  font-family: "Sansita", sans-serif;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.sansita-extrabold {
+  font-family: "Sansita", sans-serif;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.sansita-black {
+  font-family: "Sansita", sans-serif;
+  font-weight: 900;
+  font-style: normal;
+}
+
+.sansita-regular-italic {
+  font-family: "Sansita", sans-serif;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.sansita-bold-italic {
+  font-family: "Sansita", sans-serif;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.sansita-extrabold-italic {
+  font-family: "Sansita", sans-serif;
+  font-weight: 800;
+  font-style: italic;
+}
+
+.sansita-black-italic {
+  font-family: "Sansita", sans-serif;
+  font-weight: 900;
+  font-style: italic;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #e2e8f0;
+  background-color: #0b1220;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: manipulation;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 25%), radial-gradient(circle at 80% 0%, rgba(94, 234, 212, 0.12), transparent 25%), #0b1220;
+  color: #e2e8f0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Utility classes shared with the Remind Me experience */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mask-gradient {
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+}
+
+.text-shine {
+  background: linear-gradient(to right, #FFD700 20%, #FFF 50%, #FFD700 80%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shine 3s linear infinite;
+}
+
+@keyframes shine {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}

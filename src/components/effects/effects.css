@@ -1,0 +1,96 @@
+/**
+ * 效果组件动画样式
+ * 
+ * 包含 CelebrationView、LevelProgressBar 等组件需要的动画
+ */
+
+/* ============================================
+   动画关键帧
+   ============================================ */
+
+/* 向上滑入并淡入 */
+@keyframes slideUpFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 进度条闪光效果 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* 向上滑入并弹跳（用于 CTA 按钮） */
+@keyframes slideUpBounce {
+  0% {
+    opacity: 0;
+    transform: translateY(50px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 淡出动画 */
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 金币飞入动画 */
+@keyframes coinFlyIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(10px) scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 数字跳动动画 */
+@keyframes numberBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+

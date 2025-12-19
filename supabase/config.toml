@@ -1,0 +1,10 @@
+# Supabase Configuration
+
+[functions.onboarding-entry-check]
+verify_jwt = false
+
+[functions.onboarding-start]
+verify_jwt = false
+
+[functions.onboarding-complete]
+verify_jwt = false

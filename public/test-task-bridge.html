@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试任务桥接 (Task Bridge Test)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        h2 {
+            color: #666;
+            font-size: 18px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        .log {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+        }
+        .log-entry.success {
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .log-entry.error {
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .test-info {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #ffc107;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔔 任务桥接测试工具</h1>
+        <p>用于测试 Web 端与 Android/iOS 原生端的任务提醒桥接功能</p>
+    </div>
+
+    <div class="card">
+        <h2>📱 环境检测</h2>
+        <div id="envStatus"></div>
+    </div>
+
+    <div class="card">
+        <h2>🧪 快速测试</h2>
+        <div class="test-info">
+            <strong>提示：</strong>点击下面的按钮测试事件触发。在 Android App 中应该会设置真实的系统提醒。
+        </div>
+        <button onclick="testCreateTask()">
+            ✅ 测试创建任务（2分钟后提醒）
+        </button>
+        <button onclick="testDeleteTask()" class="danger">
+            ❌ 测试删除任务
+        </button>
+        <button onclick="clearLog()">
+            🗑️ 清空日志
+        </button>
+    </div>
+
+    <div class="card">
+        <h2>📋 事件日志</h2>
+        <div id="eventLog" class="log">
+            <div class="log-entry">等待事件...</div>
+        </div>
+    </div>
+
+    <script>
+        const logContainer = document.getElementById('eventLog');
+        let testTaskId = null;
+
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // 清空日志
+        function clearLog() {
+            logContainer.innerHTML = '<div class="log-entry">日志已清空，等待新事件...</div>';
+        }
+
+        // 检测环境
+        function detectEnvironment() {
+            const envStatus = document.getElementById('envStatus');
+            let html = '';
+
+            // 检测 Android
+            const isAndroid = typeof window.AndroidBridge !== 'undefined';
+            html += `<div class="status ${isAndroid ? 'success' : 'error'}">
+                ${isAndroid ? '✅' : '❌'} Android Bridge: ${isAndroid ? '已连接' : '未检测到'}
+            </div>`;
+
+            // 检测 iOS
+            const isIOS = typeof window.webkit !== 'undefined' &&
+                         typeof window.webkit.messageHandlers !== 'undefined' &&
+                         typeof window.webkit.messageHandlers.nativeApp !== 'undefined';
+            html += `<div class="status ${isIOS ? 'success' : 'error'}">
+                ${isIOS ? '✅' : '❌'} iOS Bridge: ${isIOS ? '已连接' : '未检测到'}
+            </div>`;
+
+            // 环境提示
+            if (!isAndroid && !isIOS) {
+                html += `<div class="status info">
+                    ℹ️ 当前运行在浏览器中。事件会触发，但不会设置真实提醒。
+                </div>`;
+            } else {
+                html += `<div class="status success">
+                    ✅ 原生环境已就绪！可以测试真实提醒功能。
+                </div>`;
+            }
+
+            envStatus.innerHTML = html;
+        }
+
+        // 测试创建任务（2分钟后提醒）
+        function testCreateTask() {
+            // 计算 2 分钟后的时间
+            const now = new Date();
+            const reminderTime = new Date(now.getTime() + 2 * 60 * 1000);
+
+            // 生成测试任务 ID
+            testTaskId = 'test-' + Date.now();
+
+            const testTask = {
+                id: testTaskId,
+                user_id: 'test-user-001',
+                title: '测试提醒（2分钟后）',
+                reminder_date: reminderTime.toISOString().split('T')[0],
+                time: reminderTime.toTimeString().slice(0, 5),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                status: 'pending',
+                called: false
+            };
+
+            addLog(`准备触发任务创建事件...`, 'info');
+            addLog(`任务ID: ${testTask.id}`, 'info');
+            addLog(`提醒时间: ${testTask.reminder_date} ${testTask.time}`, 'info');
+
+            try {
+                // 触发 CustomEvent
+                const event = new CustomEvent('mindboat:taskCreated', {
+                    detail: { task: testTask },
+                    bubbles: true,
+                    cancelable: false
+                });
+                window.dispatchEvent(event);
+
+                addLog('✅ mindboat:taskCreated 事件已触发', 'success');
+                addLog('⏰ 如果在原生 App 中，2分钟后应该收到提醒！', 'success');
+            } catch (error) {
+                addLog(`❌ 触发事件失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 测试删除任务
+        function testDeleteTask() {
+            if (!testTaskId) {
+                testTaskId = 'test-' + (Date.now() - 1000);
+                addLog('⚠️ 使用模拟任务ID（未先创建任务）', 'info');
+            }
+
+            addLog(`准备触发任务删除事件...`, 'info');
+            addLog(`任务ID: ${testTaskId}`, 'info');
+
+            try {
+                // 触发 CustomEvent
+                const event = new CustomEvent('mindboat:taskDeleted', {
+                    detail: { taskId: testTaskId },
+                    bubbles: true,
+                    cancelable: false
+                });
+                window.dispatchEvent(event);
+
+                addLog('✅ mindboat:taskDeleted 事件已触发', 'success');
+                addLog('🔕 如果在原生 App 中，提醒应该已被取消', 'success');
+            } catch (error) {
+                addLog(`❌ 触发事件失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 监听自定义事件（验证事件确实被触发）
+        window.addEventListener('mindboat:taskCreated', (e) => {
+            addLog('🎧 监听到 mindboat:taskCreated 事件', 'success');
+            addLog(`任务标题: ${e.detail.task.title}`, 'info');
+        });
+
+        window.addEventListener('mindboat:taskDeleted', (e) => {
+            addLog('🎧 监听到 mindboat:taskDeleted 事件', 'success');
+            addLog(`任务ID: ${e.detail.taskId}`, 'info');
+        });
+
+        // 页面加载时检测环境
+        detectEnvironment();
+        addLog('📱 测试工具已就绪', 'success');
+    </script>
+</body>
+</html>

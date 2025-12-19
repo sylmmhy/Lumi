@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(supabase functions download:*)",
+      "Bash(chmod:*)",
+      "Bash(bash:*)",
+      "Bash(npm run build:*)",
+      "mcp__figma__get_design_context",
+      "mcp__figma__get_screenshot",
+      "Bash(ipconfig getifaddr:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "mcp__supabase__apply_migration",
+      "Bash(git pull:*)",
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(wc:*)",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__execute_sql",
+      "Bash(cat:*)",
+      "Bash(git fetch:*)",
+      "mcp__Amplitude__get_session_replays",
+      "mcp__Amplitude__query_dataset"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
+}

@@ -17,6 +17,7 @@ import {
     generateTodayRoutineInstances,
     fetchRecurringReminders,
 } from '../remindMe/services/reminderService';
+import { isNativeApp } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
 
@@ -208,9 +209,9 @@ export function AppTabsPage() {
                     }
                 }
 
-                // 第一次设置任务后显示测试版本弹窗
+                // 第一次设置任务后显示测试版本弹窗（仅在网页版显示，App WebView 中不显示）
                 try {
-                    if (!localStorage.getItem('hasSeenTestVersionModal')) {
+                    if (!isNativeApp() && !localStorage.getItem('hasSeenTestVersionModal')) {
                         setShowTestVersionModal(true);
                         localStorage.setItem('hasSeenTestVersionModal', 'true');
                     }

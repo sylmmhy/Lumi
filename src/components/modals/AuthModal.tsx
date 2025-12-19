@@ -113,7 +113,14 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           </form>
 
           <p className="mt-6 text-center text-xs text-gray-400">
-            By continuing you agree to FireGo Terms and Privacy.
+            By continuing, you agree to our{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              Terms of Use
+            </a>
+            {' '}and{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              Privacy Policy
+            </a>
           </p>
         </div>
       </div>

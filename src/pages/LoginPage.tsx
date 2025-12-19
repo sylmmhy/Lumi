@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useContext } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { loadGoogleScript } from '../lib/google-script'
 import { generateCSRFToken, googleLogin } from '../lib/google-login'
 import { initAmplitude, trackEvent } from '../lib/amplitude'
@@ -177,7 +177,7 @@ export function LoginPage() {
           {isSignUp ? 'Create Account' : 'Welcome Back'}
         </h1>
         <p className="text-center text-gray-500 mb-6 text-sm">
-          {isSignUp ? 'Sign up to get started' : 'Sign in to continue to FireGo'}
+          {isSignUp ? 'Sign up to get started' : 'Sign in to continue to Lumi'}
         </p>
 
         {/* Email Form */}
@@ -247,6 +247,18 @@ export function LoginPage() {
 
         {/* Google Button Container */}
         <div className="flex justify-center min-h-[40px]" ref={buttonRef}></div>
+
+        {/* Terms and Privacy */}
+        <p className="text-center text-xs text-gray-500 mt-6">
+          By continuing, you agree to our{' '}
+          <Link to="/terms" className="text-blue-600 hover:underline">
+            Terms of Use
+          </Link>
+          {' '}and{' '}
+          <Link to="/privacy" className="text-blue-600 hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
       </div>
     </main >
   )

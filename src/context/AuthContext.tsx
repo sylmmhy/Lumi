@@ -403,9 +403,38 @@ export function AuthProvider({
   }, [loginWithEmail, signupWithEmail]);
 
   const logout = useCallback(async () => {
+    // 获取当前的 session token 用于调用 API
+    const currentToken = localStorage.getItem('session_token');
+    
     if (supabase) {
+      // 如果有有效的 token，先清理服务器端的设备记录
+      if (currentToken) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-user-devices`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${currentToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ action: 'remove_voip_device' }),
+          });
+          
+          if (response.ok) {
+            console.log('✅ VoIP 设备记录已从服务器清理');
+          } else {
+            console.warn('⚠️ 清理 VoIP 设备记录失败:', await response.text());
+          }
+        } catch (error) {
+          console.error('❌ 清理 VoIP 设备记录时出错:', error);
+        }
+      }
+      
       await supabase.auth.signOut();
     }
+    
+    // 清理本地存储的 VoIP token
+    localStorage.removeItem('voip_token');
     localStorage.removeItem('user_id');
     localStorage.removeItem('session_token');
     localStorage.removeItem('refresh_token');

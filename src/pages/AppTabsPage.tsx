@@ -20,6 +20,7 @@ import {
 import { isNativeApp } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
+import { getPreferredLanguage } from '../lib/language';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -333,7 +334,11 @@ export function AppTabsPage() {
     const startAICoachForTask = useCallback(async (task: Task) => {
         console.log('🤖 Starting AI Coach session for task:', task.text);
         try {
-            await aiCoach.startSession(task.text, { userName: auth.userName ?? undefined });
+            const preferredLanguage = getPreferredLanguage() ?? undefined;
+            await aiCoach.startSession(task.text, {
+                userName: auth.userName ?? undefined,
+                preferredLanguage,
+            });
             console.log('✅ AI Coach session started successfully');
             setTasks(prev => prev.map(t => t.id === task.id ? { ...t, called: true } : t));
         } catch (error) {
@@ -458,9 +463,12 @@ export function AppTabsPage() {
 
     /**
      * 用户在任务执行视图中点击「I'M DOING IT!」或「END CALL」
+     * - 保存会话记忆到 Mem0
      * - 结束当前 AI 会话
      */
-    const handleEndAICoachSession = useCallback(() => {
+    const handleEndAICoachSession = useCallback(async () => {
+        // 先保存会话记忆，再结束会话
+        await aiCoach.saveSessionMemory();
         aiCoach.endSession();
     }, [aiCoach]);
 

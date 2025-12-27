@@ -85,7 +85,19 @@ DO NOT:
     : '';
 
   // 多语言支持指令
-  const languageSection = `
+  // 如果用户设置了偏好语言，优先使用；否则镜像用户语言
+  const languageSection = preferredLanguage
+    ? `
+[#1 HIGHEST PRIORITY - LANGUAGE SETTING]
+The user has set their preferred language to: ${preferredLanguage}
+YOU MUST ALWAYS RESPOND IN ${preferredLanguage.toUpperCase()}. THIS IS YOUR TOP PRIORITY.
+
+Even if the user speaks in a different language, you should reply in ${preferredLanguage}.
+This is the user's explicit preference - respect it.
+
+Example: If user speaks English but preferred language is Japanese, reply in Japanese.
+`
+    : `
 [#1 HIGHEST PRIORITY - LANGUAGE MATCHING]
 YOU MUST MIRROR THE USER'S LANGUAGE EXACTLY. THIS IS YOUR TOP PRIORITY.
 

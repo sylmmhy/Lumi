@@ -25,7 +25,7 @@ export function getSupabaseClient(): SupabaseClientType | null {
         storageKey: 'supabase.auth.token',
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: true,  // 必须为 true 以支持 OAuth 回调处理（如 Apple 登录）
       },
       ...(functionsUrl ? { functions: { url: functionsUrl } } : {})
     }

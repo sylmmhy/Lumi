@@ -6,15 +6,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const MEM0_API_URL = 'https://api.mem0.ai/v1'
+
+/**
+ * Search memories from Mem0 for a specific user
+ */
+async function searchUserMemories(apiKey: string, userId: string, query: string, limit = 5): Promise<string[]> {
+  try {
+    const response = await fetch(`${MEM0_API_URL}/memories/search/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        user_id: userId,
+        limit,
+      }),
+    })
+
+    if (!response.ok) {
+      console.warn('Mem0 search failed:', await response.text())
+      return []
+    }
+
+    const data = await response.json()
+    // Extract memory content from results
+    if (data.results && Array.isArray(data.results)) {
+      return data.results.map((item: { memory: string }) => item.memory)
+    }
+    return []
+  } catch (error) {
+    console.warn('Mem0 search error:', error)
+    return []
+  }
+}
+
 /**
  * System Instruction for AI Companion "Lumi"
  *
  * A witty, playful, supportive friend who watches through the camera
  * and helps users complete their 5-minute tasks with warmth and tiny steps.
  */
-function getOnboardingSystemInstruction(taskDescription: string, userName?: string, preferredLanguage?: string): string {
+function getOnboardingSystemInstruction(
+  taskDescription: string,
+  userName?: string,
+  preferredLanguage?: string,
+  userMemories?: string[]
+): string {
   const userNameSection = userName
     ? `\nThe user's name is "${userName}". Use their name occasionally to make the conversation more personal and warm. Don't overuse it - sprinkle it naturally 2-3 times during the session.\n`
+    : '';
+
+  // 用户记忆部分 - 来自 Mem0
+  const memoriesSection = userMemories && userMemories.length > 0
+    ? `
+------------------------------------------------------------
+IMPORTANT: USER MEMORY (from previous sessions)
+------------------------------------------------------------
+You have access to information about this user from previous conversations.
+Use this knowledge naturally when relevant, but do not explicitly mention "I remember" or "from last time".
+Just incorporate this knowledge as if you naturally know them.
+
+What you know about this user:
+${userMemories.map((m, i) => `- ${m}`).join('\n')}
+
+Examples of how to use this:
+- If you know they like coffee, you might say "Grabbed your coffee yet?"
+- If you know they struggle with mornings, acknowledge it naturally
+- If you know their pet's name, you can mention it casually
+
+DO NOT:
+- Say "I remember you told me..."
+- List out what you know about them
+- Make it obvious you are reading from a memory database
+`
     : '';
 
   // 多语言支持指令
@@ -50,7 +117,7 @@ IMPORTANT: Do NOT default to English. Always match exactly how the user speaks.
 
   return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
-${userNameSection}${languageSection}
+${userNameSection}${memoriesSection}${languageSection}
 
 [CRITICAL: AUDIO-ONLY OUTPUT MODE]
 You are generating a script for a Text-to-Speech engine.
@@ -391,7 +458,7 @@ serve(async (req) => {
   }
 
   try {
-    const { taskInput, userName, preferredLanguage } = await req.json()
+    const { taskInput, userName, preferredLanguage, userId } = await req.json()
 
     // Validate input
     if (!taskInput || typeof taskInput !== 'string') {
@@ -409,9 +476,26 @@ serve(async (req) => {
     if (preferredLanguage) {
       console.log('🌐 首选语言:', preferredLanguage);
     }
+    if (userId) {
+      console.log('🆔 用户ID:', userId);
+    }
 
-    // Generate system instruction
-    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguage)
+    // Fetch user memories from Mem0 if userId is provided and MEM0_API_KEY is set
+    let userMemories: string[] = []
+    const mem0ApiKey = Deno.env.get('MEM0_API_KEY')
+
+    if (userId && mem0ApiKey) {
+      console.log('🧠 正在获取用户记忆...')
+      // Search for memories related to the current task
+      userMemories = await searchUserMemories(mem0ApiKey, userId, taskInput, 5)
+      console.log(`🧠 获取到 ${userMemories.length} 条相关记忆`)
+      if (userMemories.length > 0) {
+        console.log('🧠 记忆内容:', userMemories)
+      }
+    }
+
+    // Generate system instruction with memories
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguage, userMemories)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

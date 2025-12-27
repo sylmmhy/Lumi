@@ -3,6 +3,14 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=ivlfsixvfovqitkajyjc"
+    },
+    "mem0": {
+      "command": "uvx",
+      "args": ["mem0-mcp-server"],
+      "env": {
+        "MEM0_API_KEY": "m0-9qtbgj5W9LBGsAZ6pZFs38tkdZNEKKoqjsKBTR15",
+        "MEM0_DEFAULT_USER_ID": "jasmine"
+      }
     }
   }
 }

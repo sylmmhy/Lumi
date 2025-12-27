@@ -28,7 +28,9 @@
       "WebSearch",
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:www.philschmid.de)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "WebFetch(domain:docs.mem0.ai)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

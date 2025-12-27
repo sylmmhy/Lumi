@@ -123,6 +123,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const onTaskRescheduledRef = useRef(onTaskRescheduled);
   const onAIEndSessionRef = useRef(onAIEndSession);
   const currentTaskIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  const currentTaskDescriptionRef = useRef<string>('');
   const endSessionRef = useRef<(() => void) | null>(null);
 
   // 更新 refs
@@ -360,17 +362,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param taskDescription 任务描述
    * @param options 可选配置
    * @param options.taskId 当前任务的 ID（用于 AI 重新安排任务时间）
+   * @param options.userId 用户 ID（用于 Mem0 记忆检索和存储）
    * @param options.customSystemInstruction 自定义系统指令
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    * @param options.preferredLanguage 首选语言，如 "Chinese"、"English"，不传则自动检测用户语言
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { taskId?: string; customSystemInstruction?: string; userName?: string; preferredLanguage?: string }
+    options?: { taskId?: string; userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguage?: string }
   ) => {
-    const { taskId, customSystemInstruction, userName, preferredLanguage } = options || {};
+    const { taskId, userId, customSystemInstruction, userName, preferredLanguage } = options || {};
     processedTranscriptRef.current.clear();
     currentTaskIdRef.current = taskId || null;
+    currentUserIdRef.current = userId || null;
+    currentTaskDescriptionRef.current = taskDescription;
     setIsConnecting(true);
 
    try {
@@ -433,7 +438,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         }
 
         const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: taskDescription, userName, preferredLanguage }
+          body: { taskInput: taskDescription, userName, preferredLanguage, userId }
         });
 
         if (error) {
@@ -489,6 +494,84 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [stopCountdown, geminiLive]);
 
   /**
+   * 保存会话记忆到 Mem0
+   * 调用此函数将当前会话的对话内容保存为长期记忆
+   * @param additionalContext 可选的额外上下文信息
+   */
+  const saveSessionMemory = useCallback(async (additionalContext?: string) => {
+    const userId = currentUserIdRef.current;
+    const taskDescription = currentTaskDescriptionRef.current;
+
+    if (!userId) {
+      if (import.meta.env.DEV) {
+        console.log('⚠️ 无法保存记忆：缺少 userId');
+      }
+      return false;
+    }
+
+    // 获取当前会话的消息
+    const messages = state.messages;
+    if (messages.length === 0) {
+      if (import.meta.env.DEV) {
+        console.log('⚠️ 无法保存记忆：没有对话消息');
+      }
+      return false;
+    }
+
+    try {
+      if (import.meta.env.DEV) {
+        console.log('🧠 正在保存会话记忆...');
+      }
+
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
+        throw new Error('Supabase 未配置');
+      }
+
+      // 将消息转换为 Mem0 格式
+      const mem0Messages = messages.map(msg => ({
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.content,
+      }));
+
+      // 添加任务上下文作为第一条消息
+      if (taskDescription) {
+        mem0Messages.unshift({
+          role: 'system',
+          content: `User was working on task: "${taskDescription}"${additionalContext ? `. ${additionalContext}` : ''}`,
+        });
+      }
+
+      const { data, error } = await supabaseClient.functions.invoke('mem0-memory', {
+        body: {
+          action: 'add',
+          userId,
+          messages: mem0Messages,
+          metadata: {
+            source: 'ai_coach_session',
+            taskDescription,
+            sessionDuration: initialTime - state.timeRemaining,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      if (error) {
+        throw new Error(`保存记忆失败: ${error.message}`);
+      }
+
+      if (import.meta.env.DEV) {
+        console.log('✅ 会话记忆已保存:', data);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ 保存会话记忆失败:', error);
+      return false;
+    }
+  }, [state.messages, state.timeRemaining, initialTime]);
+
+  /**
    * 重置会话
    */
   const resetSession = useCallback(() => {
@@ -542,6 +625,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     startSession,
     endSession,
     resetSession,
+    saveSessionMemory,
     sendTextMessage: geminiLive.sendTextMessage,
     toggleCamera: geminiLive.toggleCamera,
 

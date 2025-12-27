@@ -131,6 +131,20 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           onTurnCompleteRef.current?.();
         }
 
+        // Handle user input audio transcription (用户语音转文字)
+        if ('inputTranscription' in serverContent && serverContent.inputTranscription) {
+          const transcription = serverContent.inputTranscription as { text?: string };
+          if (transcription.text) {
+            setTranscript((prev) => {
+              const newTranscript = [...prev, { role: 'user' as const, text: transcription.text! }];
+              if (onTranscriptUpdate) {
+                onTranscriptUpdate(newTranscript);
+              }
+              return newTranscript;
+            });
+          }
+        }
+
         // Handle tool call
         if ('toolCall' in serverContent && serverContent.toolCall) {
           const toolCall = serverContent.toolCall as unknown as ToolCall;
@@ -277,6 +291,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         model,
         config: {
           responseModalities: ['audio'] as unknown as Modality[],
+          // 启用用户语音转录，用于保存对话记忆
+          inputAudioTranscription: {},
           systemInstruction: finalSystemInstruction ? { parts: [{ text: finalSystemInstruction }] } : undefined,
           tools: toolList,
         },

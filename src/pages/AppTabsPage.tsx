@@ -336,6 +336,7 @@ export function AppTabsPage() {
         try {
             const preferredLanguage = getPreferredLanguage() ?? undefined;
             await aiCoach.startSession(task.text, {
+                userId: auth.userId ?? undefined,  // 传入 userId 用于 Mem0 记忆保存
                 userName: auth.userName ?? undefined,
                 preferredLanguage,
             });
@@ -344,7 +345,7 @@ export function AppTabsPage() {
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);
         }
-    }, [aiCoach, setTasks, auth.userName]);
+    }, [aiCoach, setTasks, auth.userId, auth.userName]);
 
     /**
      * 确保首次显示语音/摄像头提示；用户确认后才真正启动 AI 教练。
@@ -467,7 +468,6 @@ export function AppTabsPage() {
      * - 结束当前 AI 会话
      */
     const handleEndAICoachSession = useCallback(async () => {
-        // 先保存会话记忆，再结束会话
         await aiCoach.saveSessionMemory();
         aiCoach.endSession();
     }, [aiCoach]);

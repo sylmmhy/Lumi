@@ -84,6 +84,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
 
+  // 用于累积用户语音碎片，避免每个词都存为单独消息
+  const userSpeechBufferRef = useRef<string>('');
+
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
   // ==========================================
@@ -123,6 +126,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       processedTranscriptRef.current.add(messageId);
 
       if (lastMessage.role === 'assistant') {
+        // AI 开始说话前，先把累积的用户消息存储
+        if (userSpeechBufferRef.current.trim()) {
+          const fullUserMessage = userSpeechBufferRef.current.trim();
+          if (import.meta.env.DEV) {
+            console.log('🎤 用户说:', fullUserMessage);
+          }
+          addMessageRef.current('user', fullUserMessage, false);
+          userSpeechBufferRef.current = '';
+        }
+
+        // 存储 AI 消息
         addMessageRef.current('ai', lastMessage.text);
         if (import.meta.env.DEV) {
           console.log('🤖 AI 说:', lastMessage.text);
@@ -130,11 +144,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       if (lastMessage.role === 'user') {
+        // 累积用户语音碎片，不立即存储
         if (isValidUserSpeech(lastMessage.text)) {
-          if (import.meta.env.DEV) {
-            console.log('🎤 用户说:', lastMessage.text);
-          }
-          addMessageRef.current('user', lastMessage.text, false);
+          userSpeechBufferRef.current += lastMessage.text;
         }
       }
     },
@@ -381,7 +393,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       return false;
     }
 
-    // 获取当前会话的消息
+    // 先把 buffer 中剩余的用户消息保存
+    if (userSpeechBufferRef.current.trim()) {
+      const fullUserMessage = userSpeechBufferRef.current.trim();
+      if (import.meta.env.DEV) {
+        console.log('🎤 保存剩余用户消息:', fullUserMessage);
+      }
+      addMessageRef.current('user', fullUserMessage, false);
+      userSpeechBufferRef.current = '';
+    }
+
     const messages = state.messages;
     if (messages.length === 0) {
       if (import.meta.env.DEV) {
@@ -413,6 +434,14 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           content: `User was working on task: "${taskDescription}"${additionalContext ? `. ${additionalContext}` : ''}`,
         });
       }
+
+      // 日志：查看传给 Mem0 的内容
+      console.log('📤 [Mem0] 发送到 Mem0 的内容:', {
+        userId,
+        taskDescription,
+        messagesCount: mem0Messages.length,
+        messages: mem0Messages,
+      });
 
       const { data, error } = await supabaseClient.functions.invoke('mem0-memory', {
         body: {
@@ -449,6 +478,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const resetSession = useCallback(() => {
     endSession();
     processedTranscriptRef.current.clear();
+    userSpeechBufferRef.current = '';
     setState({
       taskDescription: '',
       timeRemaining: initialTime,

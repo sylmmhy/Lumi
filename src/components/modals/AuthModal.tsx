@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { appleLogin } from '../../lib/apple-login';
 
 export interface AuthModalProps {
   /** 是否展示弹窗 */
@@ -24,6 +25,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +53,19 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       setError(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setIsAppleLoading(true);
+    setError(null);
+    try {
+      await appleLogin(window.location.origin);
+      // Note: appleLogin will redirect to Apple's OAuth page
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('auth.authFailed');
+      setError(message);
+      setIsAppleLoading(false);
     }
   };
 
@@ -107,14 +122,39 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isAppleLoading}
               className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('common.processing') : t('auth.continue')}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-gray-400">
+          {/* Divider */}
+          <div className="relative mb-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">{t('auth.orContinueWith') || 'Or continue with'}</span>
+            </div>
+          </div>
+
+          {/* Apple Login Button */}
+          <button
+            type="button"
+            onClick={handleAppleLogin}
+            disabled={isAppleLoading || isLoading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+            </svg>
+            <span className="text-sm font-medium text-gray-700">
+              {isAppleLoading ? t('common.processing') : (t('auth.continueWithApple') || 'Continue with Apple')}
+            </span>
+          </button>
+
+          <p className="text-center text-xs text-gray-400">
             {t('auth.termsAgree')}{' '}
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
               {t('auth.termsOfUse')}

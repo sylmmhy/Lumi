@@ -8,6 +8,7 @@ interface TaskGroupProps {
   tasks: Task[];
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onEdit?: (task: Task) => void;
 }
 
 /**
@@ -24,6 +25,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   tasks,
   onToggle,
   onDelete,
+  onEdit,
 }) => (
     <div className="animate-fade-in-up">
         <div className="bg-brand-cream inline-block px-4 py-2 rounded-lg mb-3">
@@ -39,6 +41,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
                     icon={icon}
                     onToggle={onToggle}
                     onDelete={onDelete}
+                    onEdit={onEdit}
                 />
             ))}
         </div>

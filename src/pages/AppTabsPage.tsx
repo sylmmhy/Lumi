@@ -14,6 +14,7 @@ import {
     createReminder,
     toggleReminderCompletion,
     deleteReminder,
+    updateReminder,
     generateTodayRoutineInstances,
     fetchRecurringReminders,
 } from '../remindMe/services/reminderService';
@@ -325,6 +326,30 @@ export function AppTabsPage() {
         }
     };
 
+    const handleUpdateTask = async (updatedTask: Task) => {
+        // Optimistically update UI
+        const previousTasks = [...tasks];
+        setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+
+        try {
+            const result = await updateReminder(updatedTask.id, {
+                text: updatedTask.text,
+                time: updatedTask.time,
+                displayTime: updatedTask.displayTime,
+                date: updatedTask.date,
+                category: updatedTask.category,
+            });
+            if (!result) {
+                throw new Error('Failed to update');
+            }
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            // Revert on error
+            setTasks(previousTasks);
+            alert('Failed to update task');
+        }
+    };
+
 
     /**
      * 为某个任务启动 AI 教练会话
@@ -525,6 +550,7 @@ export function AppTabsPage() {
                         onAddTask={addTask}
                         onToggleComplete={toggleComplete}
                         onDeleteTask={handleDeleteTask}
+                        onUpdateTask={handleUpdateTask}
                         onRequestLogin={() => setShowAuthModal(true)}
                         isLoggedIn={auth.isLoggedIn}
                     />

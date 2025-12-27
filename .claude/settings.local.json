@@ -30,7 +30,8 @@
       "WebFetch(domain:www.philschmid.de)",
       "Bash(pkill:*)",
       "WebFetch(domain:docs.mem0.ai)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "mcp__supabase__search_docs"
     ],
     "deny": [],
     "ask": []

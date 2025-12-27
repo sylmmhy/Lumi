@@ -23,7 +23,14 @@ const parseTime = (str: string) => {
 
 // --- Time Picker Components ---
 
-const ScrollWheel = ({ items, value, onChange }: { items: string[], value: string, onChange: (val: string) => void }) => {
+interface ScrollWheelProps {
+    items: string[];
+    value: string;
+    onChange: (val: string) => void;
+    loop?: boolean; // Whether to enable infinite loop scrolling
+}
+
+const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const isScrollingRef = useRef(false);
     const isDraggingRef = useRef(false);
@@ -31,38 +38,89 @@ const ScrollWheel = ({ items, value, onChange }: { items: string[], value: strin
     const startYRef = useRef(0);
     const startXRef = useRef(0);
     const startScrollTopRef = useRef(0);
+    const isRepositioningRef = useRef(false);
     const [isDragging, setIsDragging] = useState(false);
     const ITEM_HEIGHT = 40; // matches h-[40px] in tailwind
 
-    // Initial scroll to selected value
+    // For loop mode, we create 3 copies of items (before, original, after)
+    const LOOP_COPIES = 3;
+    const displayItems = useMemo(() => {
+        if (!loop) return items;
+        const result: string[] = [];
+        for (let i = 0; i < LOOP_COPIES; i++) {
+            result.push(...items);
+        }
+        return result;
+    }, [items, loop]);
+
+    // Get the starting offset for the middle copy
+    const middleOffset = loop ? items.length : 0;
+
+    // Initial scroll to selected value (in the middle copy for loop mode)
     useEffect(() => {
         if (containerRef.current && !isScrollingRef.current && !isDraggingRef.current) {
             const idx = items.indexOf(value);
             if (idx !== -1) {
-                containerRef.current.scrollTop = idx * ITEM_HEIGHT;
+                const targetIdx = loop ? middleOffset + idx : idx;
+                containerRef.current.scrollTop = targetIdx * ITEM_HEIGHT;
             }
         }
-    }, [value, items]);
+    }, [value, items, loop, middleOffset]);
+
+    // Check and reposition for infinite scroll
+    const checkAndReposition = () => {
+        if (!loop || !containerRef.current || isRepositioningRef.current) return;
+
+        const scrollTop = containerRef.current.scrollTop;
+        const itemCount = items.length;
+        const totalHeight = itemCount * ITEM_HEIGHT;
+        const middleStart = middleOffset * ITEM_HEIGHT;
+        const middleEnd = middleStart + totalHeight;
+
+        // If scrolled into first copy, jump to middle copy
+        if (scrollTop < middleStart - ITEM_HEIGHT) {
+            isRepositioningRef.current = true;
+            containerRef.current.scrollTop = scrollTop + totalHeight;
+            requestAnimationFrame(() => {
+                isRepositioningRef.current = false;
+            });
+        }
+        // If scrolled into last copy, jump to middle copy
+        else if (scrollTop >= middleEnd) {
+            isRepositioningRef.current = true;
+            containerRef.current.scrollTop = scrollTop - totalHeight;
+            requestAnimationFrame(() => {
+                isRepositioningRef.current = false;
+            });
+        }
+    };
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (isDraggingRef.current) return; // Skip logic if dragging manually
+        if (isDraggingRef.current || isRepositioningRef.current) return;
 
         isScrollingRef.current = true;
         const target = e.currentTarget as HTMLDivElement & { scrollTimeout?: NodeJS.Timeout };
         if (target.scrollTimeout) {
             clearTimeout(target.scrollTimeout);
         }
-        const idx = Math.round(target.scrollTop / ITEM_HEIGHT);
 
-        // Debounce the selection slightly or just check bounds
+        const scrollTop = target.scrollTop;
+        let idx = Math.round(scrollTop / ITEM_HEIGHT);
+
+        // For loop mode, map back to original items
+        if (loop) {
+            idx = idx % items.length;
+            if (idx < 0) idx += items.length;
+        }
+
         if (items[idx] && items[idx] !== value) {
             onChange(items[idx]);
         }
 
-        // Reset scrolling flag logic
-        clearTimeout(target.scrollTimeout);
+        // Reset scrolling flag and check reposition
         target.scrollTimeout = setTimeout(() => {
             isScrollingRef.current = false;
+            checkAndReposition();
         }, 150);
     };
 
@@ -99,11 +157,21 @@ const ScrollWheel = ({ items, value, onChange }: { items: string[], value: strin
 
         // Snap to nearest item after drag
         if (containerRef.current) {
-            const idx = Math.round(containerRef.current.scrollTop / ITEM_HEIGHT);
+            let idx = Math.round(containerRef.current.scrollTop / ITEM_HEIGHT);
             containerRef.current.scrollTo({ top: idx * ITEM_HEIGHT, behavior: 'smooth' });
+
+            // For loop mode, map back to original items
+            if (loop) {
+                idx = idx % items.length;
+                if (idx < 0) idx += items.length;
+            }
+
             if (items[idx]) {
                 onChange(items[idx]);
             }
+
+            // Delayed reposition check
+            setTimeout(checkAndReposition, 200);
         }
     };
 
@@ -129,15 +197,11 @@ const ScrollWheel = ({ items, value, onChange }: { items: string[], value: strin
     const handleTouchStart = (e: React.TouchEvent) => {
         const touch = e.touches[0];
         handleDragStart(touch.clientY, touch.clientX);
-        // Prevent default to stop native scrolling/zooming
-        // e.preventDefault(); // Note: React's synthetic event might not support this if passive. 
-        // We use touch-action: none in CSS instead.
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
         const touch = e.touches[0];
         handleDragMove(touch.clientY, touch.clientX);
-        // e.preventDefault(); // handled by touch-action: none
     };
 
     const handleTouchEnd = () => {
@@ -163,20 +227,25 @@ const ScrollWheel = ({ items, value, onChange }: { items: string[], value: strin
             onTouchEnd={handleTouchEnd}
         >
             <div className="h-[60px]"></div> {/* Padding to center first item */}
-            {items.map((item) => (
-                <div
-                    key={item}
-                    className={`h-[40px] flex items-center justify-center snap-center text-lg transition-all select-none ${item === value ? 'text-black font-bold scale-110' : 'text-gray-300 scale-90'}`}
-                    onClick={() => {
-                        if (isDraggingRef.current || hasMovedRef.current) return;
-                        onChange(item);
-                        const idx = items.indexOf(item);
-                        containerRef.current?.scrollTo({ top: idx * ITEM_HEIGHT, behavior: 'smooth' });
-                    }}
-                >
-                    {item}
-                </div>
-            ))}
+            {displayItems.map((item, index) => {
+                const isSelected = item === value;
+                return (
+                    <div
+                        key={`${item}-${index}`}
+                        className={`h-[40px] flex items-center justify-center snap-center text-lg transition-all select-none ${isSelected ? 'text-black font-bold scale-110' : 'text-gray-300 scale-90'}`}
+                        onClick={() => {
+                            if (isDraggingRef.current || hasMovedRef.current) return;
+                            onChange(item);
+                            // Scroll to this item
+                            containerRef.current?.scrollTo({ top: index * ITEM_HEIGHT, behavior: 'smooth' });
+                            // Delayed reposition
+                            setTimeout(checkAndReposition, 300);
+                        }}
+                    >
+                        {item}
+                    </div>
+                );
+            })}
             <div className="h-[60px]"></div>
         </div>
     );
@@ -190,6 +259,7 @@ const ScrollWheel = ({ items, value, onChange }: { items: string[], value: strin
  * @property {Date} dateValue - 当前选中的日期对象
  * @property {(val: Date) => void} onDateChange - 变更日期时的回调，向上层同步新日期
  * @property {() => void} onClose - 关闭选择面板的回调
+ * @property {boolean} embedded - 是否为嵌入模式（不显示遮罩层和关闭按钮）
  */
 export interface TimePickerProps {
     timeValue: string;
@@ -197,6 +267,7 @@ export interface TimePickerProps {
     dateValue: Date;
     onDateChange: (val: Date) => void;
     onClose: () => void;
+    embedded?: boolean;
 }
 
 /**
@@ -206,7 +277,7 @@ export interface TimePickerProps {
  *
  * @param {TimePickerProps} props - 组件的受控参数与关闭行为
  */
-export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose }: TimePickerProps) => {
+export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false }: TimePickerProps) => {
     const [mode, setMode] = useState<'time' | 'date'>('time');
 
     // --- Time Logic ---
@@ -276,10 +347,11 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
     const formattedDate = dateValue.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const formattedTime = `${timeState.h}:${timeState.m} ${timeState.p}`;
 
-    return (
-        <div className="absolute top-full left-0 mt-4 bg-white rounded-[32px] shadow-2xl z-[160] w-[320px] p-6 animate-fade-in border border-gray-100/50">
+    // Content that's shared between embedded and modal modes
+    const pickerContent = (
+        <>
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
                 <span className="text-gray-900 font-semibold text-lg">Starts</span>
                 <div className="flex gap-2">
                     <button
@@ -304,23 +376,50 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
 
                 {mode === 'time' ? (
                     <div className="flex gap-4 z-10 w-full justify-center">
-                        <ScrollWheel items={hours} value={timeState.h} onChange={(val) => setTimeState(s => ({ ...s, h: val }))} />
-                        <ScrollWheel items={minutes} value={timeState.m} onChange={(val) => setTimeState(s => ({ ...s, m: val }))} />
+                        <ScrollWheel items={hours} value={timeState.h} onChange={(val) => setTimeState(s => ({ ...s, h: val }))} loop />
+                        <ScrollWheel items={minutes} value={timeState.m} onChange={(val) => setTimeState(s => ({ ...s, m: val }))} loop />
                         <ScrollWheel items={periods} value={timeState.p} onChange={(val) => setTimeState(s => ({ ...s, p: val }))} />
                     </div>
                 ) : (
                     <div className="flex gap-4 z-10 w-full justify-center">
-                        <ScrollWheel items={months} value={dateState.month} onChange={(val) => setDateState(s => ({ ...s, month: val }))} />
-                        <ScrollWheel items={days} value={dateState.day} onChange={(val) => setDateState(s => ({ ...s, day: val }))} />
+                        <ScrollWheel items={months} value={dateState.month} onChange={(val) => setDateState(s => ({ ...s, month: val }))} loop />
+                        <ScrollWheel items={days} value={dateState.day} onChange={(val) => setDateState(s => ({ ...s, day: val }))} loop />
                         <ScrollWheel items={years} value={dateState.year} onChange={(val) => setDateState(s => ({ ...s, year: val }))} />
                     </div>
                 )}
             </div>
+        </>
+    );
 
-            <div className="mt-4 text-center">
-                <button onClick={onClose} className="text-gray-300 hover:text-gray-500 text-sm">
-                    <i className="fa-solid fa-chevron-up"></i>
-                </button>
+    // Embedded mode: just return the content without modal wrapper
+    if (embedded) {
+        return <div className="w-full">{pickerContent}</div>;
+    }
+
+    // Modal mode: wrap in modal
+    return (
+        <div
+            className="fixed inset-0 z-[160] flex items-center justify-center animate-fade-in"
+            onClick={onClose}
+        >
+            {/* Semi-transparent backdrop */}
+            <div className="absolute inset-0 bg-gray-500/40" />
+
+            {/* Modal content */}
+            <div
+                className="relative bg-white rounded-[32px] shadow-2xl w-[320px] p-6 border border-gray-100/50"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {pickerContent}
+
+                <div className="mt-6">
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
+                    >
+                        OK
+                    </button>
+                </div>
             </div>
         </div>
     );

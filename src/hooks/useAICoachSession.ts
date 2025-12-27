@@ -393,17 +393,27 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       return false;
     }
 
+    // 复制当前消息列表（避免 setState 异步问题）
+    let messages = [...state.messages];
+
     // 先把 buffer 中剩余的用户消息保存
     if (userSpeechBufferRef.current.trim()) {
       const fullUserMessage = userSpeechBufferRef.current.trim();
       if (import.meta.env.DEV) {
         console.log('🎤 保存剩余用户消息:', fullUserMessage);
       }
+      // 同时添加到 state 和本地 messages 数组
+      const newUserMessage: AICoachMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: fullUserMessage,
+        timestamp: new Date(),
+        isVirtual: false,
+      };
+      messages.push(newUserMessage);
       addMessageRef.current('user', fullUserMessage, false);
       userSpeechBufferRef.current = '';
     }
-
-    const messages = state.messages;
     if (messages.length === 0) {
       if (import.meta.env.DEV) {
         console.log('⚠️ 无法保存记忆：没有对话消息');
@@ -421,8 +431,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         throw new Error('Supabase 未配置');
       }
 
-      // 将消息转换为 Mem0 格式
-      const mem0Messages = messages.map(msg => ({
+      // 将消息转换为 Mem0 格式，过滤掉虚拟消息（只保存真实对话）
+      const realMessages = messages.filter(msg => !msg.isVirtual);
+
+      if (realMessages.length === 0) {
+        if (import.meta.env.DEV) {
+          console.log('⚠️ 无法保存记忆：没有真实对话消息（全是虚拟消息）');
+        }
+        return false;
+      }
+
+      const mem0Messages = realMessages.map(msg => ({
         role: msg.role === 'ai' ? 'assistant' : 'user',
         content: msg.content,
       }));
@@ -436,12 +455,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       // 日志：查看传给 Mem0 的内容
-      console.log('📤 [Mem0] 发送到 Mem0 的内容:', {
-        userId,
-        taskDescription,
-        messagesCount: mem0Messages.length,
-        messages: mem0Messages,
-      });
+      if (import.meta.env.DEV) {
+        console.log('📤 [Mem0] 发送到 Mem0 的内容:', {
+          userId,
+          taskDescription,
+          totalMessages: messages.length,
+          virtualMessagesFiltered: messages.length - realMessages.length,
+          realMessagesCount: realMessages.length,
+          mem0MessagesCount: mem0Messages.length,
+          messages: mem0Messages,
+        });
+      }
 
       const { data, error } = await supabaseClient.functions.invoke('mem0-memory', {
         body: {

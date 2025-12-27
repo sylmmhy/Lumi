@@ -7,13 +7,15 @@ interface TaskItemProps {
     icon?: string;
     onToggle: (id: string) => void;
     onDelete: (id: string) => void;
+    /** 点击任务编辑的回调 */
+    onEdit?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
     /** urgency 模式下点击 Start 的回调 */
     onStart?: () => void;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDelete, mode = 'home', onStart }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDelete, onEdit, mode = 'home', onStart }) => {
     const [translateX, setTranslateX] = useState(0);
     const [isAnimatingOut, setIsAnimatingOut] = useState(false);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
@@ -111,15 +113,24 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
             {/* Task Content */}
             <div
                 ref={itemRef}
-                className={`bg-gray-50 p-4 flex items-center justify-between transition-transform duration-200 ease-out relative z-10 ${localCompleted ? '' : 'hover:bg-gray-100'}`}
+                className={`bg-gray-50 p-4 flex items-center justify-between transition-transform duration-200 ease-out relative z-10 ${localCompleted ? '' : 'hover:bg-gray-100 cursor-pointer'}`}
                 style={{ transform: `translateX(${translateX}px)` }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onClick={() => {
+                    // 只有在没有滑动且未完成时才触发编辑
+                    if (translateX === 0 && !localCompleted && onEdit) {
+                        onEdit(task);
+                    }
+                }}
             >
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={handleComplete}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleComplete();
+                        }}
                         disabled={localCompleted}
                         className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all ${localCompleted ? 'bg-brand-goldBorder border-brand-goldBorder' : 'border-brand-goldBorder bg-transparent'}`}
                     >

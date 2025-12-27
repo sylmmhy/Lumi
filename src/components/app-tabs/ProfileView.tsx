@@ -405,6 +405,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
             <div className="px-6 -mt-4 relative z-20">
 
+                {/* Settings Section - Language Selection */}
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+                    <button
+                        onClick={() => setShowLanguageModal(true)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-language text-brand-blue"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.lumiLanguage')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.voiceLanguage')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {getLanguageNativeName(currentLanguage)}
+                            </span>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </div>
+                    </button>
+                </div>
+
                 {/* Personal Introduction Panel with Feedback Input */}
                 <div
                     className="relative overflow-hidden rounded-[32px] bg-[#F25F3A] p-6 shadow-soft mb-8"
@@ -473,30 +497,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             )}
                         </div>
                     </div>
-                </div>
-
-                {/* Settings Section */}
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
-                    <button
-                        onClick={() => setShowLanguageModal(true)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                                <i className="fa-solid fa-language text-brand-blue"></i>
-                            </div>
-                            <div className="text-left">
-                                <p className="font-medium text-gray-800">{t('profile.lumiLanguage')}</p>
-                                <p className="text-sm text-gray-400">{t('profile.voiceLanguage')}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
-                                {getLanguageNativeName(currentLanguage)}
-                            </span>
-                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-                        </div>
-                    </button>
                 </div>
 
                 {/* Biography Section */}

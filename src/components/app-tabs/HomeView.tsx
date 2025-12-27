@@ -14,6 +14,8 @@ interface HomeViewProps {
     onAddTask: (task: Task) => void;
     onToggleComplete: (id: string) => void;
     onDeleteTask: (id: string) => void;
+    /** 更新任务 */
+    onUpdateTask?: (task: Task) => void;
     /** 未登录时触发登录弹窗 */
     onRequestLogin?: () => void;
     /** 是否已登录，用于控制优先级：先提示登录，再提示输入 */
@@ -28,6 +30,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onAddTask,
     onToggleComplete,
     onDeleteTask,
+    onUpdateTask,
     onRequestLogin,
     isLoggedIn = false,
 }) => {
@@ -38,6 +41,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [isRoutine, setIsRoutine] = useState(false);
     const [activeTab, setActiveTab] = useState<TaskType>(TaskType.TODO);
     const [showTimePicker, setShowTimePicker] = useState(false);
+
+    // Edit Task State
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [editTaskText, setEditTaskText] = useState('');
+    const [editTaskTime, setEditTaskTime] = useState('');
+    const [editTaskDate, setEditTaskDate] = useState(new Date());
 
     // Test Version Request State
     const [testEmail, setTestEmail] = useState('');
@@ -183,6 +192,42 @@ export const HomeView: React.FC<HomeViewProps> = ({
         } finally {
             setIsSubmittingTest(false);
         }
+    };
+
+    // Handle opening edit modal
+    const handleEditTask = (task: Task) => {
+        setEditingTask(task);
+        setEditTaskText(task.text);
+        setEditTaskTime(task.time || '');
+        // Parse task date
+        if (task.date) {
+            const [year, month, day] = task.date.split('-').map(Number);
+            setEditTaskDate(new Date(year, month - 1, day));
+        } else {
+            setEditTaskDate(new Date());
+        }
+    };
+
+    // Handle saving edited task
+    const handleSaveEdit = () => {
+        if (!editingTask || !onUpdateTask) return;
+
+        const [h] = editTaskTime.split(':').map(Number);
+        let category: Task['category'] = 'morning';
+        if (h >= 12 && h < 17) category = 'afternoon';
+        if (h >= 17) category = 'evening';
+
+        const updatedTask: Task = {
+            ...editingTask,
+            text: editTaskText,
+            time: editTaskTime,
+            displayTime: parseTimeToString(editTaskTime),
+            date: editingTask.type === 'routine' ? undefined : getLocalDateString(editTaskDate),
+            category,
+        };
+
+        onUpdateTask(updatedTask);
+        setEditingTask(null);
     };
 
     // Now tab: 只显示 todo 任务，排除已完成的
@@ -372,6 +417,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         tasks={dateGroup.morningTasks}
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
                                     />
                                 )}
                                 {dateGroup.afternoonTasks.length > 0 && (
@@ -382,6 +428,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             tasks={dateGroup.afternoonTasks}
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
+                                            onEdit={handleEditTask}
                                         />
                                     </div>
                                 )}
@@ -393,6 +440,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             tasks={dateGroup.eveningTasks}
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
+                                            onEdit={handleEditTask}
                                         />
                                     </div>
                                 )}
@@ -409,6 +457,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         tasks={morningTasks}
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
                                     />
                                 )}
                                 {afternoonTasks.length > 0 && (
@@ -418,6 +467,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         tasks={afternoonTasks}
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
                                     />
                                 )}
                                 {eveningTasks.length > 0 && (
@@ -427,6 +477,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         tasks={eveningTasks}
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
                                     />
                                 )}
                             </>
@@ -494,6 +545,63 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     endRect={animatingTask.endRect}
                     onComplete={() => setAnimatingTask(null)}
                 />
+            )}
+
+            {/* Edit Task Modal */}
+            {editingTask && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center animate-fade-in"
+                    onClick={() => {
+                        handleSaveEdit();
+                    }}
+                >
+                    {/* Semi-transparent backdrop */}
+                    <div className="absolute inset-0 bg-gray-500/40" />
+
+                    {/* Modal content */}
+                    <div
+                        className="relative bg-white rounded-[32px] shadow-2xl w-[340px] p-6 border border-gray-100/50"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="mb-4">
+                            <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
+                        </div>
+
+                        {/* Task Name Input */}
+                        <div className="mb-4">
+                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskName')}</label>
+                            <input
+                                type="text"
+                                value={editTaskText}
+                                onChange={(e) => setEditTaskText(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 bg-white text-gray-800"
+                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
+                            />
+                        </div>
+
+                        {/* Time Picker */}
+                        <div className="mb-6">
+                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskTime')}</label>
+                            <TimePicker
+                                timeValue={editTaskTime}
+                                onTimeChange={setEditTaskTime}
+                                dateValue={editTaskDate}
+                                onDateChange={setEditTaskDate}
+                                onClose={() => {}}
+                                embedded
+                            />
+                        </div>
+
+                        {/* Save Button */}
+                        <button
+                            onClick={handleSaveEdit}
+                            className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

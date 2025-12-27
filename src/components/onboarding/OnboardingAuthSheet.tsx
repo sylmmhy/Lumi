@@ -3,6 +3,7 @@ import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { useAuth } from '../../hooks/useAuth';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
 import { loadGoogleScript } from '../../lib/google-script';
+import { appleLogin } from '../../lib/apple-login';
 
 declare global {
   interface Window {
@@ -70,6 +71,7 @@ export function OnboardingAuthSheet({
   });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   const handleCredential = useCallback(
@@ -145,6 +147,19 @@ export function OnboardingAuthSheet({
     auth.navigateToLogin(DEFAULT_APP_PATH);
   };
 
+  const handleAppleLogin = async () => {
+    setIsAppleLoading(true);
+    setError(null);
+    try {
+      await appleLogin(`${window.location.origin}${DEFAULT_APP_PATH}`);
+      // Note: appleLogin will redirect to Apple's OAuth page
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Apple 登录失败，请稍后再试';
+      setError(message);
+      setIsAppleLoading(false);
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
@@ -185,6 +200,29 @@ export function OnboardingAuthSheet({
               <p className="mt-2 text-center text-xs text-gray-500">正在获取 Google 登录信息...</p>
             )}
           </div>
+
+          {/* Apple Login Button */}
+          <button
+            type="button"
+            onClick={handleAppleLogin}
+            disabled={isAppleLoading || isLoading}
+            className="flex w-full items-center justify-between rounded-2xl border border-gray-200 px-4 py-3 transition hover:border-gray-300 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                </svg>
+              </span>
+              <div className="text-left">
+                <p className="text-base font-semibold text-gray-900">
+                  {isAppleLoading ? '正在跳转...' : '使用 Apple 登录'}
+                </p>
+                <p className="text-xs text-gray-500">使用 Apple ID 快速登录</p>
+              </div>
+            </div>
+            <span className="text-lg text-gray-300">›</span>
+          </button>
 
           <button
             type="button"

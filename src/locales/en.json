@@ -29,6 +29,9 @@
   "home.enterEmail": "Enter your email",
   "home.invalidEmail": "Please enter a valid email address.",
   "home.submitFailed": "Failed to submit request. Please try again.",
+  "home.editTask": "Edit Task",
+  "home.taskName": "Task Name",
+  "home.taskTime": "Time",
 
   "stats.loadingHistory": "Loading history...",
   "stats.noCompletedTasks": "No completed tasks yet.",

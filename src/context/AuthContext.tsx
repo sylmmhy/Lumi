@@ -1,4 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_APP_PATH } from '../constants/routes';
@@ -76,6 +77,8 @@ export interface AuthState {
 }
 
 export interface AuthContextValue extends AuthState {
+  /** 是否正在处理 OAuth 回调（用于避免过早跳转） */
+  isOAuthProcessing: boolean;
   /** 同步本地存储并返回最新登录态 */
   checkLoginState: () => { isLoggedIn: boolean; userId: string | null; sessionToken: string | null };
   /** 跳转到登录页，带 redirect 参数 */
@@ -107,6 +110,87 @@ const AUTH_STORAGE_KEYS = [
   'refresh_token',
   NATIVE_LOGIN_FLAG_KEY,
 ] as const;
+
+/** OAuth 回调可能包含的 URL 参数键 */
+const OAUTH_PARAM_KEYS = [
+  'code',
+  'access_token',
+  'refresh_token',
+  'token_type',
+  'expires_in',
+  'provider_token',
+  'provider_refresh_token',
+  'state',
+  'error',
+  'error_description',
+] as const;
+
+/** OAuth 回调参数结构 */
+type OAuthCallbackParams = {
+  code: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  error: string | null;
+  errorDescription: string | null;
+};
+
+/**
+ * 读取当前 URL 中的 OAuth 回调参数（支持 query 与 hash）。
+ *
+ * @returns {OAuthCallbackParams} 解析出的 OAuth 回调参数集合
+ */
+function getOAuthCallbackParams(): OAuthCallbackParams {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+  return {
+    code: urlParams.get('code'),
+    accessToken: hashParams.get('access_token') || urlParams.get('access_token'),
+    refreshToken: hashParams.get('refresh_token') || urlParams.get('refresh_token'),
+    error: urlParams.get('error') || hashParams.get('error'),
+    errorDescription: urlParams.get('error_description') || hashParams.get('error_description'),
+  };
+}
+
+/**
+ * 判断当前 URL 是否包含 OAuth 回调参数，用于阻止过早跳转。
+ *
+ * @returns {boolean} 是否存在 OAuth 回调参数
+ */
+function hasOAuthCallbackParams(): boolean {
+  const { code, accessToken, error } = getOAuthCallbackParams();
+  return Boolean(code || accessToken || error);
+}
+
+/**
+ * 清理 URL 中的 OAuth 参数，避免 token 暴露在地址栏。
+ */
+function clearOAuthCallbackParams(): void {
+  const url = new URL(window.location.href);
+  for (const key of OAUTH_PARAM_KEYS) {
+    url.searchParams.delete(key);
+  }
+  url.hash = '';
+
+  const cleaned = url.searchParams.toString();
+  const nextUrl = cleaned ? `${url.pathname}?${cleaned}` : url.pathname;
+  window.history.replaceState({}, '', nextUrl);
+}
+
+/**
+ * 将 Supabase session 同步到本地存储，保持与现有登录态字段一致。
+ *
+ * @param {Session} session - Supabase 会话数据
+ */
+function persistSessionToStorage(session: Session): void {
+  localStorage.setItem('session_token', session.access_token);
+  if (session.refresh_token) {
+    localStorage.setItem('refresh_token', session.refresh_token);
+  }
+  localStorage.setItem('user_id', session.user.id);
+  localStorage.setItem('user_email', session.user.email || '');
+  localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+}
 
 /**
  * 批量读取 localStorage，减少同步 I/O 次数
@@ -237,8 +321,10 @@ export function AuthProvider({
 }: AuthProviderProps) {
   const navigate = useNavigate();
   const [authState, setAuthState] = useState<AuthState>(() => readAuthFromStorage());
+  const [isOAuthProcessing, setIsOAuthProcessing] = useState<boolean>(() => hasOAuthCallbackParams());
   const loginPathRef = useRef(loginPath);
   const defaultRedirectRef = useRef(defaultRedirectPath);
+  const hasHandledOAuthRef = useRef(false);
 
   useEffect(() => {
     loginPathRef.current = loginPath;
@@ -263,6 +349,84 @@ export function AuthProvider({
     const loginTarget = loginPathRef.current || DEFAULT_LOGIN_PATH;
     navigate(`${loginTarget}?redirect=${encodeURIComponent(target)}`, { replace: true });
   }, [navigate]);
+
+  /**
+   * 处理 OAuth 回调参数并建立 Supabase session（支持 code 与 access_token 两种模式）。
+   *
+   * @returns {Promise<void>} OAuth 回调处理完成后返回
+   */
+  const handleOAuthCallback = useCallback(async () => {
+    const { code, accessToken, refreshToken, error, errorDescription } = getOAuthCallbackParams();
+    const hasOAuthParams = Boolean(code || accessToken || error);
+
+    if (!hasOAuthParams) {
+      setIsOAuthProcessing(false);
+      return;
+    }
+
+    if (hasHandledOAuthRef.current) {
+      return;
+    }
+    hasHandledOAuthRef.current = true;
+    setIsOAuthProcessing(true);
+    console.log('🔐 检测到 OAuth 回调参数，开始处理...');
+
+    if (!supabase) {
+      console.error('❌ Supabase client not initialized, OAuth callback ignored');
+      clearOAuthCallbackParams();
+      setIsOAuthProcessing(false);
+      return;
+    }
+
+    try {
+      if (error) {
+        console.error('❌ OAuth 回调错误:', error, errorDescription);
+        return;
+      }
+
+      if (code) {
+        console.log('🔐 PKCE flow: 使用 code 交换 session...');
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          console.error('❌ exchangeCodeForSession 失败:', exchangeError);
+        } else if (data.session) {
+          console.log('✅ OAuth 登录成功:', data.session.user.email);
+          persistSessionToStorage(data.session);
+          checkLoginState();
+        }
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        console.log('🔐 Implicit flow: 使用 access_token 建立 session...');
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          console.error('❌ setSession 失败:', sessionError);
+        } else if (data.session) {
+          console.log('✅ OAuth 登录成功:', data.session.user.email);
+          persistSessionToStorage(data.session);
+          checkLoginState();
+        }
+        return;
+      }
+
+      if (accessToken && !refreshToken) {
+        console.warn('⚠️ OAuth 回调缺少 refresh_token，无法建立 Supabase session');
+      }
+    } catch (err) {
+      console.error('❌ OAuth 回调处理失败:', err);
+    } finally {
+      clearOAuthCallbackParams();
+      setIsOAuthProcessing(false);
+    }
+  }, [checkLoginState]);
+
+  useEffect(() => {
+    void handleOAuthCallback();
+  }, [handleOAuthCallback]);
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: 'Supabase client not initialized' };
@@ -940,6 +1104,7 @@ export function AuthProvider({
 
   const contextValue = useMemo<AuthContextValue>(() => ({
     ...authState,
+    isOAuthProcessing,
     checkLoginState,
     navigateToLogin,
     loginWithEmail,
@@ -949,7 +1114,7 @@ export function AuthProvider({
     logout,
     fullReset,
     markOnboardingCompleted,
-  }), [authState, checkLoginState, navigateToLogin, loginWithEmail, signupWithEmail, authWithEmail, updateProfile, logout, fullReset, markOnboardingCompleted]);
+  }), [authState, isOAuthProcessing, checkLoginState, navigateToLogin, loginWithEmail, signupWithEmail, authWithEmail, updateProfile, logout, fullReset, markOnboardingCompleted]);
 
   return (
     <AuthContext.Provider value={contextValue}>

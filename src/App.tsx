@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import { DEFAULT_APP_PATH } from './constants/routes'
@@ -10,7 +10,6 @@ import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { useAuth } from './hooks/useAuth'
-import { supabase } from './lib/supabase'
 
 /**
  * 延迟初始化分析工具，不阻塞首屏渲染
@@ -49,78 +48,26 @@ function initAnalyticsDeferred() {
 }
 
 /**
- * 根路径重定向组件：根据当前登录态与访客体验资格，决定跳转到 App、Onboarding 或登录页。
- * 同时处理 OAuth 回调（如 Apple 登录）。
+ * 根路径重定向组件：等待 OAuth 回调处理完成后再进入核心功能页。
  *
  * @returns {null} 不渲染任何 UI，仅负责路由跳转。
  */
 function RootRedirect() {
   const navigate = useNavigate()
-  const { isLoggedIn, checkLoginState } = useAuth()
+  const { isOAuthProcessing } = useAuth()
   const hasHandledRef = useRef(false)
-  const [isProcessingOAuth, setIsProcessingOAuth] = useState(false)
 
   useEffect(() => {
-    if (hasHandledRef.current) return
+    if (hasHandledRef.current || isOAuthProcessing) return
     hasHandledRef.current = true
 
-    const handleRedirect = async () => {
-      // 检查 URL 中是否有 OAuth 回调参数
-      const urlParams = new URLSearchParams(window.location.search)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      const code = urlParams.get('code')
-      const accessToken = hashParams.get('access_token')
-      const error = urlParams.get('error') || hashParams.get('error')
-
-      // 如果有 OAuth 错误，记录并继续
-      if (error) {
-        console.error('❌ OAuth 回调错误:', error, urlParams.get('error_description'))
-      }
-
-      // 如果有 OAuth 回调参数（code 或 access_token），等待 Supabase 处理
-      if ((code || accessToken) && supabase) {
-        setIsProcessingOAuth(true)
-        console.log('🔐 检测到 OAuth 回调参数，等待 Supabase 处理...')
-
-        try {
-          // 对于 PKCE flow，需要用 code 交换 session
-          if (code) {
-            console.log('🔐 PKCE flow: 使用 code 交换 session...')
-            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-            if (exchangeError) {
-              console.error('❌ exchangeCodeForSession 失败:', exchangeError)
-            } else if (data.session) {
-              console.log('✅ OAuth 登录成功:', data.session.user.email)
-              // 更新本地存储
-              localStorage.setItem('session_token', data.session.access_token)
-              if (data.session.refresh_token) {
-                localStorage.setItem('refresh_token', data.session.refresh_token)
-              }
-              localStorage.setItem('user_id', data.session.user.id)
-              localStorage.setItem('user_email', data.session.user.email || '')
-              checkLoginState()
-            }
-          }
-
-          // 清理 URL 中的 OAuth 参数
-          window.history.replaceState({}, '', window.location.pathname)
-        } catch (err) {
-          console.error('❌ OAuth 回调处理失败:', err)
-        } finally {
-          setIsProcessingOAuth(false)
-        }
-      }
-
-      const targetAppPath = DEFAULT_APP_PATH
-      // 无论登录与否，都直接进入核心功能页（urgency）
-      navigate(targetAppPath, { replace: true })
-    }
-
-    void handleRedirect()
-  }, [isLoggedIn, navigate, checkLoginState])
+    const targetAppPath = DEFAULT_APP_PATH
+    // 无论登录与否，都直接进入核心功能页（urgency）
+    navigate(targetAppPath, { replace: true })
+  }, [isOAuthProcessing, navigate])
 
   // 如果正在处理 OAuth，显示加载状态
-  if (isProcessingOAuth) {
+  if (isOAuthProcessing) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

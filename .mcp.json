@@ -1,12 +1,21 @@
 {
   "mcpServers": {
     "supabase": {
-      "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=ivlfsixvfovqitkajyjc"
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_a31780e0707ed08c75b33fe469f3807648138cb4",
+        "SUPABASE_URL": "https://ivlfsixvfovqitkajyjc.supabase.co"
+      }
     },
     "mem0": {
       "command": "uvx",
-      "args": ["mem0-mcp-server"],
+      "args": [
+        "mem0-mcp-server"
+      ],
       "env": {
         "MEM0_API_KEY": "m0-9qtbgj5W9LBGsAZ6pZFs38tkdZNEKKoqjsKBTR15",
         "MEM0_DEFAULT_USER_ID": "jasmine"

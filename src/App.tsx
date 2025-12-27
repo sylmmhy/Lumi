@@ -8,6 +8,7 @@ import { DevTestPage } from './pages/DevTestPage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
+import { LanguageProvider } from './context/LanguageContext'
 import { useAuth } from './hooks/useAuth'
 
 /**
@@ -84,20 +85,22 @@ function App() {
   }, [])
 
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/" element={<RootRedirect />} />
-        {/* 开发测试页面 - 仅在 DEV 模式下可用 */}
-        {import.meta.env.DEV && <Route path="/dev" element={<DevTestPage />} />}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/login/mobile" element={<LoginPage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-        <Route path="/terms" element={<TermsOfUsePage />} />
-        <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />
-        <Route path="/app/:tab" element={<AppTabsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          {/* 开发测试页面 - 仅在 DEV 模式下可用 */}
+          {import.meta.env.DEV && <Route path="/dev" element={<DevTestPage />} />}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login/mobile" element={<LoginPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfUsePage />} />
+          <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />
+          <Route path="/app/:tab" element={<AppTabsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </LanguageProvider>
   )
 }
 

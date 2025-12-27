@@ -1,5 +1,6 @@
 import { useContext, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export interface AuthModalProps {
   /** 是否展示弹窗 */
@@ -17,6 +18,7 @@ export interface AuthModalProps {
  * @returns {JSX.Element | null} 覆盖式登录弹窗
  */
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
+  const { t } = useTranslation();
   const auth = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +32,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       return;
     }
     if (!email || !password) {
-      setError('Please enter email and password');
+      setError(t('auth.enterEmailPassword'));
       return;
     }
 
@@ -45,7 +47,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       onSuccess?.();
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Authentication failed';
+      const message = err instanceof Error ? err.message : t('auth.authFailed');
       setError(message);
     } finally {
       setIsLoading(false);
@@ -67,14 +69,14 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         </button>
 
         <div className="p-8">
-          <h1 className="text-2xl font-bold text-center mb-2">Welcome</h1>
+          <h1 className="text-2xl font-bold text-center mb-2">{t('auth.welcome')}</h1>
           <p className="text-center text-gray-500 mb-6 text-sm">
-            Sign in or create an account to continue
+            {t('auth.signInPrompt')}
           </p>
 
           <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
               <input
                 type="email"
                 value={email}
@@ -85,7 +87,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
               <input
                 type="password"
                 value={password}
@@ -108,18 +110,18 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               disabled={isLoading}
               className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Processing...' : 'Continue'}
+              {isLoading ? t('common.processing') : t('auth.continue')}
             </button>
           </form>
 
           <p className="mt-6 text-center text-xs text-gray-400">
-            By continuing, you agree to our{' '}
+            {t('auth.termsAgree')}{' '}
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-              Terms of Use
+              {t('auth.termsOfUse')}
             </a>
-            {' '}and{' '}
+            {' '}{t('auth.and')}{' '}
             <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-              Privacy Policy
+              {t('auth.privacyPolicy')}
             </a>
           </p>
         </div>

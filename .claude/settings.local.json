@@ -27,7 +27,8 @@
       "mcp__supabase__list_tables",
       "WebSearch",
       "WebFetch(domain:ai.google.dev)",
-      "WebFetch(domain:www.philschmid.de)"
+      "WebFetch(domain:www.philschmid.de)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []

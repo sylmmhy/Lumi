@@ -5,6 +5,7 @@ import { parseTimeToString, getLocalDateString, formatDateForSeparator } from '.
 import { TimePicker } from './TimePicker';
 import { TaskGroup } from './TaskGroup';
 import { DateSeparator } from './DateSeparator';
+import { useTranslation } from '../../hooks/useTranslation';
 
 import { supabase } from '../../lib/supabase';
 
@@ -30,6 +31,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onRequestLogin,
     isLoggedIn = false,
 }) => {
+    const { t } = useTranslation();
     const [taskInput, setTaskInput] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date()); // New State for Date
@@ -85,7 +87,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         }
 
         if (!taskInput.trim()) {
-            alert('Please enter your task. AI will call you to remind!');
+            alert(t('home.pleaseEnterTask'));
             return;
         }
 
@@ -157,7 +159,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         }
 
         if (!emailToSubmit || !emailToSubmit.includes('@')) {
-            alert('Please enter a valid email address.');
+            alert(t('home.invalidEmail'));
             setIsSubmittingTest(false);
             return;
         }
@@ -177,7 +179,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             setTestEmail('');
         } catch (error: any) {
             console.error('Error requesting test version:', error);
-            alert('Failed to submit request. Please try again.');
+            alert(t('home.submitFailed'));
         } finally {
             setIsSubmittingTest(false);
         }
@@ -240,7 +242,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex-1 relative h-full overflow-hidden flex flex-col">
             {/* Sticky Top Bar (Floating) */}
             <div className={`absolute top-0 left-0 right-0 h-12 bg-white z-50 flex items-end justify-center pb-2 shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
-                <span className="italic text-brand-darkBlue text-xl" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>Setting Reminder</span>
+                <span className="italic text-brand-darkBlue text-xl" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.settingReminder')}</span>
             </div>
 
             {/* Unified Scroll Container */}
@@ -248,14 +250,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                 {/* Header Section (Scrolls away) - Increased z-index to 45 to be above sticky tabs (z-40) so TimePicker shows on top */}
                 <div className="bg-brand-blue px-6 pt-16 pb-1 relative z-[45] transition-colors duration-500">
-                    <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>Procrastinating?</p>
-                    <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>AI will call you</h1>
+                    <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
+                    <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
 
                     <div ref={inputContainerRef} className="bg-white rounded-2xl p-4 shadow-sm mb-6 transition-all focus-within:ring-2 focus-within:ring-blue-300">
                         <textarea
                             value={taskInput}
                             onChange={(e) => setTaskInput(e.target.value)}
-                            placeholder="Enter your task here.&#10;e.g., &quot;take shower&quot;"
+                            placeholder={t('home.placeholder')}
                             className="w-full resize-none outline-none text-brand-text placeholder-gray-400 text-lg leading-relaxed h-16 bg-transparent"
                             style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                         />
@@ -268,7 +270,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 className="bg-brand-darkBlue text-white italic text-4xl px-5 py-3 rounded-xl shadow-inner flex items-center gap-2 hover:bg-opacity-90 transition-all"
                                 style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}
                             >
-                                {selectedTime ? parseTimeToString(selectedTime) : 'Set a time'}
+                                {selectedTime ? parseTimeToString(selectedTime) : t('home.setTime')}
                             </button>
 
                             {showTimePicker && (
@@ -293,7 +295,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             checked={isRoutine}
                             onChange={() => setIsRoutine(!isRoutine)}
                         />
-                        <span className="italic text-lg group-hover:text-white transition-colors" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>Routine task</span>
+                        <span className="italic text-lg group-hover:text-white transition-colors" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>{t('home.routineTask')}</span>
                     </label>
 
                     {/* SVG Arc Bottom */}
@@ -309,7 +311,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             <button
                                 onClick={() => {
                                     if (!taskInput.trim()) {
-                                        alert('Please enter your task. AI will call you to remind!');
+                                        alert(t('home.pleaseEnterTask'));
                                         return;
                                     }
                                     handleSetTask();
@@ -341,7 +343,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.TODO ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
                                 style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                             >
-                                Now
+                                {t('home.now')}
                             </button>
                             <button
                                 ref={routineTabRef}
@@ -349,7 +351,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.ROUTINE ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
                                 style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                             >
-                                Routine
+                                {t('home.routine')}
                             </button>
                         </div>
                     </div>
@@ -365,7 +367,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                                 {dateGroup.morningTasks.length > 0 && (
                                     <TaskGroup
-                                        title="Morning"
+                                        title={t('home.morning')}
                                         icon="☀️"
                                         tasks={dateGroup.morningTasks}
                                         onToggle={onToggleComplete}
@@ -375,7 +377,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 {dateGroup.afternoonTasks.length > 0 && (
                                     <div className={dateGroup.morningTasks.length > 0 ? 'mt-6' : ''}>
                                         <TaskGroup
-                                            title="Afternoon"
+                                            title={t('home.afternoon')}
                                             icon="🌤️"
                                             tasks={dateGroup.afternoonTasks}
                                             onToggle={onToggleComplete}
@@ -386,7 +388,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 {dateGroup.eveningTasks.length > 0 && (
                                     <div className={(dateGroup.morningTasks.length > 0 || dateGroup.afternoonTasks.length > 0) ? 'mt-6' : ''}>
                                         <TaskGroup
-                                            title="Evening"
+                                            title={t('home.evening')}
                                             icon="🌙"
                                             tasks={dateGroup.eveningTasks}
                                             onToggle={onToggleComplete}
@@ -402,7 +404,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             <>
                                 {morningTasks.length > 0 && (
                                     <TaskGroup
-                                        title="Morning"
+                                        title={t('home.morning')}
                                         icon="☀️"
                                         tasks={morningTasks}
                                         onToggle={onToggleComplete}
@@ -411,7 +413,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 )}
                                 {afternoonTasks.length > 0 && (
                                     <TaskGroup
-                                        title="Afternoon"
+                                        title={t('home.afternoon')}
                                         icon="🌤️"
                                         tasks={afternoonTasks}
                                         onToggle={onToggleComplete}
@@ -420,7 +422,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 )}
                                 {eveningTasks.length > 0 && (
                                     <TaskGroup
-                                        title="Evening"
+                                        title={t('home.evening')}
                                         icon="🌙"
                                         tasks={eveningTasks}
                                         onToggle={onToggleComplete}
@@ -432,13 +434,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                         {filteredTasks.length === 0 && (
                             <div className="py-0 space-y-4">
-                                <p className="text-center font-serif italic text-lg text-gray-400">No tasks yet. Here are some examples:</p>
+                                <p className="text-center font-serif italic text-lg text-gray-400">{t('home.noTasks')}</p>
                                 <div className="space-y-3">
                                     {(activeTab === TaskType.TODO ? exampleNowTasks : exampleRoutineTasks).map((item, idx) => (
                                         <div key={`${item.title}-${idx}`} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
                                             <div className="flex flex-col text-left">
                                                 <span className="text-gray-800 font-semibold">{item.title}</span>
-                                                <span className="text-xs text-gray-400">Example</span>
+                                                <span className="text-xs text-gray-400">{t('home.example')}</span>
                                             </div>
                                             <div className="bg-brand-cream px-3 py-1 rounded-lg text-sm font-serif italic font-bold text-gray-800 shadow-inner">
                                                 {item.time}
@@ -452,12 +454,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         {/* Request Test Version Card */}
                         <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 shadow-sm mb-6">
                             <p className="text-gray-600 text-sm mb-4 leading-relaxed">
-                                💗 Please note that the phone-call reminder feature is only available on iOS or Android. If you are interested, you can click below to request a test version, and the developer will send you an email.
+                                💗 {t('home.testVersionNote')}
                             </p>
 
                             {testRequestSent ? (
                                 <div className="w-full bg-green-50 border border-green-200 text-green-700 font-serif italic font-bold text-sm py-3 rounded-xl text-center">
-                                    Request Sent! We'll contact you soon.
+                                    {t('home.requestSent')}
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -466,7 +468,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             type="email"
                                             value={testEmail}
                                             onChange={(e) => setTestEmail(e.target.value)}
-                                            placeholder="Enter your email"
+                                            placeholder={t('home.enterEmail')}
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 bg-white text-sm"
                                         />
                                     )}
@@ -475,7 +477,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         disabled={isSubmittingTest}
                                         className="w-full bg-white border border-gray-200 text-brand-darkBlue font-serif italic font-bold text-sm py-3 rounded-xl shadow-sm hover:bg-gray-100 transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {isSubmittingTest ? 'Submitting...' : 'Request Test Version'}
+                                        {isSubmittingTest ? t('common.submitting') : t('home.requestTestVersion')}
                                     </button>
                                 </div>
                             )}

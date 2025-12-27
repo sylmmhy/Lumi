@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SUPPORTED_LANGUAGES, getPreferredLanguage, setPreferredLanguage } from '../../lib/language';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface LanguageSelectionModalProps {
     isOpen: boolean;
@@ -7,6 +8,7 @@ interface LanguageSelectionModalProps {
 }
 
 export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ isOpen, onClose }) => {
+    const { t, setLanguage: setContextLanguage } = useTranslation();
     const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
 
     useEffect(() => {
@@ -20,6 +22,7 @@ export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ 
     const handleSelectLanguage = (code: string | null) => {
         setSelectedLanguage(code);
         setPreferredLanguage(code);
+        setContextLanguage(code); // Update context to trigger UI re-render
         onClose();
     };
 
@@ -34,14 +37,14 @@ export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ 
             >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-4 flex-none">
-                    <h3 className="text-xl font-bold text-gray-800">Lumi's Language</h3>
+                    <h3 className="text-xl font-bold text-gray-800">{t('language.title')}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
                         <i className="fa-solid fa-times text-xl"></i>
                     </button>
                 </div>
 
                 <p className="text-gray-500 text-sm mb-4 flex-none">
-                    Choose the language Lumi speaks. Auto-detect will match your speech.
+                    {t('language.description')}
                 </p>
 
                 {/* Language List */}
@@ -58,9 +61,9 @@ export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ 
                         <div className="flex items-center gap-3">
                             <span className="text-xl">🌍</span>
                             <div className="text-left">
-                                <p className="font-medium">Auto-detect</p>
+                                <p className="font-medium">{t('language.autoDetect')}</p>
                                 <p className={`text-xs ${selectedLanguage === null ? 'text-white/70' : 'text-gray-400'}`}>
-                                    Lumi matches your language
+                                    {t('language.autoDetectHint')}
                                 </p>
                             </div>
                         </div>

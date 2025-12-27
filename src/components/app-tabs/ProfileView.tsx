@@ -6,6 +6,7 @@ import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { AuthContext } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguage, getLanguageNativeName } from '../../lib/language';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
     isPremium: boolean;
@@ -19,6 +20,7 @@ interface ProfileViewProps {
  * @returns Profile 页面内容
  */
 export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLogin }) => {
+    const { t } = useTranslation();
     const auth = useContext(AuthContext);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -87,13 +89,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             const result = await auth?.updateProfile({ name: nameInput.trim() });
             if (result?.error) {
                 console.error('Error saving name:', result.error);
-                alert('Failed to save name. Please try again.');
+                alert(t('profile.saveFailed'));
             } else {
                 setIsEditingName(false);
             }
         } catch (error) {
             console.error('Error saving name:', error);
-            alert('Failed to save name. Please try again.');
+            alert(t('profile.saveFailed'));
         } finally {
             setIsSavingName(false);
         }
@@ -271,7 +273,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             }, 1500); // A bit faster than 3s to keep momentum
         } catch (error) {
             console.error('Error submitting feedback:', error);
-            alert('Failed to send feedback. Please try again.');
+            alert(t('profile.feedbackFailed'));
         } finally {
             setIsSubmittingFeedback(false);
         }
@@ -294,7 +296,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 });
 
             if (error) throw error;
-            alert("Thanks! I'll reach out to you soon.");
+            alert(t('feedback.thanksSoon'));
         } catch (error) {
             console.error('Error joining interview list:', error);
         }
@@ -343,14 +345,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 </div>
                 {/* Name Display/Edit Section */}
                 {isGuest ? (
-                    <h2 className="text-2xl font-serif font-bold text-gray-800">Not logged in</h2>
+                    <h2 className="text-2xl font-serif font-bold text-gray-800">{t('profile.notLoggedIn')}</h2>
                 ) : isEditingName ? (
                     <div className="flex flex-col items-center gap-2 w-full px-4">
                         <input
                             type="text"
                             value={nameInput}
                             onChange={(e) => setNameInput(e.target.value)}
-                            placeholder="Enter your name"
+                            placeholder={t('profile.enterName')}
                             className="text-xl font-serif font-bold text-gray-800 text-center bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 w-full max-w-[200px] focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
                             autoFocus
                             onKeyDown={(e) => {
@@ -362,13 +364,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 }
                             }}
                         />
-                        <p className="text-xs text-gray-400">Lumi will call you by this name</p>
+                        <p className="text-xs text-gray-400">{t('profile.nameHint')}</p>
                         <div className="flex gap-2 mt-1">
                             <button
                                 onClick={handleCancelEditName}
                                 className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                             <button
                                 onClick={handleSaveName}
@@ -378,7 +380,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 {isSavingName ? (
                                     <i className="fa-solid fa-spinner fa-spin"></i>
                                 ) : (
-                                    'Save'
+                                    t('common.save')
                                 )}
                             </button>
                         </div>
@@ -390,15 +392,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             className="group flex items-center gap-2 hover:bg-gray-50 rounded-lg px-3 py-1 transition-colors"
                         >
                             <h2 className="text-2xl font-serif font-bold text-gray-800">
-                                {auth?.userName || auth?.userEmail?.split('@')[0] || 'Set your name'}
+                                {auth?.userName || auth?.userEmail?.split('@')[0] || t('profile.setYourName')}
                             </h2>
                             <i className="fa-solid fa-pen text-xs text-gray-400 group-hover:text-brand-blue transition-colors"></i>
                         </button>
-                        <p className="text-xs text-gray-400 mt-0.5">Tap to edit name</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{t('profile.tapToEdit')}</p>
                     </div>
                 )}
-                <p className="text-gray-500 text-sm mt-1">{isGuest ? 'Not logged in' : (auth?.userEmail || 'user@example.com')}</p>
-                {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">Premium Active</p>}
+                <p className="text-gray-500 text-sm mt-1">{isGuest ? t('profile.notLoggedIn') : (auth?.userEmail || 'user@example.com')}</p>
+                {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">{t('profile.premiumActive')}</p>}
             </div>
 
             <div className="px-6 -mt-4 relative z-20">
@@ -413,7 +415,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                     <div className="relative z-10 text-center">
                         <p className="font-serif text-xl font-bold leading-relaxed mb-4 text-white drop-shadow-sm flex flex-col items-center">
-                            <span>Hi I‘am Miko, I have ADHD so I want to make sth help myself and others. Pls left your feedback I'm eager for that.</span>
+                            <span>{t('profile.feedbackIntro')}</span>
                             <span className="mt-2 inline-block">🥹🙏❤️</span>
                         </p>
 
@@ -437,14 +439,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             {feedbackSent ? (
                                 <div className="w-full h-10 flex items-center justify-center gap-2 text-[#F57C00] font-bold animate-fade-in">
                                     <i className="fa-solid fa-check-circle"></i>
-                                    <span>Thank you! ❤️</span>
+                                    <span>{t('profile.thankYou')} ❤️</span>
                                 </div>
                             ) : (
                                 <>
                                     <textarea
                                         value={feedbackInput}
                                         onChange={(e) => setFeedbackInput(e.target.value)}
-                                        placeholder="Type your feedback here..."
+                                        placeholder={t('profile.feedbackPlaceholder')}
                                         rows={3}
                                         className="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400 px-2 text-sm font-medium resize-none py-2 leading-relaxed text-left"
                                         onKeyDown={(e) => {
@@ -484,8 +486,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 <i className="fa-solid fa-language text-brand-blue"></i>
                             </div>
                             <div className="text-left">
-                                <p className="font-medium text-gray-800">Lumi's Language</p>
-                                <p className="text-sm text-gray-400">Voice output language</p>
+                                <p className="font-medium text-gray-800">{t('profile.lumiLanguage')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.voiceLanguage')}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -507,24 +509,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </div>
                         </div>
 
-                        <h3 className="font-serif font-bold text-gray-800 text-lg mb-4 text-center mt-4">Meet the Maker</h3>
-                        
+                        <h3 className="font-serif font-bold text-gray-800 text-lg mb-4 text-center mt-4">{t('profile.meetTheMaker')}</h3>
+
                         <div className="text-gray-600 text-sm leading-relaxed space-y-4 text-left">
                             <p>
-                                Hi, I'm a female indie developer based in San Francisco and a Columbia University alum.
+                                {t('profile.makerIntro')}
                             </p>
                             <p>
-                                I used to be a designer, but having ADHD means I'm always eager to explore new things.
+                                {t('profile.makerAdhd')}
                             </p>
                             <p>
-                                The rise of AI has given me the chance to build something that brings genuine happiness to myself and others, rather than letting my dreams fade in the daily grind.
+                                {t('profile.makerDream')}
                             </p>
                             <p>
-                                I hope my work fosters more inclusion and awareness for neurodiversity.
+                                {t('profile.makerHope')}
                             </p>
                             <div className="pt-2 border-t border-gray-100 mt-4">
                                 <p className="mt-3">
-                                    I'm so glad you're here. If you're in the Bay Area, let me buy you a coffee and hang out! You can reach me at:
+                                    {t('profile.makerContact')}
                                 </p>
                                 <a 
                                     href="mailto:ys3367@columbia.edu" 
@@ -543,7 +545,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
                 >
                     <i className={`fa-solid ${isGuest ? 'fa-right-to-bracket' : 'fa-right-from-bracket'}`}></i>
-                    <span>{isGuest ? 'Log In / Sign Up' : 'Log Out'}</span>
+                    <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
                 </button>
             </div>
 

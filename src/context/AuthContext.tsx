@@ -287,9 +287,32 @@ export function AuthProvider({
       localStorage.setItem('is_new_user', 'false');
       localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
 
-      // 从 user_metadata 或 users 表获取用户信息
-      const userName = data.user.user_metadata?.full_name || '';
-      const userPicture = data.user.user_metadata?.avatar_url || '';
+      // 先尝试从 user_metadata 获取用户信息
+      let userName = data.user.user_metadata?.full_name || '';
+      let userPicture = data.user.user_metadata?.avatar_url || '';
+
+      // 如果 user_metadata 没有名字或头像，从 public.users 表获取
+      if (!userName || !userPicture) {
+        try {
+          const { data: userProfile } = await supabase
+            .from('users')
+            .select('name, picture_url')
+            .eq('id', data.user.id)
+            .single();
+
+          if (userProfile) {
+            if (!userName && userProfile.name) {
+              userName = userProfile.name;
+            }
+            if (!userPicture && userProfile.picture_url) {
+              userPicture = userProfile.picture_url;
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ 获取用户资料失败:', err);
+        }
+      }
+
       if (userName) localStorage.setItem('user_name', userName);
       if (userPicture) localStorage.setItem('user_picture', userPicture);
 
@@ -620,6 +643,28 @@ export function AuthProvider({
       console.warn('⚠️ 原生登录未提供 refresh_token，Supabase 会话无法自动刷新');
     }
 
+    // 如果原生端没有传递用户名或头像，从数据库获取
+    if (supabase && (!userName || !pictureUrl)) {
+      try {
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('name, picture_url')
+          .eq('id', userId)
+          .single();
+
+        if (userProfile) {
+          if (!userName && userProfile.name) {
+            localStorage.setItem('user_name', userProfile.name);
+          }
+          if (!pictureUrl && userProfile.picture_url) {
+            localStorage.setItem('user_picture', userProfile.picture_url);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ 获取用户资料失败:', err);
+      }
+    }
+
     await setUserId(userId);
     if (email) {
       void setUserProperties({ email });
@@ -736,6 +781,31 @@ export function AuthProvider({
         localStorage.setItem('user_id', session.user.id);
         localStorage.setItem('user_email', session.user.email || '');
         localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+
+        // 如果 localStorage 中没有用户名或头像，从数据库获取
+        const storedName = localStorage.getItem('user_name');
+        const storedPicture = localStorage.getItem('user_picture');
+        if (!storedName || !storedPicture) {
+          try {
+            const { data: userProfile } = await client
+              .from('users')
+              .select('name, picture_url')
+              .eq('id', session.user.id)
+              .single();
+
+            if (userProfile) {
+              if (!storedName && userProfile.name) {
+                localStorage.setItem('user_name', userProfile.name);
+              }
+              if (!storedPicture && userProfile.picture_url) {
+                localStorage.setItem('user_picture', userProfile.picture_url);
+              }
+            }
+          } catch (err) {
+            console.warn('⚠️ 获取用户资料失败:', err);
+          }
+        }
+
         // 非阻塞绑定分析工具
         bindAnalyticsUser(session.user.id, session.user.email);
         checkLoginState();
@@ -767,6 +837,31 @@ export function AuthProvider({
           localStorage.setItem('user_id', restoredSession.session.user.id);
           localStorage.setItem('user_email', restoredSession.session.user.email || '');
           localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+
+          // 如果 localStorage 中没有用户名或头像，从数据库获取
+          const storedName = localStorage.getItem('user_name');
+          const storedPicture = localStorage.getItem('user_picture');
+          if (!storedName || !storedPicture) {
+            try {
+              const { data: userProfile } = await client
+                .from('users')
+                .select('name, picture_url')
+                .eq('id', restoredSession.session.user.id)
+                .single();
+
+              if (userProfile) {
+                if (!storedName && userProfile.name) {
+                  localStorage.setItem('user_name', userProfile.name);
+                }
+                if (!storedPicture && userProfile.picture_url) {
+                  localStorage.setItem('user_picture', userProfile.picture_url);
+                }
+              }
+            } catch (err) {
+              console.warn('⚠️ 获取用户资料失败:', err);
+            }
+          }
+
           // 非阻塞绑定分析工具
           bindAnalyticsUser(restoredSession.session.user.id, restoredSession.session.user.email);
           checkLoginState();

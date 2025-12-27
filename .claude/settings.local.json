@@ -24,7 +24,10 @@
       "Bash(git fetch:*)",
       "mcp__Amplitude__get_session_replays",
       "mcp__Amplitude__query_dataset",
-      "mcp__supabase__list_tables"
+      "mcp__supabase__list_tables",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:www.philschmid.de)"
     ],
     "deny": [],
     "ask": []

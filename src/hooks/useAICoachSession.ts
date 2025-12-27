@@ -4,6 +4,39 @@ import { useVirtualMessages } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { getSupabaseClient } from '../lib/supabase';
+import { updateReminder } from '../remindMe/services/reminderService';
+import type { FunctionDeclaration } from '@google/genai';
+
+// ==========================================
+// Function Calling 工具定义
+// ==========================================
+
+/**
+ * AI 可调用的工具函数声明
+ * 当用户请求重新安排任务时间时，AI 会调用这个函数
+ */
+const AI_COACH_TOOLS: FunctionDeclaration[] = [
+  {
+    name: 'reschedule_task_and_end_session',
+    description: `当用户请求稍后再提醒、重新安排任务时间时调用此函数。例如：
+    - "15分钟后再提醒我"
+    - "半小时后叫我"
+    - "我想晚点做，30分钟后提醒"
+    - "Remind me in 20 minutes"
+    - "I'll do it later, call me in 10 minutes"
+    调用此函数后，当前任务的提醒时间会被更新为指定的分钟数后，然后会话将自动结束。`,
+    parameters: {
+      type: 'object',
+      properties: {
+        minutes: {
+          type: 'number',
+          description: '多少分钟后重新提醒用户（必须是正整数，1-180之间）',
+        },
+      },
+      required: ['minutes'],
+    },
+  },
+];
 
 /**
  * AI Coach Session Hook - 组合层
@@ -40,6 +73,10 @@ export interface UseAICoachSessionOptions {
   enableVirtualMessages?: boolean;
   /** 是否启用 VAD（用户说话检测），默认 true */
   enableVAD?: boolean;
+  /** 当 AI 重新安排任务时间后的回调（任务已更新） */
+  onTaskRescheduled?: (taskId: string, newTime: string) => void;
+  /** 当 AI 主动结束会话时的回调 */
+  onAIEndSession?: () => void;
 }
 
 /**
@@ -58,6 +95,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onCountdownComplete,
     enableVirtualMessages = true,
     enableVAD = true,
+    onTaskRescheduled,
+    onAIEndSession,
   } = options;
 
   // ==========================================
@@ -79,6 +118,18 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   
   // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
   const addMessageRef = useRef<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>(() => {});
+
+  // 使用 ref 存储回调函数，避免 useGeminiLive 重新创建
+  const onTaskRescheduledRef = useRef(onTaskRescheduled);
+  const onAIEndSessionRef = useRef(onAIEndSession);
+  const currentTaskIdRef = useRef<string | null>(null);
+  const endSessionRef = useRef<(() => void) | null>(null);
+
+  // 更新 refs
+  useEffect(() => {
+    onTaskRescheduledRef.current = onTaskRescheduled;
+    onAIEndSessionRef.current = onAIEndSession;
+  }, [onTaskRescheduled, onAIEndSession]);
 
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
@@ -105,9 +156,86 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [addMessage]);
 
   // ==========================================
+  // Function Calling 处理
+  // ==========================================
+  const handleToolCall = useCallback(async (toolCall: { functionName: string; args: Record<string, unknown> }) => {
+    const { functionName, args } = toolCall;
+
+    if (import.meta.env.DEV) {
+      console.log('🔧 AI Coach 收到工具调用:', functionName, args);
+    }
+
+    if (functionName === 'reschedule_task_and_end_session') {
+      const minutes = Math.min(Math.max(Number(args.minutes) || 15, 1), 180); // 限制在 1-180 分钟
+      const taskId = currentTaskIdRef.current;
+
+      if (!taskId) {
+        console.warn('⚠️ 无法重新安排任务：没有当前任务 ID');
+        return;
+      }
+
+      // 计算新的时间（当前时间 + minutes 分钟）
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + minutes);
+      const newTime = now.toTimeString().slice(0, 5); // HH:mm 格式
+      const newDisplayTime = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }).toLowerCase(); // h:mm am/pm 格式
+
+      if (import.meta.env.DEV) {
+        console.log(`⏰ 重新安排任务: ID=${taskId}, 新时间=${newTime} (${newDisplayTime}), ${minutes}分钟后`);
+      }
+
+      try {
+        // 更新任务时间
+        const updatedTask = await updateReminder(taskId, {
+          time: newTime,
+          displayTime: newDisplayTime,
+        });
+
+        if (updatedTask) {
+          if (import.meta.env.DEV) {
+            console.log('✅ 任务时间已更新:', updatedTask);
+          }
+
+          // 调用外部回调通知任务已更新
+          if (onTaskRescheduledRef.current) {
+            onTaskRescheduledRef.current(taskId, newTime);
+          }
+        } else {
+          console.error('❌ 更新任务失败');
+        }
+      } catch (error) {
+        console.error('❌ 更新任务出错:', error);
+      }
+
+      // 延迟一小段时间让 AI 说完告别语，然后结束会话
+      setTimeout(() => {
+        if (import.meta.env.DEV) {
+          console.log('👋 AI 请求结束会话');
+        }
+
+        // 调用 AI 结束会话回调
+        if (onAIEndSessionRef.current) {
+          onAIEndSessionRef.current();
+        }
+
+        // 结束会话
+        if (endSessionRef.current) {
+          endSessionRef.current();
+        }
+      }, 3000); // 3秒后结束，给 AI 时间说告别语
+    }
+  }, []);
+
+  // ==========================================
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
+    tools: AI_COACH_TOOLS,
+    onToolCall: handleToolCall,
     onTranscriptUpdate: (newTranscript) => {
       const lastMessage = newTranscript[newTranscript.length - 1];
       if (!lastMessage) return;
@@ -231,20 +359,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * 开始 AI 教练会话
    * @param taskDescription 任务描述
    * @param options 可选配置
+   * @param options.taskId 当前任务的 ID（用于 AI 重新安排任务时间）
    * @param options.customSystemInstruction 自定义系统指令
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
+   * @param options.preferredLanguage 首选语言，如 "Chinese"、"English"，不传则自动检测用户语言
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { customSystemInstruction?: string; userName?: string }
+    options?: { taskId?: string; customSystemInstruction?: string; userName?: string; preferredLanguage?: string }
   ) => {
-    const { customSystemInstruction, userName } = options || {};
+    const { taskId, customSystemInstruction, userName, preferredLanguage } = options || {};
     processedTranscriptRef.current.clear();
+    currentTaskIdRef.current = taskId || null;
     setIsConnecting(true);
 
    try {
       if (import.meta.env.DEV) {
-        console.log('🚀 开始 AI 教练会话...');
+        console.log('🚀 开始 AI 教练会话...', taskId ? `任务ID: ${taskId}` : '(无任务ID)');
       }
 
       // 关键修复：先断开旧会话，确保完全清理
@@ -302,7 +433,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         }
 
         const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: taskDescription, userName }
+          body: { taskInput: taskDescription, userName, preferredLanguage }
         });
 
         if (error) {
@@ -371,6 +502,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     });
     setTaskStartTime(0);
   }, [endSession, initialTime]);
+
+  // 更新 endSession ref（用于 handleToolCall 中调用）
+  useEffect(() => {
+    endSessionRef.current = endSession;
+  }, [endSession]);
 
   // 组件卸载时断开连接
   useEffect(() => {

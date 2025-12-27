@@ -1,9 +1,11 @@
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { PremiumModal, SpecialOfferModal } from '../modals/PremiumModals';
 import { AvatarSelectionPopup } from '../modals/AvatarSelectionPopup';
 import { FeedbackInterviewModal } from '../modals/FeedbackInterviewModal';
+import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { AuthContext } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getPreferredLanguage, getLanguageNativeName } from '../../lib/language';
 
 interface ProfileViewProps {
     isPremium: boolean;
@@ -38,6 +40,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [feedbackSent, setFeedbackSent] = useState(false);
     const [currentFeedbackId, setCurrentFeedbackId] = useState<string | null>(null); // Track current feedback session ID
     const [showInterviewModal, setShowInterviewModal] = useState(false);
+    const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [currentLanguage, setCurrentLanguage] = useState<string | null>(null);
+
+    // Load current language preference
+    useEffect(() => {
+        setCurrentLanguage(getPreferredLanguage());
+    }, [showLanguageModal]); // Refresh when modal closes
 
     const handleClosePremium = () => {
         setShowPremiumModal(false);
@@ -464,30 +473,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </div>
                 </div>
 
-                {/* Settings List - Temporarily hidden per user request */}
-                {/* <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-8">
-                    {showLinkedAccounts && (
-                        <>
-                            <MenuItem icon="fa-brands fa-google" label="Link Google Account" sub="Connected" />
-                            <MenuItem icon="fa-solid fa-mobile-screen" label="Link Phone Number" />
-                            <div className="h-px bg-gray-50 mx-4 my-1"></div>
-                        </>
-                    )}
-
-                    <MenuItem icon="fa-brands fa-discord" label="Join Discord Community" />
-                    <MenuItem icon="fa-solid fa-headset" label="Contact Developer" />
-
-                    <div className="h-px bg-gray-50 mx-4 my-1"></div>
-                    <MenuItem icon="fa-solid fa-shield-halved" label="Privacy Policy" />
-                    <MenuItem icon="fa-solid fa-file-contract" label="Terms of Service" />
-                    <div className="h-px bg-gray-50 mx-4 my-1"></div>
-                    <MenuItem
-                        icon="fa-solid fa-right-from-bracket"
-                        label="Log Out"
-                        isDestructive
-                        onClick={handleLogout}
-                    />
-                </div> */}
+                {/* Settings Section */}
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+                    <button
+                        onClick={() => setShowLanguageModal(true)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-language text-brand-blue"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">Lumi's Language</p>
+                                <p className="text-sm text-gray-400">Voice output language</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {getLanguageNativeName(currentLanguage)}
+                            </span>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </div>
+                    </button>
+                </div>
 
                 {/* Biography Section */}
                 <div className="mb-8 mt-4">
@@ -552,11 +560,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 />
             )}
             
-            <FeedbackInterviewModal 
+            <FeedbackInterviewModal
                 isOpen={showInterviewModal}
                 onClose={() => setShowInterviewModal(false)}
                 onConfirm={handleJoinInterview}
                 isGuest={isGuest}
+            />
+
+            <LanguageSelectionModal
+                isOpen={showLanguageModal}
+                onClose={() => setShowLanguageModal(false)}
             />
         </div>
     );

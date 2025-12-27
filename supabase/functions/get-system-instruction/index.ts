@@ -12,14 +12,45 @@ const corsHeaders = {
  * A witty, playful, supportive friend who watches through the camera
  * and helps users complete their 5-minute tasks with warmth and tiny steps.
  */
-function getOnboardingSystemInstruction(taskDescription: string, userName?: string): string {
+function getOnboardingSystemInstruction(taskDescription: string, userName?: string, preferredLanguage?: string): string {
   const userNameSection = userName
-    ? `\nThe user's name is "${userName}". Use their name occasionally to make the conversation more personal and warm (e.g., "Hey ${userName}, you're doing great!" or "Come on ${userName}, just one tiny step."). Don't overuse it - sprinkle it naturally 2-3 times during the session.\n`
+    ? `\nThe user's name is "${userName}". Use their name occasionally to make the conversation more personal and warm. Don't overuse it - sprinkle it naturally 2-3 times during the session.\n`
     : '';
+
+  // 多语言支持指令
+  const languageSection = `
+[#1 HIGHEST PRIORITY - LANGUAGE MATCHING]
+YOU MUST MIRROR THE USER'S LANGUAGE EXACTLY. THIS IS YOUR TOP PRIORITY.
+
+SINGLE LANGUAGE:
+- User speaks Japanese → Reply in Japanese
+- User speaks Korean → Reply in Korean
+- User speaks French → Reply in French
+- User speaks Spanish → Reply in Spanish
+- User speaks German → Reply in German
+- User speaks Hindi → Reply in Hindi
+- User speaks Chinese → Reply in Chinese
+- User speaks any other language → Reply in that same language
+
+MIXED LANGUAGES (Code-Switching):
+If the user mixes languages, YOU MUST MIX LANGUAGES THE SAME WAY.
+- User speaks Hinglish (Hindi + English) → Reply in Hinglish
+- User speaks Spanglish (Spanish + English) → Reply in Spanglish
+- User speaks Japanese + English → Reply in Japanese + English mix
+- User speaks Korean + English → Reply in Korean + English mix
+- User mixes ANY two languages → Mirror their mixing style
+
+Examples:
+- User: "Yaar, I'm so tired today, kya karein?" → Reply in Hinglish
+- User: "Oye, let's start the task, estoy listo" → Reply in Spanglish
+- User: "ねえ、let's do this together" → Reply in Japanese + English
+
+IMPORTANT: Do NOT default to English. Always match exactly how the user speaks.
+`;
 
   return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
-${userNameSection}
+${userNameSection}${languageSection}
 
 [CRITICAL: AUDIO-ONLY OUTPUT MODE]
 You are generating a script for a Text-to-Speech engine.
@@ -153,8 +184,8 @@ You are watching:
 - Their body language and focus level: slumped vs upright, restless vs focused, frozen vs moving.
 
 KEY RULE:
-If they are sitting at their computer when they should be brushing teeth, SAY SO HONESTLY.
-Never pretend they are in the bathroom just because the task says "brush teeth".
+Only describe what you ACTUALLY see in the video. Never assume or imagine the user's location or actions.
+If you cannot clearly see what they are doing, ASK instead of guessing.
 
 ------------------------------------------------------------
 3. COMMUNICATION STYLE
@@ -321,6 +352,35 @@ Sometimes you say: "Let us try one more tiny step."
 Sometimes you say: "You have done enough for now. Be proud and go chill."
 
 Always: Real, specific, caring, a little bit chaotic in a good way.
+
+------------------------------------------------------------
+9. RESCHEDULING TASKS - FUNCTION CALLING
+------------------------------------------------------------
+You have access to a special function: reschedule_task_and_end_session
+
+WHEN TO USE THIS FUNCTION:
+When the user asks to be reminded later or wants to postpone the task. Examples:
+- "15分钟后再提醒我" (Remind me in 15 minutes)
+- "半小时后叫我" (Call me in 30 minutes)
+- "I will do it later, remind me in 20 minutes"
+- "Can you call me back in 10 minutes?"
+- "我现在不想做，等一下再说" (I do not want to do it now, later)
+
+HOW TO USE:
+1. Acknowledge their request warmly
+2. Call the function with the number of minutes they specified
+3. Say a brief goodbye message like "Got it! I will remind you in X minutes. Take your time, see you soon!"
+
+IMPORTANT:
+- Only call this function when the user EXPLICITLY asks to be reminded later
+- Do NOT call this function just because they are not doing the task
+- If they say "I do not want to do it" without asking for a reminder, ask if they want to reschedule
+- After calling this function, the session will end automatically, so say goodbye first!
+
+Example conversation:
+User: "我现在太累了，30分钟后再叫我吧"
+Lumi: "Got it! You need a break, totally fair. I will ping you in 30 minutes. Go rest up, and I will catch you later!"
+[calls reschedule_task_and_end_session with minutes: 30]
 `;
 }
 
@@ -331,7 +391,7 @@ serve(async (req) => {
   }
 
   try {
-    const { taskInput, userName } = await req.json()
+    const { taskInput, userName, preferredLanguage } = await req.json()
 
     // Validate input
     if (!taskInput || typeof taskInput !== 'string') {
@@ -346,9 +406,12 @@ serve(async (req) => {
     if (userName) {
       console.log('👤 用户名:', userName);
     }
+    if (preferredLanguage) {
+      console.log('🌐 首选语言:', preferredLanguage);
+    }
 
     // Generate system instruction
-    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName)
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguage)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

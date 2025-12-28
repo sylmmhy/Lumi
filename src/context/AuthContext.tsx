@@ -1,4 +1,5 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AuthContext, type AuthContextValue, type AuthState, type NativeAuthPayload } from './AuthContextDefinition';
 import type { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -11,15 +12,7 @@ import { resetPostHogUser } from '../lib/posthog';
 const DEFAULT_LOGIN_PATH = '/login/mobile';
 const NATIVE_LOGIN_FLAG_KEY = 'native_login';
 
-interface NativeAuthPayload {
-  userId?: string;
-  email?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  sessionToken?: string;
-  name?: string;
-  pictureUrl?: string;
-}
+
 
 declare global {
   interface Window {
@@ -64,40 +57,7 @@ declare global {
   }
 }
 
-export interface AuthState {
-  isLoggedIn: boolean;
-  userId: string | null;
-  userEmail: string | null;
-  userName: string | null;
-  userPicture: string | null;
-  isNewUser: boolean;
-  sessionToken: string | null;
-  refreshToken: string | null;
-  isNativeLogin: boolean;
-}
 
-export interface AuthContextValue extends AuthState {
-  /** 是否正在处理 OAuth 回调（用于避免过早跳转） */
-  isOAuthProcessing: boolean;
-  /** 同步本地存储并返回最新登录态 */
-  checkLoginState: () => { isLoggedIn: boolean; userId: string | null; sessionToken: string | null };
-  /** 跳转到登录页，带 redirect 参数 */
-  navigateToLogin: (redirectPath?: string) => void;
-  /** 邮箱登录 */
-  loginWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  /** 邮箱注册 */
-  signupWithEmail: (email: string, password: string, fullName?: string, visitorId?: string) => Promise<{ error: string | null; data?: any }>;
-  /** 统一登录/注册：自动判断用户是否存在，已注册则登录，未注册则自动创建账户 */
-  authWithEmail: (email: string, password: string) => Promise<{ error: string | null; isNewUser?: boolean }>;
-  /** 更新用户信息 */
-  updateProfile: (updates: { name?: string; pictureUrl?: string }) => Promise<{ error: string | null }>;
-  /** 登出并刷新登录态 */
-  logout: () => void;
-  /** 清空所有本地存储 */
-  fullReset: () => void;
-  /** 标记引导完成 */
-  markOnboardingCompleted: (taskDescription: string, timeSpent: number, status: 'success' | 'failure') => void;
-}
 
 // 需要读取的 localStorage keys
 const AUTH_STORAGE_KEYS = [
@@ -298,7 +258,7 @@ function requestNativeAuth(): void {
   }
 }
 
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -563,9 +523,9 @@ export function AuthProvider({
     // 检查是否是"用户不存在"或"密码错误"的情况
     const errorLower = loginResult.error.toLowerCase();
     const isInvalidCredentials = errorLower.includes('invalid') ||
-                                  errorLower.includes('credentials') ||
-                                  errorLower.includes('not found') ||
-                                  errorLower.includes('no user');
+      errorLower.includes('credentials') ||
+      errorLower.includes('not found') ||
+      errorLower.includes('no user');
 
     if (isInvalidCredentials) {
       // 尝试注册新用户
@@ -592,7 +552,7 @@ export function AuthProvider({
   const logout = useCallback(async () => {
     // 获取当前的 session token 用于调用 API
     const currentToken = localStorage.getItem('session_token');
-    
+
     if (supabase) {
       // 如果有有效的 token，先清理服务器端的设备记录
       if (currentToken) {
@@ -606,7 +566,7 @@ export function AuthProvider({
             },
             body: JSON.stringify({ action: 'remove_voip_device' }),
           });
-          
+
           if (response.ok) {
             console.log('✅ VoIP 设备记录已从服务器清理');
           } else {
@@ -616,10 +576,10 @@ export function AuthProvider({
           console.error('❌ 清理 VoIP 设备记录时出错:', error);
         }
       }
-      
+
       await supabase.auth.signOut();
     }
-    
+
     // 清理本地存储的 VoIP token
     localStorage.removeItem('voip_token');
     localStorage.removeItem('user_id');
@@ -686,7 +646,7 @@ export function AuthProvider({
 
   const updateProfile = useCallback(async (updates: { name?: string; pictureUrl?: string }) => {
     if (!supabase) return { error: 'Supabase client not initialized' };
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'No user logged in' };
 
@@ -714,7 +674,7 @@ export function AuthProvider({
     // 3. Update local storage
     if (updates.name) localStorage.setItem('user_name', updates.name);
     if (updates.pictureUrl) localStorage.setItem('user_picture', updates.pictureUrl);
-    
+
     checkLoginState();
     return { error: null };
   }, [checkLoginState]);

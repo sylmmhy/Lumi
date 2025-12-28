@@ -107,10 +107,11 @@ export function TaskFlowController({
   }, [aiCoach]);
 
   if (step === 'working') {
+    const { canvasRef } = aiCoach;
     return (
       <>
         {/* 隐藏画布：Gemini Live 需要 canvas 来推送视频帧 */}
-        <canvas ref={aiCoach.canvasRef} className="hidden" />
+        <canvas ref={canvasRef} className="hidden" />
         <TaskWorkingView
           taskDescription={taskName}
           time={aiCoach.state.timeRemaining}

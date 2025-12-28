@@ -557,9 +557,10 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }
 
   if (step === 'working') {
+    const { canvasRef } = aiCoach;
     return (
       <>
-        <canvas ref={aiCoach.canvasRef} className="hidden" />
+        <canvas ref={canvasRef} className="hidden" />
         <TaskWorkingView
           taskDescription={aiCoach.state.taskDescription}
           time={aiCoach.state.timeRemaining}
@@ -1072,7 +1073,8 @@ function TaskCompleteAnimationTest({ onBack }: { onBack: () => void }) {
     ));
 
     // 2. 同时触发彩带（从卡片位置喷出）
-    setConfettiConfig({ trigger: Date.now(), originY });
+    // 2. 同时触发彩带（从卡片位置喷出）
+    setConfettiConfig(prev => ({ trigger: prev.trigger + 1, originY }));
 
     // 3. 等待 500ms 后开始淡出动画
     setTimeout(() => {
@@ -1262,18 +1264,16 @@ setTrigger(Date.now());`}</pre>
                 <button
                   onClick={() => handleToggle(task.id)}
                   disabled={task.completed}
-                  className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all ${
-                    task.completed
-                      ? 'bg-brand-goldBorder border-brand-goldBorder'
-                      : 'border-brand-goldBorder bg-transparent hover:bg-brand-goldBorder/10'
-                  }`}
+                  className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all ${task.completed
+                    ? 'bg-brand-goldBorder border-brand-goldBorder'
+                    : 'border-brand-goldBorder bg-transparent hover:bg-brand-goldBorder/10'
+                    }`}
                 >
                   {task.completed && <i className="fa-solid fa-check text-white text-xs"></i>}
                 </button>
                 <span
-                  className={`text-lg text-gray-700 font-medium transition-all duration-300 ${
-                    task.completed ? 'line-through decoration-brand-blue/50' : ''
-                  }`}
+                  className={`text-lg text-gray-700 font-medium transition-all duration-300 ${task.completed ? 'line-through decoration-brand-blue/50' : ''
+                    }`}
                 >
                   {task.text}
                 </span>

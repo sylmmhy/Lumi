@@ -118,6 +118,7 @@ export function TaskWorkingView({
 }: TaskWorkingViewProps) {
   const displayTime = timeMode === 'countdown' ? time : time;
   const [fireSize, setFireSize] = useState<string>(getResponsiveFireSize());
+  const { enabled: cameraEnabled, videoRef } = camera || {};
 
   useEffect(() => {
     /**
@@ -149,10 +150,10 @@ export function TaskWorkingView({
         </div>
 
         {/* 2. 悬浮摄像头 (右下角) */}
-        {camera?.enabled && (
+        {cameraEnabled && (
           <div className="absolute bottom-4 right-4 w-[120px] h-[160px] rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-50 bg-black/50 backdrop-blur-sm">
             <video
-              ref={camera.videoRef}
+              ref={videoRef}
               autoPlay
               playsInline
               muted
@@ -171,7 +172,7 @@ export function TaskWorkingView({
         )}
 
         {/* 摄像头开启按钮 (如果摄像头关闭，显示在右下角) */}
-        {onToggleCamera && !camera?.enabled && (
+        {onToggleCamera && !cameraEnabled && (
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-1 z-40 pointer-events-none">
             <div className="text-white/60 text-sm font-medium text-left leading-tight pointer-events-auto flex-1 min-w-0">
               💡 Allow camera access so AI can better assist you.

@@ -19,8 +19,7 @@ interface StatsHeaderProps {
  * @param props
  */
 export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange, streak }) => {
-    const { t, uiLanguage } = useTranslation();
-    const isEnglish = uiLanguage === 'en';
+    const { t } = useTranslation();
 
     return (
         <div className="relative w-full overflow-hidden">

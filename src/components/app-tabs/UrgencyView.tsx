@@ -3,18 +3,20 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Task } from '../../remindMe/types';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { TaskItem } from './TaskItem';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const QUICK_TAGS = [
-    { emoji: '💪', text: 'Work out' },
-    { emoji: '🛏️', text: 'Get out of bed' },
-    { emoji: '😴', text: 'Go to sleep' },
-    { emoji: '📚', text: 'Start reading' },
-    { emoji: '🛁', text: 'Need to shower' },
-    { emoji: '📝', text: 'Start studying' },
-    { emoji: '✉️', text: 'Reply to emails' },
-    { emoji: '📞', text: 'Make that call' },
-    { emoji: '🍳', text: 'Cook dinner' },
-    { emoji: '🧹', text: 'Clean up' },
+// Quick tags with translation keys
+const QUICK_TAG_KEYS = [
+    { emoji: '💪', key: 'urgency.workout' },
+    { emoji: '🛏️', key: 'urgency.getOutOfBed' },
+    { emoji: '😴', key: 'urgency.goToSleep' },
+    { emoji: '📚', key: 'urgency.startReading' },
+    { emoji: '🛁', key: 'urgency.needShower' },
+    { emoji: '📝', key: 'urgency.startStudying' },
+    { emoji: '✉️', key: 'urgency.replyEmails' },
+    { emoji: '📞', key: 'urgency.makeCall' },
+    { emoji: '🍳', key: 'urgency.cookDinner' },
+    { emoji: '🧹', key: 'urgency.cleanUp' },
 ];
 
 interface UrgencyViewProps {
@@ -47,10 +49,17 @@ const QuickTag = ({ emoji, text, onClick }: { emoji: string; text: string; onCli
 );
 
 const QuickTagsRow: React.FC<{ onSelect: (text: string) => void }> = ({ onSelect }) => {
+    const { t } = useTranslation();
     const quickTagsScrollRef = useRef<HTMLDivElement | null>(null);
     const quickTagsAnimationRef = useRef<number | null>(null);
     const quickTagsVirtualScrollRef = useRef(0);
     const quickTagsPauseRef = useRef(false);
+
+    // Translate quick tags
+    const QUICK_TAGS = QUICK_TAG_KEYS.map(tag => ({
+        emoji: tag.emoji,
+        text: t(tag.key),
+    }));
 
     const pauseQuickTagsAutoScroll = () => {
         quickTagsPauseRef.current = true;
@@ -150,6 +159,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
     onQuickFill,
     onRegisterSubmit,
 }) => {
+    const { t } = useTranslation();
     const [showEmptyWarning, setShowEmptyWarning] = useState(false);
 
     const handleSubmit = () => {
@@ -173,8 +183,8 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
 
             <div
                 className={`w-full max-w-[520px] rounded-2xl p-4 mb-2 border transition-all duration-300 ${
-                    showEmptyWarning 
-                        ? 'border-brand-darkOrange shadow-[0_0_15px_rgba(194,58,34,0.15)]' 
+                    showEmptyWarning
+                        ? 'border-brand-darkOrange shadow-[0_0_15px_rgba(194,58,34,0.15)]'
                         : (withBorder ? 'border-gray-200' : 'border-transparent')
                 }`}
                 style={{ backgroundColor: '#F3F4F6' }}
@@ -185,7 +195,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
                         onChange(e.target.value);
                         if (showEmptyWarning) setShowEmptyWarning(false);
                     }}
-                    placeholder='e.g., "take shower"'
+                    placeholder={t('urgency.placeholder')}
                     rows={1}
                     className="w-full resize-none outline-none text-brand-text placeholder-gray-500 text-lg leading-relaxed bg-transparent"
                 />
@@ -193,7 +203,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
 
             {showEmptyWarning && (
                 <p className="w-full text-left text-brand-darkOrange text-sm font-medium mb-3 px-1 animate-fade-in">
-                    You need to enter the task you want to do
+                    {t('urgency.emptyWarning')}
                 </p>
             )}
 
@@ -219,6 +229,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
  * @returns {JSX.Element} 含快捷标签滚动条、任务列表和自定义输入的视图
  */
 export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, onToggleComplete, onDeleteTask, onRegisterHelpMeStart }) => {
+    const { t } = useTranslation();
     const [customTask, setCustomTask] = useState('');
     // 显示今天所有未完成的任务（todo + routine_instance），不显示 routine 模板
     const filteredTasks = tasks.filter(t => (t.type === 'todo' || t.type === 'routine_instance') && !t.completed);
@@ -254,8 +265,8 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                     />
                 </div>
 
-                <h1 className="text-[35px] text-[#ebebeb] capitalize leading-[38.99px] mb-1" style={{ fontFamily: "'Sansita One', sans-serif" }}>Get you start!</h1>
-                <h2 className="text-[58px] text-[#f3fa93] capitalize leading-[60.946px] mb-4" style={{ fontFamily: "'Sansita One', sans-serif" }}>In 5 Minutes!</h2>
+                <h1 className="text-[35px] text-[#ebebeb] capitalize leading-[38.99px] mb-1" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.getYouStart')}</h1>
+                <h2 className="text-[58px] text-[#f3fa93] capitalize leading-[60.946px] mb-4" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.inFiveMinutes')}</h2>
 
                 {/* SVG Curve Bottom */}
                 <div className="absolute bottom-0 left-0 right-0 translate-y-[98%] z-10 overflow-visible">
@@ -275,7 +286,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                     {filteredTasks.length === 0 ? (
                         <div className="flex flex-col items-center text-center pt-0">
                             <CustomTaskForm
-                                title="Enter your task here"
+                                title={t('urgency.enterTaskHere')}
                                 value={customTask}
                                 onChange={setCustomTask}
                                 onSubmit={handleCustomTaskStart}
@@ -285,7 +296,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                         </div>
                     ) : (
                         <>
-                            <h3 className="text-center font-serif italic text-brand-text text-[20px] font-bold mb-6">Pick one task to start</h3>
+                            <h3 className="text-center font-serif italic text-brand-text text-[20px] font-bold mb-6">{t('urgency.pickOneTask')}</h3>
                             {filteredTasks.map(task => (
                                 <TaskItem
                                     key={task.id}
@@ -305,7 +316,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                     <div className="mt-16 mb-8">
                         <div className="h-[1px] bg-gray-200 w-full mb-12"></div>
                         <CustomTaskForm
-                            title="Enter your task here"
+                            title={t('urgency.enterTaskHere')}
                             value={customTask}
                             onChange={setCustomTask}
                             onSubmit={handleCustomTaskStart}

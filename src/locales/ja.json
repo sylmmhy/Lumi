@@ -22,6 +22,8 @@
   "home.evening": "夜",
   "home.noTasks": "まだ何もないよ。こんな感じで使ってね：",
   "home.example": "例",
+  "home.exampleVehicle": "車の登録を忘れずに",
+  "home.examplePackage": "荷物を期限内に送る",
   "home.pleaseEnterTask": "やることを入力してね！AIが電話でリマインドするよ！",
   "home.testVersionNote": "電話リマインダーはiOS/Androidアプリだけで使えるよ。興味あったら下からテスト版をリクエストしてね。メールで連絡するよ！",
   "home.requestTestVersion": "テスト版をもらう",
@@ -58,6 +60,9 @@
   "stats.oct": "10月",
   "stats.nov": "11月",
   "stats.dec": "12月",
+  "stats.routineTab": "習慣",
+  "stats.doneTab": "完了",
+  "stats.dayStreak": "連続記録",
 
   "profile.notLoggedIn": "ログインしてないよ",
   "profile.enterName": "名前を入れてね",
@@ -96,6 +101,7 @@
 
   "language.title": "Lumiの声の言語",
   "language.description": "Lumiが話す言語を選んでね。自動だとあなたの言葉に合わせるよ。",
+  "language.descriptionMulti": "複数の言語を選べるよ。",
   "language.autoDetect": "自動",
   "language.autoDetectHint": "Lumiがあなたの言葉に合わせる",
 
@@ -107,7 +113,7 @@
 
   "feedback.title": "感想ありがとう！",
   "feedback.contactInfo": "連絡先",
-  "feedback.interviewInvite": "15分くらいお話できたら、お礼にスタバ代（$5）送るね...",
+  "feedback.interviewInvite": "15分くらいお話できたら、お礼にスタバ代（500円）送るね。あなたの意見、すごく大事！",
   "feedback.yesInterested": "話したい！",
   "feedback.noThanks": "大丈夫",
   "feedback.emailPrompt": "連絡用にメアド教えてね！",
@@ -115,5 +121,35 @@
   "feedback.invalidEmail": "ちゃんとしたメアドを入れてね",
   "feedback.thanksSoon": "ありがとう！すぐ連絡するね",
 
-  "task.start": "始める"
+  "task.start": "始める",
+
+  "urgency.getYouStart": "今すぐ始めよう！",
+  "urgency.inFiveMinutes": "5分で！",
+  "urgency.enterTaskHere": "やることを入力してね",
+  "urgency.pickOneTask": "1つ選んで始めよう",
+  "urgency.placeholder": "例：「シャワー浴びる」",
+  "urgency.emptyWarning": "やることを入力してね",
+  "urgency.workout": "運動する",
+  "urgency.getOutOfBed": "ベッドから出る",
+  "urgency.goToSleep": "寝る準備",
+  "urgency.startReading": "読書を始める",
+  "urgency.needShower": "シャワー浴びる",
+  "urgency.startStudying": "勉強を始める",
+  "urgency.replyEmails": "メール返信",
+  "urgency.makeCall": "電話する",
+  "urgency.cookDinner": "夕飯を作る",
+  "urgency.cleanUp": "掃除する",
+
+  "leaderboard.ranking": "ランキング",
+  "leaderboard.youAreTheBest": "最高だね！",
+  "leaderboard.today": "今日",
+  "leaderboard.pos": "位",
+  "leaderboard.timeLeft": "残り時間",
+  "leaderboard.day": "日",
+  "leaderboard.days": "日",
+  "leaderboard.public": "全体",
+  "leaderboard.friends": "友達",
+  "leaderboard.xp": "XP",
+  "leaderboard.comingSoon": "もうすぐ",
+  "leaderboard.comingSoonHint": "ランキング機能は準備中だよ。お楽しみに！"
 }

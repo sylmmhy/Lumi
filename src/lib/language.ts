@@ -15,31 +15,34 @@ export interface SupportedLanguage {
  * All languages supported by Gemini Live Native Audio
  */
 export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
-  { code: 'en-US', name: 'English (US)', nativeName: 'English' },
-  { code: 'en-IN', name: 'English (India)', nativeName: 'English (India)' },
-  { code: 'de-DE', name: 'German', nativeName: 'Deutsch' },
-  { code: 'es-US', name: 'Spanish (US)', nativeName: 'Español' },
-  { code: 'fr-FR', name: 'French', nativeName: 'Français' },
-  { code: 'hi-IN', name: 'Hindi', nativeName: 'हिन्दी' },
-  { code: 'pt-BR', name: 'Portuguese (Brazil)', nativeName: 'Português' },
-  { code: 'ar-XA', name: 'Arabic', nativeName: 'العربية' },
-  { code: 'id-ID', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
-  { code: 'it-IT', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'en-US', name: 'English', nativeName: 'English' },
   { code: 'ja-JP', name: 'Japanese', nativeName: '日本語' },
-  { code: 'ko-KR', name: 'Korean', nativeName: '한국어' },
-  { code: 'tr-TR', name: 'Turkish', nativeName: 'Türkçe' },
-  { code: 'vi-VN', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
-  { code: 'bn-IN', name: 'Bengali', nativeName: 'বাংলা' },
-  { code: 'mr-IN', name: 'Marathi', nativeName: 'मराठी' },
-  { code: 'ta-IN', name: 'Tamil', nativeName: 'தமிழ்' },
-  { code: 'te-IN', name: 'Telugu', nativeName: 'తెలుగు' },
+  { code: 'es-en', name: 'Spanglish', nativeName: 'Spanglish (ES+EN)' },
+  { code: 'es-US', name: 'Spanish', nativeName: 'Español' },
+  { code: 'fr-FR', name: 'French', nativeName: 'Français' },
   { code: 'nl-NL', name: 'Dutch', nativeName: 'Nederlands' },
-  { code: 'pl-PL', name: 'Polish', nativeName: 'Polski' },
+  { code: 'de-DE', name: 'German', nativeName: 'Deutsch' },
+  { code: 'it-IT', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'ko-KR', name: 'Korean', nativeName: '한국어' },
+  { code: 'pt-BR', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'id-ID', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
   { code: 'ru-RU', name: 'Russian', nativeName: 'Русский' },
+  { code: 'ar-XA', name: 'Arabic', nativeName: 'العربية' },
+  { code: 'vi-VN', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
   { code: 'th-TH', name: 'Thai', nativeName: 'ไทย' },
+  { code: 'hi-en', name: 'Hinglish', nativeName: 'Hinglish (HI+EN)' },
+  { code: 'en-IN', name: 'English (India)', nativeName: 'English (India)' },
+  { code: 'hi-IN', name: 'Hindi', nativeName: 'हिन्दी' },
+  { code: 'bn-IN', name: 'Bengali', nativeName: 'বাংলা' },
+  { code: 'pl-PL', name: 'Polish', nativeName: 'Polski' },
+  { code: 'tr-TR', name: 'Turkish', nativeName: 'Türkçe' },
+  { code: 'ta-IN', name: 'Tamil', nativeName: 'தமிழ்' },
+  { code: 'mr-IN', name: 'Marathi', nativeName: 'मराठी' },
+  { code: 'te-IN', name: 'Telugu', nativeName: 'తెలుగు' },
 ];
 
 const LANGUAGE_STORAGE_KEY = 'lumi_preferred_language';
+const LANGUAGES_STORAGE_KEY = 'lumi_preferred_languages'; // 多语言存储
 const UI_LANGUAGE_STORAGE_KEY = 'lumi_ui_language';
 
 /**
@@ -146,4 +149,57 @@ export function getLanguageNativeName(code: string | null): string {
   }
   const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
   return lang?.nativeName || code;
+}
+
+/**
+ * Get the user's preferred languages (multi-select)
+ * Returns empty array if auto-detect is enabled (default)
+ */
+export function getPreferredLanguages(): string[] {
+  try {
+    const stored = localStorage.getItem(LANGUAGES_STORAGE_KEY);
+    if (!stored || stored === 'auto') {
+      return []; // Auto-detect mode
+    }
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Set the user's preferred languages (multi-select)
+ * Pass empty array or null to enable auto-detection
+ */
+export function setPreferredLanguages(languageCodes: string[] | null): void {
+  try {
+    if (!languageCodes || languageCodes.length === 0) {
+      localStorage.setItem(LANGUAGES_STORAGE_KEY, 'auto');
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, 'auto'); // 保持向后兼容
+    } else {
+      localStorage.setItem(LANGUAGES_STORAGE_KEY, JSON.stringify(languageCodes));
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, languageCodes[0]); // 保持向后兼容，存第一个
+    }
+  } catch (error) {
+    console.error('Failed to save languages preference:', error);
+  }
+}
+
+/**
+ * Get display text for multiple selected languages
+ */
+export function getLanguagesDisplayText(codes: string[]): string {
+  if (!codes || codes.length === 0) {
+    return 'Auto';
+  }
+  if (codes.length === 1) {
+    return getLanguageNativeName(codes[0]);
+  }
+  // 显示前两个语言 + 数量
+  const firstTwo = codes.slice(0, 2).map(c => getLanguageNativeName(c));
+  if (codes.length === 2) {
+    return firstTwo.join(', ');
+  }
+  return `${firstTwo.join(', ')} +${codes.length - 2}`;
 }

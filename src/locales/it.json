@@ -22,6 +22,8 @@
   "home.evening": "Sera",
   "home.noTasks": "Niente ancora. Ecco qualche esempio:",
   "home.example": "Esempio",
+  "home.exampleVehicle": "Ricordare revisione auto",
+  "home.examplePackage": "Spedire il pacco in tempo",
   "home.pleaseEnterTask": "Scrivi cosa devi fare! L'AI ti chiamerà per ricordartelo!",
   "home.testVersionNote": "Il promemoria telefonico funziona solo su iOS/Android. Se ti interessa, richiedi la versione test qui sotto. Ti contatterò via email!",
   "home.requestTestVersion": "Richiedi versione test",
@@ -58,6 +60,9 @@
   "stats.oct": "Ott",
   "stats.nov": "Nov",
   "stats.dec": "Dic",
+  "stats.routineTab": "Routine",
+  "stats.doneTab": "Fatto",
+  "stats.dayStreak": "Serie",
 
   "profile.notLoggedIn": "Non loggato",
   "profile.enterName": "Il tuo nome",
@@ -96,6 +101,7 @@
 
   "language.title": "Lingua di Lumi",
   "language.description": "Scegli la lingua che parla Lumi. Con automatico si adatta a te.",
+  "language.descriptionMulti": "Puoi selezionare più lingue.",
   "language.autoDetect": "Automatico",
   "language.autoDetectHint": "Lumi si adatta alla tua lingua",
 
@@ -107,7 +113,7 @@
 
   "feedback.title": "Grazie per il feedback!",
   "feedback.contactInfo": "Contatti",
-  "feedback.interviewInvite": "Se hai 15 minuti per una chiacchierata, ti offro un caffè ($5)...",
+  "feedback.interviewInvite": "Se hai 15 minuti per una chiacchierata, ti offro un caffè (5€) come ringraziamento. Il tuo feedback è preziosissimo!",
   "feedback.yesInterested": "Ci sto!",
   "feedback.noThanks": "No grazie",
   "feedback.emailPrompt": "Lascia la tua email per il caffè!",
@@ -115,5 +121,35 @@
   "feedback.invalidEmail": "Inserisci un'email valida",
   "feedback.thanksSoon": "Grazie! Ti contatto presto",
 
-  "task.start": "Inizia"
+  "task.start": "Inizia",
+
+  "urgency.getYouStart": "Inizia Subito!",
+  "urgency.inFiveMinutes": "In 5 Minuti!",
+  "urgency.enterTaskHere": "Scrivi cosa devi fare",
+  "urgency.pickOneTask": "Scegli un'attività per iniziare",
+  "urgency.placeholder": "es. \"fare la doccia\"",
+  "urgency.emptyWarning": "Devi inserire cosa vuoi fare",
+  "urgency.workout": "Allenarsi",
+  "urgency.getOutOfBed": "Alzarsi dal letto",
+  "urgency.goToSleep": "Andare a dormire",
+  "urgency.startReading": "Iniziare a leggere",
+  "urgency.needShower": "Fare la doccia",
+  "urgency.startStudying": "Iniziare a studiare",
+  "urgency.replyEmails": "Rispondere alle email",
+  "urgency.makeCall": "Fare quella chiamata",
+  "urgency.cookDinner": "Cucinare la cena",
+  "urgency.cleanUp": "Pulire",
+
+  "leaderboard.ranking": "Classifica",
+  "leaderboard.youAreTheBest": "Sei il migliore!",
+  "leaderboard.today": "Oggi",
+  "leaderboard.pos": "Pos",
+  "leaderboard.timeLeft": "Tempo rimasto",
+  "leaderboard.day": "Giorno",
+  "leaderboard.days": "Giorni",
+  "leaderboard.public": "Pubblico",
+  "leaderboard.friends": "Amici",
+  "leaderboard.xp": "XP",
+  "leaderboard.comingSoon": "In arrivo",
+  "leaderboard.comingSoonHint": "La classifica sta arrivando. Resta sintonizzato!"
 }

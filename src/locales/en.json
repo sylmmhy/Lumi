@@ -22,6 +22,8 @@
   "home.evening": "Evening",
   "home.noTasks": "No tasks yet. Here are some examples:",
   "home.example": "Example",
+  "home.exampleVehicle": "Remember vehicle registration",
+  "home.examplePackage": "Send the package on time",
   "home.pleaseEnterTask": "Please enter your task. AI will call you to remind!",
   "home.testVersionNote": "Please note that the phone-call reminder feature is only available on iOS or Android. If you are interested, you can click below to request a test version, and the developer will send you an email.",
   "home.requestTestVersion": "Request Test Version",
@@ -61,6 +63,9 @@
   "stats.oct": "Oct",
   "stats.nov": "Nov",
   "stats.dec": "Dec",
+  "stats.routineTab": "Routine",
+  "stats.doneTab": "Done",
+  "stats.dayStreak": "Day Streak",
 
   "profile.notLoggedIn": "Not logged in",
   "profile.enterName": "Enter your name",
@@ -99,6 +104,7 @@
 
   "language.title": "Lumi's Voice Language",
   "language.description": "Choose the language Lumi speaks. Auto-detect will match your speech.",
+  "language.descriptionMulti": "You can select multiple languages.",
   "language.autoDetect": "Auto-detect",
   "language.autoDetectHint": "Lumi matches your language",
 
@@ -110,7 +116,7 @@
 
   "feedback.title": "Thank you for your feedback!",
   "feedback.contactInfo": "Contact Info",
-  "feedback.interviewInvite": "If you're open to a 15-minute chat, I'd love to buy you a coffee ($5) as a thank you...",
+  "feedback.interviewInvite": "If you're open to a 15-minute chat, I'd love to buy you a coffee ($5) as a thank you. Your insights mean the world to me!",
   "feedback.yesInterested": "Yes, I'm interested!",
   "feedback.noThanks": "No thanks",
   "feedback.emailPrompt": "Please leave your email so I can contact you for the coffee chat!",
@@ -118,5 +124,35 @@
   "feedback.invalidEmail": "Please enter a valid email address",
   "feedback.thanksSoon": "Thanks! I'll reach out to you soon.",
 
-  "task.start": "Start"
+  "task.start": "Start",
+
+  "urgency.getYouStart": "Get You Start!",
+  "urgency.inFiveMinutes": "In 5 Minutes!",
+  "urgency.enterTaskHere": "Enter your task here",
+  "urgency.pickOneTask": "Pick one task to start",
+  "urgency.placeholder": "e.g., \"take shower\"",
+  "urgency.emptyWarning": "You need to enter the task you want to do",
+  "urgency.workout": "Work out",
+  "urgency.getOutOfBed": "Get out of bed",
+  "urgency.goToSleep": "Go to sleep",
+  "urgency.startReading": "Start reading",
+  "urgency.needShower": "Need to shower",
+  "urgency.startStudying": "Start studying",
+  "urgency.replyEmails": "Reply to emails",
+  "urgency.makeCall": "Make that call",
+  "urgency.cookDinner": "Cook dinner",
+  "urgency.cleanUp": "Clean up",
+
+  "leaderboard.ranking": "Ranking",
+  "leaderboard.youAreTheBest": "You are the best!",
+  "leaderboard.today": "Today",
+  "leaderboard.pos": "Pos",
+  "leaderboard.timeLeft": "Time Left",
+  "leaderboard.day": "Day",
+  "leaderboard.days": "Days",
+  "leaderboard.public": "Public",
+  "leaderboard.friends": "Friends",
+  "leaderboard.xp": "XP",
+  "leaderboard.comingSoon": "Coming Soon",
+  "leaderboard.comingSoonHint": "The leaderboard experience is on the way. Stay tuned!"
 }

@@ -22,6 +22,8 @@
   "home.evening": "Noche",
   "home.noTasks": "Todavía nada. Aquí unos ejemplos:",
   "home.example": "Ejemplo",
+  "home.exampleVehicle": "Recordar registro del vehículo",
+  "home.examplePackage": "Enviar el paquete a tiempo",
   "home.pleaseEnterTask": "¡Escribe qué hacer! ¡La AI te llama para recordarte!",
   "home.testVersionNote": "El recordatorio por llamada solo funciona en iOS/Android. Si te interesa, pide la versión de prueba abajo. ¡Te contacto por email!",
   "home.requestTestVersion": "Pedir versión de prueba",
@@ -58,6 +60,9 @@
   "stats.oct": "Oct",
   "stats.nov": "Nov",
   "stats.dec": "Dic",
+  "stats.routineTab": "Rutina",
+  "stats.doneTab": "Hecho",
+  "stats.dayStreak": "Racha",
 
   "profile.notLoggedIn": "Sin iniciar sesión",
   "profile.enterName": "Tu nombre",
@@ -96,6 +101,7 @@
 
   "language.title": "Idioma de Lumi",
   "language.description": "Elige en qué idioma habla Lumi. Con automático se adapta a ti.",
+  "language.descriptionMulti": "Puedes seleccionar varios idiomas.",
   "language.autoDetect": "Automático",
   "language.autoDetectHint": "Lumi se adapta a tu idioma",
 
@@ -107,7 +113,7 @@
 
   "feedback.title": "¡Gracias por tu opinión!",
   "feedback.contactInfo": "Contacto",
-  "feedback.interviewInvite": "Si tienes 15 minutos para platicar, te invito un café ($5)...",
+  "feedback.interviewInvite": "Si tienes 15 minutos para platicar, te invito un café (5€) como agradecimiento. ¡Tu opinión significa mucho para mí!",
   "feedback.yesInterested": "¡Sí quiero!",
   "feedback.noThanks": "No gracias",
   "feedback.emailPrompt": "¡Deja tu email para el café!",
@@ -115,5 +121,35 @@
   "feedback.invalidEmail": "Pon un email válido",
   "feedback.thanksSoon": "¡Gracias! Te contacto pronto",
 
-  "task.start": "Empezar"
+  "task.start": "Empezar",
+
+  "urgency.getYouStart": "¡Empieza Ya!",
+  "urgency.inFiveMinutes": "¡En 5 Minutos!",
+  "urgency.enterTaskHere": "Escribe qué tienes que hacer",
+  "urgency.pickOneTask": "Elige una tarea para empezar",
+  "urgency.placeholder": "ej. \"bañarme\"",
+  "urgency.emptyWarning": "Tienes que escribir lo que quieres hacer",
+  "urgency.workout": "Hacer ejercicio",
+  "urgency.getOutOfBed": "Levantarse de la cama",
+  "urgency.goToSleep": "Ir a dormir",
+  "urgency.startReading": "Empezar a leer",
+  "urgency.needShower": "Bañarme",
+  "urgency.startStudying": "Empezar a estudiar",
+  "urgency.replyEmails": "Responder emails",
+  "urgency.makeCall": "Hacer esa llamada",
+  "urgency.cookDinner": "Cocinar la cena",
+  "urgency.cleanUp": "Limpiar",
+
+  "leaderboard.ranking": "Ranking",
+  "leaderboard.youAreTheBest": "¡Eres el mejor!",
+  "leaderboard.today": "Hoy",
+  "leaderboard.pos": "Pos",
+  "leaderboard.timeLeft": "Tiempo restante",
+  "leaderboard.day": "Día",
+  "leaderboard.days": "Días",
+  "leaderboard.public": "Público",
+  "leaderboard.friends": "Amigos",
+  "leaderboard.xp": "XP",
+  "leaderboard.comingSoon": "Próximamente",
+  "leaderboard.comingSoonHint": "La experiencia del ranking está en camino. ¡Mantente atento!"
 }

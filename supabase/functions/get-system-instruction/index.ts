@@ -52,7 +52,7 @@ async function searchUserMemories(apiKey: string, userId: string, query: string,
 function getOnboardingSystemInstruction(
   taskDescription: string,
   userName?: string,
-  preferredLanguage?: string,
+  preferredLanguages?: string[],
   userMemories?: string[]
 ): string {
   const userNameSection = userName
@@ -86,12 +86,50 @@ DO NOT:
 
   // 多语言支持指令 - 简化版
   // preferredLanguage 只用于开场白，后续完全镜像用户语言
-  const supportedLanguages = "German, English, Spanish, French, Hindi, Portuguese, Arabic, Indonesian, Italian, Japanese, Korean, Turkish, Vietnamese, Bengali, Marathi, Tamil, Telugu, Dutch, Polish, Russian, Thai";
+  const supportedLanguages = "German, English, Spanish, French, Hindi, Portuguese, Arabic, Indonesian, Italian, Japanese, Korean, Turkish, Vietnamese, Bengali, Marathi, Tamil, Telugu, Dutch, Polish, Russian, Thai, Hinglish, Spanglish";
 
-  const languageSection = preferredLanguage
-    ? `
+  // 语言代码到名称的映射 - 使用完整描述
+  const languageCodeToName: Record<string, string> = {
+    'en-US': 'English (American)',
+    'en-IN': 'English (Indian accent)',
+    'hi-en': 'Hinglish (Hindi + English mixed)',
+    'es-en': 'Spanglish (Spanish + English mixed)',
+    'de-DE': 'German (Deutsch)',
+    'es-US': 'Spanish (Español)',
+    'fr-FR': 'French (Français)',
+    'hi-IN': 'Hindi (हिन्दी)',
+    'pt-BR': 'Portuguese (Português)',
+    'ar-XA': 'Arabic (العربية)',
+    'id-ID': 'Indonesian (Bahasa Indonesia)',
+    'it-IT': 'Italian (Italiano)',
+    'ja-JP': 'Japanese (日本語)',
+    'ko-KR': 'Korean (한국어)',
+    'tr-TR': 'Turkish (Türkçe)',
+    'vi-VN': 'Vietnamese (Tiếng Việt)',
+    'bn-IN': 'Bengali (বাংলা)',
+    'mr-IN': 'Marathi (मराठी)',
+    'ta-IN': 'Tamil (தமிழ்)',
+    'te-IN': 'Telugu (తెలుగు)',
+    'nl-NL': 'Dutch (Nederlands)',
+    'pl-PL': 'Polish (Polski)',
+    'ru-RU': 'Russian (Русский)',
+    'th-TH': 'Thai (ไทย)',
+  };
+
+  // 将语言代码数组转换为语言名称数组
+  const languageNames = preferredLanguages && preferredLanguages.length > 0
+    ? preferredLanguages.map(code => languageCodeToName[code] || code)
+    : null;
+
+  // 生成语言指令
+  let languageSection: string;
+
+  if (languageNames && languageNames.length > 0) {
+    if (languageNames.length === 1) {
+      // 单语言模式
+      languageSection = `
 [LANGUAGE]
-- First message: Use ${preferredLanguage}
+- First message: Use ${languageNames[0]}
 - All subsequent messages: Mirror the user's language exactly throughout the entire conversation.
 - Supported languages: ${supportedLanguages}
 - If user speaks an unsupported language (like Chinese), reply in English.
@@ -100,8 +138,32 @@ SPECIAL - Mixed Languages (Code-Switching):
 - Hinglish: If user mixes Hindi + English (e.g. "Yaar, I am so tired, kya karein?"), reply in Hinglish. Mix Hindi and English naturally the same way they do.
 - Spanglish: If user mixes Spanish + English (e.g. "Oye, let's start, estoy listo"), reply in Spanglish. Mix Spanish and English naturally the same way they do.
 - These are valid language modes. Do not "correct" them to pure Hindi, pure Spanish, or pure English.
-`
-    : `
+`;
+    } else {
+      // 多语言模式
+      const primaryLanguage = languageNames[0];
+      const allLanguages = languageNames.join(', ');
+      languageSection = `
+[LANGUAGE - MULTILINGUAL USER]
+The user speaks multiple languages: ${allLanguages}
+
+Rules:
+- First message: Use ${primaryLanguage}
+- The user may switch between any of these languages: ${allLanguages}
+- When user speaks in one of their languages, reply in THAT SAME language
+- Feel free to naturally code-switch if appropriate (e.g., mixing languages in one sentence)
+- Supported languages: ${supportedLanguages}
+- If user speaks an unsupported language (like Chinese), reply in English.
+
+SPECIAL - Mixed Languages (Code-Switching):
+- Hinglish: If user mixes Hindi + English, reply in Hinglish naturally
+- Spanglish: If user mixes Spanish + English, reply in Spanglish naturally
+- These are valid language modes. Do not "correct" them to pure languages.
+`;
+    }
+  } else {
+    // 自动检测模式
+    languageSection = `
 [LANGUAGE - CRITICAL]
 - First message: Use English (since user hasn't spoken yet)
 - After user speaks: IMMEDIATELY switch to the user's language and stay in that language
@@ -124,6 +186,7 @@ SPECIAL - Mixed Languages:
 - Hinglish (Hindi + English mixed): Reply in Hinglish
 - Spanglish (Spanish + English mixed): Reply in Spanglish
 `;
+  }
 
   return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
@@ -470,7 +533,7 @@ serve(async (req) => {
   }
 
   try {
-    const { taskInput, userName, preferredLanguage, userId } = await req.json()
+    const { taskInput, userName, preferredLanguages, userId } = await req.json()
 
     // Validate input
     if (!taskInput || typeof taskInput !== 'string') {
@@ -485,8 +548,8 @@ serve(async (req) => {
     if (userName) {
       console.log('👤 用户名:', userName);
     }
-    if (preferredLanguage) {
-      console.log('🌐 首选语言:', preferredLanguage);
+    if (preferredLanguages && preferredLanguages.length > 0) {
+      console.log('🌐 首选语言:', preferredLanguages);
     }
     if (userId) {
       console.log('🆔 用户ID:', userId);
@@ -507,7 +570,7 @@ serve(async (req) => {
     }
 
     // Generate system instruction with memories
-    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguage, userMemories)
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

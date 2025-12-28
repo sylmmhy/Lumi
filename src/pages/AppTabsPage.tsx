@@ -21,7 +21,7 @@ import {
 import { isNativeApp } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
-import { getPreferredLanguage } from '../lib/language';
+import { getPreferredLanguages } from '../lib/language';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -359,11 +359,11 @@ export function AppTabsPage() {
     const startAICoachForTask = useCallback(async (task: Task) => {
         console.log('🤖 Starting AI Coach session for task:', task.text);
         try {
-            const preferredLanguage = getPreferredLanguage() ?? undefined;
+            const preferredLanguages = getPreferredLanguages();
             await aiCoach.startSession(task.text, {
                 userId: auth.userId ?? undefined,  // 传入 userId 用于 Mem0 记忆保存
                 userName: auth.userName ?? undefined,
-                preferredLanguage,
+                preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
             });
             console.log('✅ AI Coach session started successfully');
             setTasks(prev => prev.map(t => t.id === task.id ? { ...t, called: true } : t));

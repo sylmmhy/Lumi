@@ -22,6 +22,8 @@
   "home.evening": "저녁",
   "home.noTasks": "아직 없어. 이런 식으로 써봐:",
   "home.example": "예시",
+  "home.exampleVehicle": "차량 등록 기억하기",
+  "home.examplePackage": "택배 제때 보내기",
   "home.pleaseEnterTask": "할 일을 적어줘! AI가 전화로 알려줄게!",
   "home.testVersionNote": "전화 알림은 iOS/Android 앱에서만 돼. 관심 있으면 아래에서 테스트 버전 신청해! 이메일로 연락할게!",
   "home.requestTestVersion": "테스트 버전 받기",
@@ -58,6 +60,9 @@
   "stats.oct": "10월",
   "stats.nov": "11월",
   "stats.dec": "12월",
+  "stats.routineTab": "습관",
+  "stats.doneTab": "완료",
+  "stats.dayStreak": "연속 기록",
 
   "profile.notLoggedIn": "로그인 안 됨",
   "profile.enterName": "이름 적어줘",
@@ -96,6 +101,7 @@
 
   "language.title": "Lumi 언어",
   "language.description": "Lumi가 쓸 언어 골라. 자동이면 네 말에 맞춰.",
+  "language.descriptionMulti": "여러 언어를 선택할 수 있어.",
   "language.autoDetect": "자동",
   "language.autoDetectHint": "Lumi가 네 언어에 맞춰",
 
@@ -107,7 +113,7 @@
 
   "feedback.title": "피드백 고마워!",
   "feedback.contactInfo": "연락처",
-  "feedback.interviewInvite": "15분 정도 얘기할 수 있으면, 스타벅스 기프트카드 ($5) 보내줄게...",
+  "feedback.interviewInvite": "15분 정도 얘기할 수 있으면, 스타벅스 기프트카드 (7,000원) 보내줄게. 네 의견 정말 소중해!",
   "feedback.yesInterested": "얘기하고 싶어!",
   "feedback.noThanks": "괜찮아",
   "feedback.emailPrompt": "연락할 이메일 알려줘!",
@@ -115,5 +121,35 @@
   "feedback.invalidEmail": "제대로 된 이메일 써줘",
   "feedback.thanksSoon": "고마워! 곧 연락할게",
 
-  "task.start": "시작"
+  "task.start": "시작",
+
+  "urgency.getYouStart": "지금 시작해!",
+  "urgency.inFiveMinutes": "5분 안에!",
+  "urgency.enterTaskHere": "할 일을 입력해",
+  "urgency.pickOneTask": "하나 골라서 시작해",
+  "urgency.placeholder": "예: \"샤워하기\"",
+  "urgency.emptyWarning": "할 일을 입력해줘",
+  "urgency.workout": "운동하기",
+  "urgency.getOutOfBed": "침대에서 일어나기",
+  "urgency.goToSleep": "잠자리 준비",
+  "urgency.startReading": "책 읽기 시작",
+  "urgency.needShower": "샤워하기",
+  "urgency.startStudying": "공부 시작",
+  "urgency.replyEmails": "이메일 답장",
+  "urgency.makeCall": "전화하기",
+  "urgency.cookDinner": "저녁 만들기",
+  "urgency.cleanUp": "청소하기",
+
+  "leaderboard.ranking": "랭킹",
+  "leaderboard.youAreTheBest": "최고야!",
+  "leaderboard.today": "오늘",
+  "leaderboard.pos": "위",
+  "leaderboard.timeLeft": "남은 시간",
+  "leaderboard.day": "일",
+  "leaderboard.days": "일",
+  "leaderboard.public": "전체",
+  "leaderboard.friends": "친구",
+  "leaderboard.xp": "XP",
+  "leaderboard.comingSoon": "곧 오픈",
+  "leaderboard.comingSoonHint": "랭킹 기능이 준비 중이야. 기대해줘!"
 }

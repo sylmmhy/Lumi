@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 /**
- * 排行榜视图，展示公开/好友榜数据，同时在功能未就绪时展示“Coming Soon”蒙层。
+ * 排行榜视图，展示公开/好友榜数据，同时在功能未就绪时展示"Coming Soon"蒙层。
  *
  * @returns {JSX.Element} 排行榜页面内容与占位蒙层。
  */
 export const LeaderboardView = () => {
+    const { t } = useTranslation();
     const [scrollTop, setScrollTop] = useState(0);
     const showStickyHeader = scrollTop > 80;
 
@@ -29,7 +31,7 @@ export const LeaderboardView = () => {
         <div className="flex-1 relative h-full overflow-hidden flex flex-col">
             {/* Sticky Top Bar (Floating) */}
             <div className={`absolute top-0 left-0 right-0 h-12 bg-white z-50 flex items-end justify-center pb-2 shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
-                <span className="font-serif italic font-bold text-brand-orange text-xl">Ranking</span>
+                <span className="font-serif italic font-bold text-brand-orange text-xl">{t('leaderboard.ranking')}</span>
             </div>
 
             {/* Scroll Container */}
@@ -39,7 +41,7 @@ export const LeaderboardView = () => {
                 <div className="relative z-0">
                     <div className="bg-brand-orange pt-6 pb-12 relative z-0 flex flex-col items-center">
                         <i className="fa-solid fa-trophy text-brand-goldBorder text-5xl mb-3 drop-shadow-md"></i>
-                        <h1 className="text-3xl font-serif text-white italic font-bold">You are the best!</h1>
+                        <h1 className="text-3xl font-serif text-white italic font-bold">{t('leaderboard.youAreTheBest')}</h1>
 
                         {/* Curve */}
                         <div className="absolute bottom-0 left-0 right-0 translate-y-[98%] z-0">
@@ -54,15 +56,15 @@ export const LeaderboardView = () => {
                 <div className="px-8 -mt-8 relative z-10 mb-8">
                     <div className="bg-white rounded-3xl shadow-lg p-4 flex divide-x divide-gray-100">
                         <div className="flex-1 flex flex-col items-center justify-center">
-                            <span className="text-xs text-gray-400 font-bold mb-1">Today</span>
+                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.today')}</span>
                             <span className="text-gray-700 font-bold text-lg flex items-center gap-1">
-                                <i className="fa-solid fa-caret-up text-gray-400"></i> 0 Pos
+                                <i className="fa-solid fa-caret-up text-gray-400"></i> 0 {t('leaderboard.pos')}
                             </span>
                         </div>
                         <div className="flex-1 flex flex-col items-center justify-center">
-                            <span className="text-xs text-gray-400 font-bold mb-1">Time Left</span>
+                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.timeLeft')}</span>
                             <span className="text-brand-orange font-bold text-lg flex items-center gap-1">
-                                <i className="fa-regular fa-clock"></i> 1 Day
+                                <i className="fa-regular fa-clock"></i> 1 {t('leaderboard.day')}
                             </span>
                         </div>
                     </div>
@@ -72,10 +74,10 @@ export const LeaderboardView = () => {
                 <div className="sticky top-12 z-40 bg-white pb-2 pt-1">
                     <div className="flex justify-center gap-4">
                         <button className="bg-brand-yellow text-brand-orange font-serif italic font-bold text-lg px-8 py-2 rounded-full shadow-sm">
-                            Public
+                            {t('leaderboard.public')}
                         </button>
                         <button className="bg-[#F0F0F0] text-gray-400 font-serif italic font-bold text-lg px-8 py-2 rounded-full">
-                            Friends
+                            {t('leaderboard.friends')}
                         </button>
                     </div>
                 </div>
@@ -114,7 +116,7 @@ export const LeaderboardView = () => {
 
                             {/* Score */}
                             <div className="text-right">
-                                <span className="text-gray-500 text-sm font-medium">{user.score} XP</span>
+                                <span className="text-gray-500 text-sm font-medium">{user.score} {t('leaderboard.xp')}</span>
                             </div>
                         </div>
                     ))}
@@ -127,9 +129,9 @@ export const LeaderboardView = () => {
                     <div className="w-12 h-12 rounded-full bg-brand-orange/10 flex items-center justify-center text-brand-orange text-2xl shadow-inner">
                         <i className="fa-solid fa-hourglass-half"></i>
                     </div>
-                    <p className="text-2xl font-serif font-bold italic text-brand-orange">Coming Soon</p>
+                    <p className="text-2xl font-serif font-bold italic text-brand-orange">{t('leaderboard.comingSoon')}</p>
                     <p className="text-sm text-gray-500 leading-relaxed">
-                        The leaderboard experience is on the way. Stay tuned!
+                        {t('leaderboard.comingSoonHint')}
                     </p>
                 </div>
             </div>

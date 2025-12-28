@@ -31,6 +31,9 @@
   "home.enterEmail": "La tua email",
   "home.invalidEmail": "Inserisci un'email valida",
   "home.submitFailed": "Ops, non è andata. Riprova?",
+  "home.editTask": "Modifica attività",
+  "home.taskName": "Nome attività",
+  "home.taskTime": "Orario",
 
   "stats.loadingHistory": "Caricamento...",
   "stats.noCompletedTasks": "Niente completato ancora",

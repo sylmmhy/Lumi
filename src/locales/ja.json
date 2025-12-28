@@ -31,6 +31,9 @@
   "home.enterEmail": "メアドを入力",
   "home.invalidEmail": "ちゃんとしたメアドを入れてね",
   "home.submitFailed": "失敗しちゃった。もう一回試してね",
+  "home.editTask": "タスク編集",
+  "home.taskName": "タスク名",
+  "home.taskTime": "時間",
 
   "stats.loadingHistory": "読み込み中...",
   "stats.noCompletedTasks": "まだ完了したタスクないよ",

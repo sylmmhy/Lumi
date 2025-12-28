@@ -31,6 +31,9 @@
   "home.enterEmail": "이메일 입력",
   "home.invalidEmail": "제대로 된 이메일 써줘",
   "home.submitFailed": "실패했어. 다시 해볼래?",
+  "home.editTask": "할 일 수정",
+  "home.taskName": "할 일 이름",
+  "home.taskTime": "시간",
 
   "stats.loadingHistory": "불러오는 중...",
   "stats.noCompletedTasks": "아직 완료한 거 없어",

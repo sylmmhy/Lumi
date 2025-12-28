@@ -250,13 +250,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param options.userId 用户 ID（用于 Mem0 记忆检索和存储）
    * @param options.customSystemInstruction 自定义系统指令
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
-   * @param options.preferredLanguage 首选语言，如 "Chinese"、"English"，不传则自动检测用户语言
+   * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguage?: string }
+    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[] }
   ) => {
-    const { userId, customSystemInstruction, userName, preferredLanguage } = options || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages } = options || {};
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
@@ -322,7 +322,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         }
 
         const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: taskDescription, userName, preferredLanguage, userId }
+          body: { taskInput: taskDescription, userName, preferredLanguages, userId }
         });
 
         if (error) {

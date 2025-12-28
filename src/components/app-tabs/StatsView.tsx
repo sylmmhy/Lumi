@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
 import type { Task } from '../../remindMe/types';
 import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks } from '../../remindMe/services/reminderService';
@@ -19,6 +20,7 @@ interface Habit {
 
 const DoneHistoryView: React.FC<{ refreshTrigger?: number }> = ({ refreshTrigger }) => {
     const auth = useAuth();
+    const { t } = useTranslation();
     const [historyGroups, setHistoryGroups] = useState<{ dateLabel: string; tasks: Task[] }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -69,7 +71,7 @@ const DoneHistoryView: React.FC<{ refreshTrigger?: number }> = ({ refreshTrigger
     if (isLoading) {
         return (
             <div className="text-center py-10 text-gray-400">
-                <p className="font-serif italic text-lg">Loading history...</p>
+                <p className="font-serif italic text-lg">{t('stats.loadingHistory')}</p>
             </div>
         );
     }
@@ -77,8 +79,8 @@ const DoneHistoryView: React.FC<{ refreshTrigger?: number }> = ({ refreshTrigger
     if (historyGroups.length === 0) {
         return (
             <div className="text-center py-10 text-gray-400">
-                <p className="font-serif italic text-lg">No completed tasks yet.</p>
-                <p className="text-sm mt-2">Complete some tasks in the Home tab!</p>
+                <p className="font-serif italic text-lg">{t('stats.noCompletedTasks')}</p>
+                <p className="text-sm mt-2">{t('stats.completeTasksHint')}</p>
             </div>
         );
     }
@@ -198,6 +200,7 @@ interface StatsViewProps {
  */
 export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger }) => {
     const auth = useAuth();
+    const { t } = useTranslation();
     const [habits, setHabits] = useState<Habit[]>([]);
     const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
@@ -206,26 +209,26 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const exampleHabits = useMemo<Habit[]>(() => [
         {
             id: 'example-sleep',
-            title: 'Go to bed on time',
+            title: t('stats.goToBed'),
             timeLabel: '10:30 pm 🌙',
             theme: 'pink',
             history: buildDenseHistoryWithGaps(120, [18], [7, 38, 61, 95]),
         },
         {
             id: 'example-wake',
-            title: 'Wake up on time',
+            title: t('stats.wakeUp'),
             timeLabel: '7:00 am ☀️',
             theme: 'gold',
             history: buildDenseHistoryWithGaps(120, [21], [15, 44, 73, 102]),
         },
         {
             id: 'example-workout',
-            title: 'Work out',
+            title: t('stats.workout'),
             timeLabel: '6:30 pm 💪',
             theme: 'blue',
             history: buildDenseHistoryWithGaps(120, [20], [10, 37, 68, 99]),
         },
-    ], []);
+    ], [t]);
     const [exampleHabitsState, setExampleHabitsState] = useState<Habit[]>(exampleHabits);
 
     const updateExampleHabitHistory = (habitId: string, dateKey: string, newStatus?: boolean) => {
@@ -466,13 +469,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                         <div className="space-y-4 mt-2">
                             {isLoading ? (
                                 <div className="text-center py-10 text-gray-400">
-                                    <p className="font-serif italic text-lg">Loading...</p>
+                                    <p className="font-serif italic text-lg">{t('common.loading')}</p>
                                 </div>
                             ) : habits.length === 0 ? (
                                 <div className="py-0 space-y-6 text-gray-700">
                                     <div className="text-center space-y-2">
-                                        <p className="font-serif italic text-lg text-gray-600">Your routine streaks will be tracked here.</p>
-                                        <p className="text-sm text-gray-500">Here are example streaks (some days kept, some missed):</p>
+                                        <p className="font-serif italic text-lg text-gray-600">{t('stats.routineStreaksHint')}</p>
+                                        <p className="text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
                                     </div>
                                     <div className="space-y-4">
                                         {exampleHabitsState.map(habit => (
@@ -729,6 +732,7 @@ const HeatmapDetailOverlay = ({
     onClose: () => void,
     onToggleDate: (date: Date) => void
 }) => {
+    const { t } = useTranslation();
     const [currentDate, setCurrentDate] = useState(new Date());
     const HEATMAP_COLUMNS = 160; // 显示160周（约3年）
     const { days: heatmapDays, monthLabels } = getFixedHeatmapData(habit.history, HEATMAP_COLUMNS);
@@ -750,9 +754,9 @@ const HeatmapDetailOverlay = ({
     const activeColor = themeColors[habit.theme];
 
     // 月份名称
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const weekDaysShort = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun']; // 隔行显示
+    const monthNames = [t('stats.jan'), t('stats.feb'), t('stats.mar'), t('stats.apr'), t('stats.may'), t('stats.jun'), t('stats.jul'), t('stats.aug'), t('stats.sep'), t('stats.oct'), t('stats.nov'), t('stats.dec')];
+    const weekDays = [t('stats.mon'), t('stats.tue'), t('stats.wed'), t('stats.thu'), t('stats.fri'), t('stats.sat'), t('stats.sun')];
+    const weekDaysShort = [t('stats.mon'), '', t('stats.wed'), '', t('stats.fri'), '', t('stats.sun')]; // 隔行显示
 
     // 当前显示月份的日历数据
     const calendarDays = getCalendarData(
@@ -853,7 +857,7 @@ const HeatmapDetailOverlay = ({
                     <div className="flex items-center gap-2">
                         <span className="text-3xl">🔥</span>
                         <span className="text-2xl font-bold text-brand-goldBorder font-serif italic">
-                            {currentStreak} Days Winning
+                            {currentStreak} {t('stats.daysWinning')}
                         </span>
                     </div>
                 </div>

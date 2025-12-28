@@ -6,7 +6,7 @@ import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { AuthContext } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getPreferredLanguage, getLanguageNativeName, getUILanguageNativeName } from '../../lib/language';
+import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -45,14 +45,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showInterviewModal, setShowInterviewModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
     const [showUILanguageModal, setShowUILanguageModal] = useState(false);
-    const [currentLanguage, setCurrentLanguage] = useState<string | null>(null);
+    const [currentLanguages, setCurrentLanguages] = useState<string[]>([]);
 
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
     // Load current language preference
     useEffect(() => {
-        setCurrentLanguage(getPreferredLanguage());
+        setCurrentLanguages(getPreferredLanguages());
     }, [showLanguageModal]); // Refresh when modal closes
 
     const handleClosePremium = () => {
@@ -450,7 +450,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-500">
-                                {getLanguageNativeName(currentLanguage)}
+                                {getLanguagesDisplayText(currentLanguages)}
                             </span>
                             <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
                         </div>

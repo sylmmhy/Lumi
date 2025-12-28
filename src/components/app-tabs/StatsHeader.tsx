@@ -1,7 +1,7 @@
 import React from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 import headerBg from '../../assets/stats-header-bg.png';
 import streakCircle from '../../assets/stats-streak-circle.png';
-import headerDecoration from '../../assets/stats-header-decoration.png';
 
 interface StatsHeaderProps {
     activeTab: 'routine' | 'done';
@@ -19,6 +19,9 @@ interface StatsHeaderProps {
  * @param props
  */
 export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange, streak }) => {
+    const { t, uiLanguage } = useTranslation();
+    const isEnglish = uiLanguage === 'en';
+
     return (
         <div className="relative w-full overflow-hidden">
             {/* Background Shape */}
@@ -50,12 +53,21 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                     </div>
                     
                     {/* Text / Decoration */}
-                    <div className="flex-1 pt-2">
-                        <img 
-                            src={headerDecoration} 
-                            alt="Header Decoration" 
-                            className="h-auto w-auto max-h-12 object-contain drop-shadow-sm -translate-y-3"
-                        />
+                    <div className="flex-1 pt-2 -translate-y-3">
+                        <span
+                            className="text-4xl font-extrabold italic text-white"
+                            style={{
+                                fontFamily: "'Sansita', sans-serif",
+                                WebkitTextStroke: '4px #388444',
+                                paintOrder: 'stroke fill'
+                            }}
+                        >
+                            {t('stats.dayStreak')}&nbsp;
+                            <span className="relative inline-block">
+                                <span className="absolute -right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-[#E8C547] rounded-full -z-10"></span>
+                                <span className="relative z-10 text-white">!</span>
+                            </span>
+                        </span>
                     </div>
                 </div>
 
@@ -64,24 +76,26 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                     <button
                         onClick={() => onTabChange('routine')}
                         className={`
-                            px-8 py-2.5 rounded-full text-base font-bold italic font-serif transition-all shadow-sm
-                            ${activeTab === 'routine' 
-                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20' 
+                            px-8 py-2.5 rounded-full text-base font-bold italic transition-all shadow-sm
+                            ${activeTab === 'routine'
+                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20'
                                 : 'bg-[#f5f0f0] text-[#b9b8ac] border border-[#e4e4e4]'}
                         `}
+                        style={{ fontFamily: "'Sansita', sans-serif" }}
                     >
-                        Routine
+                        {t('stats.routineTab')}
                     </button>
                     <button
                         onClick={() => onTabChange('done')}
                         className={`
-                            px-8 py-2.5 rounded-full text-base font-bold italic font-serif transition-all shadow-sm
-                            ${activeTab === 'done' 
-                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20' 
+                            px-8 py-2.5 rounded-full text-base font-bold italic transition-all shadow-sm
+                            ${activeTab === 'done'
+                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20'
                                 : 'bg-[#f5f0f0] text-[#b9b8ac] border border-[#e4e4e4]'}
                         `}
+                        style={{ fontFamily: "'Sansita', sans-serif" }}
                     >
-                        Done
+                        {t('stats.doneTab')}
                     </button>
                 </div>
             </div>

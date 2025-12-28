@@ -234,8 +234,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
     // Routine tab: 显示 routine 模板（用于管理 routine）
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
     const filteredTasks = activeTab === TaskType.TODO
-        ? tasks.filter(t => t.type === 'todo' && !t.completed)
-        : tasks.filter(t => t.type === 'routine');
+        ? tasks.filter(task => task.type === 'todo' && !task.completed)
+        : tasks.filter(task => task.type === 'routine');
 
     // Group tasks by date for Now tab, sorted with most recent first
     const tasksByDate = useMemo(() => {
@@ -259,26 +259,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
             date,
             isToday: date === today,
             tasks: grouped[date],
-            morningTasks: grouped[date].filter(t => t.category === 'morning'),
-            afternoonTasks: grouped[date].filter(t => t.category === 'afternoon'),
-            eveningTasks: grouped[date].filter(t => t.category === 'evening'),
+            morningTasks: grouped[date].filter(task => task.category === 'morning'),
+            afternoonTasks: grouped[date].filter(task => task.category === 'afternoon'),
+            eveningTasks: grouped[date].filter(task => task.category === 'evening'),
         }));
     }, [filteredTasks, activeTab]);
 
     // For Routine tab, use flat category grouping (no date separation)
-    const morningTasks = filteredTasks.filter(t => t.category === 'morning');
-    const afternoonTasks = filteredTasks.filter(t => t.category === 'afternoon');
-    const eveningTasks = filteredTasks.filter(t => t.category === 'evening');
+    const morningTasks = filteredTasks.filter(task => task.category === 'morning');
+    const afternoonTasks = filteredTasks.filter(task => task.category === 'afternoon');
+    const eveningTasks = filteredTasks.filter(task => task.category === 'evening');
 
     const exampleNowTasks = [
-        { title: 'Remember vehicle registration', time: '6:00 pm' },
-        { title: 'Send the package on time', time: '6:00 pm' },
+        { title: t('home.exampleVehicle'), time: '6:00 pm' },
+        { title: t('home.examplePackage'), time: '6:00 pm' },
     ];
 
     const exampleRoutineTasks = [
-        { title: 'Go to bed on time', time: '10:30 pm' },
-        { title: 'Wake up on time', time: '7:00 am' },
-        { title: 'Work out', time: '6:30 pm' },
+        { title: t('stats.goToBed'), time: '10:30 pm' },
+        { title: t('stats.wakeUp'), time: '7:00 am' },
+        { title: t('stats.workout'), time: '6:30 pm' },
     ];
 
     const showStickyHeader = scrollTop > 80;

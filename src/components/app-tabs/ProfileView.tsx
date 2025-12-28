@@ -597,15 +597,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 isGuest={isGuest}
             />
 
-            <LanguageSelectionModal
-                isOpen={showLanguageModal}
-                onClose={() => setShowLanguageModal(false)}
-            />
+            {showLanguageModal && (
+                <LanguageSelectionModal
+                    isOpen={showLanguageModal}
+                    onClose={() => setShowLanguageModal(false)}
+                />
+            )}
 
-            <UILanguageSelectionModal
-                isOpen={showUILanguageModal}
-                onClose={() => setShowUILanguageModal(false)}
-            />
+            {showUILanguageModal && (
+                <UILanguageSelectionModal
+                    isOpen={showUILanguageModal}
+                    onClose={() => setShowUILanguageModal(false)}
+                />
+            )}
         </div>
     );
 };

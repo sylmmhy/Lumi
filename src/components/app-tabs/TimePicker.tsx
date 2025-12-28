@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
@@ -55,6 +55,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
 
     // Get the starting offset for the middle copy
     const middleOffset = loop ? items.length : 0;
+    const itemCount = items.length;
 
     // Initial scroll to selected value (in the middle copy for loop mode)
     useEffect(() => {
@@ -67,12 +68,13 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         }
     }, [value, items, loop, middleOffset]);
 
-    // Check and reposition for infinite scroll
-    const checkAndReposition = () => {
+    /**
+     * 循环滚动时校正滚动位置，避免滚动到头后出现跳动。
+     */
+    const checkAndReposition = useCallback(() => {
         if (!loop || !containerRef.current || isRepositioningRef.current) return;
 
         const scrollTop = containerRef.current.scrollTop;
-        const itemCount = items.length;
         const totalHeight = itemCount * ITEM_HEIGHT;
         const middleStart = middleOffset * ITEM_HEIGHT;
         const middleEnd = middleStart + totalHeight;
@@ -93,7 +95,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 isRepositioningRef.current = false;
             });
         }
-    };
+    }, [itemCount, loop, middleOffset]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         if (isDraggingRef.current || isRepositioningRef.current) return;
@@ -125,7 +127,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     };
 
     // Unified Drag Logic
-    const handleDragStart = (clientY: number, clientX: number) => {
+    /**
+     * 启动拖拽：记录起点与初始滚动位置。
+     * @param {number} clientY - 鼠标/触点的 Y 坐标
+     * @param {number} clientX - 鼠标/触点的 X 坐标
+     */
+    const handleDragStart = useCallback((clientY: number, clientX: number) => {
         if (!containerRef.current) return;
         isDraggingRef.current = true;
         hasMovedRef.current = false;
@@ -133,9 +140,14 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         startYRef.current = clientY;
         startXRef.current = clientX;
         startScrollTopRef.current = containerRef.current.scrollTop;
-    };
+    }, []);
 
-    const handleDragMove = (clientY: number, clientX: number) => {
+    /**
+     * 拖拽过程中同步滚动位置。
+     * @param {number} clientY - 鼠标/触点的 Y 坐标
+     * @param {number} clientX - 鼠标/触点的 X 坐标
+     */
+    const handleDragMove = useCallback((clientY: number, clientX: number) => {
         if (!isDraggingRef.current || !containerRef.current) return;
 
         const deltaY = startYRef.current - clientY;
@@ -149,9 +161,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         // Combine vertical and horizontal deltas
         const totalDelta = deltaY + (deltaX * 0.8);
         containerRef.current.scrollTop = startScrollTopRef.current + totalDelta;
-    };
+    }, []);
 
-    const handleDragEnd = () => {
+    /**
+     * 结束拖拽并对齐到最近的项。
+     */
+    const handleDragEnd = useCallback(() => {
         isDraggingRef.current = false;
         setIsDragging(false);
 
@@ -173,24 +188,30 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
             // Delayed reposition check
             setTimeout(checkAndReposition, 200);
         }
-    };
+    }, [checkAndReposition, items, loop, onChange]);
 
     // Mouse Handlers
+    /**
+     * 鼠标移动时同步拖拽滚动。
+     * @param {MouseEvent} e - 鼠标事件
+     */
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        handleDragMove(e.clientY, e.clientX);
+    }, [handleDragMove]);
+
+    /**
+     * 鼠标释放时结束拖拽并清理监听。
+     */
+    const handleMouseUp = useCallback(() => {
+        handleDragEnd();
+        document.removeEventListener('mousemove', handleMouseMove);
+    }, [handleDragEnd, handleMouseMove]);
+
     const handleMouseDown = (e: React.MouseEvent) => {
         handleDragStart(e.clientY, e.clientX);
         document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('mouseup', handleMouseUp, { once: true });
         e.preventDefault();
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-        handleDragMove(e.clientY, e.clientX);
-    };
-
-    const handleMouseUp = () => {
-        handleDragEnd();
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
     };
 
     // Touch Handlers
@@ -214,7 +235,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
         };
-    }, []);
+    }, [handleMouseMove, handleMouseUp]);
 
     return (
         <div

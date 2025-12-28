@@ -183,10 +183,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onAddMessage: (role, content, isVirtual) => addMessageRef.current(role, content, isVirtual),
   });
 
+  const { setOnTurnComplete } = geminiLive;
+  const { recordTurnComplete } = virtualMessages;
+
   useEffect(() => {
-    geminiLive.setOnTurnComplete(() => virtualMessages.recordTurnComplete(false));
-    return () => geminiLive.setOnTurnComplete(null);
-  }, [geminiLive.setOnTurnComplete, virtualMessages.recordTurnComplete]);
+    setOnTurnComplete(() => recordTurnComplete(false));
+    return () => setOnTurnComplete(null);
+  }, [recordTurnComplete, setOnTurnComplete]);
 
   // ==========================================
   // 倒计时

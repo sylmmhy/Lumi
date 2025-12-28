@@ -53,7 +53,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // Load current language preference
     useEffect(() => {
         setCurrentLanguages(getPreferredLanguages());
-    }, [showLanguageModal]); // Refresh when modal closes
+    }, [showLanguageModal, showUILanguageModal]); // Refresh when either modal closes
 
     const handleClosePremium = () => {
         setShowPremiumModal(false);

@@ -54,6 +54,17 @@ export function TaskFlowController({
     remainingTime: aiCoach.state.timeRemaining,
   });
 
+  /** Gemini Live 使用的隐藏画布 ref，确保渲染层能拿到对应节点 */
+  const canvasRef = aiCoach.canvasRef;
+
+  /**
+   * 同步隐藏画布节点到 Gemini Live，避免在 render 阶段读取 ref 值。
+   * @param {HTMLCanvasElement | null} node - 当前渲染的画布节点
+   */
+  const handleCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+  }, [canvasRef]);
+
   const computeCompletionTime = useCallback(
     () => initialCountdown - aiCoach.state.timeRemaining,
     [aiCoach.state.timeRemaining, initialCountdown]
@@ -107,11 +118,10 @@ export function TaskFlowController({
   }, [aiCoach]);
 
   if (step === 'working') {
-    const { canvasRef } = aiCoach;
     return (
       <>
         {/* 隐藏画布：Gemini Live 需要 canvas 来推送视频帧 */}
-        <canvas ref={canvasRef} className="hidden" />
+        <canvas ref={handleCanvasRef} className="hidden" />
         <TaskWorkingView
           taskDescription={taskName}
           time={aiCoach.state.timeRemaining}

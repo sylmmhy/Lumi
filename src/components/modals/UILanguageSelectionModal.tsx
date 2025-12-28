@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SUPPORTED_UI_LANGUAGES, getUILanguage, setPreferredLanguages } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -6,6 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
  * Mapping from UI language code to Lumi voice language code
  * When user changes App Language, Lumi's language should also change accordingly
  */
+/** UI 语言到 Lumi 语音语言的映射表 */
 const UI_TO_LUMI_LANGUAGE_MAP: Record<string, string> = {
     'en': 'en-US',
     'ja': 'ja-JP',
@@ -19,18 +20,22 @@ interface UILanguageSelectionModalProps {
     onClose: () => void;
 }
 
+/**
+ * UI 语言选择弹窗：切换 App 显示语言并同步 Lumi 语音语言。
+ *
+ * @param {UILanguageSelectionModalProps} props - 弹窗开关与关闭回调
+ * @returns {JSX.Element | null} 语言选择弹窗
+ */
 export const UILanguageSelectionModal: React.FC<UILanguageSelectionModalProps> = ({ isOpen, onClose }) => {
     const { t, setUILanguage } = useTranslation();
-    const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
-
-    useEffect(() => {
-        if (isOpen) {
-            setSelectedLanguage(getUILanguage());
-        }
-    }, [isOpen]);
+    const [selectedLanguage, setSelectedLanguage] = useState<string>(() => getUILanguage());
 
     if (!isOpen) return null;
 
+    /**
+     * 选择 UI 语言并同步对应的 Lumi 语音语言。
+     * @param {string} code - UI 语言代码
+     */
     const handleSelectLanguage = (code: string) => {
         setSelectedLanguage(code);
         setUILanguage(code);

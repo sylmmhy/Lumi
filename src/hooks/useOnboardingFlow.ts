@@ -130,10 +130,14 @@ export function useOnboardingFlow() {
     onAddMessage: orchestratorActions.addMessage,
   });
 
+  const { setOnTurnComplete } = geminiLive;
+  const { connect: connectGemini, error: geminiError } = geminiLive;
+  const { recordTurnComplete } = virtualMessages;
+
   useEffect(() => {
-    geminiLive.setOnTurnComplete(() => virtualMessages.recordTurnComplete(false));
-    return () => geminiLive.setOnTurnComplete(null);
-  }, [geminiLive.setOnTurnComplete, virtualMessages.recordTurnComplete]);
+    setOnTurnComplete(() => recordTurnComplete(false));
+    return () => setOnTurnComplete(null);
+  }, [recordTurnComplete, setOnTurnComplete]);
 
   useEffect(() => {
     localStorage.setItem('has_visited_firego', 'true');
@@ -286,7 +290,7 @@ export function useOnboardingFlow() {
 
   useEffect(() => {
     const shouldRetry =
-      !!geminiLive.error &&
+      !!geminiError &&
       step === 'running' &&
       systemInstructionRef.current &&
       reconnectAttempt < MAX_RECONNECT_ATTEMPTS &&
@@ -299,7 +303,7 @@ export function useOnboardingFlow() {
 
     const timer = setTimeout(async () => {
       try {
-        await geminiLive.connect(systemInstructionRef.current as string, undefined);
+        await connectGemini(systemInstructionRef.current as string, undefined);
         setReconnectAttempt(0);
         setUiError(null);
       } catch (error) {
@@ -312,7 +316,7 @@ export function useOnboardingFlow() {
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [geminiLive.error, geminiLive.connect, step, reconnectAttempt, isReconnecting]);
+  }, [connectGemini, geminiError, step, reconnectAttempt, isReconnecting]);
 
   return {
     step,

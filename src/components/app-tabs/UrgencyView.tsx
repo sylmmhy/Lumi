@@ -162,14 +162,17 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
     const { t } = useTranslation();
     const [showEmptyWarning, setShowEmptyWarning] = useState(false);
 
-    const handleSubmit = () => {
+    /**
+     * 提交任务输入，空内容时给出提示。
+     */
+    const handleSubmit = useCallback(() => {
         if (!value.trim()) {
             setShowEmptyWarning(true);
             setTimeout(() => setShowEmptyWarning(false), 3000);
             return;
         }
         onSubmit();
-    };
+    }, [onSubmit, value]);
 
     useEffect(() => {
         if (!onRegisterSubmit) return;

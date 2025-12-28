@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SUPPORTED_LANGUAGES, getPreferredLanguages, setPreferredLanguages } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -7,18 +7,22 @@ interface LanguageSelectionModalProps {
     onClose: () => void;
 }
 
+/**
+ * 语音语言多选弹窗，负责读取与保存用户的首选语言设置。
+ *
+ * @param {LanguageSelectionModalProps} props - 弹窗开关与关闭回调
+ * @returns {JSX.Element | null} 语言选择弹窗
+ */
 export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ isOpen, onClose }) => {
     const { t } = useTranslation();
-    const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-
-    useEffect(() => {
-        if (isOpen) {
-            setSelectedLanguages(getPreferredLanguages());
-        }
-    }, [isOpen]);
+    const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => getPreferredLanguages());
 
     if (!isOpen) return null;
 
+    /**
+     * 切换语言的选中状态（多选）。
+     * @param {string} code - 语言代码
+     */
     const handleToggleLanguage = (code: string) => {
         setSelectedLanguages(prev => {
             if (prev.includes(code)) {
@@ -31,10 +35,16 @@ export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ 
         });
     };
 
+    /**
+     * 切换到自动识别语言（清空选择）。
+     */
     const handleSelectAutoDetect = () => {
         setSelectedLanguages([]);
     };
 
+    /**
+     * 保存用户的语言选择并关闭弹窗。
+     */
     const handleSave = () => {
         setPreferredLanguages(selectedLanguages.length > 0 ? selectedLanguages : null);
         onClose();

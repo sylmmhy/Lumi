@@ -94,10 +94,16 @@
   "auth.and": "と",
   "auth.privacyPolicy": "プライバシーポリシー",
 
-  "language.title": "Lumiの言葉",
+  "language.title": "Lumiの声の言語",
   "language.description": "Lumiが話す言語を選んでね。自動だとあなたの言葉に合わせるよ。",
   "language.autoDetect": "自動",
   "language.autoDetectHint": "Lumiがあなたの言葉に合わせる",
+
+  "uiLanguage.title": "アプリの言語",
+  "uiLanguage.description": "アプリの表示言語を選んでね。",
+
+  "profile.uiLanguage": "アプリの言語",
+  "profile.uiLanguageHint": "画面の文字の言語",
 
   "feedback.title": "感想ありがとう！",
   "feedback.contactInfo": "連絡先",

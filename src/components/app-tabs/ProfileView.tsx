@@ -3,9 +3,10 @@ import { PremiumModal, SpecialOfferModal } from '../modals/PremiumModals';
 import { AvatarSelectionPopup } from '../modals/AvatarSelectionPopup';
 import { FeedbackInterviewModal } from '../modals/FeedbackInterviewModal';
 import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
+import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { AuthContext } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getPreferredLanguage, getLanguageNativeName } from '../../lib/language';
+import { getPreferredLanguage, getLanguageNativeName, getUILanguageNativeName } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -43,7 +44,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [currentFeedbackId, setCurrentFeedbackId] = useState<string | null>(null); // Track current feedback session ID
     const [showInterviewModal, setShowInterviewModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
+    const [showUILanguageModal, setShowUILanguageModal] = useState(false);
     const [currentLanguage, setCurrentLanguage] = useState<string | null>(null);
+
+    // Get current UI language from context
+    const { uiLanguage } = useTranslation();
 
     // Load current language preference
     useEffect(() => {
@@ -407,13 +412,36 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* Settings Section - Language Selection */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+                    {/* UI Language Setting */}
+                    <button
+                        onClick={() => setShowUILanguageModal(true)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-globe text-purple-500"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.uiLanguage')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.uiLanguageHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {getUILanguageNativeName(uiLanguage)}
+                            </span>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </div>
+                    </button>
+
+                    {/* Lumi Voice Language Setting */}
                     <button
                         onClick={() => setShowLanguageModal(true)}
                         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                                <i className="fa-solid fa-language text-brand-blue"></i>
+                                <i className="fa-solid fa-microphone text-brand-blue"></i>
                             </div>
                             <div className="text-left">
                                 <p className="font-medium text-gray-800">{t('profile.lumiLanguage')}</p>
@@ -572,6 +600,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             <LanguageSelectionModal
                 isOpen={showLanguageModal}
                 onClose={() => setShowLanguageModal(false)}
+            />
+
+            <UILanguageSelectionModal
+                isOpen={showUILanguageModal}
+                onClose={() => setShowUILanguageModal(false)}
             />
         </div>
     );

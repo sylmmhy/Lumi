@@ -99,6 +99,12 @@
   "language.autoDetect": "Automatico",
   "language.autoDetectHint": "Lumi si adatta alla tua lingua",
 
+  "uiLanguage.title": "Lingua dell'app",
+  "uiLanguage.description": "Scegli la lingua dell'interfaccia dell'app.",
+
+  "profile.uiLanguage": "Lingua dell'app",
+  "profile.uiLanguageHint": "Lingua del testo dell'interfaccia",
+
   "feedback.title": "Grazie per il feedback!",
   "feedback.contactInfo": "Contatti",
   "feedback.interviewInvite": "Se hai 15 minuti per una chiacchierata, ti offro un caffè ($5)...",

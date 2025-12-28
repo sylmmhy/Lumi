@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { SUPPORTED_UI_LANGUAGES, getUILanguage } from '../../lib/language';
+import { SUPPORTED_UI_LANGUAGES, getUILanguage, setPreferredLanguages } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
+
+/**
+ * Mapping from UI language code to Lumi voice language code
+ * When user changes App Language, Lumi's language should also change accordingly
+ */
+const UI_TO_LUMI_LANGUAGE_MAP: Record<string, string> = {
+    'en': 'en-US',
+    'ja': 'ja-JP',
+    'ko': 'ko-KR',
+    'it': 'it-IT',
+    'es': 'es-US',
+};
 
 interface UILanguageSelectionModalProps {
     isOpen: boolean;
@@ -22,6 +34,13 @@ export const UILanguageSelectionModal: React.FC<UILanguageSelectionModalProps> =
     const handleSelectLanguage = (code: string) => {
         setSelectedLanguage(code);
         setUILanguage(code);
+
+        // Also update Lumi's language to match the UI language
+        const lumiLanguageCode = UI_TO_LUMI_LANGUAGE_MAP[code];
+        if (lumiLanguageCode) {
+            setPreferredLanguages([lumiLanguageCode]);
+        }
+
         onClose();
     };
 

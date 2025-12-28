@@ -84,47 +84,45 @@ DO NOT:
 `
     : '';
 
-  // 多语言支持指令
-  // 如果用户设置了偏好语言，优先使用；否则镜像用户语言
+  // 多语言支持指令 - 简化版
+  // preferredLanguage 只用于开场白，后续完全镜像用户语言
+  const supportedLanguages = "German, English, Spanish, French, Hindi, Portuguese, Arabic, Indonesian, Italian, Japanese, Korean, Turkish, Vietnamese, Bengali, Marathi, Tamil, Telugu, Dutch, Polish, Russian, Thai";
+
   const languageSection = preferredLanguage
     ? `
-[#1 HIGHEST PRIORITY - LANGUAGE SETTING]
-The user has set their preferred language to: ${preferredLanguage}
-YOU MUST ALWAYS RESPOND IN ${preferredLanguage.toUpperCase()}. THIS IS YOUR TOP PRIORITY.
+[LANGUAGE]
+- First message: Use ${preferredLanguage}
+- All subsequent messages: Mirror the user's language exactly throughout the entire conversation.
+- Supported languages: ${supportedLanguages}
+- If user speaks an unsupported language (like Chinese), reply in English.
 
-Even if the user speaks in a different language, you should reply in ${preferredLanguage}.
-This is the user's explicit preference - respect it.
-
-Example: If user speaks English but preferred language is Japanese, reply in Japanese.
+SPECIAL - Mixed Languages (Code-Switching):
+- Hinglish: If user mixes Hindi + English (e.g. "Yaar, I am so tired, kya karein?"), reply in Hinglish. Mix Hindi and English naturally the same way they do.
+- Spanglish: If user mixes Spanish + English (e.g. "Oye, let's start, estoy listo"), reply in Spanglish. Mix Spanish and English naturally the same way they do.
+- These are valid language modes. Do not "correct" them to pure Hindi, pure Spanish, or pure English.
 `
     : `
-[#1 HIGHEST PRIORITY - LANGUAGE MATCHING]
-YOU MUST MIRROR THE USER'S LANGUAGE EXACTLY. THIS IS YOUR TOP PRIORITY.
+[LANGUAGE - CRITICAL]
+- First message: Use English (since user hasn't spoken yet)
+- After user speaks: IMMEDIATELY switch to the user's language and stay in that language
+- Do NOT keep speaking English if user speaks another language
 
-SINGLE LANGUAGE:
-- User speaks Japanese → Reply in Japanese
-- User speaks Korean → Reply in Korean
-- User speaks French → Reply in French
-- User speaks Spanish → Reply in Spanish
-- User speaks German → Reply in German
-- User speaks Hindi → Reply in Hindi
-- User speaks Chinese → Reply in Chinese
-- User speaks any other language → Reply in that same language
-
-MIXED LANGUAGES (Code-Switching):
-If the user mixes languages, YOU MUST MIX LANGUAGES THE SAME WAY.
-- User speaks Hinglish (Hindi + English) → Reply in Hinglish
-- User speaks Spanglish (Spanish + English) → Reply in Spanglish
-- User speaks Japanese + English → Reply in Japanese + English mix
-- User speaks Korean + English → Reply in Korean + English mix
-- User mixes ANY two languages → Mirror their mixing style
+Rules:
+1. Detect what language the user speaks
+2. Reply in THAT SAME language immediately
+3. If user switches language, YOU switch too
+4. Supported: ${supportedLanguages}
+5. Unsupported languages (like Chinese): reply in English
 
 Examples:
-- User: "Yaar, I'm so tired today, kya karein?" → Reply in Hinglish
-- User: "Oye, let's start the task, estoy listo" → Reply in Spanglish
-- User: "ねえ、let's do this together" → Reply in Japanese + English
+- User speaks Hindi → Reply in Hindi (not English!)
+- User speaks Japanese → Reply in Japanese (not English!)
+- User speaks Spanish → Reply in Spanish (not English!)
+- User switches from English to Hindi → Switch to Hindi
 
-IMPORTANT: Do NOT default to English. Always match exactly how the user speaks.
+SPECIAL - Mixed Languages:
+- Hinglish (Hindi + English mixed): Reply in Hinglish
+- Spanglish (Spanish + English mixed): Reply in Spanglish
 `;
 
   return `You are Lumi, helping the user complete this 5-minute task:

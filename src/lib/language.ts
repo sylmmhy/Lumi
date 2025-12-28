@@ -40,6 +40,59 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
 ];
 
 const LANGUAGE_STORAGE_KEY = 'lumi_preferred_language';
+const UI_LANGUAGE_STORAGE_KEY = 'lumi_ui_language';
+
+/**
+ * Supported UI languages (languages with translations available)
+ */
+export interface UILanguage {
+  code: string;
+  name: string;
+  nativeName: string;
+}
+
+export const SUPPORTED_UI_LANGUAGES: UILanguage[] = [
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
+];
+
+/**
+ * Get the user's preferred UI language code
+ * Returns 'en' as default
+ */
+export function getUILanguage(): string {
+  try {
+    const stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
+    if (!stored) {
+      return 'en'; // Default to English
+    }
+    return stored;
+  } catch {
+    return 'en';
+  }
+}
+
+/**
+ * Set the user's preferred UI language
+ */
+export function setUILanguage(languageCode: string): void {
+  try {
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, languageCode);
+  } catch (error) {
+    console.error('Failed to save UI language preference:', error);
+  }
+}
+
+/**
+ * Get the UI language native name from code
+ */
+export function getUILanguageNativeName(code: string): string {
+  const lang = SUPPORTED_UI_LANGUAGES.find(l => l.code === code);
+  return lang?.nativeName || code;
+}
 
 /**
  * Get the user's preferred language code

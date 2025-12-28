@@ -8,7 +8,7 @@ interface LanguageSelectionModalProps {
 }
 
 export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ isOpen, onClose }) => {
-    const { t, setLanguage: setContextLanguage } = useTranslation();
+    const { t } = useTranslation();
     const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
 
     useEffect(() => {
@@ -22,7 +22,6 @@ export const LanguageSelectionModal: React.FC<LanguageSelectionModalProps> = ({ 
     const handleSelectLanguage = (code: string | null) => {
         setSelectedLanguage(code);
         setPreferredLanguage(code);
-        setContextLanguage(code); // Update context to trigger UI re-render
         onClose();
     };
 

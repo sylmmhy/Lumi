@@ -97,10 +97,16 @@
   "auth.and": "and",
   "auth.privacyPolicy": "Privacy Policy",
 
-  "language.title": "Lumi's Language",
+  "language.title": "Lumi's Voice Language",
   "language.description": "Choose the language Lumi speaks. Auto-detect will match your speech.",
   "language.autoDetect": "Auto-detect",
   "language.autoDetectHint": "Lumi matches your language",
+
+  "uiLanguage.title": "App Language",
+  "uiLanguage.description": "Choose the language for app interface and text.",
+
+  "profile.uiLanguage": "App Language",
+  "profile.uiLanguageHint": "Interface text language",
 
   "feedback.title": "Thank you for your feedback!",
   "feedback.contactInfo": "Contact Info",

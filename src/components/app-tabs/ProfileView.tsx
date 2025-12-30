@@ -2,9 +2,10 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import { PremiumModal, SpecialOfferModal } from '../modals/PremiumModals';
 import { AvatarSelectionPopup } from '../modals/AvatarSelectionPopup';
 import { FeedbackInterviewModal } from '../modals/FeedbackInterviewModal';
+import { FeedbackModal } from '../modals/FeedbackModal';
 import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -45,6 +46,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showInterviewModal, setShowInterviewModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
     const [showUILanguageModal, setShowUILanguageModal] = useState(false);
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [currentLanguages, setCurrentLanguages] = useState<string[]>([]);
 
     // Get current UI language from context
@@ -457,76 +459,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </button>
                 </div>
 
-                {/* Personal Introduction Panel with Feedback Input */}
-                <div
-                    className="relative overflow-hidden rounded-[32px] bg-[#F25F3A] p-6 shadow-soft mb-8"
-                >
-                    {/* Abstract Shapes Background - Simplified for clean look */}
-                    <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full"></div>
-                    <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full"></div>
-
-                    <div className="relative z-10 text-center">
-                        <p className="font-serif text-xl font-bold leading-relaxed mb-4 text-white drop-shadow-sm flex flex-col items-center">
-                            <span>{t('profile.feedbackIntro')}</span>
-                            <span className="mt-2 inline-block">🥹🙏❤️</span>
-                        </p>
-
-                        {/* Rating Hearts */}
-                        <div className="flex justify-center gap-4 mb-5">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                                <button
-                                    key={star}
-                                    onClick={() => handleRatingSelect(star)}
-                                    className={`text-3xl transition-transform hover:scale-110 active:scale-95 focus:outline-none ${
-                                        (rating || 0) >= star ? 'text-red-500' : 'text-white/50 hover:text-red-300'
-                                    }`}
-                                >
-                                    <i className={`${(rating || 0) >= star ? 'fa-solid' : 'fa-regular'} fa-heart`}></i>
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Feedback Input Area */}
-                        <div className="bg-white rounded-xl p-1.5 flex items-center gap-2 shadow-sm transition-all">
-                            {feedbackSent ? (
-                                <div className="w-full h-10 flex items-center justify-center gap-2 text-[#F57C00] font-bold animate-fade-in">
-                                    <i className="fa-solid fa-check-circle"></i>
-                                    <span>{t('profile.thankYou')} ❤️</span>
-                                </div>
-                            ) : (
-                                <>
-                                    <textarea
-                                        value={feedbackInput}
-                                        onChange={(e) => setFeedbackInput(e.target.value)}
-                                        placeholder={t('profile.feedbackPlaceholder')}
-                                        rows={3}
-                                        className="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400 px-2 text-sm font-medium resize-none py-2 leading-relaxed text-left"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleFeedbackSubmit();
-                                            }
-                                        }}
-                                    />
-                                    <div className="flex flex-col justify-end h-full pb-1">
-                                        <button
-                                            onClick={handleFeedbackSubmit}
-                                            disabled={!feedbackInput.trim() || isSubmittingFeedback}
-                                            className="w-10 h-10 rounded-lg bg-orange-50 text-[#F57C00] flex items-center justify-center hover:bg-orange-100 active:bg-orange-200 transition-all disabled:opacity-50 disabled:scale-100 flex-none"
-                                        >
-                                            {isSubmittingFeedback ? (
-                                                <i className="fa-solid fa-spinner fa-spin"></i>
-                                            ) : (
-                                                <i className="fa-solid fa-paper-plane"></i>
-                                            )}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
                 {/* Biography Section */}
                 <div className="mb-8 mt-4">
                     <div className="bg-white rounded-3xl p-6 shadow-sm relative">
@@ -556,12 +488,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 <p className="mt-3">
                                     {t('profile.makerContact')}
                                 </p>
-                                <a 
-                                    href="mailto:ys3367@columbia.edu" 
+                                <a
+                                    href="mailto:ys3367@columbia.edu"
                                     className="block mt-2 text-brand-orange font-medium hover:text-brand-darkOrange transition-colors"
                                 >
                                     ys3367@columbia.edu
                                 </a>
+
+                                {/* Share Feedback Button */}
+                                <button
+                                    onClick={() => setShowFeedbackModal(true)}
+                                    className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-[#F25F3A] to-[#FF7849] text-white font-medium rounded-xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                >
+                                    <i className="fa-solid fa-comment-dots"></i>
+                                    <span>Share Your Feedback</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -610,6 +551,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     onClose={() => setShowUILanguageModal(false)}
                 />
             )}
+
+            <FeedbackModal
+                isOpen={showFeedbackModal}
+                onClose={() => setShowFeedbackModal(false)}
+                onInterviewRequest={() => {
+                    setShowFeedbackModal(false);
+                    setTimeout(() => setShowInterviewModal(true), 300);
+                }}
+            />
         </div>
     );
 };

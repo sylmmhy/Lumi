@@ -1,5 +1,5 @@
 import { useContext, useState } from 'react';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext } from '../../context/AuthContextDefinition';
 import { useTranslation } from '../../hooks/useTranslation';
 import { appleLogin } from '../../lib/apple-login';
 import { AppleSignInButton } from '../common/AppleSignInButton';

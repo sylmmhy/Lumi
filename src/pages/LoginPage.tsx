@@ -6,7 +6,7 @@ import { appleLogin } from '../lib/apple-login'
 import { AppleSignInButton } from '../components/common/AppleSignInButton'
 import { initAmplitude, trackEvent } from '../lib/amplitude'
 import { DEFAULT_APP_PATH } from '../constants/routes'
-import { AuthContext } from '../context/AuthContext'
+import { AuthContext } from '../context/AuthContextDefinition'
 import { getVisitorId } from '../utils/onboardingVisitor'
 
 interface GoogleIdConfiguration {

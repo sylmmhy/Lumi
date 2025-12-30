@@ -1,6 +1,6 @@
 import { useCallback, useContext } from 'react';
 import { DEFAULT_APP_PATH } from '../constants/routes';
-import { AuthContext, type AuthState } from '../context/AuthContext';
+import { AuthContext, type AuthState } from '../context/AuthContextDefinition';
 
 export type { AuthState };
 

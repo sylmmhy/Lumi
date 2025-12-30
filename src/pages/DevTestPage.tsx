@@ -23,6 +23,7 @@ import { SimpleTaskExecutionView } from '../components/task/SimpleTaskExecutionV
 import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
+import { FeedbackCard } from '../components/feedback/FeedbackCard';
 
 type TestMode =
   | 'menu'
@@ -41,7 +42,8 @@ type TestMode =
   | 'task-flow'
   | 'talking-fire'
   | 'fire-from-figma'
-  | 'task-complete-animation';
+  | 'task-complete-animation'
+  | 'feedback-card';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -330,6 +332,24 @@ export function DevTestPage() {
 
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">反馈组件</p>
+
+          {/* Feedback Card */}
+          <button
+            onClick={() => setMode('feedback-card')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            💬 Feedback Card
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              橙色反馈卡片（评分 + 文字输入）
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 src/components/feedback/FeedbackCard.tsx
+            </div>
+          </button>
+
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">任务卡片动画</p>
 
           {/* 任务完成动画 */}
@@ -415,6 +435,7 @@ export function DevTestPage() {
       {mode === 'talking-fire' && <TalkingFireTest onBack={backToMenu} />}
       {mode === 'fire-from-figma' && <FireFromFigmaTest onBack={backToMenu} />}
       {mode === 'task-complete-animation' && <TaskCompleteAnimationTest onBack={backToMenu} />}
+      {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
     </>
   );
 }
@@ -1311,6 +1332,32 @@ setTrigger(Date.now());`}</pre>
           ← 返回菜单
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// 测试 10: Feedback Card
+// ============================================
+function FeedbackCardTest({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center gap-8 p-6">
+      <h2 className="text-2xl font-bold text-gray-800">💬 Feedback Card Test</h2>
+      <p className="text-gray-500 text-sm text-center max-w-sm">
+        橙色反馈卡片，包含心形评分和文字反馈输入框
+      </p>
+
+      <div className="w-full max-w-md">
+        <FeedbackCard
+          onInterviewRequest={() => {
+            alert('Interview modal would show here!');
+          }}
+        />
+      </div>
+
+      <button onClick={onBack} className="text-gray-500 hover:text-gray-700 text-sm underline">
+        ← Back to Menu
+      </button>
     </div>
   );
 }

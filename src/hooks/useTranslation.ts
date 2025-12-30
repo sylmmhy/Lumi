@@ -3,7 +3,7 @@
  */
 
 import { useContext } from 'react';
-import { LanguageContext } from '../context/LanguageContext';
+import { LanguageContext } from '../context/LanguageContextDefinition';
 
 /**
  * Use translation in components

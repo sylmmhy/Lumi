@@ -20,6 +20,8 @@ export interface AuthState {
     sessionToken: string | null;
     refreshToken: string | null;
     isNativeLogin: boolean;
+    /** 会话是否已通过 Supabase 验证（避免 localStorage 与云端不一致） */
+    isSessionValidated: boolean;
 }
 
 export interface AuthContextValue extends AuthState {

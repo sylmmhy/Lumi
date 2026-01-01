@@ -27,7 +27,7 @@ import {
   isValidJwt,
   isValidSupabaseUuid,
 } from './auth/nativeAuthBridge';
-import { ensureUserProfileExists, updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
+import { updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
 
 // ==========================================
 // 常量定义

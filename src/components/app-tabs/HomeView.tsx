@@ -493,7 +493,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                                 <span className="text-gray-800 font-semibold">{item.title}</span>
                                                 <span className="text-xs text-gray-400">{t('home.example')}</span>
                                             </div>
-                                            <div className="bg-brand-cream px-3 py-1 rounded-lg text-sm font-serif italic font-bold text-gray-800 shadow-inner">
+                                            <div className="bg-brand-cream px-3 py-1 rounded-lg text-sm font-serif italic font-bold text-gray-800 shadow-inner whitespace-nowrap">
                                                 {item.time}
                                             </div>
                                         </div>

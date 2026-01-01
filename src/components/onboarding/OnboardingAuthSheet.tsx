@@ -5,6 +5,7 @@ import { generateCSRFToken, googleLogin } from '../../lib/google-login';
 import { loadGoogleScript } from '../../lib/google-script';
 import { appleLogin } from '../../lib/apple-login';
 import { AppleSignInButton } from '../common/AppleSignInButton';
+import { isGoogleLoginAvailable } from '../../utils/webviewDetection';
 
 declare global {
   interface Window {
@@ -74,6 +75,8 @@ export function OnboardingAuthSheet({
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  // Google 登录在 WebView 中不可用，需要检测并隐藏
+  const canShowGoogleLogin = isGoogleLoginAvailable();
 
   const handleCredential = useCallback(
     async (response: GoogleCredentialResponse) => {
@@ -97,12 +100,13 @@ export function OnboardingAuthSheet({
 
   useEffect(() => {
     if (!isOpen) return;
+    // 如果在 WebView 中，不初始化 Google 登录
+    if (!canShowGoogleLogin) return;
 
     let cancelled = false;
     const setupGoogle = async () => {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
-        setError('未配置 Google 登录，请联系管理员');
         return;
       }
 
@@ -142,7 +146,7 @@ export function OnboardingAuthSheet({
     return () => {
       cancelled = true;
     };
-  }, [handleCredential, isOpen]);
+  }, [handleCredential, isOpen, canShowGoogleLogin]);
 
   const handleEmailLogin = () => {
     auth.navigateToLogin(DEFAULT_APP_PATH);
@@ -193,14 +197,17 @@ export function OnboardingAuthSheet({
         </div>
 
         <div className="mt-6 space-y-4">
-          <div className="w-full">
-            <div className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
-              <div ref={googleButtonRef} className="flex w-full justify-center" />
+          {/* Google Login Button - 在 WebView 中隐藏 */}
+          {canShowGoogleLogin && (
+            <div className="w-full">
+              <div className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+                <div ref={googleButtonRef} className="flex w-full justify-center" />
+              </div>
+              {isLoading && (
+                <p className="mt-2 text-center text-xs text-gray-500">正在获取 Google 登录信息...</p>
+              )}
             </div>
-            {isLoading && (
-              <p className="mt-2 text-center text-xs text-gray-500">正在获取 Google 登录信息...</p>
-            )}
-          </div>
+          )}
 
           {/* Apple Login Button - Following Apple HIG */}
           <AppleSignInButton

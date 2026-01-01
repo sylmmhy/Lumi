@@ -8,6 +8,7 @@ import { initAmplitude, trackEvent } from '../lib/amplitude'
 import { DEFAULT_APP_PATH } from '../constants/routes'
 import { AuthContext } from '../context/AuthContextDefinition'
 import { getVisitorId } from '../utils/onboardingVisitor'
+import { isGoogleLoginAvailable } from '../utils/webviewDetection'
 
 interface GoogleIdConfiguration {
   client_id: string;
@@ -68,6 +69,8 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isAppleLoading, setIsAppleLoading] = useState(false)
   const buttonRef = useRef<HTMLDivElement>(null)
+  // Google 登录在 WebView 中不可用，需要检测并隐藏
+  const canShowGoogleLogin = isGoogleLoginAvailable()
 
   useEffect(() => {
     void initAmplitude()
@@ -112,10 +115,12 @@ export function LoginPage() {
   };
 
   useEffect(() => {
+    // 如果在 WebView 中，不初始化 Google 登录
+    if (!canShowGoogleLogin) return
+
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) {
       console.warn('VITE_GOOGLE_CLIENT_ID is not set')
-      setError('Google Client ID not configured')
       return
     }
 
@@ -171,7 +176,7 @@ export function LoginPage() {
     }
 
     setup()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canShowGoogleLogin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAppleLogin = async () => {
     setIsAppleLoading(true)
@@ -267,8 +272,10 @@ export function LoginPage() {
 
         {/* Social Login Buttons */}
         <div className="space-y-3">
-          {/* Google Button Container */}
-          <div className="flex justify-center min-h-[40px]" ref={buttonRef}></div>
+          {/* Google Button Container - 在 WebView 中隐藏 */}
+          {canShowGoogleLogin && (
+            <div className="flex justify-center min-h-[40px]" ref={buttonRef}></div>
+          )}
 
           {/* Apple Login Button - Following Apple HIG */}
           <AppleSignInButton

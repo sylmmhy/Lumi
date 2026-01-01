@@ -5,6 +5,7 @@ import { appleLogin } from '../../lib/apple-login';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
 import { loadGoogleScript } from '../../lib/google-script';
 import { AppleSignInButton } from '../common/AppleSignInButton';
+import { isGoogleLoginAvailable } from '../../utils/webviewDetection';
 
 interface GoogleCredentialResponse {
   credential: string;
@@ -38,9 +39,13 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const hasGoogleClientId = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  // Google 登录在 WebView 中不可用，需要检测并隐藏
+  const canShowGoogleLogin = hasGoogleClientId && isGoogleLoginAvailable();
 
   useEffect(() => {
     if (!isOpen) return;
+    // 如果在 WebView 中，不初始化 Google 登录
+    if (!canShowGoogleLogin) return;
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) return;
 
@@ -100,7 +105,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     return () => {
       cancelled = true;
     };
-  }, [auth, isOpen, onClose, onSuccess, t]);
+  }, [auth, isOpen, onClose, onSuccess, t, canShowGoogleLogin]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,8 +221,8 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
           {/* Social Login Buttons */}
           <div className="space-y-3">
-            {/* Google Login Button */}
-            {hasGoogleClientId && (
+            {/* Google Login Button - 在 WebView 中隐藏 */}
+            {canShowGoogleLogin && (
               <div className="w-full">
                 <div ref={googleButtonRef} className="w-full" />
                 {isGoogleLoading && (

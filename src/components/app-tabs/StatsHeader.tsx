@@ -35,13 +35,18 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
             {/* Content Container */}
             <div className="relative z-10 pt-20 pb-4 px-6 flex flex-col items-center">
                 
-                {/* Streak Section */}
-                <div className="flex items-center gap-10 mb-0 w-full max-w-sm mx-auto">
+                {/* Streak Section - scales proportionally on narrow screens */}
+                <div
+                    className="flex items-center gap-10 mb-0 origin-center"
+                    style={{
+                        transform: 'scale(clamp(0.65, calc((100vw - 3rem) / 24rem), 1))',
+                    }}
+                >
                     {/* Yellow Circle with Number */}
                     <div className="relative w-28 h-28 flex-shrink-0">
-                        <img 
-                            src={streakCircle} 
-                            alt="Streak Circle" 
+                        <img
+                            src={streakCircle}
+                            alt="Streak Circle"
                             className="w-full h-full object-contain drop-shadow-md scale-110"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -50,11 +55,11 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                             </span>
                         </div>
                     </div>
-                    
+
                     {/* Text / Decoration */}
-                    <div className="flex-1 pt-2 -translate-y-3">
+                    <div className="flex-shrink-0 pt-2 -translate-y-3">
                         <span
-                            className="text-4xl font-extrabold italic text-white"
+                            className="text-4xl font-extrabold italic text-white whitespace-nowrap"
                             style={{
                                 fontFamily: "'Sansita', sans-serif",
                                 WebkitTextStroke: '4px #388444',

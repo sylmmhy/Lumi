@@ -86,7 +86,8 @@
   "profile.logout": "Esci",
   "profile.thankYou": "Grazie!",
   "profile.feedbackPlaceholder": "Scrivi il tuo feedback...",
-  "profile.feedbackIntro": "Sono Miko! Ho l'ADHD e voglio creare qualcosa che aiuti me e gli altri. Dimmi cosa ne pensi!",
+  "profile.feedbackTitle": "Cerco di aiutare chi ha l'ADHD a iniziare le attività.",
+  "profile.feedbackBody": "Faccio fatica a trovare il confine tra \"partner d'aiuto\" e \"rompiscatole fastidioso\". Se hai bisogno di una spinta per iniziare ma odi essere comandato, come gestisci questo? Mi piacerebbe il tuo consiglio.",
   "profile.saveFailed": "Non salvato. Riprova?",
   "profile.feedbackFailed": "Non inviato. Riprova?",
 

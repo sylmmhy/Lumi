@@ -86,7 +86,8 @@
   "profile.logout": "ログアウト",
   "profile.thankYou": "ありがとう！",
   "profile.feedbackPlaceholder": "感想を書いてね...",
-  "profile.feedbackIntro": "Mikoです！ADHDなので自分と誰かを助けるものを作りたくて。感想聞かせてね！",
+  "profile.feedbackTitle": "ADHDの人がタスクを始められるように手伝いたい。",
+  "profile.feedbackBody": "「助けになるパートナー」と「うるさい小言屋」の境界線がわからなくて悩んでる。始めるのに背中を押してほしいけど、命令されるのは嫌な人、どうしてる？アドバイスほしいな。",
   "profile.saveFailed": "保存できなかった。もう一回試してね",
   "profile.feedbackFailed": "送れなかった。もう一回試してね",
 

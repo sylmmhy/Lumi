@@ -86,7 +86,8 @@
   "profile.logout": "로그아웃",
   "profile.thankYou": "고마워!",
   "profile.feedbackPlaceholder": "의견 적어줘...",
-  "profile.feedbackIntro": "Miko야! ADHD라서 나랑 다른 사람 도울 수 있는 거 만들고 싶어. 피드백 기다릴게!",
+  "profile.feedbackTitle": "ADHD인 사람들이 실제로 일을 시작하도록 돕고 싶어.",
+  "profile.feedbackBody": "\"도움이 되는 파트너\"와 \"짜증나는 잔소리꾼\" 사이의 경계를 찾기 어려워. 시작하려면 누군가 밀어줘야 하는데 명령받는 건 싫다면, 어떻게 해? 조언해줘.",
   "profile.saveFailed": "저장 실패. 다시 해볼래?",
   "profile.feedbackFailed": "전송 실패. 다시 해볼래?",
 

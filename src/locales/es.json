@@ -86,7 +86,8 @@
   "profile.logout": "Cerrar sesión",
   "profile.thankYou": "¡Gracias!",
   "profile.feedbackPlaceholder": "Escribe tu opinión...",
-  "profile.feedbackIntro": "¡Soy Miko! Tengo ADHD y quiero crear algo que me ayude a mí y a otros. ¡Cuéntame qué piensas!",
+  "profile.feedbackTitle": "Intentando ayudar a personas con ADHD a empezar tareas.",
+  "profile.feedbackBody": "Me cuesta encontrar el equilibrio entre ser un \"compañero útil\" y un \"pesado molesto\". Si necesitas que alguien te empuje para empezar pero odias que te manden, ¿cómo lo manejas? Me encantaría tu consejo.",
   "profile.saveFailed": "No se guardó. ¿Intentas de nuevo?",
   "profile.feedbackFailed": "No se envió. ¿Intentas de nuevo?",
 

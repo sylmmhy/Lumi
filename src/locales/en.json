@@ -86,7 +86,8 @@
   "profile.logout": "Log Out",
   "profile.thankYou": "Thank you!",
   "profile.feedbackPlaceholder": "Type your feedback here...",
-  "profile.feedbackIntro": "Trying to make ADHD focus less painful. I'm struggling to figure out which features actually help with focus vs. just being distracting. If you have ADHD, how do you handle this? I'd love your advice.",
+  "profile.feedbackTitle": "Trying to help ADHDers actually start tasks.",
+  "profile.feedbackBody": "I'm struggling to figure out the fine line between a \"helpful partner\" and an \"annoying nag.\" If you need a push to get started but hate being bossed around, how do you handle this? I'd love your advice.",
   "profile.saveFailed": "Failed to save name. Please try again.",
   "profile.feedbackFailed": "Failed to send feedback. Please try again.",
 

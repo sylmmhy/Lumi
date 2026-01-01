@@ -112,8 +112,11 @@ export const FeedbackCard: React.FC<FeedbackCardProps> = ({ onInterviewRequest }
             <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full"></div>
 
             <div className="relative z-10 text-center">
-                <p className="font-sans text-xl font-bold leading-relaxed mb-4 text-white drop-shadow-sm">
-                    {t('profile.feedbackIntro')}
+                <h2 className="font-sans text-2xl font-bold leading-tight mb-3 text-white drop-shadow-sm">
+                    {t('profile.feedbackTitle')}
+                </h2>
+                <p className="font-sans text-base font-medium leading-relaxed mb-4 text-white">
+                    {t('profile.feedbackBody')}
                 </p>
 
                 {/* Rating Hearts */}

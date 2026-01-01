@@ -38,11 +38,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [isSavingName, setIsSavingName] = useState(false);
 
     // Feedback state
-    const [feedbackInput, setFeedbackInput] = useState('');
-    const [rating, setRating] = useState<number | null>(null); // 1-5 rating
-    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-    const [feedbackSent, setFeedbackSent] = useState(false);
-    const [currentFeedbackId, setCurrentFeedbackId] = useState<string | null>(null); // Track current feedback session ID
     const [showInterviewModal, setShowInterviewModal] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
     const [showUILanguageModal, setShowUILanguageModal] = useState(false);
@@ -189,100 +184,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             alert('Failed to upload avatar. Please make sure you have created an "avatars" bucket in Supabase Storage.');
         } finally {
             setUploading(false);
-        }
-    };
-
-    const handleRatingSelect = async (star: number) => {
-        setRating(star);
-        try {
-            if (currentFeedbackId) {
-                // Update existing feedback
-                const { error } = await supabase!
-                    .from('user_feedback')
-                    .update({ rating: star })
-                    .eq('id', currentFeedbackId);
-
-                if (error) throw error;
-                console.log('Rating updated:', star);
-            } else {
-                // Create new feedback
-                const { data, error } = await supabase!
-                    .from('user_feedback')
-                    .insert({
-                        rating: star,
-                        user_id: auth?.userId || null, // Explicitly null if undefined
-                        content: feedbackInput || null 
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                if (data) {
-                    setCurrentFeedbackId(data.id);
-                    console.log('Rating saved, new ID:', data.id);
-                }
-            }
-            
-            // Trigger interview modal after rating (if not already shown)
-            setTimeout(() => {
-                setShowInterviewModal(true);
-            }, 1000);
-        } catch (error) {
-            console.error('Error saving rating:', error);
-        }
-    };
-
-    const handleFeedbackSubmit = async () => {
-        if (!feedbackInput.trim()) return; // Only submit if there is text
-        
-        setIsSubmittingFeedback(true);
-        try {
-            if (currentFeedbackId) {
-                // Update existing feedback with content
-                const { error } = await supabase!
-                    .from('user_feedback')
-                    .update({
-                        content: feedbackInput,
-                        // Update rating too just in case state is newer, though it should be synced
-                        rating: rating 
-                    })
-                    .eq('id', currentFeedbackId);
-                
-                if (error) throw error;
-            } else {
-                // Create new feedback
-                const { data, error } = await supabase!
-                    .from('user_feedback')
-                    .insert({
-                        content: feedbackInput,
-                        rating: rating, 
-                        user_id: auth?.userId || null // Explicitly null if undefined
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                // We don't strictly need to set ID here if we are resetting immediately, 
-                // but for consistency in logic flow:
-                if (data) setCurrentFeedbackId(data.id);
-            }
-            
-            setFeedbackSent(true);
-            setFeedbackInput('');
-            setRating(null);
-            setCurrentFeedbackId(null); // Reset session so next time creates new row
-            
-            // 3秒后恢复初始状态
-            setTimeout(() => {
-                setFeedbackSent(false);
-                // Show interview invite popup after feedback success animation starts
-                setShowInterviewModal(true);
-            }, 1500); // A bit faster than 3s to keep momentum
-        } catch (error) {
-            console.error('Error submitting feedback:', error);
-            alert(t('profile.feedbackFailed'));
-        } finally {
-            setIsSubmittingFeedback(false);
         }
     };
 

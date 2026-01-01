@@ -102,6 +102,7 @@
   "auth.termsOfUse": "이용약관",
   "auth.and": "그리고",
   "auth.privacyPolicy": "개인정보처리방침",
+  "auth.orContinueWith": "또는 다음으로 계속",
 
   "language.title": "Lumi 언어",
   "language.description": "Lumi가 쓸 언어 골라. 자동이면 네 말에 맞춰.",

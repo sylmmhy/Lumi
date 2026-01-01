@@ -213,7 +213,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     return (
         <div className="flex-1 bg-gray-50 flex flex-col h-full relative overflow-y-auto no-scrollbar">
             {/* Header Profile Section */}
-            <div className="bg-white p-4 pb-6 flex flex-col items-center shadow-sm rounded-b-[40px] z-10 relative flex-none">
+            <div className="bg-white pt-12 px-4 pb-6 flex flex-col items-center shadow-sm rounded-b-[40px] z-10 relative flex-none">
                 <input
                     type="file"
                     ref={fileInputRef}

@@ -102,6 +102,7 @@
   "auth.termsOfUse": "Terms of Use",
   "auth.and": "and",
   "auth.privacyPolicy": "Privacy Policy",
+  "auth.orContinueWith": "Or Continue With",
 
   "language.title": "Lumi's Voice Language",
   "language.description": "Choose the language Lumi speaks. Auto-detect will match your speech.",

@@ -1,8 +1,16 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { useTranslation } from '../../hooks/useTranslation';
 import { appleLogin } from '../../lib/apple-login';
+import { generateCSRFToken, googleLogin } from '../../lib/google-login';
+import { loadGoogleScript } from '../../lib/google-script';
 import { AppleSignInButton } from '../common/AppleSignInButton';
+
+interface GoogleCredentialResponse {
+  credential: string;
+  clientId?: string;
+  select_by?: string;
+}
 
 export interface AuthModalProps {
   /** 是否展示弹窗 */
@@ -27,6 +35,72 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const hasGoogleClientId = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    let cancelled = false;
+
+    const setup = async () => {
+      try {
+        await loadGoogleScript();
+        if (cancelled) return;
+
+        if (window.google?.accounts?.id) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response: GoogleCredentialResponse) => {
+              if (!response?.credential) return;
+              setIsGoogleLoading(true);
+              setError(null);
+              try {
+                const csrf = generateCSRFToken();
+                await googleLogin(response.credential, csrf);
+                auth?.checkLoginState();
+                onSuccess?.();
+                onClose();
+              } catch (e) {
+                const message = e instanceof Error ? e.message : t('auth.authFailed');
+                setError(message);
+              } finally {
+                setIsGoogleLoading(false);
+              }
+            },
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+
+          if (googleButtonRef.current) {
+            googleButtonRef.current.innerHTML = '';
+            // Google button width only accepts pixel values, calculate based on container
+            const containerWidth = googleButtonRef.current.offsetWidth || 400;
+            window.google.accounts.id.renderButton(googleButtonRef.current, {
+              type: 'standard',
+              theme: 'outline',
+              size: 'large',
+              text: 'continue_with',
+              shape: 'rectangular',
+              logo_alignment: 'left',
+              width: String(containerWidth),
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Google Sign-In initialization failed:', err);
+      }
+    };
+
+    void setup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, isOpen, onClose, onSuccess, t]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,18 +214,29 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             </div>
           </div>
 
-          {/* Apple Login Button - Following Apple HIG */}
-          <div className="mb-4">
+          {/* Social Login Buttons */}
+          <div className="space-y-3">
+            {/* Google Login Button */}
+            {hasGoogleClientId && (
+              <div className="w-full">
+                <div ref={googleButtonRef} className="w-full" />
+                {isGoogleLoading && (
+                  <p className="mt-2 text-center text-xs text-gray-500">{t('common.processing') || 'Processing...'}</p>
+                )}
+              </div>
+            )}
+
+            {/* Apple Login Button - Following Apple HIG */}
             <AppleSignInButton
               onClick={handleAppleLogin}
               isLoading={isAppleLoading}
-              disabled={isLoading}
+              disabled={isLoading || isGoogleLoading}
               variant="black"
               title="continue"
             />
           </div>
 
-          <p className="text-center text-xs text-gray-400">
+          <p className="text-center text-xs text-gray-400 mt-6">
             {t('auth.termsAgree')}{' '}
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
               {t('auth.termsOfUse')}

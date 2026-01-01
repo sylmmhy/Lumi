@@ -34,7 +34,11 @@
       "mcp__supabase__search_docs",
       "Bash(node:*)",
       "Bash(npx skott:*)",
-      "WebFetch(domain:developers.google.com)"
+      "WebFetch(domain:developers.google.com)",
+      "Bash(claude mcp add:*)",
+      "mcp__notion__notion-search",
+      "mcp__notion__notion-fetch",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

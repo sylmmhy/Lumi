@@ -33,7 +33,8 @@
       "Bash(mkdir:*)",
       "mcp__supabase__search_docs",
       "Bash(node:*)",
-      "Bash(npx skott:*)"
+      "Bash(npx skott:*)",
+      "WebFetch(domain:developers.google.com)"
     ],
     "deny": [],
     "ask": []

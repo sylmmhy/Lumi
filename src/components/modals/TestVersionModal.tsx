@@ -6,15 +6,13 @@ export interface TestVersionModalProps {
   isOpen: boolean;
   /** 关闭回调 */
   onClose: () => void;
-  /** 是否已登录 */
-  isLoggedIn?: boolean;
 }
 
 /**
  * 测试版本请求弹窗：在用户第一次设置闹钟后显示，
  * 提示电话提醒功能只在 iOS/Android 上可用，并提供邮箱输入以请求测试版本。
  */
-export function TestVersionModal({ isOpen, onClose, isLoggedIn = false }: TestVersionModalProps) {
+export function TestVersionModal({ isOpen, onClose }: TestVersionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [androidRequestSent, setAndroidRequestSent] = useState(false);
 

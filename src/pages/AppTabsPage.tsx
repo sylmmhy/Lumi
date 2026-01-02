@@ -617,7 +617,6 @@ export function AppTabsPage() {
         <TestVersionModal
             isOpen={showTestVersionModal}
             onClose={() => setShowTestVersionModal(false)}
-            isLoggedIn={auth.isLoggedIn}
         />
     </div>
 );

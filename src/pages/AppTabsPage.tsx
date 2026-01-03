@@ -74,6 +74,18 @@ export function AppTabsPage() {
     const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingTask, setPendingTask] = useState<Task | null>(null);
+    /**
+     * 区分 pendingTask 的来源：
+     * - 'add-task': 用户想创建/保存任务（来自 addTask）
+     * - 'start-ai': 用户想启动 AI Coach（来自 handleQuickStart）
+     */
+    const [pendingAction, setPendingAction] = useState<'add-task' | 'start-ai' | null>(null);
+    /**
+     * 记录挂起动作的来源，避免会话验证完成后误触发非验证导致的挂起。
+     * - 'session-validation': 会话未验证完成时的临时挂起
+     * - 'auth-required': 未登录或会话缺失导致的挂起
+     */
+    const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
@@ -177,10 +189,26 @@ export function AppTabsPage() {
         return () => window.clearTimeout(timer);
     }, [checkoutSuccess, handleChangeView]);
 
-    const addTask = async (newTask: Task) => {
+    /**
+     * 创建任务并在必要时触发登录/挂起流程。
+     *
+     * @param {Task} newTask - 待创建的任务对象
+     */
+    const addTask = useCallback(async (newTask: Task) => {
+        // 如果会话还未验证完成，先挂起操作，等待验证完成后再处理
+        if (!auth.isSessionValidated) {
+            console.log('⏳ 会话验证中，挂起 addTask 操作');
+            setPendingTask(newTask);
+            setPendingAction('add-task');
+            setPendingActionSource('session-validation');
+            return;
+        }
+
         if (!auth.userId) {
             console.error('User not logged in');
             setPendingTask(newTask);
+            setPendingAction('add-task');
+            setPendingActionSource('auth-required');
             setShowAuthModal(true);
             return;
         }
@@ -193,6 +221,8 @@ export function AppTabsPage() {
         if (sessionError || !sessionData?.user) {
             console.warn('Supabase 会话缺失，无法创建任务，将提示登录', sessionError);
             setPendingTask(newTask);
+            setPendingAction('add-task');
+            setPendingActionSource('auth-required');
             setShowAuthModal(true);
             return;
         }
@@ -224,7 +254,7 @@ export function AppTabsPage() {
         } catch (error) {
             console.error('Failed to create reminder:', error);
         }
-    };
+    }, [auth.isSessionValidated, auth.userId]);
 
     /**
      * 切换任务的完成状态
@@ -393,15 +423,67 @@ export function AppTabsPage() {
      * 「Start」按钮点击：直接进入 AI 教练任务流程
      * 注意：不再通过路由跳转，而是在当前页面内启动 useAICoachSession，
      * 这样前后逻辑与 DevTestPage / TaskWorkingExample 中保持一致。
+     *
+     * @param {Task} task - 用户选择或输入的任务
      */
     const handleQuickStart = (task: Task) => {
+        // 如果会话还未验证完成，先挂起操作，等待验证完成后再处理
+        if (!auth.isSessionValidated) {
+            console.log('⏳ 会话验证中，挂起 handleQuickStart 操作');
+            setPendingTask(task);
+            setPendingAction('start-ai');
+            setPendingActionSource('session-validation');
+            return;
+        }
+
         if (!auth.isLoggedIn) {
             setPendingTask(task);
+            setPendingAction('start-ai');
+            setPendingActionSource('auth-required');
             setShowAuthModal(true);
             return;
         }
         ensureVoicePromptThenStart(task);
     };
+
+    /**
+     * 会话验证完成后处理挂起的操作
+     *
+     * 背景：iOS WebView 的登录态恢复是异步的，过早判断"未登录"会触发登录流程
+     * 这个 effect 等待会话验证完成后，再根据登录状态决定是弹登录框还是直接执行操作
+     */
+    useEffect(() => {
+        // 只在会话验证完成且由验证挂起的操作时处理
+        if (!auth.isSessionValidated || !pendingTask || !pendingAction || pendingActionSource !== 'session-validation') {
+            return;
+        }
+
+        console.log('✅ 会话验证完成，处理挂起操作:', { pendingAction, isLoggedIn: auth.isLoggedIn });
+
+        if (pendingAction === 'add-task') {
+            if (auth.isLoggedIn) {
+                // 已登录，直接创建任务
+                void addTask(pendingTask);
+                setPendingTask(null);
+                setPendingAction(null);
+                setPendingActionSource(null);
+            } else {
+                // 未登录，弹出登录框
+                setShowAuthModal(true);
+            }
+        } else if (pendingAction === 'start-ai') {
+            if (auth.isLoggedIn) {
+                // 已登录，直接启动 AI
+                ensureVoicePromptThenStart(pendingTask);
+                setPendingTask(null);
+                setPendingAction(null);
+                setPendingActionSource(null);
+            } else {
+                // 未登录，弹出登录框
+                setShowAuthModal(true);
+            }
+        }
+    }, [addTask, auth.isSessionValidated, auth.isLoggedIn, pendingTask, pendingAction, pendingActionSource, ensureVoicePromptThenStart]);
 
     /**
      * 检测 URL 参数以支持快速启动链接，类似 onboarding 的实现
@@ -600,12 +682,28 @@ export function AppTabsPage() {
             onClose={() => {
                 setShowAuthModal(false);
                 setPendingTask(null);
+                setPendingAction(null);
+                setPendingActionSource(null);
             }}
             onSuccess={() => {
                 auth.checkLoginState();
                 if (pendingTask) {
-                    ensureVoicePromptThenStart(pendingTask);
+                    if (!auth.isSessionValidated) {
+                        // 会话尚未验证完成，延后处理，等待验证完成后再继续
+                        setPendingActionSource('session-validation');
+                        return;
+                    }
+                    // 根据 pendingAction 决定执行什么操作
+                    if (pendingAction === 'start-ai') {
+                        // 用户想启动 AI Coach
+                        ensureVoicePromptThenStart(pendingTask);
+                    } else if (pendingAction === 'add-task') {
+                        // 用户只想创建任务，不启动 AI
+                        void addTask(pendingTask);
+                    }
                     setPendingTask(null);
+                    setPendingAction(null);
+                    setPendingActionSource(null);
                 }
             }}
         />

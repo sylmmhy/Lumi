@@ -26,6 +26,7 @@ import {
   parseNativeAuthPayload,
   isValidJwt,
   isValidSupabaseUuid,
+  isInNativeWebView,
 } from './auth/nativeAuthBridge';
 import { updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
 
@@ -216,6 +217,11 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
         console.warn('⚠️ localStorage token 无效:', restoreError.message);
         // Token 无效，清除 localStorage（以 Supabase 为准）
         clearAuthStorage();
+        // 在 WebView 环境中通知 Native 端 session 失效
+        if (isInNativeWebView()) {
+          console.log('📱 Session 验证失败，通知 Native 端');
+          notifyNativeLogout();
+        }
         return {
           isLoggedIn: false,
           userId: null,
@@ -253,6 +259,11 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
     // 恢复失败，清除 localStorage
     console.warn('⚠️ 无法恢复 session，清除本地认证状态');
     clearAuthStorage();
+    // 在 WebView 环境中通知 Native 端
+    if (isInNativeWebView()) {
+      console.log('📱 Session 恢复失败，通知 Native 端');
+      notifyNativeLogout();
+    }
   }
 
   // 4. Native 登录特殊处理：允许没有 Supabase session
@@ -273,6 +284,8 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   }
 
   // 5. 没有任何有效会话
+  // 注意：这里不通知 Native，因为可能是首次加载（localStorage 本来就没有数据）
+  // 只有在 localStorage 有数据但验证失败时才需要通知
   return {
     isLoggedIn: false,
     userId: null,
@@ -331,6 +344,14 @@ export function AuthProvider({
   }, []);
 
   const navigateToLogin = useCallback((redirectPath?: string) => {
+    // 在 WebView 环境中，通知 Native 端回到原生登录页
+    if (isInNativeWebView()) {
+      console.log('📱 WebView 环境，通知 Native 端跳转到原生登录页');
+      notifyNativeLogout();
+      return;
+    }
+
+    // 非 WebView 环境，使用网页端登录页
     const target = redirectPath || defaultRedirectRef.current || DEFAULT_APP_PATH;
     const loginTarget = loginPathRef.current || DEFAULT_LOGIN_PATH;
     navigate(`${loginTarget}?redirect=${encodeURIComponent(target)}`, { replace: true });

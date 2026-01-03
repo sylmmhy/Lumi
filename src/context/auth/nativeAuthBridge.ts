@@ -8,6 +8,17 @@
 import type { NativeAuthPayload } from '../AuthContextDefinition';
 
 /**
+ * 检测是否在原生 WebView 环境中
+ * @returns true 如果在 iOS 或 Android WebView 中
+ */
+export function isInNativeWebView(): boolean {
+  return Boolean(
+    window.webkit?.messageHandlers?.userLogout ||
+    window.AndroidBridge?.logout
+  );
+}
+
+/**
  * 通知原生 App 用户已登出
  * iOS: 使用 WKScriptMessageHandler (window.webkit.messageHandlers.userLogout)
  * Android: 使用 AndroidBridge (window.AndroidBridge.onLogout)

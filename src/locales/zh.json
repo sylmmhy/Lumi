@@ -129,7 +129,7 @@
   "task.start": "开始",
 
   "urgency.getYouStart": "帮你开始！",
-  "urgency.inFiveMinutes": "5分钟后！",
+  "urgency.inFiveMinutes": "5分钟启动！",
   "urgency.enterTaskHere": "在这里输入你的任务",
   "urgency.pickOneTask": "选一个任务开始",
   "urgency.placeholder": "例如：\"洗澡\"",

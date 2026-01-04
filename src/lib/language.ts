@@ -16,6 +16,7 @@ export interface SupportedLanguage {
  */
 export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
   { code: 'en-US', name: 'English', nativeName: 'English' },
+  { code: 'zh-CN', name: 'Chinese', nativeName: '中文' },
   { code: 'ja-JP', name: 'Japanese', nativeName: '日本語' },
   { code: 'es-en', name: 'Spanglish', nativeName: 'Spanglish (ES+EN)' },
   { code: 'es-US', name: 'Spanish', nativeName: 'Español' },

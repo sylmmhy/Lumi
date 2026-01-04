@@ -351,6 +351,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // 开始倒计时
       startCountdown();
 
+      // 立即触发 AI 开场白，发送简短指令让 AI 快速回复（减少 thinking 时间）
+      // 等待一小段时间确保连接稳定
+      setTimeout(() => {
+        geminiLive.sendTextMessage('Hi');
+      }, 100);
+
       if (import.meta.env.DEV) {
         console.log('✨ AI 教练会话已成功开始');
       }

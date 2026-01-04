@@ -149,13 +149,34 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         if ('outputTranscription' in serverContent && serverContent.outputTranscription) {
           const transcription = serverContent.outputTranscription as { text?: string };
           if (transcription.text) {
-            setTranscript((prev) => {
-              const newTranscript = [...prev, { role: 'assistant' as const, text: transcription.text! }];
-              if (onTranscriptUpdate) {
-                onTranscriptUpdate(newTranscript);
-              }
-              return newTranscript;
-            });
+            // 过滤掉 Gemini 2.5 的 "thinking" 输出（仅在生产环境过滤，dev 模式保留用于调试）
+            // thinking 内容通常以 ** 开头（markdown 加粗格式）表示思考过程标题
+            const text = transcription.text.trim();
+            const isThinkingContent = text.startsWith('**') && (
+              text.includes('查看') ||
+              text.includes('分析') ||
+              text.includes('考虑') ||
+              text.includes('思考') ||
+              text.includes('理解') ||
+              text.includes('精炼') ||
+              text.includes('编写') ||
+              text.includes('构思') ||
+              text.includes('方法') ||
+              text.includes('Thinking') ||
+              text.includes('Analyzing') ||
+              text.includes('Considering')
+            );
+
+            // dev 模式下不过滤，方便调试；生产环境过滤掉 thinking 内容
+            if (import.meta.env.DEV || !isThinkingContent) {
+              setTranscript((prev) => {
+                const newTranscript = [...prev, { role: 'assistant' as const, text: transcription.text! }];
+                if (onTranscriptUpdate) {
+                  onTranscriptUpdate(newTranscript);
+                }
+                return newTranscript;
+              });
+            }
           }
         }
 
@@ -306,7 +327,13 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         config: {
           responseModalities: ['audio'] as unknown as Modality[],
           // 设置 AI 语音为 Puck
-          speechConfig: 'Puck',
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: 'Puck',
+              },
+            },
+          },
           // 启用用户语音转录，用于保存对话记忆
           inputAudioTranscription: {},
           // 启用 AI 语音转录，同步输出文字

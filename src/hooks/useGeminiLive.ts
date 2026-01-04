@@ -352,6 +352,11 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           thinkingConfig: {
             thinkingBudget: 0,
           },
+          // 启用 Proactive Audio：模型智能判断何时需要响应
+          // 只对直接向设备说话的内容进行回复，忽略背景对话
+          proactivity: {
+            proactiveAudio: true,
+          },
           // 启用用户语音转录，用于保存对话记忆
           inputAudioTranscription: {},
           // 启用 AI 语音转录，同步输出文字

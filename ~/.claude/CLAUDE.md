@@ -2,6 +2,12 @@
 - 必须保持代码的局部性，不要随意重构没有要求修改的模块。
 - **组件复用**：如果组件库或项目中已有现成组件（如 `Button`, `Card` 等），优先复用，**严禁**重复造轮子。
 
+**产品的架构是：**
+网页版本：/Users/miko_mac_mini/projects/firego--original-web
+iOS端（但是iOS只是壳子，内部实际用的webview调用的网页版）：/Users/miko_mac_mini/projects/mindboat-ios-web-warpper
+安卓端（但是安卓只是壳子，内部实际用的webview调用的网页版）：/Users/miko_mac_mini/AndroidStudioProjects/FireGo
+如果有功能需要联动的情况，你需要做好三个端口的接口联动
+
 **项目角色与风格**：  
 你是一个资深的 React + TypeScript 前端开发专家。
 You are coding inside an existing project.

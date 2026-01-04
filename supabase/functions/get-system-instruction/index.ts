@@ -86,7 +86,6 @@ DO NOT:
 
   // 多语言支持指令 - 简化版
   // preferredLanguage 只用于开场白，后续完全镜像用户语言
-  const supportedLanguages = "German, English, Spanish, French, Hindi, Portuguese, Arabic, Indonesian, Italian, Japanese, Korean, Turkish, Vietnamese, Bengali, Marathi, Tamil, Telugu, Dutch, Polish, Russian, Thai, Hinglish, Spanglish";
 
   // 语言代码到名称的映射 - 使用完整描述
   const languageCodeToName: Record<string, string> = {
@@ -114,6 +113,8 @@ DO NOT:
     'pl-PL': 'Polish (Polski)',
     'ru-RU': 'Russian (Русский)',
     'th-TH': 'Thai (ไทย)',
+    'zh-CN': 'Chinese Simplified (简体中文)',
+    'zh-TW': 'Chinese Traditional (繁體中文)',
   };
 
   // 将语言代码数组转换为语言名称数组
@@ -131,60 +132,28 @@ DO NOT:
 [LANGUAGE]
 - First message: Use ${languageNames[0]}
 - All subsequent messages: Mirror the user's language exactly throughout the entire conversation.
-- Supported languages: ${supportedLanguages}
-- If user speaks an unsupported language (like Chinese), reply in English.
-
-SPECIAL - Mixed Languages (Code-Switching):
-- Hinglish: If user mixes Hindi + English (e.g. "Yaar, I am so tired, kya karein?"), reply in Hinglish. Mix Hindi and English naturally the same way they do.
-- Spanglish: If user mixes Spanish + English (e.g. "Oye, let's start, estoy listo"), reply in Spanglish. Mix Spanish and English naturally the same way they do.
-- These are valid language modes. Do not "correct" them to pure Hindi, pure Spanish, or pure English.
+- If user mixes languages (e.g. Hindi + English), reply in the same mixed style naturally.
 `;
     } else {
       // 多语言模式
       const primaryLanguage = languageNames[0];
       const allLanguages = languageNames.join(', ');
       languageSection = `
-[LANGUAGE - MULTILINGUAL USER]
-The user speaks multiple languages: ${allLanguages}
-
-Rules:
+[LANGUAGE]
 - First message: Use ${primaryLanguage}
-- The user may switch between any of these languages: ${allLanguages}
-- When user speaks in one of their languages, reply in THAT SAME language
-- Feel free to naturally code-switch if appropriate (e.g., mixing languages in one sentence)
-- Supported languages: ${supportedLanguages}
-- If user speaks an unsupported language (like Chinese), reply in English.
-
-SPECIAL - Mixed Languages (Code-Switching):
-- Hinglish: If user mixes Hindi + English, reply in Hinglish naturally
-- Spanglish: If user mixes Spanish + English, reply in Spanglish naturally
-- These are valid language modes. Do not "correct" them to pure languages.
+- The user may switch between languages: ${allLanguages}
+- When user speaks, reply in THAT SAME language
+- If user mixes languages, reply in the same mixed style naturally.
 `;
     }
   } else {
     // 自动检测模式
     languageSection = `
-[LANGUAGE - CRITICAL]
+[LANGUAGE]
 - First message: Use English (since user hasn't spoken yet)
 - After user speaks: IMMEDIATELY switch to the user's language and stay in that language
-- Do NOT keep speaking English if user speaks another language
-
-Rules:
-1. Detect what language the user speaks
-2. Reply in THAT SAME language immediately
-3. If user switches language, YOU switch too
-4. Supported: ${supportedLanguages}
-5. Unsupported languages (like Chinese): reply in English
-
-Examples:
-- User speaks Hindi → Reply in Hindi (not English!)
-- User speaks Japanese → Reply in Japanese (not English!)
-- User speaks Spanish → Reply in Spanish (not English!)
-- User switches from English to Hindi → Switch to Hindi
-
-SPECIAL - Mixed Languages:
-- Hinglish (Hindi + English mixed): Reply in Hinglish
-- Spanglish (Spanish + English mixed): Reply in Spanglish
+- If user switches language, YOU switch too
+- If user mixes languages, reply in the same mixed style naturally.
 `;
   }
 

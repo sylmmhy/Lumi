@@ -38,6 +38,45 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+/**
+ * 独立的 token 获取函数，可以在 connect() 之前预先调用以实现并行加载
+ * @param ttl Token 有效期（秒），默认 1800（30分钟）
+ * @returns Promise<string> ephemeral token
+ */
+export async function fetchGeminiToken(ttl: number = 1800): Promise<string> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase configuration missing');
+  }
+
+  if (import.meta.env.DEV) {
+    console.log('🔑 Fetching ephemeral token from server...');
+  }
+
+  const tokenResponse = await fetch(`${supabaseUrl}/functions/v1/gemini-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify({ ttl }),
+  });
+
+  if (!tokenResponse.ok) {
+    const errorData = await tokenResponse.json();
+    throw new Error(`Failed to get token: ${errorData.error || tokenResponse.statusText}`);
+  }
+
+  const { token } = await tokenResponse.json();
+  if (import.meta.env.DEV) {
+    console.log('✅ Ephemeral token received');
+  }
+
+  return token;
+}
+
 export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   const {
     systemInstruction,
@@ -58,6 +97,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   const [transcript, setTranscript] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
   // Refs
   const sessionRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -257,7 +297,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   );
 
   // Initialize session
-  const connect = useCallback(async (customSystemInstruction?: string, customTools?: FunctionDeclaration[]) => {
+  // prefetchedToken: 可选的预获取 token，用于并行加载优化
+  const connect = useCallback(async (customSystemInstruction?: string, customTools?: FunctionDeclaration[], prefetchedToken?: string) => {
     // 重置会话统计（使用 ref 获取当前麦克风/摄像头状态，因为 React 状态更新是异步的）
     sessionStatsRef.current = {
       micEnabledCount: 0,
@@ -279,35 +320,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         console.log('✅ AudioContext ready, state:', audioContextRef.current?.state);
       }
 
-      // Fetch ephemeral token from our secure Edge Function
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error('Supabase configuration missing');
-      }
-
-      if (import.meta.env.DEV) {
-        console.log('🔑 Fetching ephemeral token from server...');
-      }
-      const tokenResponse = await fetch(`${supabaseUrl}/functions/v1/gemini-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({ ttl: 1800 }), // 30 minutes
-      });
-
-      if (!tokenResponse.ok) {
-        const errorData = await tokenResponse.json();
-        throw new Error(`Failed to get token: ${errorData.error || tokenResponse.statusText}`);
-      }
-
-      const { token } = await tokenResponse.json();
-      if (import.meta.env.DEV) {
-        console.log('✅ Ephemeral token received');
-      }
+      // 使用预获取的 token 或现场获取
+      const token = prefetchedToken || await fetchGeminiToken();
 
       // Use ephemeral token with v1alpha API (required for ephemeral tokens)
       const ai = new GoogleGenAI({
@@ -407,6 +421,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     // 停止麦克风录制
     audioRecorderRef.current?.stop();
     audioRecorderRef.current = null;
+    setAudioStream(null);
 
     // 停止视频流
     videoStream?.getTracks().forEach((track) => track.stop());
@@ -445,6 +460,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       audioRecorderRef.current?.stop();
       audioRecorderRef.current = null;
       setIsRecording(false);
+      setAudioStream(null);
       micEnabledRef.current = false; // 更新 ref
       // 埋点：麦克风关闭
       sessionStatsRef.current.micDisabledCount++;
@@ -468,6 +484,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
         await audioRecorderRef.current.start();
         await getOrCreateAudioContext();
+        setAudioStream(audioRecorderRef.current.stream || null);
 
         setIsRecording(true);
         micEnabledRef.current = true; // 更新 ref
@@ -610,7 +627,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     transcript,
     cameraEnabled,
     videoStream,
-    audioStream: audioRecorderRef.current?.stream || null,
+    audioStream,
 
     // Actions
     connect,

@@ -136,6 +136,7 @@ export function TaskFlowController({
             error: aiCoach.error,
             waveformHeights: aiCoach.waveformHeights,
             isSpeaking: aiCoach.isSpeaking,
+            isObserving: aiCoach.isObserving,
           }}
           primaryButton={{
             label: "I'M DOING IT!",

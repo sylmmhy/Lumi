@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useGeminiLive } from './useGeminiLive';
+import { useGeminiLive, fetchGeminiToken } from './useGeminiLive';
 import { useVirtualMessages } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
@@ -73,6 +73,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [taskStartTime, setTaskStartTime] = useState(0);
+  const [isObserving, setIsObserving] = useState(false); // AI 正在观察用户
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const processedTranscriptRef = useRef<Set<string>>(new Set());
@@ -190,6 +191,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     setOnTurnComplete(() => recordTurnComplete(false));
     return () => setOnTurnComplete(null);
   }, [recordTurnComplete, setOnTurnComplete]);
+
+  // 当 AI 开始说话时，关闭观察状态
+  useEffect(() => {
+    if (geminiLive.isSpeaking && isObserving) {
+      setIsObserving(false);
+      if (import.meta.env.DEV) {
+        console.log('👀 AI 开始说话，观察阶段结束');
+      }
+    }
+  }, [geminiLive.isSpeaking, isObserving]);
 
   // ==========================================
   // 倒计时
@@ -311,35 +322,44 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         await geminiLive.toggleMicrophone();
       }
 
-      // 步骤3：获取系统指令并连接 Gemini
+      // 步骤3：并行获取系统指令和 Gemini token，优化连接速度
+      if (import.meta.env.DEV) {
+        console.log('⚡ 步骤3: 并行获取系统指令和 token...');
+      }
+
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
+        throw new Error('Supabase 未配置');
+      }
+
+      const needFetchInstruction = !customSystemInstruction;
+
+      const [instructionResult, token] = await Promise.all([
+        // 如果已有自定义 instruction 则返回 null
+        needFetchInstruction
+          ? supabaseClient.functions.invoke('get-system-instruction', {
+              body: { taskInput: taskDescription, userName, preferredLanguages, userId }
+            })
+          : Promise.resolve(null),
+        // 获取 Gemini token
+        fetchGeminiToken(),
+      ]);
+
+      // 处理 system instruction 结果
       let systemInstruction = customSystemInstruction;
-
-      if (!systemInstruction) {
-        if (import.meta.env.DEV) {
-          console.log('📡 步骤3: 获取系统指令...');
-          console.log('📝 当前任务描述:', taskDescription);
+      if (instructionResult) {
+        if (instructionResult.error) {
+          throw new Error(`获取系统指令失败: ${instructionResult.error.message}`);
         }
-        const supabaseClient = getSupabaseClient();
-        if (!supabaseClient) {
-          throw new Error('Supabase 未配置');
-        }
-
-        const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: taskDescription, userName, preferredLanguages, userId }
-        });
-
-        if (error) {
-          throw new Error(`获取系统指令失败: ${error.message}`);
-        }
-
-        systemInstruction = data.systemInstruction;
+        systemInstruction = instructionResult.data.systemInstruction;
       }
 
       if (import.meta.env.DEV) {
-        console.log('✅ 系统指令已获取，正在连接 Gemini Live...');
+        console.log('✅ 并行获取完成，正在连接 Gemini Live...');
       }
 
-      await geminiLive.connect(systemInstruction, undefined);
+      // 使用预获取的 token 连接
+      await geminiLive.connect(systemInstruction, undefined, token);
 
       if (import.meta.env.DEV) {
         console.log('✅ 连接已建立');
@@ -347,15 +367,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       setIsConnecting(false);
       setIsSessionActive(true);
+      setIsObserving(true); // AI 开始观察用户
 
       // 开始倒计时
       startCountdown();
 
-      // 立即触发 AI 开场白，发送简短指令让 AI 快速回复（减少 thinking 时间）
-      // 等待一小段时间确保连接稳定
-      setTimeout(() => {
-        geminiLive.sendTextMessage('Hi');
-      }, 100);
+      // 注意：AI 开场白由 useVirtualMessages 系统触发
+      // 不在这里发送消息，让虚拟消息系统统一处理
 
       if (import.meta.env.DEV) {
         console.log('✨ AI 教练会话已成功开始');
@@ -380,6 +398,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     stopCountdown();
     geminiLive.disconnect();
     setIsSessionActive(false);
+    setIsObserving(false);
 
     if (import.meta.env.DEV) {
       console.log('✅ AI 教练会话已结束');
@@ -537,6 +556,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     state,
     isConnecting,
     isSessionActive,
+    isObserving, // AI 正在观察用户（开场前）
 
     // Gemini Live 状态
     isConnected: geminiLive.isConnected,

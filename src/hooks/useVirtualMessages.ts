@@ -10,7 +10,7 @@ import { getSupabaseClient } from '../lib/supabase';
  * - 生成带时间感知的消息内容
  */
 
-export type VirtualMessageCategory = 'encouragement_focused' | 'status_check';
+export type VirtualMessageCategory = 'encouragement_focused' | 'status_check' | 'opening';
 
 export interface UseVirtualMessagesOptions {
   /** 是否启用虚拟消息 */
@@ -31,7 +31,7 @@ export interface UseVirtualMessagesOptions {
 
 // 冷却时间：15秒
 const COOLDOWN_MS = 15 * 1000;
-// 初始延迟：立即发送第一条消息
+// 初始延迟：立即发送，不要延迟（thinking 已经够慢了）
 const INITIAL_DELAY_MS = 0;
 // 检查间隔：每5秒检查一次
 const CHECK_INTERVAL_MS = 5000;
@@ -152,6 +152,11 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
    * 生成时间感知的虚拟消息
    */
   const generateTimeAwareMessage = useCallback(async (category: VirtualMessageCategory): Promise<string> => {
+    // 开场白消息 - 简短指令，让 AI 快速风趣开场，不要多想
+    if (category === 'opening') {
+      return "Greet me! Be witty and fun. Don't overthink, just say hi based on what you see.";
+    }
+
     const elapsedMs = Date.now() - taskStartTime;
     const elapsedSeconds = Math.floor(elapsedMs / 1000);
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
@@ -197,9 +202,10 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         console.error('❌ 获取虚拟消息失败:', error);
       }
       // 备用消息
-      const fallbackMessages = {
+      const fallbackMessages: Record<VirtualMessageCategory, string> = {
         encouragement_focused: "Check in on me and give me a nudge if I need it.",
-        status_check: "What do you honestly see me doing right now? Does it match the task we discussed?"
+        status_check: "What do you honestly see me doing right now? Does it match the task we discussed?",
+        opening: "Greet me! Be witty and fun. Don't overthink, just say hi based on what you see.",
       };
       const baseMessage = fallbackMessages[category];
       return `${timeContext} ${baseMessage}`;
@@ -272,7 +278,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     lastTurnCompleteTimeRef.current = 0;
 
     if (import.meta.env.DEV) {
-      console.log('🤖 虚拟消息系统已激活 - AI 将在 2 秒后说话');
+      console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);
       console.log('🔄 冷却时间已重置');
     }
 
@@ -289,10 +295,10 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       }, CHECK_INTERVAL_MS);
     };
 
-    // 初始消息：2秒后发送
+    // 初始消息：使用 'opening' 类型触发 AI 开场白
     const initialTimeoutId = setTimeout(async () => {
       if (!isActive) return;
-      await sendVirtualMessageInternal('encouragement_focused');
+      await sendVirtualMessageInternal('opening');
       // 开始定期检查
       scheduleNextCheck();
     }, INITIAL_DELAY_MS);

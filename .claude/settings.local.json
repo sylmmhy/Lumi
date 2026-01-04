@@ -39,7 +39,10 @@
       "mcp__notion__notion-search",
       "mcp__notion__notion-fetch",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:docs.cloud.google.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

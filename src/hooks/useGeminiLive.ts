@@ -145,6 +145,20 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           }
         }
 
+        // Handle AI output audio transcription (AI 语音转文字)
+        if ('outputTranscription' in serverContent && serverContent.outputTranscription) {
+          const transcription = serverContent.outputTranscription as { text?: string };
+          if (transcription.text) {
+            setTranscript((prev) => {
+              const newTranscript = [...prev, { role: 'assistant' as const, text: transcription.text! }];
+              if (onTranscriptUpdate) {
+                onTranscriptUpdate(newTranscript);
+              }
+              return newTranscript;
+            });
+          }
+        }
+
         // Handle tool call
         if ('toolCall' in serverContent && serverContent.toolCall) {
           const toolCall = serverContent.toolCall as unknown as ToolCall;
@@ -279,7 +293,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         apiKey: token,
         httpOptions: { apiVersion: 'v1alpha' }
       });
-      const model = 'models/gemini-2.0-flash-exp';
+      const model = 'models/gemini-2.5-flash-native-audio-preview-12-2025';
 
       const finalSystemInstruction = customSystemInstruction || systemInstruction;
       const finalTools = customTools || tools;
@@ -293,6 +307,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           responseModalities: ['audio'] as unknown as Modality[],
           // 启用用户语音转录，用于保存对话记忆
           inputAudioTranscription: {},
+          // 启用 AI 语音转录，同步输出文字
+          outputAudioTranscription: {},
           systemInstruction: finalSystemInstruction ? { parts: [{ text: finalSystemInstruction }] } : undefined,
           tools: toolList,
         },

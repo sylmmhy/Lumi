@@ -9,6 +9,7 @@ interface RunningStepProps {
   aiConnected: boolean;
   aiError?: string | null;
   isSpeaking: boolean;
+  isObserving?: boolean;
   waveformHeights: number[];
   onToggleCamera: () => void;
   onComplete: () => void;
@@ -32,6 +33,7 @@ export function RunningStep({
   aiConnected,
   aiError,
   isSpeaking,
+  isObserving,
   waveformHeights,
   onToggleCamera,
   onComplete,
@@ -52,6 +54,7 @@ export function RunningStep({
         error: aiError,
         waveformHeights,
         isSpeaking,
+        isObserving,
       }}
       onToggleCamera={onToggleCamera}
       primaryButton={{

@@ -45,6 +45,8 @@ export interface TaskWorkingViewProps {
     waveformHeights?: number[];
     /** 是否正在说话 */
     isSpeaking?: boolean;
+    /** AI 是否正在观察用户（开场前） */
+    isObserving?: boolean;
   };
 
   /** 主按钮配置 */
@@ -142,11 +144,20 @@ export function TaskWorkingView({
       <div className="relative flex-1 overflow-hidden rounded-[32px] bg-black flex items-center justify-center">
 
         {/* 1. 中央火焰动画 (最底层) */}
-        <div className="z-0 flex items-center justify-center">
+        <div className="z-0 flex flex-col items-center justify-center">
           <TalkingFire
             isSpeaking={aiStatus?.isSpeaking || false}
             size={fireSize} // 手机 2/3 宽，其他 1/2 宽
           />
+          {/* AI 观察提示 */}
+          {aiStatus?.isObserving && (
+            <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 animate-pulse">
+              <span className="text-2xl">👀</span>
+              <span className="text-white/90 text-sm font-medium">
+                Observing you...
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 2. 悬浮摄像头 (右下角) */}

@@ -8,6 +8,7 @@ import { useCelebrationAnimation } from './useCelebrationAnimation';
 import { useVirtualMessages } from './useVirtualMessages';
 import { useGeminiLive } from './useGeminiLive';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
+import { fetchGeminiToken } from './useGeminiLive';
 import { useOnboardingOrchestrator } from '../components/onboarding/OnboardingOrchestrator';
 import { DEFAULT_APP_PATH } from '../constants/routes';
 import { ONBOARDING_COUNTDOWN_SECONDS } from '../constants/onboarding';
@@ -38,6 +39,7 @@ export function useOnboardingFlow() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isObserving, setIsObserving] = useState(false);
 
   const processedTranscriptRef = useRef<Set<string>>(new Set());
   const systemInstructionRef = useRef<string | undefined>(undefined);
@@ -107,6 +109,16 @@ export function useOnboardingFlow() {
       setReconnectAttempt(0);
     }
   }, [geminiLive.isConnected]);
+
+  // AI 开始说话时结束观察阶段
+  useEffect(() => {
+    if (geminiLive.isSpeaking && isObserving) {
+      setIsObserving(false);
+      if (import.meta.env.DEV) {
+        console.log('👀 AI 开始说话，观察阶段结束');
+      }
+    }
+  }, [geminiLive.isSpeaking, isObserving]);
 
   const vad = useVoiceActivityDetection(geminiLive.audioStream, {
     enabled: step === 'running' && geminiLive.isRecording,
@@ -178,28 +190,48 @@ export function useOnboardingFlow() {
         }
       }
 
+      // 并行获取 system instruction 和 gemini token，优化连接速度
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
+        throw new Error('Supabase 未配置');
+      }
+
+      const needFetchInstruction = !systemInstructionRef.current;
+
+      if (import.meta.env.DEV) {
+        console.log('⚡ 并行获取 system instruction 和 token...');
+      }
+
+      const [instructionResult, token] = await Promise.all([
+        // 如果已有缓存的 instruction 则返回 null
+        needFetchInstruction
+          ? supabaseClient.functions.invoke('get-system-instruction', {
+              body: { taskInput: finalTaskInput }
+            })
+          : Promise.resolve(null),
+        // 获取 Gemini token
+        fetchGeminiToken(),
+      ]);
+
+      // 处理 system instruction 结果
       let systemInstruction = systemInstructionRef.current;
-      if (!systemInstruction) {
-        const supabaseClient = getSupabaseClient();
-        if (!supabaseClient) {
-          throw new Error('Supabase 未配置');
+      if (instructionResult) {
+        if (instructionResult.error) {
+          throw new Error(`获取系统指令失败: ${instructionResult.error.message}`);
         }
-
-        const { data, error } = await supabaseClient.functions.invoke('get-system-instruction', {
-          body: { taskInput: finalTaskInput }
-        });
-
-        if (error) {
-          throw new Error(`获取系统指令失败: ${error.message}`);
-        }
-
-        systemInstruction = data.systemInstruction;
+        systemInstruction = instructionResult.data.systemInstruction;
         systemInstructionRef.current = systemInstruction;
       }
 
-      await geminiLive.connect(systemInstruction, undefined);
+      if (import.meta.env.DEV) {
+        console.log('✅ 并行获取完成，开始连接...');
+      }
+
+      // 使用预获取的 token 连接
+      await geminiLive.connect(systemInstruction, undefined, token);
 
       setIsConnecting(false);
+      setIsObserving(true); // 开始观察阶段
 
       taskTimer.startCountdown();
       orchestratorActions.startTimer();
@@ -216,6 +248,7 @@ export function useOnboardingFlow() {
     taskTimer.stopCountdown();
     orchestratorActions.stopTimer();
     geminiLive.disconnect();
+    setIsObserving(false);
 
     analytics.trackTaskCompleted(orchestratorState.taskDescription);
 
@@ -230,6 +263,7 @@ export function useOnboardingFlow() {
     taskTimer.reset();
     orchestratorActions.reset();
     geminiLive.disconnect();
+    setIsObserving(false);
     processedTranscriptRef.current.clear();
     systemInstructionRef.current = undefined;
   }, [taskTimer, orchestratorActions, geminiLive]);
@@ -344,6 +378,7 @@ export function useOnboardingFlow() {
         aiConnected: geminiLive.isConnected,
         aiError: geminiLive.error,
         isSpeaking: geminiLive.isSpeaking,
+        isObserving,
         waveformHeights: waveformAnimation.heights,
         onToggleCamera: geminiLive.toggleCamera,
         onComplete: handleEndTask,

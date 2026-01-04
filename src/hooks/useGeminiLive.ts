@@ -348,6 +348,10 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
               },
             },
           },
+          // 关闭 thinking 以加快响应速度（实时对话不需要深度思考）
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
           // 启用用户语音转录，用于保存对话记忆
           inputAudioTranscription: {},
           // 启用 AI 语音转录，同步输出文字

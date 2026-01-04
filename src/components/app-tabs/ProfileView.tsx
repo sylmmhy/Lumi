@@ -314,7 +314,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             <div className="px-6 -mt-4 relative z-20">
 
                 {/* Settings Section - Language Selection */}
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
                     {/* UI Language Setting */}
                     <button
                         onClick={() => setShowUILanguageModal(true)}
@@ -359,6 +359,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </div>
                     </button>
                 </div>
+
+                {/* Login/Logout Button - Below Language Settings */}
+                <button
+                    onClick={handleAuthAction}
+                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-6"
+                >
+                    <i className={`fa-solid ${isGuest ? 'fa-right-to-bracket' : 'fa-right-from-bracket'}`}></i>
+                    <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
+                </button>
 
                 {/* Biography Section */}
                 <div className="mb-8 mt-4">
@@ -409,14 +418,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </div>
                 </div>
 
-                {/* Standalone Logout Button */}
-                <button
-                    onClick={handleAuthAction}
-                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-                >
-                    <i className={`fa-solid ${isGuest ? 'fa-right-to-bracket' : 'fa-right-from-bracket'}`}></i>
-                    <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
-                </button>
             </div>
 
             {/* Bottom Spacer */}

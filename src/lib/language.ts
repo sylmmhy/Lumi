@@ -56,6 +56,7 @@ export interface UILanguage {
 
 export const SUPPORTED_UI_LANGUAGES: UILanguage[] = [
   { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文' },
   { code: 'ja', name: 'Japanese', nativeName: '日本語' },
   { code: 'ko', name: 'Korean', nativeName: '한국어' },
   { code: 'it', name: 'Italian', nativeName: 'Italiano' },

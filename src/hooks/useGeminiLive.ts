@@ -305,14 +305,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
         model,
         config: {
           responseModalities: ['audio'] as unknown as Modality[],
-          // 设置 AI 语音为 Puck (Male)
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: 'Puck',
-              },
-            },
-          },
+          // 设置 AI 语音为 Puck
+          speechConfig: 'Puck',
           // 启用用户语音转录，用于保存对话记忆
           inputAudioTranscription: {},
           // 启用 AI 语音转录，同步输出文字

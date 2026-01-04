@@ -1,7 +1,7 @@
 /**
  * Internationalization (i18n) system for Lumi UI
  *
- * Supports: English, Japanese, Korean, Italian, Spanish
+ * Supports: English, Japanese, Korean, Italian, Spanish, Chinese
  */
 
 import en from '../locales/en.json';
@@ -9,6 +9,7 @@ import ja from '../locales/ja.json';
 import ko from '../locales/ko.json';
 import it from '../locales/it.json';
 import es from '../locales/es.json';
+import zh from '../locales/zh.json';
 
 export type TranslationKey = keyof typeof en;
 
@@ -20,6 +21,7 @@ const translations: Translations = {
   ko,
   it,
   es,
+  zh,
 };
 
 // Map full language codes to simplified codes
@@ -30,6 +32,8 @@ const languageCodeMap: Record<string, string> = {
   'ko-KR': 'ko',
   'it-IT': 'it',
   'es-US': 'es',
+  'zh-CN': 'zh',
+  'zh-TW': 'zh',
 };
 
 /**

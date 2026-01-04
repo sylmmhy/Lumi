@@ -42,7 +42,8 @@
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:docs.cloud.google.com)",
       "WebFetch(domain:github.com)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:discuss.ai.google.dev)"
     ],
     "deny": [],
     "ask": []

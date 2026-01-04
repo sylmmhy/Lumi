@@ -268,8 +268,8 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                     />
                 </div>
 
-                <h1 className="text-[35px] text-[#ebebeb] capitalize leading-[38.99px] mb-1" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.getYouStart')}</h1>
-                <h2 className="text-[58px] text-[#f3fa93] capitalize leading-[60.946px] mb-4" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.inFiveMinutes')}</h2>
+                <h1 className="w-full text-center text-[35px] text-[#ebebeb] capitalize leading-[38.99px] mb-1" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.getYouStart')}</h1>
+                <h2 className="w-full text-center text-[58px] text-[#f3fa93] capitalize leading-[60.946px] mb-4" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.inFiveMinutes')}</h2>
 
                 {/* SVG Curve Bottom */}
                 <div className="absolute bottom-0 left-0 right-0 translate-y-[98%] z-10 overflow-visible">

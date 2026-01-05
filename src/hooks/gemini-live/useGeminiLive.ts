@@ -109,6 +109,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             audioOutput.stop();
           },
           onTurnComplete: () => {
+            audioOutput.markTurnComplete();  // 重置 isSpeaking 状态
             onTurnCompleteRef.current?.();
           },
           onInputTranscription: (text: string) => {

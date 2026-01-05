@@ -28,6 +28,7 @@ interface UseAudioOutputReturn {
   ensureReady: () => Promise<AudioContext>;
   playAudio: (base64Data: string) => void;
   stop: () => void;
+  markTurnComplete: () => void;  // 标记轮次完成（只设置状态，不停止播放）
   cleanup: () => void;
 
   // Refs
@@ -99,6 +100,14 @@ export function useAudioOutput(
   }, []);
 
   /**
+   * 标记轮次完成（只设置状态，不停止播放）
+   * 当 Gemini 发送 turnComplete 时调用
+   */
+  const markTurnComplete = useCallback(() => {
+    setIsSpeaking(false);
+  }, []);
+
+  /**
    * 清理资源
    */
   const cleanup = useCallback(() => {
@@ -124,6 +133,7 @@ export function useAudioOutput(
     ensureReady,
     playAudio,
     stop,
+    markTurnComplete,
     cleanup,
 
     // Refs

@@ -105,6 +105,16 @@
   "auth.privacyPolicy": "Privacy Policy",
   "auth.orContinueWith": "Or Continue With",
 
+  "onboarding.signInTitle": "Sign in to sync progress",
+  "onboarding.signInDesc": "Sign in with Google or email to save tasks and rewards.",
+  "onboarding.googleLoading": "Getting Google login info...",
+  "onboarding.emailLogin": "Sign in with email",
+  "onboarding.emailLoginHint": "Enter email and password after redirect",
+  "onboarding.termsAgree": "By signing in, you agree to Lumi's",
+  "onboarding.loginFailed": "Login failed, please try again",
+  "onboarding.googleInitFailed": "Google login initialization failed",
+  "onboarding.appleLoginFailed": "Apple login failed, please try again",
+
   "language.title": "Lumi's Voice Language",
   "language.description": "Choose the language Lumi speaks. Auto-detect will match your speech.",
   "language.descriptionMulti": "You can select multiple languages.",

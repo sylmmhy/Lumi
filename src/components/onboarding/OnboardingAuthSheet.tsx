@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
 import { loadGoogleScript } from '../../lib/google-script';
 import { appleLogin } from '../../lib/apple-login';
@@ -71,6 +72,7 @@ export function OnboardingAuthSheet({
     requireLoginAfterOnboarding: false,
     redirectPath: DEFAULT_APP_PATH,
   });
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
@@ -89,13 +91,13 @@ export function OnboardingAuthSheet({
         auth.checkLoginState();
         onLoginSuccess?.();
       } catch (err) {
-        const message = err instanceof Error ? err.message : '登录失败，请稍后再试';
+        const message = err instanceof Error ? err.message : t('onboarding.loginFailed');
         setError(message);
       } finally {
         setIsLoading(false);
       }
     },
-    [auth, onLoginSuccess],
+    [auth, onLoginSuccess, t],
   );
 
   useEffect(() => {
@@ -136,7 +138,7 @@ export function OnboardingAuthSheet({
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Google 登录初始化失败';
+        const message = err instanceof Error ? err.message : t('onboarding.googleInitFailed');
         setError(message);
       }
     };
@@ -159,7 +161,7 @@ export function OnboardingAuthSheet({
       await appleLogin(`${window.location.origin}${DEFAULT_APP_PATH}`);
       // Note: appleLogin will redirect to Apple's OAuth page
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Apple 登录失败，请稍后再试';
+      const message = err instanceof Error ? err.message : t('onboarding.appleLoginFailed');
       setError(message);
       setIsAppleLoading(false);
     }
@@ -174,23 +176,23 @@ export function OnboardingAuthSheet({
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
-        aria-label="关闭登录弹窗"
+        aria-label="Close"
       />
 
       <div className="relative w-full max-w-md translate-y-0 rounded-t-3xl bg-white px-6 pt-6 pb-8 shadow-2xl">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              FireGo Onboarding
+              Lumi Onboarding
             </p>
-            <h3 className="text-2xl font-bold text-gray-900">登录以同步进度</h3>
-            <p className="text-sm text-gray-600">使用 Google 或邮箱登录，保存任务与奖励。</p>
+            <h3 className="text-2xl font-bold text-gray-900">{t('onboarding.signInTitle')}</h3>
+            <p className="text-sm text-gray-600">{t('onboarding.signInDesc')}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="关闭登录弹窗"
+            aria-label="Close"
           >
             ×
           </button>
@@ -204,7 +206,7 @@ export function OnboardingAuthSheet({
                 <div ref={googleButtonRef} className="flex w-full justify-center" />
               </div>
               {isLoading && (
-                <p className="mt-2 text-center text-xs text-gray-500">正在获取 Google 登录信息...</p>
+                <p className="mt-2 text-center text-xs text-gray-500">{t('onboarding.googleLoading')}</p>
               )}
             </div>
           )}
@@ -228,8 +230,8 @@ export function OnboardingAuthSheet({
                 ✉️
               </span>
               <div className="text-left">
-                <p className="text-base font-semibold text-gray-900">使用邮箱登录</p>
-                <p className="text-xs text-gray-500">跳转后输入邮箱密码即可</p>
+                <p className="text-base font-semibold text-gray-900">{t('onboarding.emailLogin')}</p>
+                <p className="text-xs text-gray-500">{t('onboarding.emailLoginHint')}</p>
               </div>
             </div>
             <span className="text-lg text-gray-300">›</span>
@@ -243,25 +245,25 @@ export function OnboardingAuthSheet({
         )}
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          登录即表示同意 FireGo 的{' '}
+          {t('onboarding.termsAgree')}{' '}
           <a
             href="/terms"
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-gray-600 underline-offset-4 hover:underline"
           >
-            使用条款
+            {t('auth.termsOfUse')}
           </a>{' '}
-          和{' '}
+          {t('auth.and')}{' '}
           <a
             href="/privacy"
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-gray-600 underline-offset-4 hover:underline"
           >
-            隐私政策
+            {t('auth.privacyPolicy')}
           </a>
-          。
+          .
         </p>
       </div>
     </div>

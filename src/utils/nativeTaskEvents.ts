@@ -8,6 +8,27 @@
  * - 支持 Android 和 iOS（未来）
  */
 
+// iOS WebKit message handler types
+interface WebKitMessageHandler {
+  postMessage: (message: unknown) => void;
+}
+
+interface WebKitMessageHandlers {
+  taskChanged?: WebKitMessageHandler;
+  nativeApp?: WebKitMessageHandler;
+}
+
+interface WebKitNamespace {
+  messageHandlers?: WebKitMessageHandlers;
+}
+
+declare global {
+  interface Window {
+    webkit?: WebKitNamespace;
+    AndroidBridge?: unknown;
+  }
+}
+
 /**
  * 任务提醒数据结构（与 Android 端约定）
  */
@@ -55,8 +76,8 @@ export function notifyNativeTaskCreated(task: TaskReminderData): void {
     window.dispatchEvent(event);
 
     // iOS: 发送消息给 WKWebView 的 messageHandler
-    if ((window as any).webkit?.messageHandlers?.taskChanged) {
-      (window as any).webkit.messageHandlers.taskChanged.postMessage({
+    if (window.webkit?.messageHandlers?.taskChanged) {
+      window.webkit.messageHandlers.taskChanged.postMessage({
         action: 'create',
         taskId: task.id,
         task: task
@@ -100,8 +121,8 @@ export function notifyNativeTaskDeleted(taskId: string): void {
     window.dispatchEvent(event);
 
     // iOS: 发送消息给 WKWebView 的 messageHandler
-    if ((window as any).webkit?.messageHandlers?.taskChanged) {
-      (window as any).webkit.messageHandlers.taskChanged.postMessage({
+    if (window.webkit?.messageHandlers?.taskChanged) {
+      window.webkit.messageHandlers.taskChanged.postMessage({
         action: 'delete',
         taskId: taskId
       });
@@ -137,7 +158,7 @@ export function isNativeApp(): boolean {
   // iOS
   if (typeof window !== 'undefined' &&
       'webkit' in window &&
-      (window as any).webkit?.messageHandlers?.nativeApp) {
+      window.webkit?.messageHandlers?.nativeApp) {
     return true;
   }
 

@@ -34,7 +34,7 @@ export interface AuthContextValue extends AuthState {
     /** 邮箱登录 */
     loginWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
     /** 邮箱注册 */
-    signupWithEmail: (email: string, password: string, fullName?: string, visitorId?: string) => Promise<{ error: string | null; data?: any }>;
+    signupWithEmail: (email: string, password: string, fullName?: string, visitorId?: string) => Promise<{ error: string | null }>;
     /** 统一登录/注册：自动判断用户是否存在，已注册则登录，未注册则自动创建账户 */
     authWithEmail: (email: string, password: string) => Promise<{ error: string | null; isNewUser?: boolean }>;
     /** 更新用户信息 */

@@ -86,8 +86,8 @@ const ensureUserProfileExists = async (user: User): Promise<boolean> => {
     .upsert({
       id: user.id,
       email: user.email ?? null,
-      name: (user as any)?.user_metadata?.full_name ?? null,
-      picture_url: (user as any)?.user_metadata?.avatar_url ?? null,
+      name: (user.user_metadata?.full_name as string) ?? null,
+      picture_url: (user.user_metadata?.avatar_url as string) ?? null,
     }, { onConflict: 'id' });
 
   if (upsertError) {
@@ -281,6 +281,7 @@ export async function createReminder(task: Omit<Task, 'id' | 'displayTime'>, use
 
   const { data, error } = await supabase
     .from('tasks') // 使用 tasks 表
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase types not generated
     .insert([dbRecord] as any)
     .select()
     .single();

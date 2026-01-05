@@ -179,8 +179,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             // 3. Update profile
             await auth.updateProfile({ pictureUrl: publicUrl });
 
-        } catch (error: any) {
-            console.error('Error uploading avatar:', error.message);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            console.error('Error uploading avatar:', message);
             alert('Failed to upload avatar. Please make sure you have created an "avatars" bucket in Supabase Storage.');
         } finally {
             setUploading(false);

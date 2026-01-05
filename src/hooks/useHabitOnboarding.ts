@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 import { createReminder } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface HabitOnboardingState {
   step: OnboardingStep;

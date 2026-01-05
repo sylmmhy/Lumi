@@ -20,7 +20,7 @@ export interface ConfettiEffectProps {
   /** 是否显示彩带（手动控制模式） */
   active?: boolean;
   /** 触发器（自动控制模式）：每次值变化时会自动发射 500ms 彩带 */
-  trigger?: any;
+  trigger?: unknown;
   /** 彩带发射持续时间（仅在自动模式下生效），默认 500ms */
   duration?: number;
   /** 彩带数量，默认 5000（密集发射） */

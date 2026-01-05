@@ -106,9 +106,10 @@ export function LoginPage() {
 
       const redirectPath = searchParams.get('redirect') || DEFAULT_APP_PATH;
       navigate(redirectPath, { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed');
-      trackEvent('auth_failed', { method: 'email', error: err.message });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
+      trackEvent('auth_failed', { method: 'email', error: message });
     } finally {
       setIsLoading(false);
     }

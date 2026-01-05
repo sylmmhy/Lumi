@@ -145,8 +145,12 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             }
           },
           onAudioData: async (data: string) => {
-            await audioOutput.ensureReady();
-            audioOutput.playAudio(data);
+            try {
+              await audioOutput.ensureReady();
+              audioOutput.playAudio(data);
+            } catch (err) {
+              devLog('⚠️ Audio playback error:', err);
+            }
           },
           onTextContent: (text: string) => {
             transcriptManager.addAssistantEntry(text);
@@ -358,7 +362,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     isConnected: session.isConnected,
     isRecording: audioIsRecording,
     isSpeaking: audioOutput.isSpeaking,
-    error: session.error || audioError || videoError,
+    // 合并所有错误，避免丢失信息
+    error: [session.error, audioError, videoError].filter(Boolean).join('; ') || null,
     transcript: transcriptManager.transcript,
     cameraEnabled: videoIsEnabled,
     videoStream,

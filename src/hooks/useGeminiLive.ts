@@ -561,13 +561,32 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
   }, [isConnected]);
 
+  /**
+   * 尝试启动摄像头预览播放，处理部分浏览器/ WebView 的自动播放限制。
+   * @param {HTMLVideoElement} videoElement - 当前需要播放的 video 元素
+   */
+  const ensureVideoPlayback = useCallback(async (videoElement: HTMLVideoElement) => {
+    try {
+      const playPromise = videoElement.play();
+      if (playPromise) {
+        await playPromise;
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('Camera preview playback failed:', err);
+      }
+      setError('Camera preview blocked. Please tap the camera button to start playback.');
+    }
+  }, [setError]);
+
   // Set video preview (independent of connection status)
   // This ensures the video preview shows even before Gemini connects
   useEffect(() => {
     if (videoRef.current && videoStream) {
       videoRef.current.srcObject = videoStream;
+      void ensureVideoPlayback(videoRef.current);
     }
-  }, [videoStream]);
+  }, [videoStream, ensureVideoPlayback]);
 
   // Send video frames
   useEffect(() => {

@@ -66,15 +66,23 @@ export const SUPPORTED_UI_LANGUAGES: UILanguage[] = [
 
 /**
  * Get the user's preferred UI language code
- * Returns 'en' as default
+ * Priority: localStorage > system language > 'en'
  */
 export function getUILanguage(): string {
   try {
     const stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
-    if (!stored) {
-      return 'en'; // Default to English
+    if (stored) {
+      return stored;
     }
-    return stored;
+
+    // Auto-detect from system language
+    const systemLang = navigator.language?.split('-')[0] || 'en';
+    const supportedCodes = SUPPORTED_UI_LANGUAGES.map(l => l.code);
+    if (supportedCodes.includes(systemLang)) {
+      return systemLang;
+    }
+
+    return 'en'; // Fallback to English
   } catch {
     return 'en';
   }

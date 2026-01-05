@@ -1,5 +1,7 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContextDefinition';
+import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { useTranslation } from '../../hooks/useTranslation';
 import { appleLogin } from '../../lib/apple-login';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
@@ -20,6 +22,10 @@ export interface AuthModalProps {
   onClose: () => void;
   /** 登录成功回调（用于刷新父组件状态或继续操作） */
   onSuccess?: () => void;
+  /** 嵌入模式：不显示弹窗背景和关闭按钮，作为独立页面内容 */
+  embedded?: boolean;
+  /** 嵌入模式下登录成功后的重定向路径 */
+  redirectPath?: string;
 }
 
 /**
@@ -28,8 +34,9 @@ export interface AuthModalProps {
  * @param {AuthModalProps} props - 控制弹窗开关与回调
  * @returns {JSX.Element | null} 覆盖式登录弹窗
  */
-export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redirectPath }: AuthModalProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,6 +48,16 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const hasGoogleClientId = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
   // Google 登录在 WebView 中不可用，需要检测并隐藏
   const canShowGoogleLogin = hasGoogleClientId && isGoogleLoginAvailable();
+
+  // 登录成功后的处理
+  const handleSuccess = useCallback(() => {
+    if (embedded && redirectPath) {
+      navigate(redirectPath, { replace: true });
+    } else {
+      onSuccess?.();
+      onClose();
+    }
+  }, [embedded, redirectPath, navigate, onSuccess, onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,8 +84,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 const csrf = generateCSRFToken();
                 await googleLogin(response.credential, csrf);
                 auth?.checkLoginState();
-                onSuccess?.();
-                onClose();
+                handleSuccess();
               } catch (e) {
                 const message = e instanceof Error ? e.message : t('auth.authFailed');
                 setError(message);
@@ -105,7 +121,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     return () => {
       cancelled = true;
     };
-  }, [auth, isOpen, onClose, onSuccess, t, canShowGoogleLogin]);
+  }, [auth, isOpen, t, canShowGoogleLogin, handleSuccess]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,8 +142,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       if (res?.error) throw new Error(res.error);
 
       auth.checkLoginState();
-      onSuccess?.();
-      onClose();
+      handleSuccess();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('auth.authFailed');
       setError(message);
@@ -140,7 +155,9 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     setIsAppleLoading(true);
     setError(null);
     try {
-      await appleLogin(window.location.origin);
+      // Apple 登录会重定向，使用传入的 redirectPath 或默认路径
+      const appleRedirectUrl = `${window.location.origin}${redirectPath || DEFAULT_APP_PATH}`;
+      await appleLogin(appleRedirectUrl);
       // Note: appleLogin will redirect to Apple's OAuth page
     } catch (err) {
       const message = err instanceof Error ? err.message : t('auth.authFailed');
@@ -151,6 +168,111 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
   if (!isOpen) return null;
 
+  // 表单内容（共享给 modal 和 embedded 模式）
+  const formContent = (
+    <>
+      <h1 className="text-2xl font-bold text-center mb-2">{t('auth.welcome')}</h1>
+      <p className="text-center text-gray-500 mb-6 text-sm">
+        {t('auth.signInPrompt')}
+      </p>
+
+      <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
+            placeholder="you@example.com"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
+            placeholder="••••••••"
+            required
+            minLength={6}
+          />
+        </div>
+
+        {error && (
+          <div className="text-red-500 text-sm bg-red-50 p-2 rounded border border-red-100">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isLoading || isAppleLoading}
+          className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? t('common.processing') : t('auth.continue')}
+        </button>
+      </form>
+
+      {/* Divider */}
+      <div className="relative mb-4">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-200"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-2 bg-white text-gray-500">{t('auth.orContinueWith') || 'Or continue with'}</span>
+        </div>
+      </div>
+
+      {/* Social Login Buttons */}
+      <div className="space-y-3">
+        {/* Google Login Button - 在 WebView 中隐藏 */}
+        {canShowGoogleLogin && (
+          <div className="w-full">
+            <div ref={googleButtonRef} className="w-full" />
+            {isGoogleLoading && (
+              <p className="mt-2 text-center text-xs text-gray-500">{t('common.processing') || 'Processing...'}</p>
+            )}
+          </div>
+        )}
+
+        {/* Apple Login Button - Following Apple HIG */}
+        <AppleSignInButton
+          onClick={handleAppleLogin}
+          isLoading={isAppleLoading}
+          disabled={isLoading || isGoogleLoading}
+          variant="black"
+          title="continue"
+        />
+      </div>
+
+      <p className="text-center text-xs text-gray-400 mt-6">
+        {t('auth.termsAgree')}{' '}
+        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          {t('auth.termsOfUse')}
+        </a>
+        {' '}{t('auth.and')}{' '}
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          {t('auth.privacyPolicy')}
+        </a>
+      </p>
+    </>
+  );
+
+  // 嵌入模式：作为独立页面内容，无背景遮罩
+  if (embedded) {
+    return (
+      <main className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
+          {formContent}
+        </div>
+      </main>
+    );
+  }
+
+  // 弹窗模式：带背景遮罩和关闭按钮
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl">
@@ -164,93 +286,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         </button>
 
         <div className="p-8">
-          <h1 className="text-2xl font-bold text-center mb-2">{t('auth.welcome')}</h1>
-          <p className="text-center text-gray-500 mb-6 text-sm">
-            {t('auth.signInPrompt')}
-          </p>
-
-          <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-
-            {error && (
-              <div className="text-red-500 text-sm bg-red-50 p-2 rounded border border-red-100">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading || isAppleLoading}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? t('common.processing') : t('auth.continue')}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="relative mb-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">{t('auth.orContinueWith') || 'Or continue with'}</span>
-            </div>
-          </div>
-
-          {/* Social Login Buttons */}
-          <div className="space-y-3">
-            {/* Google Login Button - 在 WebView 中隐藏 */}
-            {canShowGoogleLogin && (
-              <div className="w-full">
-                <div ref={googleButtonRef} className="w-full" />
-                {isGoogleLoading && (
-                  <p className="mt-2 text-center text-xs text-gray-500">{t('common.processing') || 'Processing...'}</p>
-                )}
-              </div>
-            )}
-
-            {/* Apple Login Button - Following Apple HIG */}
-            <AppleSignInButton
-              onClick={handleAppleLogin}
-              isLoading={isAppleLoading}
-              disabled={isLoading || isGoogleLoading}
-              variant="black"
-              title="continue"
-            />
-          </div>
-
-          <p className="text-center text-xs text-gray-400 mt-6">
-            {t('auth.termsAgree')}{' '}
-            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-              {t('auth.termsOfUse')}
-            </a>
-            {' '}{t('auth.and')}{' '}
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-              {t('auth.privacyPolicy')}
-            </a>
-          </p>
+          {formContent}
         </div>
       </div>
     </div>

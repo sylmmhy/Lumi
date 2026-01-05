@@ -105,6 +105,16 @@
   "auth.privacyPolicy": "隐私政策",
   "auth.orContinueWith": "或通过以下方式继续",
 
+  "onboarding.signInTitle": "登录以同步进度",
+  "onboarding.signInDesc": "使用 Google 或邮箱登录，保存任务与奖励。",
+  "onboarding.googleLoading": "正在获取 Google 登录信息...",
+  "onboarding.emailLogin": "使用邮箱登录",
+  "onboarding.emailLoginHint": "跳转后输入邮箱密码即可",
+  "onboarding.termsAgree": "登录即表示同意 Lumi 的",
+  "onboarding.loginFailed": "登录失败，请稍后再试",
+  "onboarding.googleInitFailed": "Google 登录初始化失败",
+  "onboarding.appleLoginFailed": "Apple 登录失败，请稍后再试",
+
   "language.title": "Lumi 的语音语言",
   "language.description": "选择 Lumi 说话的语言。自动检测会匹配你的语音。",
   "language.descriptionMulti": "你可以选择多种语言。",

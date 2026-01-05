@@ -25,6 +25,7 @@
   "home.exampleVehicle": "Ricordare revisione auto",
   "home.examplePackage": "Spedire il pacco in tempo",
   "home.pleaseEnterTask": "Scrivi cosa devi fare! L'AI ti chiamerà per ricordartelo!",
+  "home.timePastConfirm": "L'orario selezionato è già passato. Impostarlo per domani alla stessa ora?",
   "home.testVersionNote": "Il promemoria telefonico funziona solo su iOS/Android. Se ti interessa, richiedi la versione test qui sotto. Ti contatterò via email!",
   "home.requestTestVersion": "Richiedi versione test",
   "home.requestSent": "Richiesta inviata! Ti contatto presto",

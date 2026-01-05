@@ -25,6 +25,7 @@
   "home.exampleVehicle": "차량 등록 기억하기",
   "home.examplePackage": "택배 제때 보내기",
   "home.pleaseEnterTask": "할 일을 적어줘! AI가 전화로 알려줄게!",
+  "home.timePastConfirm": "선택한 시간이 지났습니다. 내일 같은 시간으로 설정할까요?",
   "home.testVersionNote": "전화 알림은 iOS/Android 앱에서만 돼. 관심 있으면 아래에서 테스트 버전 신청해! 이메일로 연락할게!",
   "home.requestTestVersion": "테스트 버전 받기",
   "home.requestSent": "신청 완료! 곧 연락할게",

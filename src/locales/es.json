@@ -25,6 +25,7 @@
   "home.exampleVehicle": "Recordar registro del vehículo",
   "home.examplePackage": "Enviar el paquete a tiempo",
   "home.pleaseEnterTask": "¡Escribe qué hacer! ¡La AI te llama para recordarte!",
+  "home.timePastConfirm": "La hora seleccionada ya pasó. ¿Configurarlo para mañana a la misma hora?",
   "home.testVersionNote": "El recordatorio por llamada solo funciona en iOS/Android. Si te interesa, pide la versión de prueba abajo. ¡Te contacto por email!",
   "home.requestTestVersion": "Pedir versión de prueba",
   "home.requestSent": "¡Listo! Te contacto pronto",

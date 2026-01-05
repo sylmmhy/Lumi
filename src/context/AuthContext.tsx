@@ -27,6 +27,7 @@ import {
   isValidJwt,
   isValidSupabaseUuid,
   isInNativeWebView,
+  notifyNativeLoginSuccess,
 } from './auth/nativeAuthBridge';
 import { updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
 
@@ -880,6 +881,19 @@ export function AuthProvider({
           isNativeLogin: false,
           isSessionValidated: true, // Supabase 确认的会话
         }));
+
+        // 通知原生端登录成功，以便上传 FCM Token
+        const displayName = session.user.user_metadata?.full_name
+          || session.user.user_metadata?.name
+          || session.user.email
+          || '';
+        notifyNativeLoginSuccess(
+          session.access_token,
+          session.refresh_token || '',
+          session.user.id,
+          session.user.email || '',
+          displayName
+        );
       } else if (event === 'SIGNED_OUT') {
         // Supabase 通知已登出，清除 localStorage 并更新状态
         clearAuthStorage();

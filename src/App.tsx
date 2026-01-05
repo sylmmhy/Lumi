@@ -4,6 +4,7 @@ import './App.css'
 import { DEFAULT_APP_PATH } from './constants/routes'
 import { AppTabsPage } from './pages/AppTabsPage'
 import { LoginPage } from './pages/LoginPage'
+import { OnboardingPage } from './pages/OnboardingPage'
 import { DevTestPage } from './pages/DevTestPage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
@@ -98,6 +99,7 @@ function App() {
           {import.meta.env.DEV && <Route path="/dev" element={<DevTestPage />} />}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/mobile" element={<LoginPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfUsePage />} />
           <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />

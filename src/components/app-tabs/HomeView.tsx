@@ -122,14 +122,32 @@ export const HomeView: React.FC<HomeViewProps> = ({
             finalTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         }
 
-        const [h] = finalTime.split(':').map(Number);
+        const [h, m] = finalTime.split(':').map(Number);
         let category: Task['category'] = 'morning';
         if (h >= 12 && h < 17) category = 'afternoon';
         if (h >= 17) category = 'evening';
 
         // For routine templates, don't set a specific date (they generate daily instances)
         // For todo tasks, use the selected date (using local date to avoid UTC timezone issues)
-        const dateStr = isRoutine ? undefined : getLocalDateString(selectedDate);
+        let dateStr = isRoutine ? undefined : getLocalDateString(selectedDate);
+
+        // 对于一次性任务，检查时间是否已过
+        if (!isRoutine && dateStr) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const reminderTime = new Date(year, month - 1, day, h, m);
+
+            if (reminderTime.getTime() <= Date.now()) {
+                const confirmed = window.confirm(t('home.timePastConfirm'));
+                if (confirmed) {
+                    // 设为明天同一时间
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    dateStr = getLocalDateString(tomorrow);
+                } else {
+                    return; // 用户取消，不创建任务
+                }
+            }
+        }
 
         const newTask: Task = {
             id: Date.now().toString(),
@@ -220,17 +238,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const handleSaveEdit = () => {
         if (!editingTask || !onUpdateTask) return;
 
-        const [h] = editTaskTime.split(':').map(Number);
+        const [h, m] = editTaskTime.split(':').map(Number);
         let category: Task['category'] = 'morning';
         if (h >= 12 && h < 17) category = 'afternoon';
         if (h >= 17) category = 'evening';
+
+        let taskDate = editingTask.type === 'routine' ? undefined : getLocalDateString(editTaskDate);
+
+        // 对于一次性任务，检查时间是否已过
+        if (editingTask.type === 'todo' && taskDate) {
+            const [year, month, day] = taskDate.split('-').map(Number);
+            const reminderTime = new Date(year, month - 1, day, h, m);
+
+            if (reminderTime.getTime() <= Date.now()) {
+                const confirmed = window.confirm(t('home.timePastConfirm'));
+                if (confirmed) {
+                    // 设为明天同一时间
+                    const tomorrow = new Date(editTaskDate);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    taskDate = getLocalDateString(tomorrow);
+                } else {
+                    return; // 用户取消，不保存
+                }
+            }
+        }
 
         const updatedTask: Task = {
             ...editingTask,
             text: editTaskText,
             time: editTaskTime,
             displayTime: parseTimeToString(editTaskTime),
-            date: editingTask.type === 'routine' ? undefined : getLocalDateString(editTaskDate),
+            date: taskDate,
             category,
         };
 

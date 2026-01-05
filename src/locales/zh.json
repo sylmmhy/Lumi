@@ -25,6 +25,7 @@
   "home.exampleVehicle": "记得续车检",
   "home.examplePackage": "按时寄出包裹",
   "home.pleaseEnterTask": "请输入你的任务，AI 会打电话提醒你！",
+  "home.timePastConfirm": "选择的时间已过去，是否设定为明天同一时间？",
   "home.testVersionNote": "请注意，电话提醒功能仅在 iOS 或 Android 上可用。如果你感兴趣，可以点击下方申请测试版本，开发者会给你发邮件。",
   "home.requestTestVersion": "申请测试版本",
   "home.requestSent": "申请已发送！我们会尽快联系你。",

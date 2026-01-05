@@ -191,6 +191,23 @@ function getLocalDateString(date: Date = new Date()): string {
 }
 
 /**
+ * 判断任务是否应该触发原生提醒
+ * 只有当任务有日期+时间，且时间在未来时才触发
+ *
+ * @param task - 任务对象
+ * @returns 是否应该触发原生提醒
+ */
+function shouldTriggerNativeReminder(task: Task): boolean {
+  if (!task.date || !task.time) return false;
+
+  const [hours, minutes] = task.time.split(':').map(Number);
+  const [year, month, day] = task.date.split('-').map(Number);
+  const reminderTime = new Date(year, month - 1, day, hours, minutes);
+
+  return reminderTime.getTime() > Date.now();
+}
+
+/**
  * Fetch all reminders for a user on a specific date
  * 获取用户在指定日期的所有提醒任务
  */
@@ -293,8 +310,8 @@ export async function createReminder(task: Omit<Task, 'id' | 'displayTime'>, use
 
   const createdTask = dbToTask(data as TaskRecord);
 
-  // 🆕 自动触发原生提醒事件（如果有提醒时间）
-  if (createdTask && createdTask.date && createdTask.time) {
+  // 🆕 自动触发原生提醒事件（仅当提醒时间在未来时）
+  if (createdTask && shouldTriggerNativeReminder(createdTask)) {
     notifyNativeTaskCreated(taskToNativeReminder(createdTask, effectiveUserId));
   }
 
@@ -363,9 +380,9 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
 
   const updatedTask = dbToTask(data as TaskRecord);
 
-  // 🆕 如果修改了时间，重新设置原生提醒
+  // 🆕 如果修改了时间，重新设置原生提醒（仅当提醒时间在未来时）
   if (updatedTask && (updates.date !== undefined || updates.time !== undefined)) {
-    if (updatedTask.date && updatedTask.time) {
+    if (shouldTriggerNativeReminder(updatedTask)) {
       // 从数据库记录中获取 user_id
       const userId = (data as TaskRecord).user_id;
       notifyNativeTaskCreated(taskToNativeReminder(updatedTask, userId));
@@ -436,8 +453,8 @@ export async function toggleReminderCompletion(id: string, completed: boolean): 
       // 任务完成，取消原生提醒
       notifyNativeTaskDeleted(id);
     } else {
-      // 取消完成，恢复原生提醒（如果有提醒时间）
-      if (result.date && result.time) {
+      // 取消完成，恢复原生提醒（仅当提醒时间在未来时）
+      if (shouldTriggerNativeReminder(result)) {
         // 获取 userId 用于恢复提醒
         const { data: userData } = await supabase?.auth.getUser() ?? { data: null };
         const userId = userData?.user?.id;
@@ -568,9 +585,9 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
 
     const createdTasks = (newInstances as TaskRecord[]).map(dbToTask);
 
-    // 5. 🆕 为新创建的实例设置原生通知
+    // 5. 🆕 为新创建的实例设置原生通知（仅当提醒时间在未来时）
     createdTasks.forEach(task => {
-      if (task.date && task.time) {
+      if (shouldTriggerNativeReminder(task)) {
         notifyNativeTaskCreated(taskToNativeReminder(task, userId));
       }
     });

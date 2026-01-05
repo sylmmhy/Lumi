@@ -25,6 +25,7 @@
   "home.exampleVehicle": "車の登録を忘れずに",
   "home.examplePackage": "荷物を期限内に送る",
   "home.pleaseEnterTask": "やることを入力してね！AIが電話でリマインドするよ！",
+  "home.timePastConfirm": "選択した時間は過ぎています。明日の同じ時間に設定しますか？",
   "home.testVersionNote": "電話リマインダーはiOS/Androidアプリだけで使えるよ。興味あったら下からテスト版をリクエストしてね。メールで連絡するよ！",
   "home.requestTestVersion": "テスト版をもらう",
   "home.requestSent": "リクエスト完了！すぐ連絡するね",

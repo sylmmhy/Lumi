@@ -25,6 +25,7 @@
   "home.exampleVehicle": "Remember vehicle registration",
   "home.examplePackage": "Send the package on time",
   "home.pleaseEnterTask": "Please enter your task. AI will call you to remind!",
+  "home.timePastConfirm": "The selected time has passed. Set it for tomorrow at the same time?",
   "home.testVersionNote": "Please note that the phone-call reminder feature is only available on iOS or Android. If you are interested, you can click below to request a test version, and the developer will send you an email.",
   "home.requestTestVersion": "Request Test Version",
   "home.requestSent": "Request Sent! We'll contact you soon.",

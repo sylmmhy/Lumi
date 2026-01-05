@@ -5,6 +5,42 @@ import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { getSupabaseClient } from '../lib/supabase';
 
+// ==========================================
+// 配置常量
+// ==========================================
+
+/** 连接超时时间（毫秒） */
+const CONNECTION_TIMEOUT_MS = 15000;
+
+/** 摄像头重试次数 */
+const MAX_CAMERA_RETRIES = 2;
+
+/** 摄像头重试间隔（毫秒） */
+const CAMERA_RETRY_DELAY_MS = 1000;
+
+// ==========================================
+// 工具函数
+// ==========================================
+
+/**
+ * 为 Promise 添加超时保护
+ * @param promise 要执行的 Promise
+ * @param timeoutMs 超时时间（毫秒）
+ * @param errorMessage 超时错误信息
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
+
 /**
  * AI Coach Session Hook - 组合层
  * 
@@ -74,8 +110,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [taskStartTime, setTaskStartTime] = useState(0);
   const [isObserving, setIsObserving] = useState(false); // AI 正在观察用户
+  const [connectionError, setConnectionError] = useState<string | null>(null); // 连接错误信息
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isCleaningUpRef = useRef(false); // 防止重复清理
   const processedTranscriptRef = useRef<Set<string>>(new Set());
   
   // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
@@ -218,6 +256,41 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }
   }, []);
 
+  // ==========================================
+  // 统一清理函数（解决断开连接逻辑重复问题）
+  // ==========================================
+  const cleanup = useCallback(() => {
+    // 防止重复清理
+    if (isCleaningUpRef.current) {
+      return;
+    }
+    isCleaningUpRef.current = true;
+
+    if (import.meta.env.DEV) {
+      console.log('🧹 执行统一清理...');
+    }
+
+    // 1. 停止计时器（复用 stopCountdown 逻辑）
+    stopCountdown();
+
+    // 2. 断开 Gemini 连接
+    geminiLive.disconnect();
+
+    // 3. 重置状态
+    setIsSessionActive(false);
+    setIsObserving(false);
+    setIsConnecting(false);
+
+    // 重置清理标志（延迟重置，确保当前清理完成）
+    setTimeout(() => {
+      isCleaningUpRef.current = false;
+    }, 100);
+
+    if (import.meta.env.DEV) {
+      console.log('✅ 统一清理完成');
+    }
+  }, [geminiLive, stopCountdown]);
+
   // 倒计时 effect
   useEffect(() => {
     if (state.isTimerRunning && state.timeRemaining > 0) {
@@ -275,21 +348,25 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
     setIsConnecting(true);
+    setConnectionError(null); // 清除之前的错误
 
    try {
       if (import.meta.env.DEV) {
         console.log('🚀 开始 AI 教练会话...');
       }
 
-      // 关键修复：先断开旧会话，确保完全清理
+      // 关键修复：使用统一的 cleanup 函数清理旧会话
       if (geminiLive.isConnected) {
         if (import.meta.env.DEV) {
-          console.log('⚠️ 检测到旧会话，先断开...');
+          console.log('⚠️ 检测到旧会话，先清理...');
         }
-        geminiLive.disconnect();
+        cleanup();
         // 等待一小段时间确保清理完成
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
+
+      // 重置清理标志，允许后续清理
+      isCleaningUpRef.current = false;
 
       // 更新任务描述
       setState(prev => ({
@@ -299,17 +376,43 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         messages: [],
       }));
 
-      // 步骤1：尝试启用摄像头（不阻塞流程）
+      // 步骤1：尝试启用摄像头（带重试机制）
       if (import.meta.env.DEV) {
         console.log('🎬 步骤1: 尝试启用摄像头...');
       }
       if (!geminiLive.cameraEnabled) {
-        try {
-          await geminiLive.toggleCamera();
-        } catch (cameraError) {
-          // 摄像头启用失败不阻塞流程，用户可以稍后手动开启
-          if (import.meta.env.DEV) {
-            console.log('⚠️ 摄像头启用失败，继续流程:', cameraError);
+        let cameraRetries = 0;
+        let cameraSuccess = false;
+
+        while (cameraRetries < MAX_CAMERA_RETRIES && !cameraSuccess) {
+          try {
+            await geminiLive.toggleCamera();
+            cameraSuccess = true;
+            if (import.meta.env.DEV) {
+              console.log('✅ 摄像头启用成功');
+            }
+          } catch (cameraError) {
+            cameraRetries++;
+            const errorMessage = cameraError instanceof Error ? cameraError.message : String(cameraError);
+
+            // 如果是权限被拒绝，不重试
+            if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowed')) {
+              if (import.meta.env.DEV) {
+                console.log('⚠️ 摄像头权限被拒绝，跳过重试');
+              }
+              break;
+            }
+
+            if (cameraRetries < MAX_CAMERA_RETRIES) {
+              if (import.meta.env.DEV) {
+                console.log(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
+              }
+              await new Promise(resolve => setTimeout(resolve, CAMERA_RETRY_DELAY_MS));
+            } else {
+              if (import.meta.env.DEV) {
+                console.log('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
+              }
+            }
           }
         }
       }
@@ -322,7 +425,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         await geminiLive.toggleMicrophone();
       }
 
-      // 步骤3：并行获取系统指令和 Gemini token，优化连接速度
+      // 步骤3：并行获取系统指令和 Gemini token（带超时保护）
       if (import.meta.env.DEV) {
         console.log('⚡ 步骤3: 并行获取系统指令和 token...');
       }
@@ -334,16 +437,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       const needFetchInstruction = !customSystemInstruction;
 
-      const [instructionResult, token] = await Promise.all([
-        // 如果已有自定义 instruction 则返回 null
-        needFetchInstruction
-          ? supabaseClient.functions.invoke('get-system-instruction', {
-              body: { taskInput: taskDescription, userName, preferredLanguages, userId }
-            })
-          : Promise.resolve(null),
-        // 获取 Gemini token
-        fetchGeminiToken(),
-      ]);
+      const [instructionResult, token] = await withTimeout(
+        Promise.all([
+          // 如果已有自定义 instruction 则返回 null
+          needFetchInstruction
+            ? supabaseClient.functions.invoke('get-system-instruction', {
+                body: { taskInput: taskDescription, userName, preferredLanguages, userId }
+              })
+            : Promise.resolve(null),
+          // 获取 Gemini token
+          fetchGeminiToken(),
+        ]),
+        CONNECTION_TIMEOUT_MS,
+        '获取配置超时，请检查网络连接后重试'
+      );
 
       // 处理 system instruction 结果
       let systemInstruction = customSystemInstruction;
@@ -358,8 +465,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         console.log('✅ 并行获取完成，正在连接 Gemini Live...');
       }
 
-      // 使用预获取的 token 连接
-      await geminiLive.connect(systemInstruction, undefined, token);
+      // 使用预获取的 token 连接（带超时保护）
+      await withTimeout(
+        geminiLive.connect(systemInstruction, undefined, token),
+        CONNECTION_TIMEOUT_MS,
+        '连接 AI 服务超时，请检查网络连接后重试'
+      );
 
       if (import.meta.env.DEV) {
         console.log('✅ 连接已建立');
@@ -381,29 +492,34 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '连接失败，请重试';
       console.error('❌ startSession 错误:', error);
       setIsConnecting(false);
+      setConnectionError(errorMessage);
+
+      // 清理可能的残留状态
+      cleanup();
+
       throw error;
     }
-  }, [initialTime, geminiLive, startCountdown]);
+  }, [initialTime, geminiLive, startCountdown, cleanup]);
 
   /**
    * 结束 AI 教练会话
+   * 使用统一的 cleanup 函数确保资源正确释放
    */
   const endSession = useCallback(() => {
     if (import.meta.env.DEV) {
       console.log('🔌 结束 AI 教练会话...');
     }
 
-    stopCountdown();
-    geminiLive.disconnect();
-    setIsSessionActive(false);
-    setIsObserving(false);
+    // 使用统一的清理函数
+    cleanup();
 
     if (import.meta.env.DEV) {
       console.log('✅ AI 教练会话已结束');
     }
-  }, [stopCountdown, geminiLive]);
+  }, [cleanup]);
 
   /**
    * 保存会话记忆到 Mem0
@@ -422,7 +538,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }
 
     // 复制当前消息列表（避免 setState 异步问题）
-    let messages = [...state.messages];
+    const messages = [...state.messages];
 
     // 先把 buffer 中剩余的用户消息保存
     if (userSpeechBufferRef.current.trim()) {
@@ -531,6 +647,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession();
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
+    setConnectionError(null); // 清除错误状态
     setState({
       taskDescription: '',
       timeRemaining: initialTime,
@@ -540,9 +657,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     setTaskStartTime(0);
   }, [endSession, initialTime]);
 
-  // 组件卸载时断开连接
+  // 组件卸载时使用统一清理函数
   useEffect(() => {
     return () => {
+      // 使用 cleanup 确保所有资源正确释放
+      // 注意：这里不能直接调用 cleanup()，因为它依赖于 geminiLive
+      // 所以我们直接执行清理逻辑
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       geminiLive.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -557,6 +681,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     isConnecting,
     isSessionActive,
     isObserving, // AI 正在观察用户（开场前）
+    connectionError, // 连接错误信息（超时、网络问题等）
 
     // Gemini Live 状态
     isConnected: geminiLive.isConnected,

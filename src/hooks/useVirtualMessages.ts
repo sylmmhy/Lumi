@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { getSupabaseClient } from '../lib/supabase';
 
 /**
  * Virtual Messages Hook - AI 消息调度

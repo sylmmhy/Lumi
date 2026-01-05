@@ -73,6 +73,8 @@ declare global {
         userLogout?: { postMessage: (message: unknown) => void };
         authConfirmed?: { postMessage: (message: { success: boolean; reason: string }) => void };
         requestNativeAuth?: { postMessage: (message: Record<string, never>) => void };
+        taskChanged?: { postMessage: (message: unknown) => void };
+        nativeApp?: { postMessage: (message: unknown) => void };
       };
     };
   }

@@ -6,28 +6,9 @@
  * - 与现有 mindboat:nativeLogin/nativeLogout 完全一致
  * - 事件驱动，解耦 Web 和原生端
  * - 支持 Android 和 iOS（未来）
+ *
+ * 注意：Window 的全局类型声明在 src/context/AuthContext.tsx 中定义
  */
-
-// iOS WebKit message handler types
-interface WebKitMessageHandler {
-  postMessage: (message: unknown) => void;
-}
-
-interface WebKitMessageHandlers {
-  taskChanged?: WebKitMessageHandler;
-  nativeApp?: WebKitMessageHandler;
-}
-
-interface WebKitNamespace {
-  messageHandlers?: WebKitMessageHandlers;
-}
-
-declare global {
-  interface Window {
-    webkit?: WebKitNamespace;
-    AndroidBridge?: unknown;
-  }
-}
 
 /**
  * 任务提醒数据结构（与 Android 端约定）

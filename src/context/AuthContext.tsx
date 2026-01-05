@@ -66,6 +66,16 @@ declare global {
       isLoggedIn?: () => boolean;
       getUserInfo?: () => string;
       getIdToken?: () => string;
+      // FCM Token 上传相关
+      getFcmToken?: () => string;
+      uploadFcmToken?: () => void;
+      onWebLoginSuccess?: (
+        accessToken: string,
+        refreshToken: string,
+        userId: string,
+        email: string,
+        displayName: string
+      ) => void;
     };
     webkit?: {
       messageHandlers?: {

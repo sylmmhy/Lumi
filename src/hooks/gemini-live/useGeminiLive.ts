@@ -167,6 +167,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   });
 
   // Audio input (microphone)
+  // 解构出稳定的字段，避免依赖整个对象导致 useCallback/useEffect 重复触发
   const audioInput = useAudioInput({
     onAudioData: (base64Audio: string) => {
       session.sendRealtimeInput({
@@ -180,8 +181,16 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       devLog('Audio input error:', error);
     },
   });
+  const {
+    isRecording: audioIsRecording,
+    start: audioStart,
+    stop: audioStop,
+    error: audioError,
+    audioStream,
+  } = audioInput;
 
   // Video input (camera)
+  // 解构出稳定的字段，避免依赖整个对象导致 useCallback/useEffect 重复触发
   const videoInput = useVideoInput({
     onVideoFrame: (base64Jpeg: string) => {
       session.sendRealtimeInput({
@@ -195,6 +204,17 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       devLog('Video input error:', error);
     },
   });
+  const {
+    isEnabled: videoIsEnabled,
+    start: videoStart,
+    stop: videoStop,
+    error: videoError,
+    videoStream,
+    videoRef,
+    canvasRef,
+    startFrameCapture,
+    stopFrameCapture,
+  } = videoInput;
 
   // ============================================================================
   // Composed Actions
@@ -239,45 +259,47 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     session.disconnect();
 
     // 停止麦克风
-    audioInput.stop();
+    audioStop();
 
     // 停止摄像头
-    videoInput.stop();
+    videoStop();
 
     // 清理音频输出
     audioOutput.cleanup();
 
     devLog('✅ Gemini Live disconnected and cleaned up');
-  }, [session, audioInput, videoInput, audioOutput, analytics]);
+  }, [session, audioStop, videoStop, audioOutput, analytics]);
 
   /**
    * 切换麦克风
+   * 使用解构的稳定字段作为依赖，避免每次渲染都重建函数
    */
   const toggleMicrophone = useCallback(async () => {
-    if (audioInput.isRecording) {
-      audioInput.stop();
+    if (audioIsRecording) {
+      audioStop();
       analytics.trackMicToggle(false);
     } else {
       // 确保 AudioContext 已准备
       await audioOutput.ensureReady();
-      await audioInput.start();
+      await audioStart();
       analytics.trackMicToggle(true);
     }
-  }, [audioInput, audioOutput, analytics]);
+  }, [audioIsRecording, audioStart, audioStop, audioOutput, analytics]);
 
   /**
    * 切换摄像头
+   * 使用解构的稳定字段作为依赖，避免每次渲染都重建函数
    */
   const toggleCamera = useCallback(async () => {
-    if (videoInput.isEnabled) {
-      videoInput.stop();
+    if (videoIsEnabled) {
+      videoStop();
       analytics.trackCameraToggle(false);
     } else {
       await audioOutput.ensureReady();
-      await videoInput.start();
+      await videoStart();
       analytics.trackCameraToggle(true);
     }
-  }, [videoInput, audioOutput, analytics]);
+  }, [videoIsEnabled, videoStart, videoStop, audioOutput, analytics]);
 
   /**
    * 发送文本消息
@@ -297,34 +319,35 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
   // ============================================================================
   // Auto-enable Effects
+  // 使用解构的稳定字段作为依赖，避免每次渲染都触发 effect
   // ============================================================================
 
   // 连接后自动启用摄像头
   useEffect(() => {
-    if (session.isConnected && enableCamera && !videoInput.isEnabled) {
+    if (session.isConnected && enableCamera && !videoIsEnabled) {
       queueMicrotask(() => {
         toggleCamera();
       });
     }
-  }, [session.isConnected, enableCamera, videoInput.isEnabled, toggleCamera]);
+  }, [session.isConnected, enableCamera, videoIsEnabled, toggleCamera]);
 
   // 连接后自动启用麦克风
   useEffect(() => {
-    if (session.isConnected && enableMicrophone && !audioInput.isRecording) {
+    if (session.isConnected && enableMicrophone && !audioIsRecording) {
       queueMicrotask(() => {
         toggleMicrophone();
       });
     }
-  }, [session.isConnected, enableMicrophone, audioInput.isRecording, toggleMicrophone]);
+  }, [session.isConnected, enableMicrophone, audioIsRecording, toggleMicrophone]);
 
   // 连接后开始视频帧捕获
   useEffect(() => {
-    if (session.isConnected && videoInput.isEnabled) {
-      videoInput.startFrameCapture();
+    if (session.isConnected && videoIsEnabled) {
+      startFrameCapture();
     } else {
-      videoInput.stopFrameCapture();
+      stopFrameCapture();
     }
-  }, [session.isConnected, videoInput.isEnabled, videoInput]);
+  }, [session.isConnected, videoIsEnabled, startFrameCapture, stopFrameCapture]);
 
   // ============================================================================
   // Return (保持原有 API 兼容)
@@ -333,13 +356,13 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   return {
     // State
     isConnected: session.isConnected,
-    isRecording: audioInput.isRecording,
+    isRecording: audioIsRecording,
     isSpeaking: audioOutput.isSpeaking,
-    error: session.error || audioInput.error || videoInput.error,
+    error: session.error || audioError || videoError,
     transcript: transcriptManager.transcript,
-    cameraEnabled: videoInput.isEnabled,
-    videoStream: videoInput.videoStream,
-    audioStream: audioInput.audioStream,
+    cameraEnabled: videoIsEnabled,
+    videoStream,
+    audioStream,
 
     // Actions
     connect,
@@ -350,8 +373,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     setOnTurnComplete,
 
     // Refs for UI
-    videoRef: videoInput.videoRef,
-    canvasRef: videoInput.canvasRef,
+    videoRef,
+    canvasRef,
   };
 }
 

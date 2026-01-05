@@ -54,13 +54,33 @@ export function useAudioInput(
 
   // Refs
   const recorderRef = useRef<AudioRecorder | null>(null);
+  const isStartingRef = useRef(false); // 防止并发启动
 
   /**
    * 启动麦克风录制
+   * 添加幂等守卫：如果已在录制或正在启动中，直接返回
    */
   const start = useCallback(async () => {
+    // 幂等守卫：已经在录制中
+    if (isRecording) {
+      devLog('🎤 Microphone already recording, skipping start');
+      return;
+    }
+
+    // 幂等守卫：正在启动中（防止并发调用）
+    if (isStartingRef.current) {
+      devLog('🎤 Microphone start already in progress, skipping');
+      return;
+    }
+
+    isStartingRef.current = true;
+
     try {
-      if (!recorderRef.current) {
+      // 如果已有 recorder 实例，先清理旧的监听器
+      if (recorderRef.current) {
+        recorderRef.current.removeAllListeners('data');
+        recorderRef.current.removeAllListeners('volume');
+      } else {
         recorderRef.current = new AudioRecorder(sampleRate);
       }
 
@@ -95,15 +115,23 @@ export function useAudioInput(
 
       setError(userFriendlyError);
       onError?.(userFriendlyError);
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [sampleRate, onAudioData, onVolumeChange, onError]);
+  }, [isRecording, sampleRate, onAudioData, onVolumeChange, onError]);
 
   /**
    * 停止麦克风录制
+   * 清理监听器防止内存泄漏
    */
   const stop = useCallback(() => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
+    if (recorderRef.current) {
+      // 先移除所有监听器，防止内存泄漏
+      recorderRef.current.removeAllListeners('data');
+      recorderRef.current.removeAllListeners('volume');
+      recorderRef.current.stop();
+      recorderRef.current = null;
+    }
     setIsRecording(false);
     setAudioStream(null);
 

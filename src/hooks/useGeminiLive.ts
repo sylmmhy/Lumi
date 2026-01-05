@@ -640,15 +640,20 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   }, [cameraEnabled, videoStream, isConnected]);
 
   // Auto-enable camera and microphone if specified
+  // Use queueMicrotask to defer setState calls and avoid cascading renders
   useEffect(() => {
     if (isConnected && enableCamera && !cameraEnabled) {
-      toggleCamera();
+      queueMicrotask(() => {
+        toggleCamera();
+      });
     }
   }, [isConnected, enableCamera, cameraEnabled, toggleCamera]);
 
   useEffect(() => {
     if (isConnected && enableMicrophone && !isRecording) {
-      toggleMicrophone();
+      queueMicrotask(() => {
+        toggleMicrophone();
+      });
     }
   }, [isConnected, enableMicrophone, isRecording, toggleMicrophone]);
 

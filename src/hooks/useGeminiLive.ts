@@ -561,13 +561,19 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
   }, [isConnected]);
 
+  // Set video preview (independent of connection status)
+  // This ensures the video preview shows even before Gemini connects
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [videoStream]);
+
   // Send video frames
   useEffect(() => {
     if (!cameraEnabled || !videoStream || !videoRef.current || !canvasRef.current || !isConnected) {
       return;
     }
-
-    videoRef.current.srcObject = videoStream;
 
     let timeoutId = -1;
 

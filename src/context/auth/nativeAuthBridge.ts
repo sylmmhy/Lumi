@@ -155,3 +155,40 @@ export function initNativeAuthBridge(onAuthPayloadFound: (payload: NativeAuthPay
     requestNativeAuth();
   }
 }
+
+/**
+ * 通知 Android 原生端用户登录成功
+ * 将 Supabase session 传递给 Android 原生端，以便上传 FCM Token
+ *
+ * 注意：此函数仅针对 Android，不影响 iOS 端现有逻辑
+ *
+ * @param accessToken - Supabase access_token
+ * @param refreshToken - Supabase refresh_token
+ * @param userId - 用户 ID
+ * @param email - 用户邮箱
+ * @param displayName - 用户显示名称
+ */
+export function notifyNativeLoginSuccess(
+  accessToken: string,
+  refreshToken: string,
+  userId: string,
+  email: string,
+  displayName: string
+): void {
+  try {
+    // 仅 Android: 调用 AndroidBridge.onWebLoginSuccess
+    // iOS 端有自己的登录同步机制，不需要这个调用
+    if (window.AndroidBridge?.onWebLoginSuccess) {
+      window.AndroidBridge.onWebLoginSuccess(
+        accessToken,
+        refreshToken,
+        userId,
+        email,
+        displayName
+      );
+      console.log('📱 已通过 AndroidBridge 通知 Android 原生端登录成功');
+    }
+  } catch (error) {
+    console.error('❌ 通知 Android 原生端登录成功失败:', error);
+  }
+}

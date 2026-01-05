@@ -63,12 +63,35 @@ export function useVideoInput(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const captureTimeoutRef = useRef<number>(-1);
   const isCapturingRef = useRef(false);
+  const isStartingRef = useRef(false); // 防止并发启动
+  const currentStreamRef = useRef<MediaStream | null>(null); // 追踪当前 stream 以便清理
 
   /**
    * 启动摄像头
+   * 添加幂等守卫：如果已启用或正在启动中，直接返回
    */
   const start = useCallback(async () => {
+    // 幂等守卫：已经启用
+    if (isEnabled) {
+      devLog('📹 Camera already enabled, skipping start');
+      return;
+    }
+
+    // 幂等守卫：正在启动中（防止并发调用）
+    if (isStartingRef.current) {
+      devLog('📹 Camera start already in progress, skipping');
+      return;
+    }
+
+    isStartingRef.current = true;
+
     try {
+      // 如果有旧的 stream，先停止它（防止资源泄漏）
+      if (currentStreamRef.current) {
+        currentStreamRef.current.getTracks().forEach((track) => track.stop());
+        currentStreamRef.current = null;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -77,6 +100,7 @@ export function useVideoInput(
         },
       });
 
+      currentStreamRef.current = stream;
       setVideoStream(stream);
       setIsEnabled(true);
       setError(null);
@@ -87,13 +111,22 @@ export function useVideoInput(
       const errorMessage = 'Camera access denied. Please allow camera access in Settings.';
       setError(errorMessage);
       onError?.(errorMessage);
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [resolution, onError]);
+  }, [isEnabled, resolution, onError]);
 
   /**
    * 停止摄像头
+   * 清理所有资源
    */
   const stop = useCallback(() => {
+    // 停止所有 tracks
+    if (currentStreamRef.current) {
+      currentStreamRef.current.getTracks().forEach((track) => track.stop());
+      currentStreamRef.current = null;
+    }
+    // 也停止 state 中的 stream（以防万一不一致）
     videoStream?.getTracks().forEach((track) => track.stop());
     setVideoStream(null);
     setIsEnabled(false);

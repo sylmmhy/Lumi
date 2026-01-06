@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
+import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
 
 // Step components
@@ -23,8 +24,30 @@ import { DoneStep } from './habit-steps/DoneStep';
  * 包含完整的 Edge Function prompt、虚拟消息系统等
  */
 export function HabitOnboardingPage() {
+  const { isLoggedIn, isSessionValidated, navigateToLogin } = useAuth();
   const onboarding = useHabitOnboarding();
   const [isInCall, setIsInCall] = useState(false);
+
+  // 登录检查：未登录时重定向到登录页
+  useEffect(() => {
+    if (isSessionValidated && !isLoggedIn) {
+      navigateToLogin('/habit-onboarding');
+    }
+  }, [isSessionValidated, isLoggedIn, navigateToLogin]);
+
+  // 等待会话验证完成
+  if (!isSessionValidated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // 未登录时不渲染内容（等待重定向）
+  if (!isLoggedIn) {
+    return null;
+  }
 
   // AI Coach Session - 复用现有的统一组件（包含虚拟消息、VAD 等完整功能）
   const aiCoach = useAICoachSession({

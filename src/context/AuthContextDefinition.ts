@@ -22,6 +22,8 @@ export interface AuthState {
     isNativeLogin: boolean;
     /** 会话是否已通过 Supabase 验证（避免 localStorage 与云端不一致） */
     isSessionValidated: boolean;
+    /** 用户是否已完成习惯引导流程 */
+    hasCompletedHabitOnboarding: boolean;
 }
 
 export interface AuthContextValue extends AuthState {
@@ -45,6 +47,8 @@ export interface AuthContextValue extends AuthState {
     fullReset: () => void;
     /** 标记引导完成 */
     markOnboardingCompleted: (taskDescription: string, timeSpent: number, status: 'success' | 'failure') => void;
+    /** 标记习惯引导已完成（更新数据库） */
+    markHabitOnboardingCompleted: () => Promise<{ error: string | null }>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

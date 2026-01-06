@@ -138,6 +138,7 @@ function readAuthFromStorage(): AuthState {
     refreshToken: stored['refresh_token'],
     isNativeLogin,
     isSessionValidated: false, // 初始未验证，需通过 Supabase 确认
+    hasCompletedHabitOnboarding: false, // 从数据库查询后更新
   };
 }
 
@@ -200,6 +201,19 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
     console.log('✅ Supabase session 有效:', session.user.email);
     persistSessionToStorage(session);
 
+    // 查询用户的 habit onboarding 状态
+    let hasCompletedHabitOnboarding = false;
+    try {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('has_completed_habit_onboarding')
+        .eq('id', session.user.id)
+        .single();
+      hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+    } catch (err) {
+      console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+    }
+
     return {
       isLoggedIn: true,
       userId: session.user.id,
@@ -211,6 +225,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       refreshToken: session.refresh_token || null,
       isNativeLogin: false,
       isSessionValidated: true,
+      hasCompletedHabitOnboarding,
     };
   }
 
@@ -246,12 +261,27 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           refreshToken: null,
           isNativeLogin: false,
           isSessionValidated: true,
+          hasCompletedHabitOnboarding: false,
         };
       }
 
       if (restored.session) {
         console.log('✅ 成功用 localStorage token 恢复 session:', restored.session.user.email);
         persistSessionToStorage(restored.session);
+
+        // 查询用户的 habit onboarding 状态
+        let hasCompletedHabitOnboarding = false;
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('has_completed_habit_onboarding')
+            .eq('id', restored.session.user.id)
+            .single();
+          hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+        } catch (err) {
+          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+        }
+
         return {
           isLoggedIn: true,
           userId: restored.session.user.id,
@@ -263,6 +293,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           refreshToken: restored.session.refresh_token || null,
           isNativeLogin: false,
           isSessionValidated: true,
+          hasCompletedHabitOnboarding,
         };
       }
     } catch (err) {
@@ -282,6 +313,20 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   // 4. Native 登录特殊处理：允许没有 Supabase session
   if (isNativeLogin && storedUserId) {
     console.log('📱 Native 登录模式，使用 localStorage 状态');
+
+    // 查询用户的 habit onboarding 状态
+    let hasCompletedHabitOnboarding = false;
+    try {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('has_completed_habit_onboarding')
+        .eq('id', storedUserId)
+        .single();
+      hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+    } catch (err) {
+      console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+    }
+
     return {
       isLoggedIn: true,
       userId: storedUserId,
@@ -293,6 +338,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       refreshToken: stored['refresh_token'],
       isNativeLogin: true,
       isSessionValidated: true,
+      hasCompletedHabitOnboarding,
     };
   }
 
@@ -310,6 +356,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
     refreshToken: null,
     isNativeLogin: false,
     isSessionValidated: true,
+    hasCompletedHabitOnboarding: false,
   };
 }
 
@@ -476,6 +523,20 @@ export function AuthProvider({
 
       console.log('✅ Login successful:', data.user.email);
       await bindAnalyticsUserSync(data.user.id, data.user.email);
+
+      // 查询用户的 habit onboarding 状态
+      let hasCompletedHabitOnboarding = false;
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('has_completed_habit_onboarding')
+          .eq('id', data.user.id)
+          .single();
+        hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+      } catch (err) {
+        console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+      }
+
       // 登录成功后，设置验证状态为 true（Supabase 已确认）
       setAuthState(prev => ({
         ...prev,
@@ -489,6 +550,7 @@ export function AuthProvider({
         isNewUser: false,
         isNativeLogin: false,
         isSessionValidated: true,
+        hasCompletedHabitOnboarding,
       }));
       return { error: null };
     }
@@ -533,6 +595,7 @@ export function AuthProvider({
       const { user, session } = data;
       bindAnalyticsUser(user.id, user.email);
       // 注册成功后，设置验证状态为 true（Supabase 已确认）
+      // 新用户默认未完成习惯引导
       setAuthState(prev => ({
         ...prev,
         isLoggedIn: true,
@@ -544,6 +607,7 @@ export function AuthProvider({
         isNewUser: true,
         isNativeLogin: false,
         isSessionValidated: true,
+        hasCompletedHabitOnboarding: false,
       }));
     }
 
@@ -628,6 +692,7 @@ export function AuthProvider({
       refreshToken: null,
       isNativeLogin: false,
       isSessionValidated: true,
+      hasCompletedHabitOnboarding: false,
     });
   }, []);
 
@@ -691,6 +756,7 @@ export function AuthProvider({
       refreshToken: null,
       isNativeLogin: false,
       isSessionValidated: true,
+      hasCompletedHabitOnboarding: false,
     });
   }, []);
 
@@ -704,6 +770,35 @@ export function AuthProvider({
     localStorage.setItem('onboarding_time_spent', String(timeSpent));
     localStorage.setItem('onboarding_status', status);
   }, []);
+
+  const markHabitOnboardingCompleted = useCallback(async (): Promise<{ error: string | null }> => {
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    const userId = authState.userId;
+    if (!userId) return { error: 'User not logged in' };
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ has_completed_habit_onboarding: true })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('❌ 更新 habit onboarding 状态失败:', error);
+        return { error: error.message };
+      }
+
+      console.log('✅ Habit onboarding 状态已更新');
+      setAuthState(prev => ({
+        ...prev,
+        hasCompletedHabitOnboarding: true,
+      }));
+      return { error: null };
+    } catch (err) {
+      console.error('❌ 更新 habit onboarding 状态时出错:', err);
+      return { error: String(err) };
+    }
+  }, [authState.userId]);
 
   // ==========================================
   // Native 登录处理
@@ -765,6 +860,21 @@ export function AuthProvider({
       finalPictureUrl = localStorage.getItem('user_picture') || pictureUrl;
     }
 
+    // 查询用户的 habit onboarding 状态
+    let hasCompletedHabitOnboarding = false;
+    if (supabase) {
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('has_completed_habit_onboarding')
+          .eq('id', userId)
+          .single();
+        hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+      } catch (err) {
+        console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+      }
+    }
+
     await bindAnalyticsUserSync(userId, email);
     // Native 登录成功后，设置验证状态为 true
     setAuthState({
@@ -778,6 +888,7 @@ export function AuthProvider({
       refreshToken: refreshToken || null,
       isNativeLogin: true,
       isSessionValidated: true,
+      hasCompletedHabitOnboarding,
     });
     notifyAuthConfirmed('session_set');
     console.log('🔐 Web: 登录态设置成功, userId:', userId);
@@ -909,6 +1020,7 @@ export function AuthProvider({
           refreshToken: null,
           isNativeLogin: false,
           isSessionValidated: true, // 已验证：确定是登出状态
+          hasCompletedHabitOnboarding: false,
         });
       }
     });
@@ -945,6 +1057,7 @@ export function AuthProvider({
     logout,
     fullReset,
     markOnboardingCompleted,
+    markHabitOnboardingCompleted,
   }), [
     authState,
     isOAuthProcessing,
@@ -956,6 +1069,7 @@ export function AuthProvider({
     updateProfile,
     logout,
     fullReset,
+    markHabitOnboardingCompleted,
     markOnboardingCompleted,
   ]);
 

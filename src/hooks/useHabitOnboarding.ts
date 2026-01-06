@@ -59,7 +59,7 @@ function getTimeCategory(time: string): 'morning' | 'afternoon' | 'evening' {
 
 export function useHabitOnboarding() {
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, markHabitOnboardingCompleted } = useAuth();
   const [state, setState] = useState<HabitOnboardingState>(INITIAL_STATE);
 
   // 导航
@@ -139,6 +139,9 @@ export function useHabitOnboarding() {
         throw new Error('Failed to create habit');
       }
 
+      // 标记习惯引导已完成
+      await markHabitOnboardingCompleted();
+
       // 成功，导航到主页
       navigate('/app/urgency');
     } catch (err) {
@@ -149,7 +152,7 @@ export function useHabitOnboarding() {
         error: err instanceof Error ? err.message : 'Failed to save habit',
       }));
     }
-  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate]);
+  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, markHabitOnboardingCompleted]);
 
   // 计算属性
   const canProceed = useMemo(() => {

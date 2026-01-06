@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { HabitButton } from '../../../components/onboarding/HabitButton';
 import { CustomHabitModal } from '../../../components/onboarding/CustomHabitModal';
 import { PRESET_HABITS, type PresetHabit } from '../../../types/habit';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface HabitSelectStepProps {
   selectedHabitId: string | null;
@@ -24,7 +25,18 @@ export function HabitSelectStep({
   onNext,
   canProceed,
 }: HabitSelectStepProps) {
+  const { t } = useTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // 习惯 ID 到翻译 key 的映射
+  const habitTranslationKeys: Record<string, string> = {
+    bedtime: 'habitOnboarding.habitSelect.bedtime',
+    wakeup: 'habitOnboarding.habitSelect.wakeup',
+    exercise: 'habitOnboarding.habitSelect.exercise',
+    study: 'habitOnboarding.habitSelect.study',
+    eat: 'habitOnboarding.habitSelect.eat',
+    custom: 'habitOnboarding.habitSelect.custom',
+  };
 
   const handleHabitClick = (habit: PresetHabit) => {
     if (habit.id === 'custom') {
@@ -40,19 +52,20 @@ export function HabitSelectStep({
     onSelectHabit('custom');
   };
 
-  // 获取显示的习惯列表，如果已有自定义名称，替换 "Other" 的显示
+  // 获取显示的习惯列表，使用翻译后的名称
   const displayHabits = PRESET_HABITS.map(habit => {
     if (habit.id === 'custom' && customHabitName) {
       return { ...habit, name: customHabitName };
     }
-    return habit;
+    const translationKey = habitTranslationKeys[habit.id];
+    return { ...habit, name: translationKey ? t(translationKey) : habit.name };
   });
 
   return (
     <div className="flex-1 flex flex-col">
       {/* 标题 */}
       <h1 className="text-3xl font-bold text-gray-900 text-center mt-8 mb-10">
-        What habit do you want to start?
+        {t('habitOnboarding.habitSelect.title')}
       </h1>
 
       {/* 习惯选项列表 */}
@@ -77,7 +90,7 @@ export function HabitSelectStep({
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          Next
+          {t('habitOnboarding.habitSelect.next')}
         </button>
       </div>
 

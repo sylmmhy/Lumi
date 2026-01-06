@@ -1,4 +1,5 @@
 import { Phone, Video } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface HowItWorksStepProps {
   onNext: () => void;
@@ -9,6 +10,8 @@ interface HowItWorksStepProps {
  * 解释工作原理页面
  */
 export function HowItWorksStep({ onNext }: HowItWorksStepProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center">
       {/* 图标 */}
@@ -27,7 +30,7 @@ export function HowItWorksStep({ onNext }: HowItWorksStepProps) {
 
       {/* 标题 */}
       <h1 className="text-3xl font-bold text-gray-900 mb-4 px-4">
-        At your chosen time, I'll call you with a short video reminder.
+        {t('habitOnboarding.howItWorks.title')}
       </h1>
 
       {/* 下一步按钮 */}
@@ -38,7 +41,7 @@ export function HowItWorksStep({ onNext }: HowItWorksStepProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          Got it
+          {t('habitOnboarding.howItWorks.button')}
         </button>
       </div>
     </div>

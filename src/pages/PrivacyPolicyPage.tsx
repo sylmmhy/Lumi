@@ -31,7 +31,7 @@ export function PrivacyPolicyPage() {
           Privacy Policy
         </h1>
         <p style={{ color: '#94a3b8', marginBottom: '32px' }}>
-          Last Updated: December 17, 2025
+          Last Updated: January 5, 2026
         </p>
 
         <Section title="1. Introduction">
@@ -198,6 +198,36 @@ export function PrivacyPolicyPage() {
           <p>
             To exercise these rights, please contact us at the email address provided below.
           </p>
+
+          <SubSection title="7.1 How to Delete Your Account">
+            <p>
+              You can request deletion of your account and all associated data by contacting us via email:
+            </p>
+            <p style={{ marginTop: '12px', marginBottom: '12px' }}>
+              <strong>Email:</strong>{' '}
+              <a href="mailto:yilun@meetlumi.org?subject=Account%20Deletion%20Request" style={linkStyle}>
+                yilun@meetlumi.org
+              </a>
+            </p>
+            <p>Please include the following information in your request:</p>
+            <ul>
+              <li>The email address associated with your account</li>
+              <li>Subject line: "Account Deletion Request"</li>
+            </ul>
+            <p style={{ marginTop: '12px' }}>
+              <strong>What happens when you delete your account:</strong>
+            </p>
+            <ul>
+              <li>All your personal information (email, name, profile picture) will be permanently deleted</li>
+              <li>All your tasks, routines, and habit tracking data will be permanently deleted</li>
+              <li>Your account credentials will be removed from our authentication system</li>
+              <li>Analytics data associated with your account will be anonymized</li>
+            </ul>
+            <p style={{ marginTop: '12px' }}>
+              We will process your deletion request within <strong>30 days</strong> and send you a confirmation
+              email once your account has been deleted.
+            </p>
+          </SubSection>
         </Section>
 
         <Section title="8. Children's Privacy">

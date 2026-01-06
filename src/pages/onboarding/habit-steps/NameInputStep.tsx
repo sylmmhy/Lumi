@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
+import { useTranslation } from '../../../hooks/useTranslation';
 import lumiHappy from '../../../assets/Lumi-happy.png';
 
 interface NameInputStepProps {
@@ -11,6 +12,7 @@ interface NameInputStepProps {
  * 让用户设置自己的名字，Lumi 将用这个名字称呼用户
  */
 export function NameInputStep({ onNext }: NameInputStepProps) {
+  const { t } = useTranslation();
   const { userId, userName, updateProfile } = useAuth();
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -27,12 +29,12 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      setError('Please enter your name');
+      setError(t('habitOnboarding.nameInput.errorEmpty'));
       return;
     }
 
     if (!userId) {
-      setError('User not found');
+      setError(t('habitOnboarding.nameInput.errorNotFound'));
       return;
     }
 
@@ -48,7 +50,7 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
       }
     } catch (err) {
       console.error('Failed to save name:', err);
-      setError('Failed to save name. Please try again.');
+      setError(t('habitOnboarding.nameInput.errorSave'));
     } finally {
       setIsSaving(false);
     }
@@ -65,12 +67,12 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
 
       {/* 标题 */}
       <h1 className="text-2xl font-bold text-gray-900 mb-2">
-        What should Lumi call you?
+        {t('habitOnboarding.nameInput.title')}
       </h1>
 
       {/* 副标题 */}
       <p className="text-gray-600 mb-8">
-        Enter your preferred name
+        {t('habitOnboarding.nameInput.subtitle')}
       </p>
 
       {/* 名字输入框 */}
@@ -78,7 +80,7 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Your name"
+        placeholder={t('habitOnboarding.nameInput.placeholder')}
         className="w-full max-w-xs px-4 py-3 text-lg text-center text-gray-900
                    border-2 border-gray-200 rounded-xl
                    focus:border-blue-500 focus:outline-none
@@ -107,7 +109,7 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          {isSaving ? 'Saving...' : 'Continue'}
+          {isSaving ? t('habitOnboarding.nameInput.saving') : t('habitOnboarding.nameInput.continue')}
         </button>
       </div>
     </div>

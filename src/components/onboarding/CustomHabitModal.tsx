@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface CustomHabitModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export function CustomHabitModal({
   onConfirm,
   initialValue = '',
 }: CustomHabitModalProps) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,7 +61,7 @@ export function CustomHabitModal({
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900">
-            Enter your habit
+            {t('habitOnboarding.customHabit.title')}
           </h3>
           <button
             onClick={onClose}
@@ -77,9 +79,9 @@ export function CustomHabitModal({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="e.g., Drink water, Meditate..."
+            placeholder={t('habitOnboarding.customHabit.placeholder')}
             maxLength={50}
-            className="w-full px-4 py-3 text-lg border border-gray-200 rounded-xl
+            className="w-full px-4 py-3 text-lg text-gray-900 border border-gray-200 rounded-xl
                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                        placeholder:text-gray-400"
           />
@@ -95,7 +97,7 @@ export function CustomHabitModal({
             className="flex-1 py-3 px-4 text-gray-700 font-medium
                        bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
           >
-            Cancel
+            {t('habitOnboarding.customHabit.cancel')}
           </button>
           <button
             onClick={handleSubmit}
@@ -104,7 +106,7 @@ export function CustomHabitModal({
                        bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed
                        rounded-full transition-colors"
           >
-            Confirm
+            {t('habitOnboarding.customHabit.confirm')}
           </button>
         </div>
       </div>

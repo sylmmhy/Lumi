@@ -518,6 +518,49 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     habit={selectedHabit}
                     onClose={() => setSelectedHabit(null)}
                     onToggleDate={(date) => toggleHabitOnDate(selectedHabit.id, date)}
+                    onUpdateTime={async (newTime: string) => {
+                        // 示例数据不支持更新
+                        if (selectedHabit.id.startsWith('example-')) return;
+
+                        try {
+                            // 根据时间计算 category
+                            const [h] = newTime.split(':').map(Number);
+                            let category: Task['category'] = 'morning';
+                            if (h >= 12 && h < 17) category = 'afternoon';
+                            if (h >= 17) category = 'evening';
+
+                            // 获取时间图标
+                            const icon = category === 'morning' ? '☀️' : category === 'afternoon' ? '🌤️' : '🌙';
+
+                            // 格式化显示时间
+                            const h12 = h % 12 || 12;
+                            const [, m] = newTime.split(':');
+                            const period = h >= 12 ? 'pm' : 'am';
+                            const displayTime = `${h12}:${m} ${period}`;
+
+                            // 更新数据库
+                            await updateReminder(selectedHabit.id, {
+                                time: newTime,
+                                displayTime,
+                                category
+                            });
+
+                            // 更新本地状态
+                            const updatedHabit = {
+                                ...selectedHabit,
+                                time: newTime,
+                                timeLabel: `${displayTime} ${icon}`,
+                                theme: category === 'morning' ? 'gold' : category === 'afternoon' ? 'blue' : 'pink' as HabitTheme,
+                            };
+
+                            setHabits(prev => prev.map(h =>
+                                h.id === selectedHabit.id ? updatedHabit : h
+                            ));
+                            setSelectedHabit(updatedHabit);
+                        } catch (error) {
+                            console.error('Failed to update habit time:', error);
+                        }
+                    }}
                 />
             )}
         </div>
@@ -735,14 +778,20 @@ const getCalendarData = (year: number, month: number, history: { [key: string]: 
 const HeatmapDetailOverlay = ({
     habit,
     onClose,
-    onToggleDate
+    onToggleDate,
+    onUpdateHabit
 }: {
     habit: Habit,
     onClose: () => void,
-    onToggleDate: (date: Date) => void
+    onToggleDate: (date: Date) => void,
+    onUpdateHabit?: (newName: string, newTime: string) => void
 }) => {
     const { t } = useTranslation();
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editTime, setEditTime] = useState(habit.time || '09:00');
+    const [editDate, setEditDate] = useState(new Date());
+    const [editName, setEditName] = useState(habit.title);
     const HEATMAP_COLUMNS = 160; // 显示160周（约3年）
     const { days: heatmapDays, monthLabels } = getFixedHeatmapData(habit.history, HEATMAP_COLUMNS);
     const currentStreak = calculateCurrentStreak(habit.history);
@@ -754,6 +803,12 @@ const HeatmapDetailOverlay = ({
             scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
         }
     }, []);
+
+    // 当 habit 变化时同步编辑状态
+    useEffect(() => {
+        setEditTime(habit.time || '09:00');
+        setEditName(habit.title);
+    }, [habit.time, habit.title]);
 
     const themeColors = {
         gold: 'bg-brand-heatmapGold',
@@ -800,7 +855,20 @@ const HeatmapDetailOverlay = ({
             <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex justify-between items-start p-6 pb-4">
-                    <h2 className="text-xl font-bold text-gray-800">{habit.title}</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-800">{habit.title}</h2>
+                        <span className="text-sm text-gray-500 bg-brand-cream px-2 py-1 rounded-lg font-serif italic">
+                            {habit.timeLabel}
+                        </span>
+                        {onUpdateHabit && !habit.id.startsWith('example-') && (
+                            <button
+                                onClick={() => setShowEditModal(true)}
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                            >
+                                <i className="fa-solid fa-pen text-gray-400 text-sm"></i>
+                            </button>
+                        )}
+                    </div>
                     <button
                         onClick={onClose}
                         className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
@@ -942,6 +1010,56 @@ const HeatmapDetailOverlay = ({
                     </div>
                 </div>
             </div>
+
+            {/* Time Picker Modal */}
+            {showTimePicker && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center animate-fade-in"
+                    onClick={() => setShowTimePicker(false)}
+                >
+                    {/* Semi-transparent backdrop */}
+                    <div className="absolute inset-0 bg-black/50" />
+
+                    {/* Modal content */}
+                    <div
+                        className="relative bg-white rounded-[32px] shadow-2xl w-[320px] p-6 border border-gray-100/50"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="mb-4">
+                            <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
+                        </div>
+
+                        <TimePicker
+                            timeValue={editTime}
+                            onTimeChange={setEditTime}
+                            dateValue={editDate}
+                            onDateChange={setEditDate}
+                            onClose={() => {}}
+                            embedded
+                        />
+
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                onClick={() => setShowTimePicker(false)}
+                                className="flex-1 py-3 bg-gray-100 text-gray-600 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+                            >
+                                {t('common.cancel')}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (onUpdateTime) {
+                                        onUpdateTime(editTime);
+                                    }
+                                    setShowTimePicker(false);
+                                }}
+                                className="flex-1 py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -157,5 +157,67 @@
   "leaderboard.friends": "Amici",
   "leaderboard.xp": "XP",
   "leaderboard.comingSoon": "In arrivo",
-  "leaderboard.comingSoonHint": "La classifica sta arrivando. Resta sintonizzato!"
+  "leaderboard.comingSoonHint": "La classifica sta arrivando. Resta sintonizzato!",
+
+  "habitOnboarding.welcome.title": "Ciao, sono Lumi",
+  "habitOnboarding.welcome.subtitle": "Creiamo insieme la tua prima abitudine oggi.",
+  "habitOnboarding.welcome.button": "Inizia",
+
+  "habitOnboarding.habitSelect.title": "Quale abitudine vuoi iniziare?",
+  "habitOnboarding.habitSelect.next": "Avanti",
+  "habitOnboarding.habitSelect.bedtime": "Andare a letto in orario",
+  "habitOnboarding.habitSelect.wakeup": "Svegliarsi presto",
+  "habitOnboarding.habitSelect.exercise": "Fare esercizio",
+  "habitOnboarding.habitSelect.study": "Studiare",
+  "habitOnboarding.habitSelect.eat": "Mangiare in orario",
+  "habitOnboarding.habitSelect.custom": "Altro",
+
+  "habitOnboarding.customHabit.title": "Scrivi la tua abitudine",
+  "habitOnboarding.customHabit.placeholder": "es. Bere acqua, Meditare...",
+  "habitOnboarding.customHabit.cancel": "Annulla",
+  "habitOnboarding.customHabit.confirm": "Conferma",
+
+  "habitOnboarding.timeSelect.title": "Quando vuoi che ti ricordi?",
+  "habitOnboarding.timeSelect.next": "Avanti",
+
+  "habitOnboarding.howItWorks.title": "All'ora scelta, ti chiamerò con un breve promemoria video.",
+  "habitOnboarding.howItWorks.button": "Capito",
+
+  "habitOnboarding.permissions.title": "Attiva i permessi",
+  "habitOnboarding.permissions.description": "Per ricevere videochiamate dal tuo coach AI, permetti questi accessi.",
+  "habitOnboarding.permissions.notifications": "Notifiche",
+  "habitOnboarding.permissions.notificationsHint": "Ti avviso quando è ora",
+  "habitOnboarding.permissions.microphone": "Microfono",
+  "habitOnboarding.permissions.microphoneHint": "Parla con il tuo coach AI",
+  "habitOnboarding.permissions.camera": "Fotocamera",
+  "habitOnboarding.permissions.cameraHint": "L'AI ti vede e ti guida",
+  "habitOnboarding.permissions.allow": "Permetti",
+  "habitOnboarding.permissions.requesting": "Richiesta in corso...",
+  "habitOnboarding.permissions.continue": "Continua",
+  "habitOnboarding.permissions.continueAnyway": "Continua comunque",
+  "habitOnboarding.permissions.skip": "Dopo",
+
+  "habitOnboarding.nameInput.title": "Come ti chiamo?",
+  "habitOnboarding.nameInput.subtitle": "Inserisci il nome che preferisci",
+  "habitOnboarding.nameInput.placeholder": "Il tuo nome",
+  "habitOnboarding.nameInput.continue": "Continua",
+  "habitOnboarding.nameInput.saving": "Salvataggio...",
+  "habitOnboarding.nameInput.errorEmpty": "Inserisci il tuo nome",
+  "habitOnboarding.nameInput.errorNotFound": "Utente non trovato",
+  "habitOnboarding.nameInput.errorSave": "Salvataggio fallito. Riprova.",
+
+  "habitOnboarding.languageSelect.title": "In che lingua vuoi che parli Lumi?",
+  "habitOnboarding.languageSelect.subtitle": "Puoi selezionarne più di una",
+  "habitOnboarding.languageSelect.continue": "Continua",
+  "habitOnboarding.languageSelect.skipHint": "Salta per rilevamento automatico",
+
+  "habitOnboarding.tryNow.title": "Pronto a provare?",
+  "habitOnboarding.tryNow.description": "Posso chiamarti ora per una sessione di 5 minuti.",
+  "habitOnboarding.tryNow.callNow": "Chiamami ora",
+  "habitOnboarding.tryNow.skip": "Dopo",
+
+  "habitOnboarding.done.title": "Tutto pronto!",
+  "habitOnboarding.done.subtitle": "La tua abitudine è pronta. Andiamo!",
+  "habitOnboarding.done.button": "Andiamo!",
+  "habitOnboarding.done.saving": "Salvataggio..."
 }

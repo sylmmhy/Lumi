@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TimePicker } from '../../../components/app-tabs/TimePicker';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface TimeSelectStepProps {
   reminderTime: string;
@@ -16,6 +17,7 @@ export function TimeSelectStep({
   onTimeChange,
   onNext,
 }: TimeSelectStepProps) {
+  const { t } = useTranslation();
   // 日期状态（Onboarding 只关心时间，日期默认为今天）
   const [dateValue, setDateValue] = useState(() => new Date());
 
@@ -23,7 +25,7 @@ export function TimeSelectStep({
     <div className="flex-1 flex flex-col">
       {/* 标题 */}
       <h1 className="text-3xl font-bold text-gray-900 text-center mt-8 mb-4">
-        When should I remind you?
+        {t('habitOnboarding.timeSelect.title')}
       </h1>
 
       {/* 时间选择器 - 复用 app-tabs/TimePicker，embedded 模式 */}
@@ -48,7 +50,7 @@ export function TimeSelectStep({
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          Next
+          {t('habitOnboarding.timeSelect.next')}
         </button>
       </div>
     </div>

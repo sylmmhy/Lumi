@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ConfettiEffect } from '../../../components/effects/ConfettiEffect';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface DoneStepProps {
   onFinish: () => void;
@@ -11,6 +12,7 @@ interface DoneStepProps {
  * 完成页面，带彩纸庆祝动画
  */
 export function DoneStep({ onFinish, isLoading = false }: DoneStepProps) {
+  const { t } = useTranslation();
   const [showConfetti, setShowConfetti] = useState(false);
 
   // 延迟显示彩纸效果
@@ -31,12 +33,12 @@ export function DoneStep({ onFinish, isLoading = false }: DoneStepProps) {
 
       {/* 标题 */}
       <h1 className="text-4xl font-bold text-gray-900 mb-4">
-        All set!
+        {t('habitOnboarding.done.title')}
       </h1>
 
       {/* 副标题 */}
       <p className="text-lg text-gray-600 mb-12">
-        Your habit is ready. Let's go!
+        {t('habitOnboarding.done.subtitle')}
       </p>
 
       {/* 完成按钮 */}
@@ -49,7 +51,7 @@ export function DoneStep({ onFinish, isLoading = false }: DoneStepProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          {isLoading ? 'Saving...' : "Let's go!"}
+          {isLoading ? t('habitOnboarding.done.saving') : t('habitOnboarding.done.button')}
         </button>
       </div>
     </div>

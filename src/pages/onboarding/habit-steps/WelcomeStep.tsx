@@ -1,3 +1,5 @@
+import { useTranslation } from '../../../hooks/useTranslation';
+
 interface WelcomeStepProps {
   onNext: () => void;
 }
@@ -7,6 +9,8 @@ interface WelcomeStepProps {
  * Lumi 介绍欢迎页
  */
 export function WelcomeStep({ onNext }: WelcomeStepProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center">
       {/* Lumi 头像 */}
@@ -16,12 +20,12 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
 
       {/* 标题 */}
       <h1 className="text-3xl font-bold text-gray-900 mb-4">
-        Hi, I'm Lumi
+        {t('habitOnboarding.welcome.title')}
       </h1>
 
       {/* 副标题 */}
       <p className="text-xl text-gray-600 mb-12">
-        Let's build your first habit today.
+        {t('habitOnboarding.welcome.subtitle')}
       </p>
 
       {/* 下一步按钮 */}
@@ -31,7 +35,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
                    text-white text-lg font-medium rounded-full
                    transition-colors shadow-md"
       >
-        Get Started
+        {t('habitOnboarding.welcome.button')}
       </button>
     </div>
   );

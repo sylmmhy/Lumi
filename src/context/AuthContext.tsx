@@ -1182,6 +1182,9 @@ export function AuthProvider({
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);
         bindAnalyticsUser(session.user.id, session.user.email);
+
+        // 先更新基本状态，但不设置 isSessionValidated: true
+        // 等待 hasCompletedHabitOnboarding 查询完成后再设置，避免过早跳转到 onboarding
         setAuthState(prev => ({
           ...prev,
           isLoggedIn: true,
@@ -1190,8 +1193,35 @@ export function AuthProvider({
           sessionToken: session.access_token,
           refreshToken: session.refresh_token || null,
           isNativeLogin: false,
-          isSessionValidated: true, // Supabase 确认的会话
+          // 注意：这里不设置 isSessionValidated: true，等查询完成后再设置
         }));
+
+        // 异步查询 hasCompletedHabitOnboarding，完成后再设置 isSessionValidated
+        void (async () => {
+          let hasCompletedHabitOnboarding = false;
+          try {
+            const { data: userData } = await client
+              .from('users')
+              .select('has_completed_habit_onboarding')
+              .eq('id', session.user.id)
+              .single();
+            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+            console.log('✅ onAuthStateChange: 获取 habit onboarding 状态:', hasCompletedHabitOnboarding);
+          } catch (err) {
+            console.warn('⚠️ onAuthStateChange: 获取 habit onboarding 状态失败:', err);
+          }
+
+          // 查询完成后，同时设置 isSessionValidated 和 hasCompletedHabitOnboarding
+          setAuthState(prev => {
+            // 确保 userId 没有变化（防止竞态条件）
+            if (prev.userId !== session.user.id) return prev;
+            return {
+              ...prev,
+              hasCompletedHabitOnboarding,
+              isSessionValidated: true,
+            };
+          });
+        })();
 
         // 通知原生端登录成功，以便上传 FCM Token
         const displayName = session.user.user_metadata?.full_name

@@ -28,8 +28,12 @@ export interface AuthModalProps {
   redirectPath?: string;
 }
 
+/** 邮箱登录步骤 */
+type EmailStep = 'email' | 'otp';
+
 /**
  * 登录/注册弹窗：复用现有邮箱与 Google 登录逻辑，但以模态形式呈现。
+ * 邮箱登录使用验证码 (OTP) 方式，无需密码。
  *
  * @param {AuthModalProps} props - 控制弹窗开关与回调
  * @returns {JSX.Element | null} 覆盖式登录弹窗
@@ -39,12 +43,15 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [emailStep, setEmailStep] = useState<EmailStep>('email');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
   const hasGoogleClientId = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
   // Google 登录在 WebView 中不可用，需要检测并隐藏
   const canShowGoogleLogin = hasGoogleClientId && isGoogleLoginAvailable();
@@ -64,6 +71,32 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
       onClose();
     }
   }, [embedded, redirectPath, navigate, onSuccess, onClose, auth?.isNewUser, auth?.hasCompletedHabitOnboarding]);
+
+  // 重置状态当弹窗关闭时
+  useEffect(() => {
+    if (!isOpen) {
+      setEmailStep('email');
+      setOtpCode('');
+      setError(null);
+      setCountdown(0);
+    }
+  }, [isOpen]);
+
+  // 倒计时逻辑
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  // 自动聚焦到验证码输入框
+  useEffect(() => {
+    if (emailStep === 'otp' && otpInputRef.current) {
+      otpInputRef.current.focus();
+    }
+  }, [emailStep]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -129,22 +162,51 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
     };
   }, [auth, isOpen, t, canShowGoogleLogin, handleSuccess]);
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  /** 发送验证码 */
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth) {
       setError('Auth not ready');
       return;
     }
-    if (!email || !password) {
-      setError(t('auth.enterEmailPassword'));
+    if (!email) {
+      setError(t('auth.enterEmail'));
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      // 使用统一的登录/注册方法：自动判断用户是否存在
-      const res = await auth.authWithEmail(email, password);
+      const res = await auth.sendEmailOtp(email);
+      if (res?.error) throw new Error(res.error);
+
+      // 发送成功，切换到验证码输入步骤
+      setEmailStep('otp');
+      setCountdown(60); // 60秒倒计时
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('auth.authFailed');
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** 验证验证码 */
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth) {
+      setError('Auth not ready');
+      return;
+    }
+    if (!otpCode) {
+      setError(t('auth.enterOtp'));
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await auth.verifyEmailOtp(email, otpCode);
       if (res?.error) throw new Error(res.error);
 
       auth.checkLoginState();
@@ -155,6 +217,31 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /** 重新发送验证码 */
+  const handleResendOtp = async () => {
+    if (countdown > 0 || !auth) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await auth.sendEmailOtp(email);
+      if (res?.error) throw new Error(res.error);
+      setCountdown(60);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('auth.authFailed');
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** 返回邮箱输入步骤 */
+  const handleBackToEmail = () => {
+    setEmailStep('email');
+    setOtpCode('');
+    setError(null);
   };
 
   const handleAppleLogin = async () => {
@@ -179,48 +266,90 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
     <>
       <h1 className="text-2xl font-bold text-center mb-2">{t('auth.welcome')}</h1>
       <p className="text-center text-gray-500 mb-6 text-sm">
-        {t('auth.signInPrompt')}
+        {emailStep === 'email' ? t('auth.signInPrompt') : t('auth.otpSentTo').replace('{{email}}', email)}
       </p>
 
-      <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
-            placeholder="••••••••"
-            required
-            minLength={6}
-          />
-        </div>
-
-        {error && (
-          <div className="text-red-500 text-sm bg-red-50 p-2 rounded border border-red-100">
-            {error}
+      {emailStep === 'email' ? (
+        // 步骤1：输入邮箱
+        <form onSubmit={handleSendOtp} className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500"
+              placeholder="you@example.com"
+              required
+            />
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={isLoading || isAppleLoading}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? t('common.processing') : t('auth.continue')}
-        </button>
-      </form>
+          {error && (
+            <div className="text-red-500 text-sm bg-red-50 p-2 rounded border border-red-100">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading || isAppleLoading}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? t('common.processing') : t('auth.sendOtp')}
+          </button>
+        </form>
+      ) : (
+        // 步骤2：输入验证码
+        <form onSubmit={handleVerifyOtp} className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.otp')}</label>
+            <input
+              ref={otpInputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 placeholder:text-gray-500 text-center text-2xl tracking-widest"
+              placeholder="000000"
+              maxLength={6}
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="text-red-500 text-sm bg-red-50 p-2 rounded border border-red-100">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading || otpCode.length < 6}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? t('common.processing') : t('auth.verifyOtp')}
+          </button>
+
+          <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              onClick={handleBackToEmail}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              {t('auth.changeEmail')}
+            </button>
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              disabled={countdown > 0 || isLoading}
+              className="text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+            >
+              {countdown > 0 ? t('auth.resendIn').replace('{{seconds}}', String(countdown)) : t('auth.resendOtp')}
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Divider */}
       <div className="relative mb-4">

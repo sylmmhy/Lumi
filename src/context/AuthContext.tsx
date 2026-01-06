@@ -644,6 +644,128 @@ export function AuthProvider({
   }, [loginWithEmail, signupWithEmail]);
 
   // ==========================================
+  // 邮箱验证码 (OTP) 登录
+  // ==========================================
+
+  const sendEmailOtp = useCallback(async (email: string): Promise<{ error: string | null }> => {
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    try {
+      // 构建 Magic Link 的回调 URL
+      // 使用当前页面的 origin，确保用户点击链接后能正确回到应用
+      const redirectTo = `${window.location.origin}${defaultRedirectRef.current || DEFAULT_APP_PATH}`;
+      console.log('📧 Magic Link 回调 URL:', redirectTo);
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+          // 设置 Magic Link 点击后的重定向 URL
+          emailRedirectTo: redirectTo,
+        },
+      });
+
+      if (error) {
+        console.error('❌ 发送验证码失败:', error);
+        return { error: error.message };
+      }
+
+      console.log('✅ Magic Link 已发送到:', email);
+      return { error: null };
+    } catch (err) {
+      console.error('❌ 发送验证码时出错:', err);
+      return { error: String(err) };
+    }
+  }, []);
+
+  const verifyEmailOtp = useCallback(async (
+    email: string,
+    otp: string
+  ): Promise<{ error: string | null; isNewUser?: boolean }> => {
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'email',
+      });
+
+      if (error) {
+        console.error('❌ 验证码验证失败:', error);
+        return { error: error.message };
+      }
+
+      const { session, user } = data;
+      if (session && user) {
+        localStorage.setItem('session_token', session.access_token);
+        if (session.refresh_token) localStorage.setItem('refresh_token', session.refresh_token);
+        localStorage.setItem('user_id', user.id);
+        localStorage.setItem('user_email', user.email || '');
+        localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+
+        // 检查是否是新用户（通过 created_at 和当前时间对比）
+        const createdAt = new Date(user.created_at);
+        const now = new Date();
+        const isNewUser = (now.getTime() - createdAt.getTime()) < 60000; // 1分钟内创建的视为新用户
+        localStorage.setItem('is_new_user', isNewUser ? 'true' : 'false');
+
+        // 获取用户资料
+        let userName = user.user_metadata?.full_name || '';
+        let userPicture = user.user_metadata?.avatar_url || '';
+
+        if (!userName || !userPicture) {
+          await syncUserProfileToStorage(supabase, user.id);
+          userName = localStorage.getItem('user_name') || userName;
+          userPicture = localStorage.getItem('user_picture') || userPicture;
+        }
+
+        if (userName) localStorage.setItem('user_name', userName);
+        if (userPicture) localStorage.setItem('user_picture', userPicture);
+
+        console.log('✅ OTP 登录成功:', user.email);
+        await bindAnalyticsUserSync(user.id, user.email);
+
+        // 查询用户的 habit onboarding 状态
+        let hasCompletedHabitOnboarding = false;
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('has_completed_habit_onboarding')
+            .eq('id', user.id)
+            .single();
+          hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+        } catch (err) {
+          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+        }
+
+        // 登录成功后，设置验证状态为 true（Supabase 已确认）
+        setAuthState(prev => ({
+          ...prev,
+          isLoggedIn: true,
+          userId: user.id,
+          userEmail: user.email || null,
+          userName: userName || null,
+          userPicture: userPicture || null,
+          sessionToken: session.access_token,
+          refreshToken: session.refresh_token || null,
+          isNewUser,
+          isNativeLogin: false,
+          isSessionValidated: true,
+          hasCompletedHabitOnboarding,
+        }));
+
+        return { error: null, isNewUser };
+      }
+
+      return { error: 'Verification failed' };
+    } catch (err) {
+      console.error('❌ 验证码验证时出错:', err);
+      return { error: String(err) };
+    }
+  }, []);
+
+  // ==========================================
   // 登出
   // ==========================================
 
@@ -1072,6 +1194,8 @@ export function AuthProvider({
     loginWithEmail,
     signupWithEmail,
     authWithEmail,
+    sendEmailOtp,
+    verifyEmailOtp,
     updateProfile,
     logout,
     fullReset,
@@ -1085,6 +1209,8 @@ export function AuthProvider({
     loginWithEmail,
     signupWithEmail,
     authWithEmail,
+    sendEmailOtp,
+    verifyEmailOtp,
     updateProfile,
     logout,
     fullReset,

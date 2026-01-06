@@ -191,6 +191,24 @@ function getLocalDateString(date: Date = new Date()): string {
 }
 
 /**
+ * 判断指定日期和时间是否在未来
+ * 用于检查 routine 实例是否应该被创建（只有时间未过的才应该创建）
+ *
+ * @param time - 时间字符串 (HH:mm 格式)
+ * @param dateStr - 日期字符串 (YYYY-MM-DD 格式)
+ * @returns 是否在未来
+ */
+function isTimeInFuture(time: string | null | undefined, dateStr: string): boolean {
+  if (!time) return false;
+
+  const [hours, minutes] = time.split(':').map(Number);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const reminderTime = new Date(year, month - 1, day, hours, minutes);
+
+  return reminderTime.getTime() > Date.now();
+}
+
+/**
  * 判断任务是否应该触发原生提醒
  * 只有当任务有日期+时间，且时间在未来时才触发
  *
@@ -551,8 +569,18 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
     );
 
     // 3. 为还没有今日实例的 routine 生成实例
+    // 🔧 修复：跳过今天时间已过的任务，避免 pg_cron 立即触发推送
     const instancesToCreate = routineTemplates
-      .filter(template => !existingParentIds.has(template.id))
+      .filter(template => {
+        // 跳过已有今日实例的
+        if (existingParentIds.has(template.id)) return false;
+        // 🆕 跳过今天时间已过的任务（避免立即触发电话）
+        if (!isTimeInFuture(template.time, today)) {
+          console.log(`⏭️ Skipping routine "${template.title}" - time ${template.time} has passed for today`);
+          return false;
+        }
+        return true;
+      })
       .map(template => ({
         user_id: userId,
         title: template.title,

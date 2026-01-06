@@ -10,12 +10,13 @@ import { HabitSelectStep } from './habit-steps/HabitSelectStep';
 import { TimeSelectStep } from './habit-steps/TimeSelectStep';
 import { HowItWorksStep } from './habit-steps/HowItWorksStep';
 import { PermissionsStep } from './habit-steps/PermissionsStep';
+import { NameInputStep } from './habit-steps/NameInputStep';
 import { TryNowStep } from './habit-steps/TryNowStep';
 import { DoneStep } from './habit-steps/DoneStep';
 
 /**
  * Habit Onboarding 主页面
- * 7 步流程：Welcome -> Choose Habit -> Set Time -> How It Works -> Permissions -> Try Now -> Done
+ * 8 步流程：Welcome -> Choose Habit -> Set Time -> How It Works -> Permissions -> Name Input -> Try Now -> Done
  *
  * 直接复用完整的 useAICoachSession + TaskWorkingView 组件
  * 包含完整的 Edge Function prompt、虚拟消息系统等
@@ -138,6 +139,9 @@ export function HabitOnboardingPage() {
         return <PermissionsStep onNext={onboarding.goNext} />;
 
       case 6:
+        return <NameInputStep onNext={onboarding.goNext} />;
+
+      case 7:
         return (
           <TryNowStep
             onStartCall={handleStartCall}
@@ -145,7 +149,7 @@ export function HabitOnboardingPage() {
           />
         );
 
-      case 7:
+      case 8:
         return (
           <DoneStep
             onFinish={handleFinish}

@@ -651,7 +651,7 @@ export function AuthProvider({
     const currentToken = localStorage.getItem('session_token');
 
     if (supabase) {
-      // 清理 VoIP 设备
+      // 清理 VoIP 设备（忽略失败，不阻塞登出流程）
       if (currentToken) {
         try {
           const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-user-devices`, {
@@ -664,17 +664,36 @@ export function AuthProvider({
             body: JSON.stringify({ action: 'remove_voip_device' }),
           });
           if (response.ok) console.log('✅ VoIP 设备记录已清理');
-          else console.warn('⚠️ 清理 VoIP 设备记录失败:', await response.text());
+          else console.warn('⚠️ 清理 VoIP 设备记录失败（已忽略）');
         } catch (error) {
-          console.error('❌ 清理 VoIP 设备记录时出错:', error);
+          console.warn('⚠️ 清理 VoIP 设备记录时出错（已忽略）:', error);
         }
       }
-      await supabase.auth.signOut();
+
+      // 尝试调用 Supabase signOut，但不管成功与否都继续清理
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (error) {
+        console.warn('⚠️ Supabase signOut 失败（已忽略），将强制清理本地状态:', error);
+      }
     }
 
-    // 清理本地存储
+    // 强制清理所有本地存储（不管 signOut 是否成功）
     localStorage.removeItem('voip_token');
     clearAuthStorage();
+
+    // 清理 Supabase SDK 自己存储的 session（以 sb- 开头的 key）
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+      console.log(`🗑️ 已清理 Supabase 存储: ${key}`);
+    });
 
     if (import.meta.env.DEV) console.log('🔓 已登出');
 

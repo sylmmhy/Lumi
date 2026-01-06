@@ -5,6 +5,7 @@ import { DEFAULT_APP_PATH } from './constants/routes'
 import { AppTabsPage } from './pages/AppTabsPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
+import { HabitOnboardingPage } from './pages/onboarding/HabitOnboardingPage'
 import { DevTestPage } from './pages/DevTestPage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
@@ -49,26 +50,37 @@ function initAnalyticsDeferred() {
 }
 
 /**
- * 根路径重定向组件：等待 OAuth 回调处理完成后再进入核心功能页。
+ * 根路径重定向组件：根据用户登录状态和 onboarding 完成情况决定跳转目标。
+ *
+ * 跳转逻辑：
+ * 1. 未登录 → /app/urgency（允许体验，后续操作会触发登录）
+ * 2. 已登录但未完成 habit onboarding → /habit-onboarding
+ * 3. 已登录且已完成 habit onboarding → /app/urgency
  *
  * @returns {null} 不渲染任何 UI，仅负责路由跳转。
  */
 function RootRedirect() {
   const navigate = useNavigate()
-  const { isOAuthProcessing } = useAuth()
+  const { isOAuthProcessing, isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding } = useAuth()
   const hasHandledRef = useRef(false)
 
   useEffect(() => {
-    if (hasHandledRef.current || isOAuthProcessing) return
+    // 等待 OAuth 处理完成和会话验证完成
+    if (hasHandledRef.current || isOAuthProcessing || !isSessionValidated) return
     hasHandledRef.current = true
 
-    const targetAppPath = DEFAULT_APP_PATH
-    // 无论登录与否，都直接进入核心功能页（urgency）
-    navigate(targetAppPath, { replace: true })
-  }, [isOAuthProcessing, navigate])
+    // 已登录但未完成 habit onboarding → 跳转到引导页
+    if (isLoggedIn && !hasCompletedHabitOnboarding) {
+      navigate('/habit-onboarding', { replace: true })
+      return
+    }
 
-  // 如果正在处理 OAuth，显示加载状态
-  if (isOAuthProcessing) {
+    // 其他情况（未登录或已完成引导）→ 进入核心功能页
+    navigate(DEFAULT_APP_PATH, { replace: true })
+  }, [isOAuthProcessing, isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate])
+
+  // 如果正在处理 OAuth 或会话未验证完成，显示加载状态
+  if (isOAuthProcessing || !isSessionValidated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -100,6 +112,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/mobile" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/habit-onboarding" element={<HabitOnboardingPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfUsePage />} />
           <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />

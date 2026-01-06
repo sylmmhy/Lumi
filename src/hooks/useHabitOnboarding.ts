@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './useAuth';
-import { createReminder } from '../remindMe/services/reminderService';
+import { createReminder, generateTodayRoutineInstances } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -16,6 +16,8 @@ interface HabitOnboardingState {
   error: string | null;
 }
 
+const STORAGE_KEY = 'habit_onboarding_state';
+
 const INITIAL_STATE: HabitOnboardingState = {
   step: 1,
   selectedHabitId: null,
@@ -25,6 +27,58 @@ const INITIAL_STATE: HabitOnboardingState = {
   isSaving: false,
   error: null,
 };
+
+/**
+ * 从 sessionStorage 恢复状态
+ */
+function loadStateFromStorage(): HabitOnboardingState {
+  try {
+    const saved = sessionStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // 恢复时重置 isSaving 和 error，避免卡在保存状态
+      return {
+        ...INITIAL_STATE,
+        ...parsed,
+        isSaving: false,
+        error: null,
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to load onboarding state from storage:', e);
+  }
+  return INITIAL_STATE;
+}
+
+/**
+ * 保存状态到 sessionStorage
+ */
+function saveStateToStorage(state: HabitOnboardingState): void {
+  try {
+    // 只保存需要持久化的字段，不保存 isSaving 和 error
+    const toSave = {
+      step: state.step,
+      selectedHabitId: state.selectedHabitId,
+      customHabitName: state.customHabitName,
+      reminderTime: state.reminderTime,
+      trialCallCompleted: state.trialCallCompleted,
+    };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch (e) {
+    console.warn('Failed to save onboarding state to storage:', e);
+  }
+}
+
+/**
+ * 清除存储的状态
+ */
+function clearStateFromStorage(): void {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear onboarding state from storage:', e);
+  }
+}
 
 /**
  * 将 24 小时制时间转换为 12 小时制显示
@@ -60,7 +114,13 @@ function getTimeCategory(time: string): 'morning' | 'afternoon' | 'evening' {
 export function useHabitOnboarding() {
   const navigate = useNavigate();
   const { userId, markHabitOnboardingCompleted } = useAuth();
-  const [state, setState] = useState<HabitOnboardingState>(INITIAL_STATE);
+  // 从 sessionStorage 恢复状态，避免来电/刷新后回到第 1 步
+  const [state, setState] = useState<HabitOnboardingState>(loadStateFromStorage);
+
+  // 状态变化时自动保存到 sessionStorage
+  useEffect(() => {
+    saveStateToStorage(state);
+  }, [state]);
 
   // 导航
   const goToStep = useCallback((step: OnboardingStep) => {
@@ -122,11 +182,13 @@ export function useHabitOnboarding() {
         habitName = preset?.name || 'My Habit';
       }
 
-      // 创建 routine 类型任务
+      // 创建 routine 类型任务（模板）
+      // 🔧 修复：routine 模板不设置 date，由 generateTodayRoutineInstances 统一生成今日实例
+      // 这样可以避免时间已过时 pg_cron 立即触发电话
       const result = await createReminder({
         text: habitName,
         time: state.reminderTime,
-        date: getTodayDate(),
+        // date 不设置，让 routine 作为纯模板
         type: 'routine',
         isRecurring: true,
         recurrencePattern: 'daily',
@@ -139,8 +201,15 @@ export function useHabitOnboarding() {
         throw new Error('Failed to create habit');
       }
 
+      // 🆕 为今天生成 routine 实例（如果时间未过）
+      // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
+      await generateTodayRoutineInstances(userId);
+
       // 标记习惯引导已完成
       await markHabitOnboardingCompleted();
+
+      // 清除 sessionStorage 中的临时状态
+      clearStateFromStorage();
 
       // 成功，导航到主页
       navigate('/app/urgency');

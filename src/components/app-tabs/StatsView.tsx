@@ -518,7 +518,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     habit={selectedHabit}
                     onClose={() => setSelectedHabit(null)}
                     onToggleDate={(date) => toggleHabitOnDate(selectedHabit.id, date)}
-                    onUpdateTime={async (newTime: string) => {
+                    onUpdateHabit={async (newName: string, newTime: string) => {
                         // 示例数据不支持更新
                         if (selectedHabit.id.startsWith('example-')) return;
 
@@ -540,6 +540,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
                             // 更新数据库
                             await updateReminder(selectedHabit.id, {
+                                text: newName,
                                 time: newTime,
                                 displayTime,
                                 category
@@ -548,6 +549,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                             // 更新本地状态
                             const updatedHabit = {
                                 ...selectedHabit,
+                                title: newName,
                                 time: newTime,
                                 timeLabel: `${displayTime} ${icon}`,
                                 theme: category === 'morning' ? 'gold' : category === 'afternoon' ? 'blue' : 'pink' as HabitTheme,
@@ -558,7 +560,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                             ));
                             setSelectedHabit(updatedHabit);
                         } catch (error) {
-                            console.error('Failed to update habit time:', error);
+                            console.error('Failed to update habit:', error);
                         }
                     }}
                 />
@@ -1011,52 +1013,62 @@ const HeatmapDetailOverlay = ({
                 </div>
             </div>
 
-            {/* Time Picker Modal */}
-            {showTimePicker && (
+            {/* Edit Task Modal */}
+            {showEditModal && (
                 <div
                     className="fixed inset-0 z-[200] flex items-center justify-center animate-fade-in"
-                    onClick={() => setShowTimePicker(false)}
+                    onClick={() => setShowEditModal(false)}
                 >
                     {/* Semi-transparent backdrop */}
                     <div className="absolute inset-0 bg-black/50" />
 
                     {/* Modal content */}
                     <div
-                        className="relative bg-white rounded-[32px] shadow-2xl w-[320px] p-6 border border-gray-100/50"
+                        className="relative bg-white rounded-[32px] shadow-2xl w-[340px] p-6 border border-gray-100/50"
                         onClick={(e) => e.stopPropagation()}
                     >
+                        {/* Header */}
                         <div className="mb-4">
                             <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
                         </div>
 
-                        <TimePicker
-                            timeValue={editTime}
-                            onTimeChange={setEditTime}
-                            dateValue={editDate}
-                            onDateChange={setEditDate}
-                            onClose={() => {}}
-                            embedded
-                        />
-
-                        <div className="mt-6 flex gap-3">
-                            <button
-                                onClick={() => setShowTimePicker(false)}
-                                className="flex-1 py-3 bg-gray-100 text-gray-600 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
-                            >
-                                {t('common.cancel')}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (onUpdateTime) {
-                                        onUpdateTime(editTime);
-                                    }
-                                    setShowTimePicker(false);
-                                }}
-                                className="flex-1 py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
-                            >
-                                OK
-                            </button>
+                        {/* Task Name Input */}
+                        <div className="mb-4">
+                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskName')}</label>
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 bg-white text-gray-800"
+                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
+                            />
                         </div>
+
+                        {/* Time Picker */}
+                        <div className="mb-6">
+                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskTime')}</label>
+                            <TimePicker
+                                timeValue={editTime}
+                                onTimeChange={setEditTime}
+                                dateValue={editDate}
+                                onDateChange={setEditDate}
+                                onClose={() => {}}
+                                embedded
+                            />
+                        </div>
+
+                        {/* Save Button */}
+                        <button
+                            onClick={() => {
+                                if (onUpdateHabit) {
+                                    onUpdateHabit(editName, editTime);
+                                }
+                                setShowEditModal(false);
+                            }}
+                            className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
+                        >
+                            OK
+                        </button>
                     </div>
                 </div>
             )}

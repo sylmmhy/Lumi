@@ -442,7 +442,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           // 如果已有自定义 instruction 则返回 null
           needFetchInstruction
             ? supabaseClient.functions.invoke('get-system-instruction', {
-                body: { taskInput: taskDescription, userName, preferredLanguages, userId }
+                body: {
+                  taskInput: taskDescription,
+                  userName,
+                  preferredLanguages,
+                  userId,
+                  // 注入用户本地时间，让 AI 知道当前是几点
+                  localTime: new Date().toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }),
+                  localDate: new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric'
+                  })
+                }
               })
             : Promise.resolve(null),
           // 获取 Gemini token

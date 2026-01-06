@@ -53,10 +53,26 @@ function getOnboardingSystemInstruction(
   taskDescription: string,
   userName?: string,
   preferredLanguages?: string[],
-  userMemories?: string[]
+  userMemories?: string[],
+  localTime?: string,
+  localDate?: string
 ): string {
   const userNameSection = userName
     ? `\nThe user's name is "${userName}". Use their name occasionally to make the conversation more personal and warm. Don't overuse it - sprinkle it naturally 2-3 times during the session.\n`
+    : '';
+
+  // 用户本地时间 - 帮助 AI 感知真实时间
+  const timeSection = localTime
+    ? `
+[CURRENT TIME AWARENESS]
+The user's local time is: ${localTime}${localDate ? ` on ${localDate}` : ''}.
+Use this to make time-appropriate comments naturally:
+- Morning (before noon): "Good morning" vibes, mention coffee, breakfast, starting the day
+- Afternoon (noon-5pm): Midday energy, lunch mentions, afternoon slump acknowledgment
+- Evening (5pm-9pm): Winding down vibes, dinner time, evening routines
+- Night (after 9pm): Late night acknowledgment, bedtime routines, "getting late" awareness
+DO NOT constantly mention the time. Use it naturally when relevant (like "it's getting late" or "good morning").
+`
     : '';
 
   // 用户记忆部分 - 来自 Mem0
@@ -184,7 +200,7 @@ IMPORTANT:
 
   return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
-${userNameSection}${memoriesSection}${languageSection}${triggerWordsSection}
+${userNameSection}${timeSection}${memoriesSection}${languageSection}${triggerWordsSection}
 
 [CRITICAL: AUDIO-ONLY OUTPUT MODE]
 You are generating a script for a Text-to-Speech engine.
@@ -584,7 +600,7 @@ serve(async (req) => {
   }
 
   try {
-    const { taskInput, userName, preferredLanguages, userId } = await req.json()
+    const { taskInput, userName, preferredLanguages, userId, localTime, localDate } = await req.json()
 
     // Validate input
     if (!taskInput || typeof taskInput !== 'string') {
@@ -605,6 +621,9 @@ serve(async (req) => {
     if (userId) {
       console.log('🆔 用户ID:', userId);
     }
+    if (localTime) {
+      console.log('🕐 用户本地时间:', localTime, localDate || '');
+    }
 
     // Fetch user memories from Mem0 if userId is provided and MEM0_API_KEY is set
     let userMemories: string[] = []
@@ -621,7 +640,7 @@ serve(async (req) => {
     }
 
     // Generate system instruction with memories
-    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories)
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories, localTime, localDate)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

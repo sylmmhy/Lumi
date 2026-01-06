@@ -40,7 +40,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [selectedTime, setSelectedTime] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date()); // New State for Date
     const [isRoutine, setIsRoutine] = useState(true);
-    const [activeTab, setActiveTab] = useState<TaskType>(TaskType.TODO);
+    const [activeTab, setActiveTab] = useState<TaskType>(TaskType.ROUTINE);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
     // Edit Task State

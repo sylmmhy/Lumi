@@ -1,5 +1,20 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
+
+// Declare AndroidBridge interface for TypeScript
+declare global {
+  interface Window {
+    AndroidBridge?: {
+      isAndroid?: () => boolean;
+      hasNotificationPermission?: () => boolean;
+      hasMicrophonePermission?: () => boolean;
+      hasCameraPermission?: () => boolean;
+      requestNotificationPermission?: () => void;
+      requestMicrophonePermission?: () => void;
+      requestCameraPermission?: () => void;
+    };
+  }
+}
 
 interface PermissionsStepProps {
   onNext: () => void;
@@ -7,6 +22,13 @@ interface PermissionsStepProps {
 
 type PermissionType = 'notification' | 'microphone' | 'camera';
 type PermissionStatus = 'pending' | 'granted' | 'denied';
+
+/**
+ * Check if running in Android WebView
+ */
+function isAndroidWebView(): boolean {
+  return !!(window.AndroidBridge?.isAndroid?.());
+}
 
 /**
  * Step 5: Permissions (3 sub-steps)
@@ -21,9 +43,64 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
     camera: 'pending',
   });
 
+  // Keep track of which permission we're waiting for
+  const pendingPermissionRef = useRef<PermissionType | null>(null);
+
+  // Listen for Android permission results
+  useEffect(() => {
+    if (!isAndroidWebView()) return;
+
+    const handlePermissionResult = (event: CustomEvent<{ type: PermissionType; granted: boolean }>) => {
+      const { type, granted } = event.detail;
+      console.log(`[PermissionsStep] Android permission result: ${type} = ${granted}`);
+
+      // Only handle if this is the permission we're waiting for
+      if (pendingPermissionRef.current !== type) return;
+
+      pendingPermissionRef.current = null;
+      setIsRequesting(false);
+
+      if (granted) {
+        setPermissionStatus(prev => ({ ...prev, [type]: 'granted' }));
+        // Move to next step
+        if (type === 'notification') {
+          setSubStep(2);
+        } else if (type === 'microphone') {
+          setSubStep(3);
+        } else if (type === 'camera') {
+          onNext();
+        }
+      } else {
+        setPermissionStatus(prev => ({ ...prev, [type]: 'denied' }));
+      }
+    };
+
+    window.addEventListener('permissionResult', handlePermissionResult as EventListener);
+    return () => {
+      window.removeEventListener('permissionResult', handlePermissionResult as EventListener);
+    };
+  }, [onNext]);
+
   // Request notification permission
   const requestNotification = useCallback(async () => {
     setIsRequesting(true);
+
+    // If in Android WebView, use native permission request
+    if (isAndroidWebView()) {
+      // Check if already granted
+      if (window.AndroidBridge?.hasNotificationPermission?.()) {
+        setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
+        setSubStep(2);
+        setIsRequesting(false);
+        return;
+      }
+      // Request from Android
+      pendingPermissionRef.current = 'notification';
+      window.AndroidBridge?.requestNotificationPermission?.();
+      return;
+    }
+
+    // Web browser flow
     try {
       if ('Notification' in window) {
         const result = await Notification.requestPermission();
@@ -45,6 +122,23 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
   // Request microphone permission
   const requestMicrophone = useCallback(async () => {
     setIsRequesting(true);
+
+    // If in Android WebView, use native permission request
+    if (isAndroidWebView()) {
+      // Check if already granted
+      if (window.AndroidBridge?.hasMicrophonePermission?.()) {
+        setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
+        setSubStep(3);
+        setIsRequesting(false);
+        return;
+      }
+      // Request from Android
+      pendingPermissionRef.current = 'microphone';
+      window.AndroidBridge?.requestMicrophonePermission?.();
+      return;
+    }
+
+    // Web browser flow
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
@@ -60,6 +154,23 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
   // Request camera permission
   const requestCamera = useCallback(async () => {
     setIsRequesting(true);
+
+    // If in Android WebView, use native permission request
+    if (isAndroidWebView()) {
+      // Check if already granted
+      if (window.AndroidBridge?.hasCameraPermission?.()) {
+        setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
+        onNext();
+        setIsRequesting(false);
+        return;
+      }
+      // Request from Android
+      pendingPermissionRef.current = 'camera';
+      window.AndroidBridge?.requestCameraPermission?.();
+      return;
+    }
+
+    // Web browser flow
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop());

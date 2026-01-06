@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
@@ -29,37 +29,46 @@ export function HabitOnboardingPage() {
   const onboarding = useHabitOnboarding();
   const [isInCall, setIsInCall] = useState(false);
 
-  // 登录检查：未登录时重定向到登录页
-  useEffect(() => {
-    if (isSessionValidated && !isLoggedIn) {
-      navigateToLogin('/habit-onboarding');
-    }
-  }, [isSessionValidated, isLoggedIn, navigateToLogin]);
+  // 使用 ref 来存储 handleEndCall，解决循环依赖问题
+  const handleEndCallRef = useRef<() => void>(() => {});
 
-  // 等待会话验证完成
-  if (!isSessionValidated) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  // 未登录时不渲染内容（等待重定向）
-  if (!isLoggedIn) {
-    return null;
-  }
-
-  // AI Coach Session - 复用现有的统一组件（包含虚拟消息、VAD 等完整功能）
+  // AI Coach Session - 必须在所有条件返回之前调用，遵循 React Hooks 规则
   const aiCoach = useAICoachSession({
     initialTime: 300, // 5 分钟
     enableVirtualMessages: true, // 启用虚拟消息系统 ([GREETING], [CHECK_IN] 等)
     enableVAD: true, // 启用语音活动检测
     onCountdownComplete: () => {
       // 倒计时结束，自动结束通话
-      handleEndCall();
+      handleEndCallRef.current();
     },
   });
+
+  // 结束通话
+  const handleEndCall = useCallback(() => {
+    // 使用 useAICoachSession 的 endSession
+    aiCoach.endSession();
+
+    // 标记完成
+    onboarding.completeTrialCall();
+
+    // 退出通话界面
+    setIsInCall(false);
+
+    // 跳到下一步
+    onboarding.goNext();
+  }, [aiCoach, onboarding]);
+
+  // 更新 ref
+  useEffect(() => {
+    handleEndCallRef.current = handleEndCall;
+  }, [handleEndCall]);
+
+  // 登录检查：未登录时重定向到登录页
+  useEffect(() => {
+    if (isSessionValidated && !isLoggedIn) {
+      navigateToLogin('/habit-onboarding');
+    }
+  }, [isSessionValidated, isLoggedIn, navigateToLogin]);
 
   /**
    * 开始试用通话
@@ -82,21 +91,6 @@ export function HabitOnboardingPage() {
     }
   }, [aiCoach, onboarding.habitDisplayName]);
 
-  // 结束通话
-  const handleEndCall = useCallback(() => {
-    // 使用 useAICoachSession 的 endSession
-    aiCoach.endSession();
-
-    // 标记完成
-    onboarding.completeTrialCall();
-
-    // 退出通话界面
-    setIsInCall(false);
-
-    // 跳到下一步
-    onboarding.goNext();
-  }, [aiCoach, onboarding]);
-
   // 跳过试用
   const handleSkipTrial = useCallback(() => {
     onboarding.goNext();
@@ -106,6 +100,22 @@ export function HabitOnboardingPage() {
   const handleFinish = useCallback(() => {
     onboarding.saveAndFinish();
   }, [onboarding]);
+
+  // ============ 条件返回（放在所有 hooks 之后）============
+
+  // 等待会话验证完成
+  if (!isSessionValidated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // 未登录时不渲染内容（等待重定向）
+  if (!isLoggedIn) {
+    return null;
+  }
 
   // 如果在通话中，显示 TaskWorkingView（复用现有组件）
   // 注意：组件卸载时的清理由 useAICoachSession 内部处理

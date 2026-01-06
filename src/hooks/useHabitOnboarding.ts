@@ -91,17 +91,6 @@ function formatTo12Hour(time: string): string {
 }
 
 /**
- * 获取今天的日期字符串 (YYYY-MM-DD)
- */
-function getTodayDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * 根据时间返回时间分类
  */
 function getTimeCategory(time: string): 'morning' | 'afternoon' | 'evening' {

@@ -1,20 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
 
-// Declare AndroidBridge interface for TypeScript
-declare global {
-  interface Window {
-    AndroidBridge?: {
-      isAndroid?: () => boolean;
-      hasNotificationPermission?: () => boolean;
-      hasMicrophonePermission?: () => boolean;
-      hasCameraPermission?: () => boolean;
-      requestNotificationPermission?: () => void;
-      requestMicrophonePermission?: () => void;
-      requestCameraPermission?: () => void;
-    };
-  }
-}
+// AndroidBridge interface is declared in src/context/AuthContext.tsx
 
 interface PermissionsStepProps {
   onNext: () => void;

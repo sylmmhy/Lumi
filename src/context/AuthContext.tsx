@@ -1183,8 +1183,9 @@ export function AuthProvider({
         persistSessionToStorage(session);
         bindAnalyticsUser(session.user.id, session.user.email);
 
-        // 先更新基本状态，但不设置 isSessionValidated: true
-        // 等待 hasCompletedHabitOnboarding 查询完成后再设置，避免过早跳转到 onboarding
+        // 先更新基本状态，明确将 isSessionValidated 设置为 false
+        // 这样可以防止路由守卫在 hasCompletedHabitOnboarding 查询完成之前就判断跳转
+        // 关键：不能保留 prev.isSessionValidated，否则如果之前是 true 会导致过早跳转
         setAuthState(prev => ({
           ...prev,
           isLoggedIn: true,
@@ -1193,7 +1194,7 @@ export function AuthProvider({
           sessionToken: session.access_token,
           refreshToken: session.refresh_token || null,
           isNativeLogin: false,
-          // 注意：这里不设置 isSessionValidated: true，等查询完成后再设置
+          isSessionValidated: false, // 明确设为 false，等查询完成后再设为 true
         }));
 
         // 异步查询 hasCompletedHabitOnboarding，完成后再设置 isSessionValidated

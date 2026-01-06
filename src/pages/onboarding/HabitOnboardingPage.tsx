@@ -4,6 +4,7 @@ import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
 import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
+import { getPreferredLanguages } from '../../lib/language';
 
 // Step components
 import { WelcomeStep } from './habit-steps/WelcomeStep';
@@ -60,14 +61,21 @@ export function HabitOnboardingPage() {
     },
   });
 
-  // 开始试用通话 - 直接调用 Edge Function 获取完整 prompt
+  /**
+   * 开始试用通话
+   * 1) 读取用户在引导中选择的语言偏好
+   * 2) 作为 preferredLanguages 传给 AI 会话，确保 Lumi 使用正确语言互动
+   */
   const handleStartCall = useCallback(async () => {
     try {
       setIsInCall(true);
 
       // 不传 customSystemInstruction，让 startSession 调用 Edge Function 获取完整 prompt
       // taskDescription 会被发送到 get-system-instruction Edge Function
-      await aiCoach.startSession(onboarding.habitDisplayName);
+      const preferredLanguages = getPreferredLanguages();
+      await aiCoach.startSession(onboarding.habitDisplayName, {
+        preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
+      });
     } catch (error) {
       console.error('Failed to start call:', error);
       setIsInCall(false);

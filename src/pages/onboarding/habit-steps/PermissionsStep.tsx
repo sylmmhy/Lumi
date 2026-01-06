@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Bell, Mic, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface PermissionsStepProps {
   onNext: () => void;
@@ -18,6 +19,7 @@ interface PermissionState {
  * Request notification, microphone, and camera permissions
  */
 export function PermissionsStep({ onNext }: PermissionsStepProps) {
+  const { t } = useTranslation();
   const [permissions, setPermissions] = useState<PermissionState>({
     notification: 'pending',
     microphone: 'pending',
@@ -104,10 +106,10 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-3">
-          Enable Permissions
+          {t('habitOnboarding.permissions.title')}
         </h1>
         <p className="text-gray-600 text-base leading-relaxed">
-          To receive video calls from your AI coach, please allow these permissions.
+          {t('habitOnboarding.permissions.description')}
         </p>
       </div>
 
@@ -119,8 +121,8 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
             <Bell className="w-6 h-6 text-blue-600" />
           </div>
           <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">Notifications</p>
-            <p className="text-sm text-gray-500">Get reminded when it's time</p>
+            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.notifications')}</p>
+            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.notificationsHint')}</p>
           </div>
           {getStatusIcon(permissions.notification)}
         </div>
@@ -131,8 +133,8 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
             <Mic className="w-6 h-6 text-green-600" />
           </div>
           <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">Microphone</p>
-            <p className="text-sm text-gray-500">Talk with your AI coach</p>
+            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.microphone')}</p>
+            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.microphoneHint')}</p>
           </div>
           {getStatusIcon(permissions.microphone)}
         </div>
@@ -143,8 +145,8 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
             <Camera className="w-6 h-6 text-purple-600" />
           </div>
           <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">Camera</p>
-            <p className="text-sm text-gray-500">Let AI see and guide your actions</p>
+            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.camera')}</p>
+            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.cameraHint')}</p>
           </div>
           {getStatusIcon(permissions.camera)}
         </div>
@@ -160,7 +162,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? 'Requesting...' : 'Allow Permissions'}
+            {isRequesting ? t('habitOnboarding.permissions.requesting') : t('habitOnboarding.permissions.allow')}
           </button>
         ) : (
           <button
@@ -169,7 +171,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md"
           >
-            {allGranted ? 'Continue' : 'Continue Anyway'}
+            {allGranted ? t('habitOnboarding.permissions.continue') : t('habitOnboarding.permissions.continueAnyway')}
           </button>
         )}
 
@@ -178,7 +180,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
             onClick={onNext}
             className="w-full py-3 text-gray-500 text-base font-medium"
           >
-            Skip for now
+            {t('habitOnboarding.permissions.skip')}
           </button>
         )}
       </div>

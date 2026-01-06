@@ -157,5 +157,67 @@
   "leaderboard.friends": "友達",
   "leaderboard.xp": "XP",
   "leaderboard.comingSoon": "もうすぐ",
-  "leaderboard.comingSoonHint": "ランキング機能は準備中だよ。お楽しみに！"
+  "leaderboard.comingSoonHint": "ランキング機能は準備中だよ。お楽しみに！",
+
+  "habitOnboarding.welcome.title": "こんにちは、Lumiだよ",
+  "habitOnboarding.welcome.subtitle": "今日から一緒に習慣を作ろう。",
+  "habitOnboarding.welcome.button": "始める",
+
+  "habitOnboarding.habitSelect.title": "どんな習慣を始めたい？",
+  "habitOnboarding.habitSelect.next": "次へ",
+  "habitOnboarding.habitSelect.bedtime": "早く寝る",
+  "habitOnboarding.habitSelect.wakeup": "早起きする",
+  "habitOnboarding.habitSelect.exercise": "運動する",
+  "habitOnboarding.habitSelect.study": "勉強する",
+  "habitOnboarding.habitSelect.eat": "食事を決まった時間に",
+  "habitOnboarding.habitSelect.custom": "その他",
+
+  "habitOnboarding.customHabit.title": "習慣を入力してね",
+  "habitOnboarding.customHabit.placeholder": "例：水を飲む、瞑想する...",
+  "habitOnboarding.customHabit.cancel": "やめる",
+  "habitOnboarding.customHabit.confirm": "決定",
+
+  "habitOnboarding.timeSelect.title": "いつリマインドする？",
+  "habitOnboarding.timeSelect.next": "次へ",
+
+  "habitOnboarding.howItWorks.title": "設定した時間に、短いビデオ通話でリマインドするよ。",
+  "habitOnboarding.howItWorks.button": "わかった",
+
+  "habitOnboarding.permissions.title": "権限を許可してね",
+  "habitOnboarding.permissions.description": "AIコーチからのビデオ通話を受けるために、以下の権限が必要だよ。",
+  "habitOnboarding.permissions.notifications": "通知",
+  "habitOnboarding.permissions.notificationsHint": "時間になったらお知らせ",
+  "habitOnboarding.permissions.microphone": "マイク",
+  "habitOnboarding.permissions.microphoneHint": "AIコーチと話す",
+  "habitOnboarding.permissions.camera": "カメラ",
+  "habitOnboarding.permissions.cameraHint": "AIがあなたの行動を見てサポート",
+  "habitOnboarding.permissions.allow": "権限を許可",
+  "habitOnboarding.permissions.requesting": "リクエスト中...",
+  "habitOnboarding.permissions.continue": "続ける",
+  "habitOnboarding.permissions.continueAnyway": "このまま続ける",
+  "habitOnboarding.permissions.skip": "あとで",
+
+  "habitOnboarding.nameInput.title": "Lumiに何て呼んでほしい？",
+  "habitOnboarding.nameInput.subtitle": "好きな名前を入れてね",
+  "habitOnboarding.nameInput.placeholder": "あなたの名前",
+  "habitOnboarding.nameInput.continue": "続ける",
+  "habitOnboarding.nameInput.saving": "保存中...",
+  "habitOnboarding.nameInput.errorEmpty": "名前を入力してね",
+  "habitOnboarding.nameInput.errorNotFound": "ユーザーが見つからない",
+  "habitOnboarding.nameInput.errorSave": "保存できなかった。もう一回試してね。",
+
+  "habitOnboarding.languageSelect.title": "Lumiに何語で話してほしい？",
+  "habitOnboarding.languageSelect.subtitle": "複数選べるよ",
+  "habitOnboarding.languageSelect.continue": "続ける",
+  "habitOnboarding.languageSelect.skipHint": "スキップすると自動検出",
+
+  "habitOnboarding.tryNow.title": "試してみる？",
+  "habitOnboarding.tryNow.description": "今すぐ5分間の体験通話ができるよ。",
+  "habitOnboarding.tryNow.callNow": "今すぐ電話して",
+  "habitOnboarding.tryNow.skip": "あとで",
+
+  "habitOnboarding.done.title": "準備完了！",
+  "habitOnboarding.done.subtitle": "習慣の準備ができたよ。始めよう！",
+  "habitOnboarding.done.button": "始めよう！",
+  "habitOnboarding.done.saving": "保存中..."
 }

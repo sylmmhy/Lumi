@@ -1,4 +1,5 @@
 import { Phone } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 interface TryNowStepProps {
   onStartCall: () => void;
@@ -10,6 +11,8 @@ interface TryNowStepProps {
  * 询问是否立即尝试
  */
 export function TryNowStep({ onStartCall, onSkip }: TryNowStepProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center">
       {/* 图标 */}
@@ -19,12 +22,12 @@ export function TryNowStep({ onStartCall, onSkip }: TryNowStepProps) {
 
       {/* 标题 */}
       <h1 className="text-3xl font-bold text-gray-900 mb-4">
-        Ready to try?
+        {t('habitOnboarding.tryNow.title')}
       </h1>
 
       {/* 描述 */}
       <p className="text-lg text-gray-600 mb-12 px-4">
-        I can call you now for a quick 5-minute session.
+        {t('habitOnboarding.tryNow.description')}
       </p>
 
       {/* 按钮组 */}
@@ -37,7 +40,7 @@ export function TryNowStep({ onStartCall, onSkip }: TryNowStepProps) {
                      transition-colors shadow-md flex items-center justify-center gap-2"
         >
           <Phone className="w-5 h-5" />
-          <span>Call Me Now</span>
+          <span>{t('habitOnboarding.tryNow.callNow')}</span>
         </button>
 
         {/* 次要按钮 - Skip for now */}
@@ -47,7 +50,7 @@ export function TryNowStep({ onStartCall, onSkip }: TryNowStepProps) {
                      text-gray-700 text-lg font-medium rounded-full
                      transition-colors"
         >
-          Skip for now
+          {t('habitOnboarding.tryNow.skip')}
         </button>
       </div>
     </div>

@@ -167,5 +167,67 @@
   "leaderboard.friends": "好友",
   "leaderboard.xp": "经验值",
   "leaderboard.comingSoon": "即将推出",
-  "leaderboard.comingSoonHint": "排行榜功能正在开发中，敬请期待！"
+  "leaderboard.comingSoonHint": "排行榜功能正在开发中，敬请期待！",
+
+  "habitOnboarding.welcome.title": "嗨，我是 Lumi",
+  "habitOnboarding.welcome.subtitle": "让我们今天开始养成你的第一个习惯。",
+  "habitOnboarding.welcome.button": "开始",
+
+  "habitOnboarding.habitSelect.title": "你想养成什么习惯？",
+  "habitOnboarding.habitSelect.next": "下一步",
+  "habitOnboarding.habitSelect.bedtime": "按时睡觉",
+  "habitOnboarding.habitSelect.wakeup": "早起",
+  "habitOnboarding.habitSelect.exercise": "运动",
+  "habitOnboarding.habitSelect.study": "学习",
+  "habitOnboarding.habitSelect.eat": "按时吃饭",
+  "habitOnboarding.habitSelect.custom": "其他",
+
+  "habitOnboarding.customHabit.title": "输入你的习惯",
+  "habitOnboarding.customHabit.placeholder": "例如：喝水、冥想...",
+  "habitOnboarding.customHabit.cancel": "取消",
+  "habitOnboarding.customHabit.confirm": "确认",
+
+  "habitOnboarding.timeSelect.title": "我应该什么时候提醒你？",
+  "habitOnboarding.timeSelect.next": "下一步",
+
+  "habitOnboarding.howItWorks.title": "在你选择的时间，我会给你打一个简短的视频提醒电话。",
+  "habitOnboarding.howItWorks.button": "明白了",
+
+  "habitOnboarding.permissions.title": "开启权限",
+  "habitOnboarding.permissions.description": "为了接收 AI 教练的视频通话，请允许以下权限。",
+  "habitOnboarding.permissions.notifications": "通知",
+  "habitOnboarding.permissions.notificationsHint": "在时间到时提醒你",
+  "habitOnboarding.permissions.microphone": "麦克风",
+  "habitOnboarding.permissions.microphoneHint": "与 AI 教练对话",
+  "habitOnboarding.permissions.camera": "摄像头",
+  "habitOnboarding.permissions.cameraHint": "让 AI 看到并指导你的行动",
+  "habitOnboarding.permissions.allow": "允许权限",
+  "habitOnboarding.permissions.requesting": "请求中...",
+  "habitOnboarding.permissions.continue": "继续",
+  "habitOnboarding.permissions.continueAnyway": "仍然继续",
+  "habitOnboarding.permissions.skip": "暂时跳过",
+
+  "habitOnboarding.nameInput.title": "Lumi 应该怎么称呼你？",
+  "habitOnboarding.nameInput.subtitle": "输入你喜欢的称呼",
+  "habitOnboarding.nameInput.placeholder": "你的名字",
+  "habitOnboarding.nameInput.continue": "继续",
+  "habitOnboarding.nameInput.saving": "保存中...",
+  "habitOnboarding.nameInput.errorEmpty": "请输入你的名字",
+  "habitOnboarding.nameInput.errorNotFound": "未找到用户",
+  "habitOnboarding.nameInput.errorSave": "保存名字失败，请重试。",
+
+  "habitOnboarding.languageSelect.title": "你希望 Lumi 用什么语言和你互动？",
+  "habitOnboarding.languageSelect.subtitle": "可多选",
+  "habitOnboarding.languageSelect.continue": "继续",
+  "habitOnboarding.languageSelect.skipHint": "跳过将自动检测语言",
+
+  "habitOnboarding.tryNow.title": "准备好试试了吗？",
+  "habitOnboarding.tryNow.description": "我现在可以给你打个电话，进行 5 分钟的快速体验。",
+  "habitOnboarding.tryNow.callNow": "现在打给我",
+  "habitOnboarding.tryNow.skip": "暂时跳过",
+
+  "habitOnboarding.done.title": "一切就绪！",
+  "habitOnboarding.done.subtitle": "你的习惯已准备好，开始吧！",
+  "habitOnboarding.done.button": "开始吧！",
+  "habitOnboarding.done.saving": "保存中..."
 }

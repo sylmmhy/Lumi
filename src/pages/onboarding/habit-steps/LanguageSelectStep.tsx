@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SUPPORTED_LANGUAGES, getPreferredLanguages, setPreferredLanguages } from '../../../lib/language';
+import { useTranslation } from '../../../hooks/useTranslation';
 import lumiHappy from '../../../assets/Lumi-happy.png';
 
 interface LanguageSelectStepProps {
@@ -11,6 +12,7 @@ interface LanguageSelectStepProps {
  * 让用户选择希望 Lumi 用什么语言互动（可多选）
  */
 export function LanguageSelectStep({ onNext }: LanguageSelectStepProps) {
+  const { t } = useTranslation();
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => getPreferredLanguages());
 
   /**
@@ -46,12 +48,12 @@ export function LanguageSelectStep({ onNext }: LanguageSelectStepProps) {
 
       {/* 标题 */}
       <h1 className="text-2xl font-bold text-gray-900 mb-2 flex-shrink-0">
-        What language should Lumi speak?
+        {t('habitOnboarding.languageSelect.title')}
       </h1>
 
       {/* 次标题 */}
       <p className="text-gray-500 mb-6 flex-shrink-0">
-        You can select multiple
+        {t('habitOnboarding.languageSelect.subtitle')}
       </p>
 
       {/* 语言列表 - 可滚动区域 */}
@@ -87,7 +89,7 @@ export function LanguageSelectStep({ onNext }: LanguageSelectStepProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md"
         >
-          Continue
+          {t('habitOnboarding.languageSelect.continue')}
           {selectedLanguages.length > 0 && (
             <span className="ml-2 bg-white/20 px-2 py-0.5 rounded-full text-sm">
               {selectedLanguages.length}
@@ -98,7 +100,7 @@ export function LanguageSelectStep({ onNext }: LanguageSelectStepProps) {
         {/* 提示：如果没有选择，则自动检测 */}
         {selectedLanguages.length === 0 && (
           <p className="text-gray-400 text-sm mt-3">
-            Skip to auto-detect language
+            {t('habitOnboarding.languageSelect.skipHint')}
           </p>
         )}
       </div>

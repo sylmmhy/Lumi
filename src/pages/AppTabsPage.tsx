@@ -57,11 +57,12 @@ export function AppTabsPage() {
     const auth = useAuth();
 
     // 已登录但未完成 habit onboarding 时，重定向到引导页
-    useEffect(() => {
-        if (auth.isSessionValidated && auth.isLoggedIn && !auth.hasCompletedHabitOnboarding) {
-            navigate('/habit-onboarding', { replace: true });
-        }
-    }, [auth.isSessionValidated, auth.isLoggedIn, auth.hasCompletedHabitOnboarding, navigate]);
+    // [TEMPORARILY DISABLED] 暂时禁用 onboarding 跳转
+    // useEffect(() => {
+    //     if (auth.isSessionValidated && auth.isLoggedIn && !auth.hasCompletedHabitOnboarding) {
+    //         navigate('/habit-onboarding', { replace: true });
+    //     }
+    // }, [auth.isSessionValidated, auth.isLoggedIn, auth.hasCompletedHabitOnboarding, navigate]);
 
     // Derive view directly from URL to avoid double-render (rework)
     // If tab is invalid, it defaults to DEFAULT_APP_TAB (and effect below will redirect)

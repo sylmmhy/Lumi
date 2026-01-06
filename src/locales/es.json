@@ -35,6 +35,7 @@
   "home.editTask": "Editar tarea",
   "home.taskName": "Nombre de la tarea",
   "home.taskTime": "Hora",
+  "home.exampleClickHint": "Esto es un ejemplo. ¡Crea tu propia tarea arriba!",
 
   "stats.loadingHistory": "Cargando...",
   "stats.noCompletedTasks": "Nada completado aún",

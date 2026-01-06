@@ -489,7 +489,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                                 key={habit.id}
                                                 habit={habit}
                                                 onToggleToday={() => toggleHabitToday(habit.id)}
-                                                onClickDetail={() => setSelectedHabit(habit)}
+                                                onClickDetail={() => alert(t('home.exampleClickHint'))}
                                             />
                                         ))}
                                     </div>

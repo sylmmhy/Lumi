@@ -59,9 +59,19 @@ declare global {
     MindBoatNativeAuth?: NativeAuthPayload;
     __MindBoatAuthReady?: boolean;
     AndroidBridge?: {
-      onTaskCreated: (taskJson: string) => void;
-      cancelTaskReminder: (taskId: string) => void;
+      // Permission-related methods (from PermissionsStep)
+      isAndroid?: () => boolean;
+      hasNotificationPermission?: () => boolean;
+      hasMicrophonePermission?: () => boolean;
+      hasCameraPermission?: () => boolean;
+      requestNotificationPermission?: () => void;
+      requestMicrophonePermission?: () => void;
+      requestCameraPermission?: () => void;
+      // Task-related methods
+      onTaskCreated?: (taskJson: string) => void;
+      cancelTaskReminder?: (taskId: string) => void;
       logMessage?: (message: string) => void;
+      // Auth-related methods
       logout?: () => void;
       triggerGoogleSignIn?: () => void;
       isLoggedIn?: () => boolean;

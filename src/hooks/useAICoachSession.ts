@@ -115,7 +115,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = useRef(false); // 防止重复清理
   const processedTranscriptRef = useRef<Set<string>>(new Set());
-  
+  const onCountdownCompleteRef = useRef(onCountdownComplete); // 用 ref 存储回调，避免 effect 依赖变化
+
+  /**
+   * 保存最新的 saveSessionMemory 引用，确保倒计时结束时可以稳定触发记忆保存
+   */
+  const saveSessionMemoryRef = useRef<(additionalContext?: string) => Promise<boolean>>(
+    async () => false
+  );
+
   // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
   const addMessageRef = useRef<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>(() => {});
 
@@ -149,6 +157,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   useEffect(() => {
     addMessageRef.current = addMessage;
   }, [addMessage]);
+
+  // 更新 onCountdownComplete ref
+  useEffect(() => {
+    onCountdownCompleteRef.current = onCountdownComplete;
+  }, [onCountdownComplete]);
 
   // ==========================================
   // Gemini Live
@@ -291,9 +304,19 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }
   }, [geminiLive, stopCountdown]);
 
-  // 倒计时 effect
+  /**
+   * 保存最新的 cleanup 引用，避免倒计时 effect 依赖变化导致 interval 重建
+   */
+  const cleanupRef = useRef(cleanup);
+
   useEffect(() => {
-    if (state.isTimerRunning && state.timeRemaining > 0) {
+    cleanupRef.current = cleanup;
+  }, [cleanup]);
+
+  // 倒计时 effect
+  // 注意：只依赖 isTimerRunning，不依赖 timeRemaining，避免每秒重建 interval
+  useEffect(() => {
+    if (state.isTimerRunning) {
       timerRef.current = setInterval(() => {
         setState(prev => {
           const newTime = prev.timeRemaining - 1;
@@ -303,7 +326,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            onCountdownComplete?.();
+            // 使用 ref 调用回调，避免闭包问题
+            // 使用 setTimeout 确保在 setState 完成后调用
+            setTimeout(() => {
+              void saveSessionMemoryRef.current();
+              cleanupRef.current();
+              onCountdownCompleteRef.current?.();
+            }, 0);
             return {
               ...prev,
               timeRemaining: 0,
@@ -321,10 +350,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       return () => {
         if (timerRef.current) {
           clearInterval(timerRef.current);
+          timerRef.current = null;
         }
       };
     }
-  }, [state.isTimerRunning, state.timeRemaining, onCountdownComplete]);
+  }, [state.isTimerRunning]);
 
   // ==========================================
   // 会话管理
@@ -655,6 +685,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       return false;
     }
   }, [state.messages, state.timeRemaining, initialTime]);
+
+  /**
+   * 同步 saveSessionMemory 的最新实现，避免倒计时结束时拿到旧闭包
+   */
+  useEffect(() => {
+    saveSessionMemoryRef.current = saveSessionMemory;
+  }, [saveSessionMemory]);
 
   /**
    * 重置会话

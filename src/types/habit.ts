@@ -17,4 +17,4 @@ export const PRESET_HABITS: PresetHabit[] = [
   { id: 'custom', emoji: '➕', name: 'Other' },
 ];
 
-export const TOTAL_ONBOARDING_STEPS = 8;
+export const TOTAL_ONBOARDING_STEPS = 9;

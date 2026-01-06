@@ -39,7 +39,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [taskInput, setTaskInput] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date()); // New State for Date
-    const [isRoutine, setIsRoutine] = useState(false);
+    const [isRoutine, setIsRoutine] = useState(true);
     const [activeTab, setActiveTab] = useState<TaskType>(TaskType.TODO);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -433,20 +433,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div className="sticky top-12 z-40 bg-white pt-6 pb-6">
                         <div className="flex gap-4">
                             <button
-                                ref={todoTabRef}
-                                onClick={() => setActiveTab(TaskType.TODO)}
-                                className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.TODO ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
-                            >
-                                {t('home.now')}
-                            </button>
-                            <button
                                 ref={routineTabRef}
                                 onClick={() => setActiveTab(TaskType.ROUTINE)}
                                 className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.ROUTINE ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
                                 style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                             >
                                 {t('home.routine')}
+                            </button>
+                            <button
+                                ref={todoTabRef}
+                                onClick={() => setActiveTab(TaskType.TODO)}
+                                className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.TODO ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
+                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
+                            >
+                                {t('home.now')}
                             </button>
                         </div>
                     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
+import lumiHappy from '../../../assets/Lumi-happy.png';
 
 interface NameInputStepProps {
   onNext: () => void;
@@ -53,16 +54,14 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
     }
   };
 
-  const handleSkip = () => {
-    onNext();
-  };
-
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
       {/* Lumi 头像 */}
-      <div className="w-24 h-24 mb-6 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-lg">
-        <span className="text-5xl">😊</span>
-      </div>
+      <img
+        src={lumiHappy}
+        alt="Lumi"
+        className="w-32 h-32 mb-6 object-contain"
+      />
 
       {/* 标题 */}
       <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -80,10 +79,10 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Your name"
-        className="w-full max-w-xs px-4 py-3 text-lg text-center
+        className="w-full max-w-xs px-4 py-3 text-lg text-center text-gray-900
                    border-2 border-gray-200 rounded-xl
                    focus:border-blue-500 focus:outline-none
-                   transition-colors"
+                   transition-colors placeholder:text-gray-400"
         autoFocus
         onKeyDown={(e) => {
           if (e.key === 'Enter' && name.trim()) {
@@ -98,7 +97,7 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
       )}
 
       {/* 按钮区域 */}
-      <div className="w-full max-w-xs mt-8 space-y-3">
+      <div className="w-full max-w-xs mt-8">
         {/* 确认按钮 */}
         <button
           onClick={handleSave}
@@ -109,16 +108,6 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
                      transition-colors shadow-md"
         >
           {isSaving ? 'Saving...' : 'Continue'}
-        </button>
-
-        {/* 跳过按钮 */}
-        <button
-          onClick={handleSkip}
-          disabled={isSaving}
-          className="w-full py-3 px-8 text-gray-500 hover:text-gray-700
-                     text-base font-medium transition-colors"
-        >
-          Skip for now
         </button>
       </div>
     </div>

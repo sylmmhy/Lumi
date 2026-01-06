@@ -538,7 +538,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 <p className="text-center font-serif italic text-lg text-gray-400">{t('home.noTasks')}</p>
                                 <div className="space-y-3">
                                     {(activeTab === TaskType.TODO ? exampleNowTasks : exampleRoutineTasks).map((item, idx) => (
-                                        <div key={`${item.title}-${idx}`} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+                                        <div
+                                            key={`${item.title}-${idx}`}
+                                            className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
+                                            onClick={() => alert(t('home.exampleClickHint'))}
+                                        >
                                             <div className="flex flex-col text-left">
                                                 <span className="text-gray-800 font-semibold">{item.title}</span>
                                                 <span className="text-xs text-gray-400">{t('home.example')}</span>

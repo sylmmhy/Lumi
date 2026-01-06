@@ -35,6 +35,7 @@
   "home.editTask": "Edit Task",
   "home.taskName": "Task Name",
   "home.taskTime": "Time",
+  "home.exampleClickHint": "This is an example. Create your own task above!",
 
   "stats.loadingHistory": "Loading history...",
   "stats.noCompletedTasks": "No completed tasks yet.",

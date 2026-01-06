@@ -35,6 +35,7 @@
   "home.editTask": "Modifica attività",
   "home.taskName": "Nome attività",
   "home.taskTime": "Orario",
+  "home.exampleClickHint": "Questo è un esempio. Crea la tua attività sopra!",
 
   "stats.loadingHistory": "Caricamento...",
   "stats.noCompletedTasks": "Niente completato ancora",

@@ -35,6 +35,7 @@
   "home.editTask": "编辑任务",
   "home.taskName": "任务名称",
   "home.taskTime": "时间",
+  "home.exampleClickHint": "这是示例，请在上方创建你自己的任务！",
 
   "stats.loadingHistory": "加载历史中...",
   "stats.noCompletedTasks": "还没有完成的任务。",

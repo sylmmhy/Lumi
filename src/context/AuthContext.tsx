@@ -406,13 +406,55 @@ export function AuthProvider({
   // 核心状态管理
   // ==========================================
 
+  /**
+   * 同步 localStorage 的登录态，并在需要时刷新习惯引导完成状态。
+   *
+   * 原理：
+   * - OAuth/OTP 登录会先写入 localStorage，但不会立刻查询 has_completed_habit_onboarding。
+   * - 这里检测到登录态后补一次 Supabase 查询，避免 hasCompletedHabitOnboarding 被错误置为 false。
+   * - 查询完成后再把 isSessionValidated 置为 true，防止未确认前跳转到引导页。
+   *
+   * @returns {{ isLoggedIn: boolean; userId: string | null; sessionToken: string | null }} 本地缓存的基础登录态
+   */
   const checkLoginState = useCallback(() => {
     const latest = readAuthFromStorage();
-    // 保留当前的验证状态，避免覆盖已验证的状态
-    setAuthState(prev => ({
-      ...latest,
-      isSessionValidated: prev.isSessionValidated,
-    }));
+    setAuthState(prev => {
+      const isSameUser = Boolean(prev.userId && latest.userId && prev.userId === latest.userId);
+      const canRevalidate = Boolean(supabase && latest.isLoggedIn && latest.userId);
+      const shouldRevalidate = canRevalidate && (!isSameUser || !prev.hasCompletedHabitOnboarding);
+
+      return {
+        ...latest,
+        isSessionValidated: shouldRevalidate ? false : prev.isSessionValidated,
+        hasCompletedHabitOnboarding: isSameUser ? prev.hasCompletedHabitOnboarding : false,
+      };
+    });
+
+    if (supabase && latest.isLoggedIn && latest.userId) {
+      void (async () => {
+        let fetchedHasCompletedHabitOnboarding: boolean | null = null;
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('has_completed_habit_onboarding')
+            .eq('id', latest.userId)
+            .single();
+          fetchedHasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+        } catch (err) {
+          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+        }
+
+        setAuthState(prev => {
+          if (prev.userId !== latest.userId) return prev;
+          return {
+            ...prev,
+            hasCompletedHabitOnboarding: fetchedHasCompletedHabitOnboarding ?? prev.hasCompletedHabitOnboarding,
+            isSessionValidated: true,
+          };
+        });
+      })();
+    }
+
     return {
       isLoggedIn: latest.isLoggedIn,
       userId: latest.userId,

@@ -70,11 +70,10 @@ function RootRedirect() {
     hasHandledRef.current = true
 
     // 已登录但未完成 habit onboarding → 跳转到引导页
-    // [TEMPORARILY DISABLED] 暂时禁用 onboarding 跳转
-    // if (isLoggedIn && !hasCompletedHabitOnboarding) {
-    //   navigate('/habit-onboarding', { replace: true })
-    //   return
-    // }
+    if (isLoggedIn && !hasCompletedHabitOnboarding) {
+      navigate('/habit-onboarding', { replace: true })
+      return
+    }
 
     // 其他情况（未登录或已完成引导）→ 进入核心功能页
     navigate(DEFAULT_APP_PATH, { replace: true })

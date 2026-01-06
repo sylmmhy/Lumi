@@ -52,7 +52,8 @@
       "mcp__Amplitude__search",
       "Bash(sips:*)",
       "Bash(SRC=\"/Users/miko_mac_mini/projects/firego--original-web/public/icon.png\")",
-      "Bash(SRC=~/Desktop/iconbig.png)"
+      "Bash(SRC=~/Desktop/iconbig.png)",
+      "mcp__supabase__get_project"
     ],
     "deny": [],
     "ask": []

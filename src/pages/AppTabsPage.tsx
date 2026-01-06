@@ -409,15 +409,13 @@ export function AppTabsPage() {
      */
     const ensureVoicePromptThenStart = useCallback((task: Task) => {
         console.log('📋 ensureVoicePromptThenStart called:', { task: task.text, hasSeenVoicePrompt });
+        // 跳过语音权限提示弹窗，直接启动 AI Coach
         if (!hasSeenVoicePrompt) {
-            console.log('⚠️ Showing voice prompt first');
-            setPendingVoiceTask(task);
-            setShowVoicePrompt(true);
-            return;
+            markVoicePromptSeen();
         }
         console.log('✅ Starting AI Coach directly');
         void startAICoachForTask(task);
-    }, [hasSeenVoicePrompt, startAICoachForTask]);
+    }, [hasSeenVoicePrompt, markVoicePromptSeen, startAICoachForTask]);
 
     /**
      * 「Start」按钮点击：直接进入 AI 教练任务流程

@@ -1,188 +1,207 @@
 import { useState, useCallback } from 'react';
-import { Bell, Mic, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useTranslation } from '../../../hooks/useTranslation';
+import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
 
 interface PermissionsStepProps {
   onNext: () => void;
 }
 
+type PermissionType = 'notification' | 'microphone' | 'camera';
 type PermissionStatus = 'pending' | 'granted' | 'denied';
 
-interface PermissionState {
-  notification: PermissionStatus;
-  microphone: PermissionStatus;
-  camera: PermissionStatus;
-}
-
 /**
- * Step 5: Permissions
- * Request notification, microphone, and camera permissions
+ * Step 5: Permissions (3 sub-steps)
+ * Request notification, microphone, and camera permissions one by one
  */
 export function PermissionsStep({ onNext }: PermissionsStepProps) {
-  const { t } = useTranslation();
-  const [permissions, setPermissions] = useState<PermissionState>({
+  const [subStep, setSubStep] = useState<1 | 2 | 3>(1);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<Record<PermissionType, PermissionStatus>>({
     notification: 'pending',
     microphone: 'pending',
     camera: 'pending',
   });
-  const [isRequesting, setIsRequesting] = useState(false);
 
-  // Request all permissions
-  const requestPermissions = useCallback(async () => {
+  // Request notification permission
+  const requestNotification = useCallback(async () => {
     setIsRequesting(true);
-
     try {
-      // 1. Request notification permission
       if ('Notification' in window) {
-        const notifResult = await Notification.requestPermission();
-        setPermissions(prev => ({
-          ...prev,
-          notification: notifResult === 'granted' ? 'granted' : 'denied',
-        }));
-      }
-
-      // 2. Request microphone and camera permissions
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
-
-        // Stop all tracks immediately after getting permission
-        stream.getTracks().forEach(track => track.stop());
-
-        setPermissions(prev => ({
-          ...prev,
-          microphone: 'granted',
-          camera: 'granted',
-        }));
-      } catch {
-        // Try microphone only
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audioStream.getTracks().forEach(track => track.stop());
-          setPermissions(prev => ({ ...prev, microphone: 'granted' }));
-        } catch {
-          setPermissions(prev => ({ ...prev, microphone: 'denied' }));
+        const result = await Notification.requestPermission();
+        if (result === 'granted') {
+          setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
+          setSubStep(2);
+        } else {
+          setPermissionStatus(prev => ({ ...prev, notification: 'denied' }));
         }
-
-        // Try camera only
-        try {
-          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          videoStream.getTracks().forEach(track => track.stop());
-          setPermissions(prev => ({ ...prev, camera: 'granted' }));
-        } catch {
-          setPermissions(prev => ({ ...prev, camera: 'denied' }));
-        }
+      } else {
+        // Notification not supported, skip to next
+        setSubStep(2);
       }
     } finally {
       setIsRequesting(false);
     }
   }, []);
 
-  const allGranted =
-    permissions.notification === 'granted' &&
-    permissions.microphone === 'granted' &&
-    permissions.camera === 'granted';
-
-  const anyRequested =
-    permissions.notification !== 'pending' ||
-    permissions.microphone !== 'pending' ||
-    permissions.camera !== 'pending';
-
-  const getStatusIcon = (status: PermissionStatus) => {
-    switch (status) {
-      case 'granted':
-        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-      case 'denied':
-        return <AlertCircle className="w-5 h-5 text-amber-500" />;
-      default:
-        return <div className="w-5 h-5 rounded-full border-2 border-gray-300" />;
+  // Request microphone permission
+  const requestMicrophone = useCallback(async () => {
+    setIsRequesting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
+      setSubStep(3);
+    } catch {
+      setPermissionStatus(prev => ({ ...prev, microphone: 'denied' }));
+    } finally {
+      setIsRequesting(false);
     }
-  };
+  }, []);
 
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-3">
-          {t('habitOnboarding.permissions.title')}
+  // Request camera permission
+  const requestCamera = useCallback(async () => {
+    setIsRequesting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
+      // All done, go to next step
+      onNext();
+    } catch {
+      setPermissionStatus(prev => ({ ...prev, camera: 'denied' }));
+    } finally {
+      setIsRequesting(false);
+    }
+  }, [onNext]);
+
+  // Sub-step 1: Notification
+  if (subStep === 1) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        {/* Icon */}
+        <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mb-8">
+          <Phone className="w-12 h-12 text-blue-600" />
+        </div>
+
+        {/* Title */}
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          Timely Reminders
         </h1>
-        <p className="text-gray-600 text-base leading-relaxed">
-          {t('habitOnboarding.permissions.description')}
+
+        {/* Description */}
+        <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+          I'll call you at your scheduled time to help you stay on track.
         </p>
-      </div>
 
-      {/* Permission items */}
-      <div className="w-full max-w-sm space-y-4 mb-8">
-        {/* Notification */}
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Bell className="w-6 h-6 text-blue-600" />
+        {/* Denied message */}
+        {permissionStatus.notification === 'denied' && (
+          <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm">
+              Permission denied. Please enable notifications in your browser settings and try again.
+            </p>
           </div>
-          <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.notifications')}</p>
-            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.notificationsHint')}</p>
-          </div>
-          {getStatusIcon(permissions.notification)}
-        </div>
+        )}
 
-        {/* Microphone */}
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Mic className="w-6 h-6 text-green-600" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.microphone')}</p>
-            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.microphoneHint')}</p>
-          </div>
-          {getStatusIcon(permissions.microphone)}
-        </div>
-
-        {/* Camera */}
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <Camera className="w-6 h-6 text-purple-600" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">{t('habitOnboarding.permissions.camera')}</p>
-            <p className="text-sm text-gray-500">{t('habitOnboarding.permissions.cameraHint')}</p>
-          </div>
-          {getStatusIcon(permissions.camera)}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="w-full mt-auto mb-4 space-y-3">
-        {!anyRequested ? (
+        {/* Action button */}
+        <div className="w-full mt-auto mb-4">
           <button
-            onClick={requestPermissions}
+            onClick={requestNotification}
             disabled={isRequesting}
             className="w-full py-4 px-8 bg-blue-600 hover:bg-blue-700
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? t('habitOnboarding.permissions.requesting') : t('habitOnboarding.permissions.allow')}
+            {isRequesting ? 'Requesting...' : 'Enable Notifications'}
           </button>
-        ) : (
-          <button
-            onClick={onNext}
-            className="w-full py-4 px-8 bg-blue-600 hover:bg-blue-700
-                       text-white text-lg font-medium rounded-full
-                       transition-colors shadow-md"
-          >
-            {allGranted ? t('habitOnboarding.permissions.continue') : t('habitOnboarding.permissions.continueAnyway')}
-          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sub-step 2: Microphone
+  if (subStep === 2) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        {/* Icon */}
+        <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-8">
+          <Mic className="w-12 h-12 text-green-600" />
+        </div>
+
+        {/* Title */}
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          Voice Conversation
+        </h1>
+
+        {/* Description */}
+        <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+          Lumi will guide you step by step to success. Please allow microphone access to talk with Lumi.
+        </p>
+
+        {/* Denied message */}
+        {permissionStatus.microphone === 'denied' && (
+          <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm">
+              Permission denied. Please enable microphone in your browser settings and try again.
+            </p>
+          </div>
         )}
 
-        {!anyRequested && (
+        {/* Action button */}
+        <div className="w-full mt-auto mb-4">
           <button
-            onClick={onNext}
-            className="w-full py-3 text-gray-500 text-base font-medium"
+            onClick={requestMicrophone}
+            disabled={isRequesting}
+            className="w-full py-4 px-8 bg-green-600 hover:bg-green-700
+                       text-white text-lg font-medium rounded-full
+                       transition-colors shadow-md disabled:opacity-50"
           >
-            {t('habitOnboarding.permissions.skip')}
+            {isRequesting ? 'Requesting...' : 'Allow Microphone'}
           </button>
-        )}
+        </div>
+      </div>
+    );
+  }
+
+  // Sub-step 3: Camera
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+      {/* Icon */}
+      <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mb-8">
+        <Camera className="w-12 h-12 text-purple-600" />
+      </div>
+
+      {/* Title */}
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">
+        Visual Coaching
+      </h1>
+
+      {/* Description */}
+      <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+        Lumi can observe your actions to encourage and guide you. Please allow camera access.
+      </p>
+
+      {/* Denied message */}
+      {permissionStatus.camera === 'denied' && (
+        <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm">
+            Permission denied. Please enable camera in your browser settings and try again.
+          </p>
+        </div>
+      )}
+
+      {/* Action button */}
+      <div className="w-full mt-auto mb-4">
+        <button
+          onClick={requestCamera}
+          disabled={isRequesting}
+          className="w-full py-4 px-8 bg-purple-600 hover:bg-purple-700
+                     text-white text-lg font-medium rounded-full
+                     transition-colors shadow-md disabled:opacity-50"
+        >
+          {isRequesting ? 'Requesting...' : 'Allow Camera'}
+        </button>
       </div>
     </div>
   );

@@ -22,8 +22,11 @@ export function OnboardingLayout({
 }: OnboardingLayoutProps) {
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* 顶部导航 */}
-      <div className="flex items-center px-4 pt-4 pb-2">
+      {/* 顶部导航 - 使用 safe-area-inset-top 避免刘海屏遮挡 */}
+      <div
+        className="flex items-center px-4 pb-2"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 12px), 12px)' }}
+      >
         {/* 返回按钮 */}
         <div className="w-10">
           {showBackButton && onBack && (

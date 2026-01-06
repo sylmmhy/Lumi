@@ -57,12 +57,12 @@ export function NameInputStep({ onNext }: NameInputStepProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+    <div className="flex-1 flex flex-col items-center text-center px-4 pt-8">
       {/* Lumi 头像 */}
       <img
         src={lumiHappy}
         alt="Lumi"
-        className="w-32 h-32 mb-6 object-contain"
+        className="w-28 h-28 mb-4 object-contain"
       />
 
       {/* 标题 */}

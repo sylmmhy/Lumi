@@ -49,7 +49,10 @@
       "Bash(git push:*)",
       "Bash(npx eslint:*)",
       "mcp__Amplitude__get_context",
-      "mcp__Amplitude__search"
+      "mcp__Amplitude__search",
+      "Bash(sips:*)",
+      "Bash(SRC=\"/Users/miko_mac_mini/projects/firego--original-web/public/icon.png\")",
+      "Bash(SRC=~/Desktop/iconbig.png)"
     ],
     "deny": [],
     "ask": []

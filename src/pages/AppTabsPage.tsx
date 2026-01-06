@@ -176,7 +176,7 @@ export function AppTabsPage() {
 
     /** AI 教练会话（封装了 Gemini Live + 计时器 + 虚拟消息等） */
     const aiCoach = useAICoachSession({
-        initialTime: 300,
+        initialTime: 300, // 5 分钟
     });
 
     // Handle Stripe success return without setting state inside the effect body

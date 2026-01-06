@@ -3,8 +3,9 @@ import { getLocalDateString } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
+import { TimePicker } from './TimePicker';
 import type { Task } from '../../remindMe/types';
-import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks } from '../../remindMe/services/reminderService';
+import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks, updateReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
 
 type HabitTheme = 'gold' | 'blue' | 'pink';
@@ -13,6 +14,7 @@ interface Habit {
     id: string;
     title: string;
     timeLabel: string; // e.g., "9:30 am ☀️"
+    time: string; // 24h format e.g., "09:30"
     theme: HabitTheme;
     // History is a map of date string (YYYY-MM-DD) to boolean (completed)
     history: { [key: string]: boolean };
@@ -142,6 +144,7 @@ const taskToHabit = (task: Task, completions: Set<string>): Habit => {
         id: task.id,
         title: task.text,
         timeLabel: `${task.displayTime} ${icon}`,
+        time: task.time || '',
         theme,
         history,
     };
@@ -211,6 +214,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             id: 'example-sleep',
             title: t('stats.goToBed'),
             timeLabel: '10:30 pm 🌙',
+            time: '22:30',
             theme: 'pink',
             history: buildDenseHistoryWithGaps(120, [18], [7, 38, 61, 95]),
         },
@@ -218,6 +222,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             id: 'example-wake',
             title: t('stats.wakeUp'),
             timeLabel: '7:00 am ☀️',
+            time: '07:00',
             theme: 'gold',
             history: buildDenseHistoryWithGaps(120, [21], [15, 44, 73, 102]),
         },
@@ -225,6 +230,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             id: 'example-workout',
             title: t('stats.workout'),
             timeLabel: '6:30 pm 💪',
+            time: '18:30',
             theme: 'blue',
             history: buildDenseHistoryWithGaps(120, [20], [10, 37, 68, 99]),
         },
@@ -626,11 +632,17 @@ const StatsCard: React.FC<StatsCardProps> = ({ habit, onToggleToday, onClickDeta
     const currentTheme = themeColors[habit.theme];
 
     return (
-        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-gray-100">
+        <div
+            className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-gray-100 cursor-pointer"
+            onClick={onClickDetail}
+        >
             <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={onToggleToday}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleToday();
+                        }}
                         className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-colors cursor-pointer ${currentTheme.checkBorder} ${isTodayDone ? currentTheme.checkBg : 'hover:bg-gray-50'}`}
                     >
                         {isTodayDone && <i className="fa-solid fa-check text-white text-xs"></i>}
@@ -643,10 +655,7 @@ const StatsCard: React.FC<StatsCardProps> = ({ habit, onToggleToday, onClickDeta
             </div>
 
             {/* Colorful Heatmap Grid */}
-            <div
-                className="grid grid-rows-7 grid-flow-col gap-1 h-[90px] overflow-hidden cursor-pointer"
-                onClick={onClickDetail}
-            >
+            <div className="grid grid-rows-7 grid-flow-col gap-1 h-[90px] overflow-hidden">
                 {days.map((day, i) => (
                     <div
                         key={i}
@@ -787,7 +796,7 @@ const HeatmapDetailOverlay = ({
     const gap = 4;
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex justify-between items-start p-6 pb-4">

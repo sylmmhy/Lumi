@@ -88,7 +88,7 @@ export function LanguageSelectStep({ onNext }: LanguageSelectStepProps) {
 
       {/* 固定底部按钮区域 */}
       <div
-        className="absolute bottom-0 left-0 right-0 bg-white px-6 pt-4 pb-6"
+        className="fixed bottom-0 left-0 right-0 bg-white px-6 pt-4 z-10"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 24px), 24px)' }}
       >
         <div className="max-w-xs mx-auto">

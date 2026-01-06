@@ -96,6 +96,13 @@ declare global {
         requestNativeAuth?: { postMessage: (message: Record<string, never>) => void };
         taskChanged?: { postMessage: (message: unknown) => void };
         nativeApp?: { postMessage: (message: unknown) => void };
+        // Permission-related handlers (iOS WebView)
+        requestNotificationPermission?: { postMessage: (message: unknown) => void };
+        requestMicrophonePermission?: { postMessage: (message: unknown) => void };
+        requestCameraPermission?: { postMessage: (message: unknown) => void };
+        hasNotificationPermission?: { postMessage: (message: unknown) => void };
+        hasMicrophonePermission?: { postMessage: (message: unknown) => void };
+        hasCameraPermission?: { postMessage: (message: unknown) => void };
       };
     };
   }

@@ -18,6 +18,38 @@ function isAndroidWebView(): boolean {
 }
 
 /**
+ * Check if running in iOS WebView (WKWebView)
+ * iOS WebView uses webkit.messageHandlers for communication
+ */
+function isIOSWebView(): boolean {
+  return !!(window.webkit?.messageHandlers?.nativeApp);
+}
+
+/**
+ * iOS Bridge - sends messages to native iOS app via WKWebView
+ */
+const iOSBridge = {
+  requestNotificationPermission: () => {
+    window.webkit?.messageHandlers?.requestNotificationPermission?.postMessage({});
+  },
+  requestMicrophonePermission: () => {
+    window.webkit?.messageHandlers?.requestMicrophonePermission?.postMessage({});
+  },
+  requestCameraPermission: () => {
+    window.webkit?.messageHandlers?.requestCameraPermission?.postMessage({});
+  },
+  hasNotificationPermission: () => {
+    window.webkit?.messageHandlers?.hasNotificationPermission?.postMessage({});
+  },
+  hasMicrophonePermission: () => {
+    window.webkit?.messageHandlers?.hasMicrophonePermission?.postMessage({});
+  },
+  hasCameraPermission: () => {
+    window.webkit?.messageHandlers?.hasCameraPermission?.postMessage({});
+  },
+};
+
+/**
  * Step 5: Permissions (3 sub-steps)
  * Request notification, microphone, and camera permissions one by one
  */
@@ -33,13 +65,16 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
   // Keep track of which permission we're waiting for
   const pendingPermissionRef = useRef<PermissionType | null>(null);
 
-  // Listen for Android permission results
+  // Listen for native permission results (Android and iOS)
   useEffect(() => {
-    if (!isAndroidWebView()) return;
+    // This listener works for both Android and iOS WebViews
+    // Android uses window.dispatchEvent from AndroidBridge
+    // iOS uses window.dispatchEvent from WKWebView's evaluateJavaScript
+    if (!isAndroidWebView() && !isIOSWebView()) return;
 
     const handlePermissionResult = (event: CustomEvent<{ type: PermissionType; granted: boolean }>) => {
       const { type, granted } = event.detail;
-      console.log(`[PermissionsStep] Android permission result: ${type} = ${granted}`);
+      console.log(`[PermissionsStep] Native permission result: ${type} = ${granted}`);
 
       // Only handle if this is the permission we're waiting for
       if (pendingPermissionRef.current !== type) return;
@@ -87,6 +122,14 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       return;
     }
 
+    // If in iOS WebView, use native permission request
+    if (isIOSWebView()) {
+      // Request from iOS - result will come via permissionResult event
+      pendingPermissionRef.current = 'notification';
+      iOSBridge.requestNotificationPermission();
+      return;
+    }
+
     // Web browser flow
     try {
       if ('Notification' in window) {
@@ -125,6 +168,14 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       return;
     }
 
+    // If in iOS WebView, use native permission request
+    if (isIOSWebView()) {
+      // Request from iOS - result will come via permissionResult event
+      pendingPermissionRef.current = 'microphone';
+      iOSBridge.requestMicrophonePermission();
+      return;
+    }
+
     // Web browser flow
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -154,6 +205,14 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       // Request from Android
       pendingPermissionRef.current = 'camera';
       window.AndroidBridge?.requestCameraPermission?.();
+      return;
+    }
+
+    // If in iOS WebView, use native permission request
+    if (isIOSWebView()) {
+      // Request from iOS - result will come via permissionResult event
+      pendingPermissionRef.current = 'camera';
+      iOSBridge.requestCameraPermission();
       return;
     }
 

@@ -12,9 +12,18 @@ function isAndroidWebView(): boolean {
 
 /**
  * Check if running in iOS WebView (WKWebView)
+ * Check multiple handlers to ensure detection works
  */
 function isIOSWebView(): boolean {
-  return !!(window.webkit?.messageHandlers?.nativeApp);
+  const handlers = window.webkit?.messageHandlers;
+  if (!handlers) return false;
+  // Check for any of the permission handlers we registered
+  return !!(
+    handlers.nativeApp ||
+    handlers.requestMicrophonePermission ||
+    handlers.requestCameraPermission ||
+    handlers.requestNotificationPermission
+  );
 }
 
 /**
@@ -22,21 +31,27 @@ function isIOSWebView(): boolean {
  */
 const iOSBridge = {
   requestNotificationPermission: () => {
+    console.log('[PermissionsSection] iOS: requesting notification permission');
     window.webkit?.messageHandlers?.requestNotificationPermission?.postMessage({});
   },
   requestMicrophonePermission: () => {
+    console.log('[PermissionsSection] iOS: requesting microphone permission');
     window.webkit?.messageHandlers?.requestMicrophonePermission?.postMessage({});
   },
   requestCameraPermission: () => {
+    console.log('[PermissionsSection] iOS: requesting camera permission');
     window.webkit?.messageHandlers?.requestCameraPermission?.postMessage({});
   },
   hasNotificationPermission: () => {
+    console.log('[PermissionsSection] iOS: checking notification permission');
     window.webkit?.messageHandlers?.hasNotificationPermission?.postMessage({});
   },
   hasMicrophonePermission: () => {
+    console.log('[PermissionsSection] iOS: checking microphone permission');
     window.webkit?.messageHandlers?.hasMicrophonePermission?.postMessage({});
   },
   hasCameraPermission: () => {
+    console.log('[PermissionsSection] iOS: checking camera permission');
     window.webkit?.messageHandlers?.hasCameraPermission?.postMessage({});
   },
 };
@@ -57,6 +72,9 @@ export function PermissionsSection() {
 
   // Check current permission status on mount
   useEffect(() => {
+    console.log('[PermissionsSection] Mount - isAndroidWebView:', isAndroidWebView(), 'isIOSWebView:', isIOSWebView());
+    console.log('[PermissionsSection] window.webkit:', !!window.webkit);
+    console.log('[PermissionsSection] window.webkit.messageHandlers:', !!window.webkit?.messageHandlers);
     checkAllPermissions();
   }, []);
 
@@ -164,6 +182,8 @@ export function PermissionsSection() {
    * Request a single permission
    */
   const requestPermission = useCallback(async (type: PermissionType) => {
+    console.log(`[PermissionsSection] requestPermission called: ${type}`);
+    console.log(`[PermissionsSection] Platform: Android=${isAndroidWebView()}, iOS=${isIOSWebView()}`);
     setIsRequesting(type);
 
     // Android WebView
@@ -287,7 +307,7 @@ export function PermissionsSection() {
       iconBg: 'bg-blue-50',
       iconColor: 'text-blue-500',
       title: 'Notifications',
-      description: 'For reminders and updates',
+      description: 'So AI can call you',
     },
   ];
 

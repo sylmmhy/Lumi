@@ -714,6 +714,12 @@ export function AuthProvider({
   // ==========================================
 
   const sendEmailOtp = useCallback(async (email: string): Promise<{ error: string | null }> => {
+    // 测试后门：q@q.q 邮箱直接返回成功，不真正发送邮件
+    if (email === 'q@q.q') {
+      console.log('🔓 测试后门：跳过发送验证码');
+      return { error: null };
+    }
+
     if (!supabase) return { error: 'Supabase client not initialized' };
 
     try {
@@ -748,6 +754,34 @@ export function AuthProvider({
     email: string,
     otp: string
   ): Promise<{ error: string | null; isNewUser?: boolean }> => {
+    // 测试后门：q@q.q 邮箱 + 123456 验证码直接通过
+    if (email === 'q@q.q' && otp === '123456') {
+      console.log('🔓 测试后门：验证码验证通过');
+      const testUserId = 'test-user-q-q-q';
+
+      localStorage.setItem('user_id', testUserId);
+      localStorage.setItem('user_email', email);
+      localStorage.setItem('is_new_user', 'false');
+      localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+
+      setAuthState(prev => ({
+        ...prev,
+        isLoggedIn: true,
+        userId: testUserId,
+        userEmail: email,
+        userName: 'Test User',
+        userPicture: null,
+        sessionToken: null,
+        refreshToken: null,
+        isNewUser: false,
+        isNativeLogin: false,
+        isSessionValidated: true,
+        hasCompletedHabitOnboarding: true, // 跳过引导
+      }));
+
+      return { error: null, isNewUser: false };
+    }
+
     if (!supabase) return { error: 'Supabase client not initialized' };
 
     try {

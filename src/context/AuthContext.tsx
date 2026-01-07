@@ -195,6 +195,9 @@ function clearAuthStorage(): void {
  * 3. 恢复失败则清除 localStorage（以 Supabase 为准）
  * 4. Native 登录是特殊情况，允许没有 Supabase session
  */
+// DEV BACKDOOR: Test account user ID (q@q.com)
+const DEV_TEST_USER_ID = '31d5da79-2cfc-445d-9543-eefc5b8d31d7';
+
 async function validateSessionWithSupabase(): Promise<AuthState> {
   if (!supabase) {
     // 无 Supabase 客户端，直接返回 localStorage 状态（标记为已验证以避免阻塞）
@@ -205,6 +208,24 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   const stored = batchGetLocalStorage(AUTH_STORAGE_KEYS);
   const isNativeLogin = stored[NATIVE_LOGIN_FLAG_KEY] === 'true';
   const storedUserId = stored['user_id'];
+
+  // DEV BACKDOOR: Skip validation for test account
+  if (storedUserId === DEV_TEST_USER_ID) {
+    console.log('🔓 Dev backdoor: skipping session validation for test account');
+    return {
+      isLoggedIn: true,
+      userId: storedUserId,
+      userEmail: stored['user_email'],
+      userName: stored['user_name'] || 'Test User',
+      userPicture: stored['user_picture'],
+      isNewUser: false,
+      sessionToken: null,
+      refreshToken: null,
+      isNativeLogin: false,
+      isSessionValidated: true,
+      hasCompletedHabitOnboarding: true,
+    };
+  }
 
   // 1. 获取 Supabase 当前会话状态（这是权威来源）
   const { data: { session }, error } = await supabase.auth.getSession();
@@ -714,9 +735,10 @@ export function AuthProvider({
   // ==========================================
 
   const sendEmailOtp = useCallback(async (email: string): Promise<{ error: string | null }> => {
-    // 测试后门：q@q.com 邮箱直接返回成功，不真正发送邮件
+    // DEV BACKDOOR: Skip sending OTP for test account (q@q.com + 123456)
+    // This is for internal testing purposes only and will be removed before production release
     if (email === 'q@q.com') {
-      console.log('🔓 测试后门：跳过发送验证码');
+      console.log('🔓 Dev backdoor: skipping OTP send');
       return { error: null };
     }
 
@@ -754,32 +776,71 @@ export function AuthProvider({
     email: string,
     otp: string
   ): Promise<{ error: string | null; isNewUser?: boolean }> => {
-    // 测试后门：q@q.com 邮箱 + 123456 验证码直接通过
+    // DEV BACKDOOR: Allow test account login with fixed OTP code
+    // Credentials: q@q.com + 123456 - For internal testing only, remove before production
+    // Uses real Supabase password login under the hood for full functionality
     if (email === 'q@q.com' && otp === '123456') {
-      console.log('🔓 测试后门：验证码验证通过');
-      const testUserId = 'test-user-q-q-q';
+      console.log('🔓 Dev backdoor: using password login for test account');
+      if (!supabase) return { error: 'Supabase client not initialized' };
 
-      localStorage.setItem('user_id', testUserId);
-      localStorage.setItem('user_email', email);
-      localStorage.setItem('is_new_user', 'false');
-      localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+      try {
+        // Use real password login (password set in DB: test123456)
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({
+          email: 'q@q.com',
+          password: 'test123456',
+        });
 
-      setAuthState(prev => ({
-        ...prev,
-        isLoggedIn: true,
-        userId: testUserId,
-        userEmail: email,
-        userName: 'Test User',
-        userPicture: null,
-        sessionToken: null,
-        refreshToken: null,
-        isNewUser: false,
-        isNativeLogin: false,
-        isSessionValidated: true,
-        hasCompletedHabitOnboarding: true, // 跳过引导
-      }));
+        if (loginError) {
+          console.error('❌ Dev backdoor login failed:', loginError);
+          return { error: loginError.message };
+        }
 
-      return { error: null, isNewUser: false };
+        if (data.session && data.user) {
+          localStorage.setItem('session_token', data.session.access_token);
+          if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
+          localStorage.setItem('user_id', data.user.id);
+          localStorage.setItem('user_email', data.user.email || '');
+          localStorage.setItem('is_new_user', 'false');
+          localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
+
+          console.log('✅ Dev backdoor: login successful');
+
+          // 查询 habit onboarding 状态
+          let hasCompletedHabitOnboarding = false;
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('has_completed_habit_onboarding')
+              .eq('id', data.user.id)
+              .single();
+            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+          } catch (err) {
+            console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+          }
+
+          setAuthState(prev => ({
+            ...prev,
+            isLoggedIn: true,
+            userId: data.user.id,
+            userEmail: data.user.email || null,
+            userName: data.user.user_metadata?.full_name || 'Test User',
+            userPicture: data.user.user_metadata?.avatar_url || null,
+            sessionToken: data.session.access_token,
+            refreshToken: data.session.refresh_token || null,
+            isNewUser: false,
+            isNativeLogin: false,
+            isSessionValidated: true,
+            hasCompletedHabitOnboarding,
+          }));
+
+          return { error: null, isNewUser: false };
+        }
+
+        return { error: 'Login failed' };
+      } catch (err) {
+        console.error('❌ Dev backdoor error:', err);
+        return { error: String(err) };
+      }
     }
 
     if (!supabase) return { error: 'Supabase client not initialized' };

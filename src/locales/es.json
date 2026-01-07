@@ -245,5 +245,22 @@
   "permissions.camera.title": "Coaching visual",
   "permissions.camera.description": "Lumi puede observar tus acciones para animarte y guiarte. Permite el acceso a la cámara.",
   "permissions.camera.denied": "Permiso denegado. Habilita la cámara en la configuración del navegador e inténtalo de nuevo.",
-  "permissions.camera.button": "Permitir cámara"
+  "permissions.camera.button": "Permitir cámara",
+
+  "profile.permissions.title": "Permisos del dispositivo",
+  "profile.permissions.subtitle": "Necesarios para videollamadas con AI",
+  "profile.permissions.allEnabled": "Todo habilitado",
+  "profile.permissions.microphone": "Micrófono",
+  "profile.permissions.microphoneDesc": "Para conversaciones de voz con AI",
+  "profile.permissions.camera": "Cámara",
+  "profile.permissions.cameraDesc": "Para videollamadas con AI",
+  "profile.permissions.notifications": "Notificaciones",
+  "profile.permissions.notificationsDesc": "Para que AI pueda llamarte",
+  "profile.permissions.enabled": "Habilitado",
+  "profile.permissions.denied": "Denegado",
+  "profile.permissions.notSet": "No configurado",
+  "profile.permissions.warning": "Sin estos permisos, AI no puede hacer videollamadas para ayudarte a vencer la procrastinación.",
+  "profile.permissions.enableAll": "Habilitar todos los permisos",
+  "profile.permissions.requesting": "Solicitando...",
+  "profile.permissions.allEnabledMessage": "¡Todos los permisos habilitados! AI está lista para llamarte."
 }

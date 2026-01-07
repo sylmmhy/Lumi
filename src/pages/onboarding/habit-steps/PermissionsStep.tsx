@@ -306,6 +306,18 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
     }
   }, [onNext]);
 
+  // Handle enable from warning modal - call the corresponding permission request
+  const handleEnableFromModal = useCallback(() => {
+    setShowSkipWarning(false);
+    if (subStep === 1) {
+      requestNotification();
+    } else if (subStep === 2) {
+      requestMicrophone();
+    } else {
+      requestCamera();
+    }
+  }, [subStep, requestNotification, requestMicrophone, requestCamera]);
+
   // Skip warning modal
   const SkipWarningModal = () => (
     showSkipWarning ? (
@@ -323,7 +335,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
             </p>
             <div className="space-y-3">
               <button
-                onClick={() => setShowSkipWarning(false)}
+                onClick={handleEnableFromModal}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-full transition-colors"
               >
                 {t('permissions.skipWarning.enable')}

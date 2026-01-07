@@ -229,5 +229,21 @@
   "habitOnboarding.done.title": "Tutto pronto!",
   "habitOnboarding.done.subtitle": "La tua abitudine è pronta. Andiamo!",
   "habitOnboarding.done.button": "Andiamo!",
-  "habitOnboarding.done.saving": "Salvataggio..."
+  "habitOnboarding.done.saving": "Salvataggio...",
+
+  "permissions.notification.title": "Promemoria puntuali",
+  "permissions.notification.description": "Ti chiamerò all'orario programmato per aiutarti a rimanere in carreggiata.",
+  "permissions.notification.denied": "Permesso negato. Abilita le notifiche nelle impostazioni del browser e riprova.",
+  "permissions.notification.button": "Abilita notifiche",
+  "permissions.requesting": "Richiesta in corso...",
+
+  "permissions.microphone.title": "Conversazione vocale",
+  "permissions.microphone.description": "Lumi ti guiderà passo dopo passo verso il successo. Consenti l'accesso al microfono per parlare con Lumi.",
+  "permissions.microphone.denied": "Permesso negato. Abilita il microfono nelle impostazioni del browser e riprova.",
+  "permissions.microphone.button": "Consenti microfono",
+
+  "permissions.camera.title": "Coaching visivo",
+  "permissions.camera.description": "Lumi può osservare le tue azioni per incoraggiarti e guidarti. Consenti l'accesso alla fotocamera.",
+  "permissions.camera.denied": "Permesso negato. Abilita la fotocamera nelle impostazioni del browser e riprova.",
+  "permissions.camera.button": "Consenti fotocamera"
 }

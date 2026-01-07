@@ -88,11 +88,19 @@ export function PermissionsSection() {
   useEffect(() => {
     if (!isAndroidWebView() && !isIOSWebView()) return;
 
-    const handlePermissionResult = (event: CustomEvent<{ type: PermissionType; granted: boolean }>) => {
-      const { type, granted } = event.detail;
-      console.log(`[PermissionsSection] Native permission result: ${type} = ${granted}`);
+    const handlePermissionResult = (event: CustomEvent<{ type: PermissionType; granted: boolean; status?: string }>) => {
+      const { type, granted, status } = event.detail;
+      console.log(`[PermissionsSection] Native permission result: ${type} = ${granted}, status = ${status}`);
 
-      setPermissions(prev => ({ ...prev, [type]: granted ? 'granted' : 'denied' }));
+      // Use status if available (iOS returns detailed status), otherwise fallback to granted boolean
+      let permissionStatus: PermissionStatus;
+      if (status) {
+        permissionStatus = status === 'granted' ? 'granted' : status === 'denied' ? 'denied' : 'prompt';
+      } else {
+        permissionStatus = granted ? 'granted' : 'denied';
+      }
+
+      setPermissions(prev => ({ ...prev, [type]: permissionStatus }));
 
       if (pendingPermissionRef.current === type) {
         pendingPermissionRef.current = null;

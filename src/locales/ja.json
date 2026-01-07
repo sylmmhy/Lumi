@@ -245,5 +245,22 @@
   "permissions.camera.title": "ビジュアルコーチング",
   "permissions.camera.description": "Lumi があなたの行動を見て励まし、ガイドします。カメラへのアクセスを許可してください。",
   "permissions.camera.denied": "許可が拒否されました。ブラウザ設定でカメラを有効にしてから再試行してください。",
-  "permissions.camera.button": "カメラを許可"
+  "permissions.camera.button": "カメラを許可",
+
+  "profile.permissions.title": "デバイスの権限",
+  "profile.permissions.subtitle": "AIビデオ通話に必要",
+  "profile.permissions.allEnabled": "すべて有効",
+  "profile.permissions.microphone": "マイク",
+  "profile.permissions.microphoneDesc": "AIとの音声会話に使用",
+  "profile.permissions.camera": "カメラ",
+  "profile.permissions.cameraDesc": "AIとのビデオ通話に使用",
+  "profile.permissions.notifications": "通知",
+  "profile.permissions.notificationsDesc": "AIが電話できるようにする",
+  "profile.permissions.enabled": "有効",
+  "profile.permissions.denied": "拒否",
+  "profile.permissions.notSet": "未設定",
+  "profile.permissions.warning": "これらの権限がないと、AIは先延ばしを克服するためのビデオ通話ができません。",
+  "profile.permissions.enableAll": "すべての権限を有効にする",
+  "profile.permissions.requesting": "リクエスト中...",
+  "profile.permissions.allEnabledMessage": "すべての権限が有効になりました！AIはビデオ通話の準備ができています。"
 }

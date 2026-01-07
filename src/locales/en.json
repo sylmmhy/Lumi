@@ -255,5 +255,22 @@
   "permissions.camera.title": "Visual Coaching",
   "permissions.camera.description": "Lumi can observe your actions to encourage and guide you. Please allow camera access.",
   "permissions.camera.denied": "Permission denied. Please enable camera in your browser settings and try again.",
-  "permissions.camera.button": "Allow Camera"
+  "permissions.camera.button": "Allow Camera",
+
+  "profile.permissions.title": "Device Permissions",
+  "profile.permissions.subtitle": "Required for AI video calls",
+  "profile.permissions.allEnabled": "All enabled",
+  "profile.permissions.microphone": "Microphone",
+  "profile.permissions.microphoneDesc": "For voice conversations with AI",
+  "profile.permissions.camera": "Camera",
+  "profile.permissions.cameraDesc": "For video calls with AI",
+  "profile.permissions.notifications": "Notifications",
+  "profile.permissions.notificationsDesc": "So AI can call you",
+  "profile.permissions.enabled": "Enabled",
+  "profile.permissions.denied": "Denied",
+  "profile.permissions.notSet": "Not set",
+  "profile.permissions.warning": "Without these permissions, AI cannot make video calls to help you beat procrastination.",
+  "profile.permissions.enableAll": "Enable All Permissions",
+  "profile.permissions.requesting": "Requesting...",
+  "profile.permissions.allEnabledMessage": "All permissions enabled! AI is ready to video call you."
 }

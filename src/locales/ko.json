@@ -245,5 +245,22 @@
   "permissions.camera.title": "비주얼 코칭",
   "permissions.camera.description": "Lumi가 당신의 행동을 관찰하여 격려하고 안내해 드릴게요. 카메라 접근을 허용해 주세요.",
   "permissions.camera.denied": "권한이 거부되었습니다. 브라우저 설정에서 카메라를 활성화한 후 다시 시도해 주세요.",
-  "permissions.camera.button": "카메라 허용"
+  "permissions.camera.button": "카메라 허용",
+
+  "profile.permissions.title": "기기 권한",
+  "profile.permissions.subtitle": "AI 영상 통화에 필요해요",
+  "profile.permissions.allEnabled": "전부 활성화됨",
+  "profile.permissions.microphone": "마이크",
+  "profile.permissions.microphoneDesc": "AI와 음성 대화에 사용",
+  "profile.permissions.camera": "카메라",
+  "profile.permissions.cameraDesc": "AI와 영상 통화에 사용",
+  "profile.permissions.notifications": "알림",
+  "profile.permissions.notificationsDesc": "AI가 전화할 수 있게 해요",
+  "profile.permissions.enabled": "활성화됨",
+  "profile.permissions.denied": "거부됨",
+  "profile.permissions.notSet": "미설정",
+  "profile.permissions.warning": "이 권한들이 없으면 AI가 미루기 극복을 도와주는 영상 통화를 할 수 없어요.",
+  "profile.permissions.enableAll": "모든 권한 허용하기",
+  "profile.permissions.requesting": "요청 중...",
+  "profile.permissions.allEnabledMessage": "모든 권한이 활성화됐어요! AI가 영상 통화할 준비 완료!"
 }

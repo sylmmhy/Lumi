@@ -245,5 +245,22 @@
   "permissions.camera.title": "Coaching visivo",
   "permissions.camera.description": "Lumi può osservare le tue azioni per incoraggiarti e guidarti. Consenti l'accesso alla fotocamera.",
   "permissions.camera.denied": "Permesso negato. Abilita la fotocamera nelle impostazioni del browser e riprova.",
-  "permissions.camera.button": "Consenti fotocamera"
+  "permissions.camera.button": "Consenti fotocamera",
+
+  "profile.permissions.title": "Permessi dispositivo",
+  "profile.permissions.subtitle": "Necessari per le videochiamate AI",
+  "profile.permissions.allEnabled": "Tutto attivo",
+  "profile.permissions.microphone": "Microfono",
+  "profile.permissions.microphoneDesc": "Per conversazioni vocali con AI",
+  "profile.permissions.camera": "Fotocamera",
+  "profile.permissions.cameraDesc": "Per videochiamate con AI",
+  "profile.permissions.notifications": "Notifiche",
+  "profile.permissions.notificationsDesc": "Per permettere all'AI di chiamarti",
+  "profile.permissions.enabled": "Attivo",
+  "profile.permissions.denied": "Negato",
+  "profile.permissions.notSet": "Non impostato",
+  "profile.permissions.warning": "Senza questi permessi, l'AI non può fare videochiamate per aiutarti a vincere la procrastinazione.",
+  "profile.permissions.enableAll": "Attiva tutti i permessi",
+  "profile.permissions.requesting": "Richiesta in corso...",
+  "profile.permissions.allEnabledMessage": "Tutti i permessi attivi! L'AI è pronta a chiamarti."
 }

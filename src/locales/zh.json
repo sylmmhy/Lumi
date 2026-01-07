@@ -255,5 +255,22 @@
   "permissions.camera.title": "视觉指导",
   "permissions.camera.description": "Lumi 可以观察你的行动来鼓励和指导你。请允许摄像头权限。",
   "permissions.camera.denied": "权限被拒绝。请在浏览器设置中开启摄像头权限后重试。",
-  "permissions.camera.button": "允许摄像头"
+  "permissions.camera.button": "允许摄像头",
+
+  "profile.permissions.title": "设备权限",
+  "profile.permissions.subtitle": "AI 视频通话需要这些权限",
+  "profile.permissions.allEnabled": "全部已开启",
+  "profile.permissions.microphone": "麦克风",
+  "profile.permissions.microphoneDesc": "与 AI 语音对话",
+  "profile.permissions.camera": "摄像头",
+  "profile.permissions.cameraDesc": "与 AI 视频通话",
+  "profile.permissions.notifications": "通知",
+  "profile.permissions.notificationsDesc": "让 AI 能够给你打电话",
+  "profile.permissions.enabled": "已开启",
+  "profile.permissions.denied": "已拒绝",
+  "profile.permissions.notSet": "未设置",
+  "profile.permissions.warning": "没有这些权限，AI 无法进行视频通话来帮你战胜拖延。",
+  "profile.permissions.enableAll": "开启全部权限",
+  "profile.permissions.requesting": "请求中...",
+  "profile.permissions.allEnabledMessage": "所有权限已开启！AI 已准备好给你打视频电话。"
 }

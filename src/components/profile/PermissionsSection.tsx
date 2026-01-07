@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type PermissionType = 'notification' | 'microphone' | 'camera';
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'prompt';
@@ -61,6 +62,7 @@ const iOSBridge = {
  * Collapsible design - shows as a single row, expands to show details
  */
 export function PermissionsSection() {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [permissions, setPermissions] = useState<Record<PermissionType, PermissionStatus>>({
     notification: 'unknown',
@@ -276,11 +278,11 @@ export function PermissionsSection() {
   const getStatusText = (status: PermissionStatus) => {
     switch (status) {
       case 'granted':
-        return 'Enabled';
+        return t('profile.permissions.enabled');
       case 'denied':
-        return 'Denied';
+        return t('profile.permissions.denied');
       default:
-        return 'Not set';
+        return t('profile.permissions.notSet');
     }
   };
 
@@ -290,24 +292,24 @@ export function PermissionsSection() {
       icon: 'fa-microphone',
       iconBg: 'bg-green-50',
       iconColor: 'text-green-500',
-      title: 'Microphone',
-      description: 'For voice conversations with AI',
+      title: t('profile.permissions.microphone'),
+      description: t('profile.permissions.microphoneDesc'),
     },
     {
       type: 'camera' as PermissionType,
       icon: 'fa-video',
       iconBg: 'bg-purple-50',
       iconColor: 'text-purple-500',
-      title: 'Camera',
-      description: 'For video calls with AI',
+      title: t('profile.permissions.camera'),
+      description: t('profile.permissions.cameraDesc'),
     },
     {
       type: 'notification' as PermissionType,
       icon: 'fa-bell',
       iconBg: 'bg-blue-50',
       iconColor: 'text-blue-500',
-      title: 'Notifications',
-      description: 'So AI can call you',
+      title: t('profile.permissions.notifications'),
+      description: t('profile.permissions.notificationsDesc'),
     },
   ];
 
@@ -323,15 +325,15 @@ export function PermissionsSection() {
             <i className="fa-solid fa-shield-halved text-brand-orange"></i>
           </div>
           <div className="text-left">
-            <p className="font-medium text-gray-800">Device Permissions</p>
-            <p className="text-xs text-gray-400">Required for AI video calls</p>
+            <p className="font-medium text-gray-800">{t('profile.permissions.title')}</p>
+            <p className="text-xs text-gray-400">{t('profile.permissions.subtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {allGranted ? (
             <span className="text-xs text-green-500 flex items-center gap-1">
               <i className="fa-solid fa-circle-check"></i>
-              All enabled
+              {t('profile.permissions.allEnabled')}
             </span>
           ) : (
             <span className="text-xs text-amber-500 flex items-center gap-1">
@@ -390,7 +392,7 @@ export function PermissionsSection() {
             <div className="flex items-start gap-2">
               <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 text-xs"></i>
               <p className="text-xs text-amber-700">
-                Without these permissions, AI cannot make video calls to help you beat procrastination.
+                {t('profile.permissions.warning')}
               </p>
             </div>
           </div>
@@ -410,12 +412,12 @@ export function PermissionsSection() {
               {isRequesting === 'all' ? (
                 <>
                   <i className="fa-solid fa-spinner fa-spin"></i>
-                  <span>Requesting...</span>
+                  <span>{t('profile.permissions.requesting')}</span>
                 </>
               ) : (
                 <>
                   <i className="fa-solid fa-unlock"></i>
-                  <span>Enable All Permissions</span>
+                  <span>{t('profile.permissions.enableAll')}</span>
                 </>
               )}
             </button>
@@ -428,7 +430,7 @@ export function PermissionsSection() {
             <div className="flex items-center gap-2">
               <i className="fa-solid fa-circle-check text-green-500 text-xs"></i>
               <p className="text-xs text-green-700">
-                All permissions enabled! AI is ready to video call you.
+                {t('profile.permissions.allEnabledMessage')}
               </p>
             </div>
           </div>

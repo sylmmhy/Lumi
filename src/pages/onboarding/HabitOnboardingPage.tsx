@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
 import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
 import { getPreferredLanguages } from '../../lib/language';
+import { DEFAULT_APP_PATH } from '../../constants/routes';
 
 // Step components
 import { WelcomeStep } from './habit-steps/WelcomeStep';
@@ -25,9 +27,12 @@ import { DoneStep } from './habit-steps/DoneStep';
  * 包含完整的 Edge Function prompt、虚拟消息系统等
  */
 export function HabitOnboardingPage() {
-  const { isLoggedIn, isSessionValidated, navigateToLogin } = useAuth();
+  const navigate = useNavigate();
+  const { isLoggedIn, isSessionValidated, hasCompletedHabitOnboarding, navigateToLogin } = useAuth();
   const onboarding = useHabitOnboarding();
   const [isInCall, setIsInCall] = useState(false);
+  // 防止重复重定向
+  const hasRedirectedRef = useRef(false);
 
   // 使用 ref 来存储 handleEndCall，解决循环依赖问题
   const handleEndCallRef = useRef<() => void>(() => {});
@@ -69,6 +74,19 @@ export function HabitOnboardingPage() {
       navigateToLogin('/habit-onboarding');
     }
   }, [isSessionValidated, isLoggedIn, navigateToLogin]);
+
+  // 已完成 onboarding 检查：如果用户已完成 habit onboarding，重定向到主页面
+  // 这可以防止用户被错误重定向到 onboarding 页面后卡住
+  useEffect(() => {
+    if (hasRedirectedRef.current) return;
+
+    // 等待会话验证完成且用户已登录
+    if (isSessionValidated && isLoggedIn && hasCompletedHabitOnboarding) {
+      console.log('🔄 HabitOnboardingPage: 用户已完成 onboarding，重定向到主页面');
+      hasRedirectedRef.current = true;
+      navigate(DEFAULT_APP_PATH, { replace: true });
+    }
+  }, [isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate]);
 
   /**
    * 开始试用通话

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 type PermissionType = 'notification' | 'microphone' | 'camera';
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'prompt';

@@ -47,7 +47,13 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                         <img
                             src={streakCircle}
                             alt="Streak Circle"
-                            className="w-full h-full object-contain drop-shadow-md scale-110"
+                            className="w-full h-full object-contain"
+                            style={{
+                                /* Force GPU layer and smooth rendering on all devices */
+                                transform: 'scale(1.1) translateZ(0)',
+                                backfaceVisibility: 'hidden',
+                                WebkitBackfaceVisibility: 'hidden',
+                            }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-[#45a259] text-6xl font-bold italic font-serif tracking-widest pt-0 pl-2">

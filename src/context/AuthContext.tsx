@@ -398,6 +398,9 @@ export function AuthProvider({
   const loginPathRef = useRef(loginPath);
   const defaultRedirectRef = useRef(defaultRedirectPath);
   const hasHandledOAuthRef = useRef(false);
+  // 用于追踪 onAuthStateChange 是否正在处理会话
+  // 防止 restoreSession 覆盖 onAuthStateChange 正在处理的状态
+  const isOnAuthStateChangeProcessingRef = useRef(false);
 
   useEffect(() => { loginPathRef.current = loginPath; }, [loginPath]);
   useEffect(() => { defaultRedirectRef.current = defaultRedirectPath; }, [defaultRedirectPath]);
@@ -1151,14 +1154,42 @@ export function AuthProvider({
     /**
      * 使用 validateSessionWithSupabase 验证并恢复会话
      * 解决了 localStorage 与 Supabase 状态不一致的问题
+     *
+     * 重要：使用函数式更新避免覆盖 onAuthStateChange 正在处理的状态
      */
     const restoreSession = async () => {
       // 1. 以 Supabase 为权威来源验证会话
       const validatedState = await validateSessionWithSupabase();
-      setAuthState(validatedState);
 
-      // 2. 如果验证后有有效会话，同步用户资料并绑定分析
-      if (validatedState.isLoggedIn && validatedState.userId) {
+      // 2. 使用函数式更新，避免覆盖 onAuthStateChange 正在处理的状态
+      let shouldSyncProfile = false;
+      setAuthState(prev => {
+        // 情况1: onAuthStateChange 已经完成验证同一用户，不覆盖
+        if (prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
+          console.log('🔄 restoreSession: onAuthStateChange 已完成验证，跳过覆盖');
+          return prev;
+        }
+
+        // 情况2: onAuthStateChange 正在处理同一用户（ref 为 true 或 isSessionValidated 为 false）
+        if (isOnAuthStateChangeProcessingRef.current && prev.isLoggedIn && prev.userId === validatedState.userId) {
+          console.log('🔄 restoreSession: onAuthStateChange 正在处理，跳过覆盖');
+          return prev;
+        }
+
+        // 情况3: onAuthStateChange 设置了 isSessionValidated: false 但 ref 已被清除（极端竞态）
+        // 检查：如果 prev.isLoggedIn 为 true 且 prev.isSessionValidated 为 false，说明正在等待异步查询
+        if (!prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
+          console.log('🔄 restoreSession: 检测到会话正在验证中，跳过覆盖');
+          return prev;
+        }
+
+        // 情况4: 正常更新（初始加载、用户不同等）
+        shouldSyncProfile = validatedState.isLoggedIn && !!validatedState.userId;
+        return validatedState;
+      });
+
+      // 3. 如果验证后有有效会话且未被跳过，同步用户资料并绑定分析
+      if (shouldSyncProfile && validatedState.userId) {
         await syncUserProfileToStorage(client, validatedState.userId);
         bindAnalyticsUser(validatedState.userId, validatedState.userEmail);
         notifyAuthConfirmed(validatedState.isNativeLogin ? 'native_session' : 'validated_session');
@@ -1179,6 +1210,9 @@ export function AuthProvider({
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       console.log('🔄 Auth state changed:', event);
       if (session) {
+        // 标记 onAuthStateChange 正在处理，防止 restoreSession 覆盖
+        isOnAuthStateChangeProcessingRef.current = true;
+
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);
         bindAnalyticsUser(session.user.id, session.user.email);
@@ -1222,6 +1256,9 @@ export function AuthProvider({
               isSessionValidated: true,
             };
           });
+
+          // 标记 onAuthStateChange 处理完成
+          isOnAuthStateChangeProcessingRef.current = false;
         })();
 
         // 通知原生端登录成功，以便上传 FCM Token

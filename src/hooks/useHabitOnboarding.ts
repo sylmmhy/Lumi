@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './useAuth';
+import { useTranslation } from './useTranslation';
 import { createReminder, generateTodayRoutineInstances } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 
@@ -100,9 +101,19 @@ function getTimeCategory(time: string): 'morning' | 'afternoon' | 'evening' {
   return 'evening';
 }
 
+// 习惯 ID 到翻译 key 的映射
+const HABIT_TRANSLATION_KEYS: Record<string, string> = {
+  bedtime: 'habitOnboarding.habitSelect.bedtime',
+  wakeup: 'habitOnboarding.habitSelect.wakeup',
+  exercise: 'habitOnboarding.habitSelect.exercise',
+  study: 'habitOnboarding.habitSelect.study',
+  eat: 'habitOnboarding.habitSelect.eat',
+};
+
 export function useHabitOnboarding() {
   const navigate = useNavigate();
   const { userId, markHabitOnboardingCompleted } = useAuth();
+  const { t } = useTranslation();
   // 从 sessionStorage 恢复状态，避免来电/刷新后回到第 1 步
   const [state, setState] = useState<HabitOnboardingState>(loadStateFromStorage);
 
@@ -158,7 +169,7 @@ export function useHabitOnboarding() {
     setState(prev => ({ ...prev, isSaving: true, error: null }));
 
     try {
-      // 获取习惯名称
+      // 获取习惯名称（使用用户当前语言的翻译）
       let habitName: string;
       if (state.selectedHabitId === 'custom') {
         habitName = state.customHabitName.trim();
@@ -167,8 +178,15 @@ export function useHabitOnboarding() {
           return;
         }
       } else {
-        const preset = PRESET_HABITS.find(h => h.id === state.selectedHabitId);
-        habitName = preset?.name || 'My Habit';
+        // 使用翻译系统获取当前语言的习惯名称
+        const translationKey = HABIT_TRANSLATION_KEYS[state.selectedHabitId || ''];
+        if (translationKey) {
+          habitName = t(translationKey);
+        } else {
+          // 如果没有找到翻译 key，回退到预设名称
+          const preset = PRESET_HABITS.find(h => h.id === state.selectedHabitId);
+          habitName = preset?.name || 'My Habit';
+        }
       }
 
       // 创建 routine 类型任务（模板）
@@ -210,7 +228,7 @@ export function useHabitOnboarding() {
         error: err instanceof Error ? err.message : 'Failed to save habit',
       }));
     }
-  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, markHabitOnboardingCompleted]);
+  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, markHabitOnboardingCompleted, t]);
 
   // 计算属性
   const canProceed = useMemo(() => {
@@ -237,11 +255,16 @@ export function useHabitOnboarding() {
 
   const habitDisplayName = useMemo(() => {
     if (state.selectedHabitId === 'custom') {
-      return state.customHabitName || 'Custom habit';
+      return state.customHabitName || t('habitOnboarding.habitSelect.custom');
+    }
+    // 使用翻译系统获取习惯显示名称
+    const translationKey = HABIT_TRANSLATION_KEYS[state.selectedHabitId || ''];
+    if (translationKey) {
+      return t(translationKey);
     }
     const preset = PRESET_HABITS.find(h => h.id === state.selectedHabitId);
     return preset?.name || '';
-  }, [state.selectedHabitId, state.customHabitName]);
+  }, [state.selectedHabitId, state.customHabitName, t]);
 
   const selectedHabit = useMemo((): PresetHabit | null => {
     if (!state.selectedHabitId) return null;

@@ -8,6 +8,7 @@
   "common.processing": "처리 중...",
   "common.submitting": "보내는 중...",
   "common.back": "뒤로",
+  "common.continue": "계속",
 
   "home.procrastinating": "미루고 있지?",
   "home.aiWillCallYou": "AI가 전화할게",
@@ -246,6 +247,12 @@
   "permissions.camera.description": "Lumi가 당신의 행동을 관찰하여 격려하고 안내해 드릴게요. 카메라 접근을 허용해 주세요.",
   "permissions.camera.denied": "권한이 거부되었습니다. 브라우저 설정에서 카메라를 활성화한 후 다시 시도해 주세요.",
   "permissions.camera.button": "카메라 허용",
+  "permissions.alreadyEnabled": "이미 허용됨",
+  "permissions.skip": "건너뛰기",
+  "permissions.skipWarning.title": "권한 필요",
+  "permissions.skipWarning.message": "이 권한 없이는 AI 영상 통화가 제대로 작동하지 않을 수 있어요. 나중에 기기 설정에서 활성화할 수 있어요",
+  "permissions.skipWarning.enable": "지금 허용하기",
+  "permissions.skipWarning.skipAnyway": "그래도 건너뛰기",
 
   "profile.permissions.title": "기기 권한",
   "profile.permissions.subtitle": "AI 영상 통화에 필요해요",

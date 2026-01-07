@@ -8,6 +8,7 @@
   "common.processing": "処理中...",
   "common.submitting": "送信中...",
   "common.back": "戻る",
+  "common.continue": "続ける",
 
   "home.procrastinating": "サボってない？",
   "home.aiWillCallYou": "AIが電話するよ",
@@ -246,6 +247,12 @@
   "permissions.camera.description": "Lumi があなたの行動を見て励まし、ガイドします。カメラへのアクセスを許可してください。",
   "permissions.camera.denied": "許可が拒否されました。ブラウザ設定でカメラを有効にしてから再試行してください。",
   "permissions.camera.button": "カメラを許可",
+  "permissions.alreadyEnabled": "許可済み",
+  "permissions.skip": "スキップ",
+  "permissions.skipWarning.title": "権限が必要",
+  "permissions.skipWarning.message": "この権限がないと、AIビデオ通話が正常に動作しない可能性があります。後でデバイス設定から有効にできます",
+  "permissions.skipWarning.enable": "今すぐ有効にする",
+  "permissions.skipWarning.skipAnyway": "スキップする",
 
   "profile.permissions.title": "デバイスの権限",
   "profile.permissions.subtitle": "AIビデオ通話に必要",

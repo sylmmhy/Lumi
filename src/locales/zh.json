@@ -8,6 +8,7 @@
   "common.processing": "处理中...",
   "common.submitting": "提交中...",
   "common.back": "返回",
+  "common.continue": "继续",
 
   "home.procrastinating": "又在拖延？",
   "home.aiWillCallYou": "AI 会打电话给你",
@@ -256,6 +257,12 @@
   "permissions.camera.description": "Lumi 可以观察你的行动来鼓励和指导你。请允许摄像头权限。",
   "permissions.camera.denied": "权限被拒绝。请在浏览器设置中开启摄像头权限后重试。",
   "permissions.camera.button": "允许摄像头",
+  "permissions.alreadyEnabled": "已开启",
+  "permissions.skip": "跳过",
+  "permissions.skipWarning.title": "需要权限",
+  "permissions.skipWarning.message": "不开启此权限，AI 视频通话可能无法正常工作。你可以稍后在设备设置中开启",
+  "permissions.skipWarning.enable": "现在开启",
+  "permissions.skipWarning.skipAnyway": "仍然跳过",
 
   "profile.permissions.title": "设备权限",
   "profile.permissions.subtitle": "AI 视频通话需要这些权限",

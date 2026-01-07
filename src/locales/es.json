@@ -8,6 +8,7 @@
   "common.processing": "Procesando...",
   "common.submitting": "Enviando...",
   "common.back": "Atrás",
+  "common.continue": "Continuar",
 
   "home.procrastinating": "¿Procrastinando?",
   "home.aiWillCallYou": "La AI te va a llamar",
@@ -246,6 +247,12 @@
   "permissions.camera.description": "Lumi puede observar tus acciones para animarte y guiarte. Permite el acceso a la cámara.",
   "permissions.camera.denied": "Permiso denegado. Habilita la cámara en la configuración del navegador e inténtalo de nuevo.",
   "permissions.camera.button": "Permitir cámara",
+  "permissions.alreadyEnabled": "Ya activado",
+  "permissions.skip": "Omitir",
+  "permissions.skipWarning.title": "Permiso necesario",
+  "permissions.skipWarning.message": "Sin este permiso, las videollamadas con AI pueden no funcionar correctamente. Puedes activarlo después en la configuración del dispositivo",
+  "permissions.skipWarning.enable": "Activar ahora",
+  "permissions.skipWarning.skipAnyway": "Omitir de todos modos",
 
   "profile.permissions.title": "Permisos del dispositivo",
   "profile.permissions.subtitle": "Necesarios para videollamadas con AI",

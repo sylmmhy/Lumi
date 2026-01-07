@@ -58,11 +58,11 @@ export function OnboardingLayout({
         overscrollBehavior: 'none',
       }}
     >
-      {/* 顶部导航 - 使用 safe-area-inset-top 避免刘海屏遮挡 */}
-      <div
-        className="flex items-center px-4 pb-2"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 12px), 12px)' }}
-      >
+      {/* 顶部安全区域 - 刘海屏间隙 */}
+      <div className="shrink-0 h-16 bg-white" />
+
+      {/* 顶部导航 */}
+      <div className="flex items-center px-4 pb-2">
         {/* 返回按钮 */}
         <div className="w-10">
           {showBackButton && onBack && (

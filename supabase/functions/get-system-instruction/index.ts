@@ -64,14 +64,27 @@ function getOnboardingSystemInstruction(
   // 用户本地时间 - 帮助 AI 感知真实时间
   const timeSection = localTime
     ? `
-[CURRENT TIME AWARENESS]
+[CURRENT TIME AWARENESS - STRICT TIME PERIODS]
 The user's local time is: ${localTime}${localDate ? ` on ${localDate}` : ''}.
-Use this to make time-appropriate comments naturally:
-- Morning (before noon): "Good morning" vibes, mention coffee, breakfast, starting the day
-- Afternoon (noon-5pm): Midday energy, lunch mentions, afternoon slump acknowledgment
-- Evening (5pm-9pm): Winding down vibes, dinner time, evening routines
-- Night (after 9pm): Late night acknowledgment, bedtime routines, "getting late" awareness
-DO NOT constantly mention the time. Use it naturally when relevant (like "it's getting late" or "good morning").
+
+You MUST match your tone and greetings to the EXACT time period below:
+
+1. Early Morning (5am-7am): Very early, just waking up. "So early!", sleepy vibes, gentle start.
+2. Morning (7am-11am): Normal morning. "Good morning", coffee, breakfast, starting the day.
+3. Midday (11am-1pm): Around noon. Lunch time, midday energy, "almost lunch" or "lunch time".
+4. Afternoon (1pm-5pm): After lunch. "Good afternoon", afternoon work, maybe a bit tired, snack time.
+5. Early Evening (5pm-7pm): End of workday. "Good evening", dinner time, relaxing after work. NOT late yet.
+6. Evening (7pm-9pm): After dinner. Winding down, evening activities, leisure time. Still NOT late.
+7. Night (9pm-11pm): Getting late. "Getting late", bedtime approaching, wrapping up the day.
+8. Late Night (11pm-5am): Very late or very early. "So late!", should be sleeping, night owl vibes.
+
+CRITICAL RULES:
+- NEVER say "it's late" or "getting late" before 9pm
+- NEVER say "good morning" after 11am
+- NEVER say "good evening" before 5pm
+- Before 9pm, do NOT imply the user should sleep or that it's late
+
+Use time references naturally and sparingly, not every message.
 `
     : '';
 

@@ -401,6 +401,10 @@ export function AuthProvider({
   // 用于追踪 onAuthStateChange 是否正在处理会话
   // 防止 restoreSession 覆盖 onAuthStateChange 正在处理的状态
   const isOnAuthStateChangeProcessingRef = useRef(false);
+  // 用于防止 applyNativeLogin 被多次调用（Android 注入两次的问题）
+  const isApplyingNativeLoginRef = useRef(false);
+  // 追踪 setSession 是否成功触发了 onAuthStateChange
+  const setSessionTriggeredAuthChangeRef = useRef(false);
 
   useEffect(() => { loginPathRef.current = loginPath; }, [loginPath]);
   useEffect(() => { defaultRedirectRef.current = defaultRedirectPath; }, [defaultRedirectPath]);
@@ -1016,9 +1020,38 @@ export function AuthProvider({
       return;
     }
 
+    // 防重入检查：防止 Android 多次注入导致的并发问题
+    if (isApplyingNativeLoginRef.current) {
+      console.log('🔐 applyNativeLogin: 已在处理中，跳过重复调用');
+      return;
+    }
+    isApplyingNativeLoginRef.current = true;
+    console.log('🔐 applyNativeLogin: 开始处理, userId:', userId);
+
     if (!isValidSupabaseUuid(userId)) {
       console.warn('⚠️ mindboat:nativeLogin 提供的 userId 不是有效的 Supabase UUID');
     }
+
+    // 标记正在处理认证，防止 restoreSession 覆盖状态
+    isOnAuthStateChangeProcessingRef.current = true;
+    // 重置 setSession 触发标记
+    setSessionTriggeredAuthChangeRef.current = false;
+
+    // 先设置 isSessionValidated: false，防止路由在查询完成前判断跳转
+    setAuthState(prev => ({
+      ...prev,
+      isLoggedIn: true,
+      userId,
+      userEmail: email || null,
+      userName: userName || null,
+      userPicture: pictureUrl || null,
+      isNewUser: false,
+      sessionToken: accessToken || null,
+      refreshToken: refreshToken || null,
+      isNativeLogin: true,
+      isSessionValidated: false, // 关键：先设为 false，等查询完成
+      hasCompletedHabitOnboarding: prev.userId === userId ? prev.hasCompletedHabitOnboarding : false,
+    }));
 
     localStorage.setItem('user_id', userId);
     if (email) localStorage.setItem('user_email', email);
@@ -1030,11 +1063,15 @@ export function AuthProvider({
     if (accessToken) localStorage.setItem('session_token', accessToken);
     if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
 
+    // 追踪 setSession 是否成功（会触发 onAuthStateChange）
+    let setSessionSucceeded = false;
+
     if (supabase && accessToken && refreshToken) {
       if (!isValidJwt(accessToken) || !isValidJwt(refreshToken)) {
         console.warn('⚠️ 原生登录提供的 token 不是有效的 JWT，已跳过 Supabase 会话设置');
       } else {
         try {
+          console.log('🔐 applyNativeLogin: 调用 setSession...');
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -1042,9 +1079,11 @@ export function AuthProvider({
           if (error) {
             console.warn('⚠️ 原生登录无法建立 Supabase 会话', error);
           } else if (data.session) {
+            setSessionSucceeded = true;
             localStorage.setItem('session_token', data.session.access_token);
             if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
             localStorage.setItem('user_email', data.session.user.email || email || '');
+            console.log('🔐 applyNativeLogin: setSession 成功');
           }
         } catch (err) {
           console.warn('⚠️ 设置 Supabase 会话失败', err);
@@ -1063,38 +1102,76 @@ export function AuthProvider({
       finalPictureUrl = localStorage.getItem('user_picture') || pictureUrl;
     }
 
-    // 查询用户的 habit onboarding 状态
+    // 如果 setSession 成功，onAuthStateChange 会触发并处理 hasCompletedHabitOnboarding 查询
+    // 我们给它一点时间（短暂等待），如果 onAuthStateChange 已经在处理，就让它来设置最终状态
+    if (setSessionSucceeded) {
+      // 短暂等待，让 onAuthStateChange 有机会开始处理
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 检查 onAuthStateChange 是否已经完成处理
+      // 如果 setSessionTriggeredAuthChangeRef 被 onAuthStateChange 设置为 true，说明它已经接管
+      if (setSessionTriggeredAuthChangeRef.current) {
+        console.log('🔐 applyNativeLogin: onAuthStateChange 已接管状态处理，跳过重复查询');
+        isApplyingNativeLoginRef.current = false;
+        // 不清除 isOnAuthStateChangeProcessingRef，让 onAuthStateChange 来清除
+        notifyAuthConfirmed('session_set');
+        return;
+      }
+    }
+
+    // 如果 onAuthStateChange 没有接管，自己查询 hasCompletedHabitOnboarding
     let hasCompletedHabitOnboarding = false;
     if (supabase) {
       try {
+        console.log('🔐 applyNativeLogin: 查询 hasCompletedHabitOnboarding...');
         const { data: userData } = await supabase
           .from('users')
           .select('has_completed_habit_onboarding')
           .eq('id', userId)
           .single();
         hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+        console.log('🔐 applyNativeLogin: hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
       } catch (err) {
-        console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+        console.warn('⚠️ applyNativeLogin: 获取 habit onboarding 状态失败:', err);
       }
     }
 
     await bindAnalyticsUserSync(userId, email);
-    // Native 登录成功后，设置验证状态为 true
-    setAuthState({
-      isLoggedIn: true,
-      userId,
-      userEmail: email || null,
-      userName: finalUserName || null,
-      userPicture: finalPictureUrl || null,
-      isNewUser: false,
-      sessionToken: accessToken || null,
-      refreshToken: refreshToken || null,
-      isNativeLogin: true,
-      isSessionValidated: true,
-      hasCompletedHabitOnboarding,
+
+    // 使用函数式更新，确保不覆盖 onAuthStateChange 可能设置的更新值
+    setAuthState(prev => {
+      // 如果 userId 变了（极端竞态），不更新
+      if (prev.userId !== userId) {
+        console.log('🔐 applyNativeLogin: userId 已变化，跳过状态更新');
+        return prev;
+      }
+      // 如果 onAuthStateChange 已经完成验证，优先使用它的结果
+      if (prev.isSessionValidated && setSessionSucceeded) {
+        console.log('🔐 applyNativeLogin: onAuthStateChange 已完成验证，保留其结果');
+        return prev;
+      }
+      return {
+        ...prev,
+        isLoggedIn: true,
+        userId,
+        userEmail: email || prev.userEmail || null,
+        userName: finalUserName || prev.userName || null,
+        userPicture: finalPictureUrl || prev.userPicture || null,
+        isNewUser: false,
+        sessionToken: accessToken || prev.sessionToken || null,
+        refreshToken: refreshToken || prev.refreshToken || null,
+        isNativeLogin: true,
+        isSessionValidated: true,
+        hasCompletedHabitOnboarding,
+      };
     });
+
+    // 清理标记
+    isOnAuthStateChangeProcessingRef.current = false;
+    isApplyingNativeLoginRef.current = false;
+
     notifyAuthConfirmed('session_set');
-    console.log('🔐 Web: 登录态设置成功, userId:', userId);
+    console.log('🔐 applyNativeLogin: 完成, userId:', userId, 'hasCompletedHabitOnboarding:', hasCompletedHabitOnboarding);
   }, []);
 
   const applyNativeLogout = useCallback(() => {
@@ -1212,6 +1289,8 @@ export function AuthProvider({
       if (session) {
         // 标记 onAuthStateChange 正在处理，防止 restoreSession 覆盖
         isOnAuthStateChangeProcessingRef.current = true;
+        // 标记 setSession 已触发 onAuthStateChange（用于与 applyNativeLogin 协调）
+        setSessionTriggeredAuthChangeRef.current = true;
 
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);
@@ -1235,13 +1314,14 @@ export function AuthProvider({
         void (async () => {
           let hasCompletedHabitOnboarding = false;
           try {
+            console.log('🔄 onAuthStateChange: 查询 hasCompletedHabitOnboarding...');
             const { data: userData } = await client
               .from('users')
               .select('has_completed_habit_onboarding')
               .eq('id', session.user.id)
               .single();
             hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-            console.log('✅ onAuthStateChange: 获取 habit onboarding 状态:', hasCompletedHabitOnboarding);
+            console.log('✅ onAuthStateChange: hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
           } catch (err) {
             console.warn('⚠️ onAuthStateChange: 获取 habit onboarding 状态失败:', err);
           }
@@ -1259,6 +1339,7 @@ export function AuthProvider({
 
           // 标记 onAuthStateChange 处理完成
           isOnAuthStateChangeProcessingRef.current = false;
+          console.log('✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
         })();
 
         // 通知原生端登录成功，以便上传 FCM Token

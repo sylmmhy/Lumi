@@ -714,8 +714,8 @@ export function AuthProvider({
   // ==========================================
 
   const sendEmailOtp = useCallback(async (email: string): Promise<{ error: string | null }> => {
-    // 测试后门：q@q.q 邮箱直接返回成功，不真正发送邮件
-    if (email === 'q@q.q') {
+    // 测试后门：q@q.com 邮箱直接返回成功，不真正发送邮件
+    if (email === 'q@q.com') {
       console.log('🔓 测试后门：跳过发送验证码');
       return { error: null };
     }
@@ -754,8 +754,8 @@ export function AuthProvider({
     email: string,
     otp: string
   ): Promise<{ error: string | null; isNewUser?: boolean }> => {
-    // 测试后门：q@q.q 邮箱 + 123456 验证码直接通过
-    if (email === 'q@q.q' && otp === '123456') {
+    // 测试后门：q@q.com 邮箱 + 123456 验证码直接通过
+    if (email === 'q@q.com' && otp === '123456') {
       console.log('🔓 测试后门：验证码验证通过');
       const testUserId = 'test-user-q-q-q';
 

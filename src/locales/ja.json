@@ -229,5 +229,21 @@
   "habitOnboarding.done.title": "準備完了！",
   "habitOnboarding.done.subtitle": "習慣の準備ができたよ。始めよう！",
   "habitOnboarding.done.button": "始めよう！",
-  "habitOnboarding.done.saving": "保存中..."
+  "habitOnboarding.done.saving": "保存中...",
+
+  "permissions.notification.title": "タイムリーなリマインダー",
+  "permissions.notification.description": "設定した時間に電話して、あなたをサポートします。",
+  "permissions.notification.denied": "許可が拒否されました。ブラウザ設定で通知を有効にしてから再試行してください。",
+  "permissions.notification.button": "通知を有効にする",
+  "permissions.requesting": "リクエスト中...",
+
+  "permissions.microphone.title": "音声会話",
+  "permissions.microphone.description": "Lumi が一歩一歩成功へ導きます。Lumi と話すためにマイクへのアクセスを許可してください。",
+  "permissions.microphone.denied": "許可が拒否されました。ブラウザ設定でマイクを有効にしてから再試行してください。",
+  "permissions.microphone.button": "マイクを許可",
+
+  "permissions.camera.title": "ビジュアルコーチング",
+  "permissions.camera.description": "Lumi があなたの行動を見て励まし、ガイドします。カメラへのアクセスを許可してください。",
+  "permissions.camera.denied": "許可が拒否されました。ブラウザ設定でカメラを有効にしてから再試行してください。",
+  "permissions.camera.button": "カメラを許可"
 }

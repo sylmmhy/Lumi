@@ -229,5 +229,21 @@
   "habitOnboarding.done.title": "준비 완료!",
   "habitOnboarding.done.subtitle": "습관이 준비됐어. 시작하자!",
   "habitOnboarding.done.button": "시작하자!",
-  "habitOnboarding.done.saving": "저장 중..."
+  "habitOnboarding.done.saving": "저장 중...",
+
+  "permissions.notification.title": "적시 알림",
+  "permissions.notification.description": "설정한 시간에 전화해서 목표 달성을 도와줄게요.",
+  "permissions.notification.denied": "권한이 거부되었습니다. 브라우저 설정에서 알림을 활성화한 후 다시 시도해 주세요.",
+  "permissions.notification.button": "알림 활성화",
+  "permissions.requesting": "요청 중...",
+
+  "permissions.microphone.title": "음성 대화",
+  "permissions.microphone.description": "Lumi가 단계별로 성공을 안내해 드릴게요. Lumi와 대화하려면 마이크 접근을 허용해 주세요.",
+  "permissions.microphone.denied": "권한이 거부되었습니다. 브라우저 설정에서 마이크를 활성화한 후 다시 시도해 주세요.",
+  "permissions.microphone.button": "마이크 허용",
+
+  "permissions.camera.title": "비주얼 코칭",
+  "permissions.camera.description": "Lumi가 당신의 행동을 관찰하여 격려하고 안내해 드릴게요. 카메라 접근을 허용해 주세요.",
+  "permissions.camera.denied": "권한이 거부되었습니다. 브라우저 설정에서 카메라를 활성화한 후 다시 시도해 주세요.",
+  "permissions.camera.button": "카메라 허용"
 }

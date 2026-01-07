@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 // AndroidBridge interface is declared in src/context/AuthContext.tsx
 
@@ -54,6 +55,7 @@ const iOSBridge = {
  * Request notification, microphone, and camera permissions one by one
  */
 export function PermissionsStep({ onNext }: PermissionsStepProps) {
+  const { t } = useTranslation();
   const [subStep, setSubStep] = useState<1 | 2 | 3>(1);
   const [isRequesting, setIsRequesting] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<Record<PermissionType, PermissionStatus>>({
@@ -241,12 +243,12 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Timely Reminders
+          {t('permissions.notification.title')}
         </h1>
 
         {/* Description */}
         <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
-          I'll call you at your scheduled time to help you stay on track.
+          {t('permissions.notification.description')}
         </p>
 
         {/* Denied message */}
@@ -254,7 +256,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
           <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm">
-              Permission denied. Please enable notifications in your browser settings and try again.
+              {t('permissions.notification.denied')}
             </p>
           </div>
         )}
@@ -268,7 +270,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? 'Requesting...' : 'Enable Notifications'}
+            {isRequesting ? t('permissions.requesting') : t('permissions.notification.button')}
           </button>
         </div>
       </div>
@@ -286,12 +288,12 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Voice Conversation
+          {t('permissions.microphone.title')}
         </h1>
 
         {/* Description */}
         <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
-          Lumi will guide you step by step to success. Please allow microphone access to talk with Lumi.
+          {t('permissions.microphone.description')}
         </p>
 
         {/* Denied message */}
@@ -299,7 +301,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
           <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm">
-              Permission denied. Please enable microphone in your browser settings and try again.
+              {t('permissions.microphone.denied')}
             </p>
           </div>
         )}
@@ -313,7 +315,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? 'Requesting...' : 'Allow Microphone'}
+            {isRequesting ? t('permissions.requesting') : t('permissions.microphone.button')}
           </button>
         </div>
       </div>
@@ -330,12 +332,12 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
 
       {/* Title */}
       <h1 className="text-2xl font-bold text-gray-900 mb-4">
-        Visual Coaching
+        {t('permissions.camera.title')}
       </h1>
 
       {/* Description */}
       <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
-        Lumi can observe your actions to encourage and guide you. Please allow camera access.
+        {t('permissions.camera.description')}
       </p>
 
       {/* Denied message */}
@@ -343,7 +345,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
         <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p className="text-sm">
-            Permission denied. Please enable camera in your browser settings and try again.
+            {t('permissions.camera.denied')}
           </p>
         </div>
       )}
@@ -357,7 +359,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md disabled:opacity-50"
         >
-          {isRequesting ? 'Requesting...' : 'Allow Camera'}
+          {isRequesting ? t('permissions.requesting') : t('permissions.camera.button')}
         </button>
       </div>
     </div>

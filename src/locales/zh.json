@@ -239,5 +239,21 @@
   "habitOnboarding.done.title": "一切就绪！",
   "habitOnboarding.done.subtitle": "你的习惯已准备好，开始吧！",
   "habitOnboarding.done.button": "开始吧！",
-  "habitOnboarding.done.saving": "保存中..."
+  "habitOnboarding.done.saving": "保存中...",
+
+  "permissions.notification.title": "及时提醒",
+  "permissions.notification.description": "我会在你设定的时间打电话给你，帮你保持正轨。",
+  "permissions.notification.denied": "权限被拒绝。请在浏览器设置中开启通知权限后重试。",
+  "permissions.notification.button": "开启通知",
+  "permissions.requesting": "请求中...",
+
+  "permissions.microphone.title": "语音对话",
+  "permissions.microphone.description": "Lumi 会一步步引导你走向成功。请允许麦克风权限以便与 Lumi 对话。",
+  "permissions.microphone.denied": "权限被拒绝。请在浏览器设置中开启麦克风权限后重试。",
+  "permissions.microphone.button": "允许麦克风",
+
+  "permissions.camera.title": "视觉指导",
+  "permissions.camera.description": "Lumi 可以观察你的行动来鼓励和指导你。请允许摄像头权限。",
+  "permissions.camera.denied": "权限被拒绝。请在浏览器设置中开启摄像头权限后重试。",
+  "permissions.camera.button": "允许摄像头"
 }

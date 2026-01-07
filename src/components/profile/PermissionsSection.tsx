@@ -55,6 +55,10 @@ const iOSBridge = {
     console.log('[PermissionsSection] iOS: checking camera permission');
     window.webkit?.messageHandlers?.hasCameraPermission?.postMessage({});
   },
+  openAppSettings: () => {
+    console.log('[PermissionsSection] iOS: opening app settings');
+    window.webkit?.messageHandlers?.openAppSettings?.postMessage({});
+  },
 };
 
 /**
@@ -181,12 +185,44 @@ export function PermissionsSection() {
   }, []);
 
   /**
+   * Open app settings to let user manually enable permissions
+   */
+  const openAppSettings = useCallback(() => {
+    console.log('[PermissionsSection] openAppSettings called');
+
+    if (isAndroidWebView()) {
+      window.AndroidBridge?.openAppSettings?.();
+      setIsRequesting(null);
+      return;
+    }
+
+    if (isIOSWebView()) {
+      iOSBridge.openAppSettings();
+      setIsRequesting(null);
+      return;
+    }
+
+    // Web browser - no way to open settings, just reset requesting state
+    setIsRequesting(null);
+  }, []);
+
+  /**
    * Request a single permission
+   * If permission was previously denied, open app settings instead
    */
   const requestPermission = useCallback(async (type: PermissionType) => {
     console.log(`[PermissionsSection] requestPermission called: ${type}`);
     console.log(`[PermissionsSection] Platform: Android=${isAndroidWebView()}, iOS=${isIOSWebView()}`);
+    console.log(`[PermissionsSection] Current status: ${permissions[type]}`);
     setIsRequesting(type);
+
+    // If permission was denied, open app settings instead of requesting again
+    // On iOS and Android, once denied, the system won't show the permission dialog again
+    if (permissions[type] === 'denied') {
+      console.log(`[PermissionsSection] Permission ${type} was denied, opening app settings`);
+      openAppSettings();
+      return;
+    }
 
     // Android WebView
     if (isAndroidWebView()) {
@@ -238,7 +274,7 @@ export function PermissionsSection() {
     } finally {
       setIsRequesting(null);
     }
-  }, []);
+  }, [permissions, openAppSettings]);
 
   /**
    * Request all permissions at once

@@ -67,6 +67,7 @@ declare global {
       requestNotificationPermission?: () => void;
       requestMicrophonePermission?: () => void;
       requestCameraPermission?: () => void;
+      openAppSettings?: () => void;
       // Task-related methods
       onTaskCreated?: (taskJson: string) => void;
       cancelTaskReminder?: (taskId: string) => void;
@@ -103,6 +104,7 @@ declare global {
         hasNotificationPermission?: { postMessage: (message: unknown) => void };
         hasMicrophonePermission?: { postMessage: (message: unknown) => void };
         hasCameraPermission?: { postMessage: (message: unknown) => void };
+        openAppSettings?: { postMessage: (message: unknown) => void };
       };
     };
   }

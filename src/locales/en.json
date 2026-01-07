@@ -8,6 +8,7 @@
   "common.processing": "Processing...",
   "common.submitting": "Submitting...",
   "common.back": "Back",
+  "common.continue": "Continue",
 
   "home.procrastinating": "Procrastinating?",
   "home.aiWillCallYou": "AI will call you",
@@ -256,6 +257,12 @@
   "permissions.camera.description": "Lumi can observe your actions to encourage and guide you. Please allow camera access.",
   "permissions.camera.denied": "Permission denied. Please enable camera in your browser settings and try again.",
   "permissions.camera.button": "Allow Camera",
+  "permissions.alreadyEnabled": "Already enabled",
+  "permissions.skip": "Skip",
+  "permissions.skipWarning.title": "Permission Required",
+  "permissions.skipWarning.message": "Without this permission, AI video calls may not work properly. You can enable it later in your device settings.",
+  "permissions.skipWarning.enable": "Enable Now",
+  "permissions.skipWarning.skipAnyway": "Skip Anyway",
 
   "profile.permissions.title": "Device Permissions",
   "profile.permissions.subtitle": "Required for AI video calls",

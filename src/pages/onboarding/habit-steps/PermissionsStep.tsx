@@ -58,6 +58,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
   const { t } = useTranslation();
   const [subStep, setSubStep] = useState<1 | 2 | 3>(1);
   const [isRequesting, setIsRequesting] = useState(false);
+  const [showSkipWarning, setShowSkipWarning] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<Record<PermissionType, PermissionStatus>>({
     notification: 'pending',
     microphone: 'pending',
@@ -66,6 +67,79 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
 
   // Keep track of which permission we're waiting for
   const pendingPermissionRef = useRef<PermissionType | null>(null);
+
+  // Check initial permission status on mount
+  useEffect(() => {
+    const checkInitialPermissions = async () => {
+      // Check notification
+      if (isAndroidWebView()) {
+        if (window.AndroidBridge?.hasNotificationPermission?.()) {
+          setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
+        }
+        if (window.AndroidBridge?.hasMicrophonePermission?.()) {
+          setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
+        }
+        if (window.AndroidBridge?.hasCameraPermission?.()) {
+          setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
+        }
+      } else if (isIOSWebView()) {
+        // iOS will respond via events
+        iOSBridge.hasNotificationPermission();
+        iOSBridge.hasMicrophonePermission();
+        iOSBridge.hasCameraPermission();
+      } else {
+        // Web browser
+        if ('Notification' in window && Notification.permission === 'granted') {
+          setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
+        }
+        if ('permissions' in navigator) {
+          try {
+            const micResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            if (micResult.state === 'granted') {
+              setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
+            }
+          } catch { /* ignore */ }
+          try {
+            const camResult = await navigator.permissions.query({ name: 'camera' as PermissionName });
+            if (camResult.state === 'granted') {
+              setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    };
+    checkInitialPermissions();
+  }, []);
+
+  // Handle skip - show warning first, then move to next sub-step or finish
+  const handleSkipClick = useCallback(() => {
+    // Check if current permission is not granted - show warning
+    const currentPermission = subStep === 1 ? 'notification' : subStep === 2 ? 'microphone' : 'camera';
+    if (permissionStatus[currentPermission] !== 'granted') {
+      setShowSkipWarning(true);
+    } else {
+      // Permission already granted, just proceed
+      if (subStep === 1) {
+        setSubStep(2);
+      } else if (subStep === 2) {
+        setSubStep(3);
+      } else {
+        onNext();
+      }
+    }
+  }, [subStep, permissionStatus, onNext]);
+
+  // Confirm skip after warning
+  const confirmSkip = useCallback(() => {
+    setShowSkipWarning(false);
+    if (subStep === 1) {
+      setSubStep(2);
+    } else if (subStep === 2) {
+      setSubStep(3);
+    } else {
+      onNext();
+    }
+  }, [subStep, onNext]);
 
   // Listen for native permission results (Android and iOS)
   useEffect(() => {
@@ -232,9 +306,46 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
     }
   }, [onNext]);
 
+  // Skip warning modal
+  const SkipWarningModal = () => (
+    showSkipWarning ? (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+          <div className="text-center">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 text-amber-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {t('permissions.skipWarning.title')}
+            </h3>
+            <p className="text-gray-600 text-sm mb-6">
+              {t('permissions.skipWarning.message')}
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowSkipWarning(false)}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-full transition-colors"
+              >
+                {t('permissions.skipWarning.enable')}
+              </button>
+              <button
+                onClick={confirmSkip}
+                className="w-full py-3 text-gray-500 hover:text-gray-700 font-medium transition-colors"
+              >
+                {t('permissions.skipWarning.skipAnyway')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null
+  );
+
   // Sub-step 1: Notification
   if (subStep === 1) {
     return (
+      <>
+      <SkipWarningModal />
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
         {/* Icon */}
         <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mb-8">
@@ -247,9 +358,19 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
         </h1>
 
         {/* Description */}
-        <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+        <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
           {t('permissions.notification.description')}
         </p>
+
+        {/* Status indicator */}
+        {permissionStatus.notification === 'granted' && (
+          <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
+            <i className="fa-solid fa-circle-check"></i>
+            {t('permissions.alreadyEnabled')}
+          </p>
+        )}
+
+        <div className="mb-8"></div>
 
         {/* Denied message */}
         {permissionStatus.notification === 'denied' && (
@@ -262,24 +383,36 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
         )}
 
         {/* Action button */}
-        <div className="w-full mt-auto mb-4">
+        <div className="w-full mt-auto mb-4 space-y-3">
           <button
-            onClick={requestNotification}
+            onClick={permissionStatus.notification === 'granted' ? handleSkipClick : requestNotification}
             disabled={isRequesting}
             className="w-full py-4 px-8 bg-blue-600 hover:bg-blue-700
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? t('permissions.requesting') : t('permissions.notification.button')}
+            {isRequesting ? t('permissions.requesting') :
+             permissionStatus.notification === 'granted' ? t('common.continue') : t('permissions.notification.button')}
           </button>
+          {permissionStatus.notification !== 'granted' && (
+            <button
+              onClick={handleSkipClick}
+              className="w-full py-3 text-gray-500 hover:text-gray-700 text-base font-medium transition-colors"
+            >
+              {t('permissions.skip')}
+            </button>
+          )}
         </div>
       </div>
+      </>
     );
   }
 
   // Sub-step 2: Microphone
   if (subStep === 2) {
     return (
+      <>
+      <SkipWarningModal />
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
         {/* Icon */}
         <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-8">
@@ -292,9 +425,19 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
         </h1>
 
         {/* Description */}
-        <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+        <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
           {t('permissions.microphone.description')}
         </p>
+
+        {/* Status indicator */}
+        {permissionStatus.microphone === 'granted' && (
+          <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
+            <i className="fa-solid fa-circle-check"></i>
+            {t('permissions.alreadyEnabled')}
+          </p>
+        )}
+
+        <div className="mb-8"></div>
 
         {/* Denied message */}
         {permissionStatus.microphone === 'denied' && (
@@ -307,23 +450,35 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
         )}
 
         {/* Action button */}
-        <div className="w-full mt-auto mb-4">
+        <div className="w-full mt-auto mb-4 space-y-3">
           <button
-            onClick={requestMicrophone}
+            onClick={permissionStatus.microphone === 'granted' ? handleSkipClick : requestMicrophone}
             disabled={isRequesting}
             className="w-full py-4 px-8 bg-green-600 hover:bg-green-700
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? t('permissions.requesting') : t('permissions.microphone.button')}
+            {isRequesting ? t('permissions.requesting') :
+             permissionStatus.microphone === 'granted' ? t('common.continue') : t('permissions.microphone.button')}
           </button>
+          {permissionStatus.microphone !== 'granted' && (
+            <button
+              onClick={handleSkipClick}
+              className="w-full py-3 text-gray-500 hover:text-gray-700 text-base font-medium transition-colors"
+            >
+              {t('permissions.skip')}
+            </button>
+          )}
         </div>
       </div>
+      </>
     );
   }
 
   // Sub-step 3: Camera
   return (
+    <>
+    <SkipWarningModal />
     <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
       {/* Icon */}
       <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mb-8">
@@ -336,9 +491,19 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       </h1>
 
       {/* Description */}
-      <p className="text-gray-600 text-lg leading-relaxed mb-8 max-w-sm">
+      <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
         {t('permissions.camera.description')}
       </p>
+
+      {/* Status indicator */}
+      {permissionStatus.camera === 'granted' && (
+        <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
+          <i className="fa-solid fa-circle-check"></i>
+          {t('permissions.alreadyEnabled')}
+        </p>
+      )}
+
+      <div className="mb-8"></div>
 
       {/* Denied message */}
       {permissionStatus.camera === 'denied' && (
@@ -351,17 +516,27 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
       )}
 
       {/* Action button */}
-      <div className="w-full mt-auto mb-4">
+      <div className="w-full mt-auto mb-4 space-y-3">
         <button
-          onClick={requestCamera}
+          onClick={permissionStatus.camera === 'granted' ? onNext : requestCamera}
           disabled={isRequesting}
           className="w-full py-4 px-8 bg-purple-600 hover:bg-purple-700
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md disabled:opacity-50"
         >
-          {isRequesting ? t('permissions.requesting') : t('permissions.camera.button')}
+          {isRequesting ? t('permissions.requesting') :
+           permissionStatus.camera === 'granted' ? t('common.continue') : t('permissions.camera.button')}
         </button>
+        {permissionStatus.camera !== 'granted' && (
+          <button
+            onClick={handleSkipClick}
+            className="w-full py-3 text-gray-500 hover:text-gray-700 text-base font-medium transition-colors"
+          >
+            {t('permissions.skip')}
+          </button>
+        )}
       </div>
     </div>
+    </>
   );
 }

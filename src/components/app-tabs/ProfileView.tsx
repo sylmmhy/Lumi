@@ -6,6 +6,7 @@ import { FeedbackModal } from '../modals/FeedbackModal';
 import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { PermissionsSection } from '../profile/PermissionsSection';
+import { MemoriesSection } from '../profile/MemoriesSection';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
@@ -364,6 +365,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* Device Permissions Section */}
                 <PermissionsSection />
+
+                {/* AI Memories Section */}
+                <MemoriesSection />
 
                 {/* Login/Logout Button - Below Language Settings */}
                 <button

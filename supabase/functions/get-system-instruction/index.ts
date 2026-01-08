@@ -6,39 +6,138 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const MEM0_API_URL = 'https://api.mem0.ai/v1'
+/**
+ * 从任务描述中提取关键词用于模糊匹配
+ */
+function extractKeywords(taskDescription: string): string[] {
+  // 常见的任务关键词映射
+  const keywordMap: Record<string, string[]> = {
+    'sleep': ['sleep', 'bed', 'rest', 'night', '睡', '觉', '休息'],
+    'workout': ['workout', 'exercise', 'gym', 'fitness', '运动', '健身', '锻炼'],
+    'cook': ['cook', 'meal', 'food', 'dinner', 'lunch', 'breakfast', '做饭', '烹饪', '饭'],
+    'clean': ['clean', 'tidy', 'organize', '打扫', '清洁', '整理'],
+    'study': ['study', 'learn', 'read', 'homework', '学习', '读书', '作业'],
+    'work': ['work', 'task', 'project', '工作', '任务', '项目'],
+  }
+
+  const lowerTask = taskDescription.toLowerCase()
+  const keywords: string[] = []
+
+  // 检查任务描述包含哪些关键词类别
+  for (const [category, words] of Object.entries(keywordMap)) {
+    if (words.some(word => lowerTask.includes(word))) {
+      keywords.push(...words)
+    }
+  }
+
+  // 如果没有匹配到预定义类别，提取任务描述中的主要词汇
+  if (keywords.length === 0) {
+    // 简单分词，过滤掉常见的停用词
+    const stopWords = ['to', 'the', 'a', 'an', 'on', 'time', 'go', 'do', 'get', 'my']
+    const words = taskDescription
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !stopWords.includes(w))
+    keywords.push(...words)
+  }
+
+  return [...new Set(keywords)] // 去重
+}
 
 /**
- * Search memories from Mem0 for a specific user
+ * 从 Supabase user_memories 表获取用户记忆
+ * 混合策略：
+ * 1. PREF 类型记忆（通用 AI 交互偏好）- 始终获取
+ * 2. 与当前任务相关的记忆 - 按 task_name 精确匹配或关键词匹配
  */
-async function searchUserMemories(apiKey: string, userId: string, query: string, limit = 5): Promise<string[]> {
+async function getUserMemories(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskDescription: string,
+  limit = 5
+): Promise<string[]> {
   try {
-    const response = await fetch(`${MEM0_API_URL}/memories/search/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        user_id: userId,
-        limit,
-      }),
-    })
+    const memories: Array<{ content: string; tag: string; relevance: string }> = []
 
-    if (!response.ok) {
-      console.warn('Mem0 search failed:', await response.text())
+    // 1. 获取 PREF 类型记忆（通用 AI 交互偏好）- 全部加载，不限条数
+    const { data: prefMemories, error: prefError } = await supabase
+      .from('user_memories')
+      .select('content, tag')
+      .eq('user_id', userId)
+      .eq('tag', 'PREF')
+      .gte('confidence', 0.5)
+      .order('confidence', { ascending: false })
+      .order('created_at', { ascending: false })
+      // 不设 limit，全部加载通用偏好
+
+    if (!prefError && prefMemories) {
+      memories.push(...prefMemories.map(m => ({ ...m, relevance: 'universal' })))
+      console.log(`🧠 获取到 ${prefMemories.length} 条通用偏好记忆 (PREF) - 全部加载`)
+    }
+
+    // 2. 精确匹配：获取同任务名的记忆
+    const { data: exactMemories, error: exactError } = await supabase
+      .from('user_memories')
+      .select('content, tag')
+      .eq('user_id', userId)
+      .eq('task_name', taskDescription)
+      .neq('tag', 'PREF') // 排除已获取的 PREF
+      .gte('confidence', 0.5)
+      .order('confidence', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(3)
+
+    if (!exactError && exactMemories && exactMemories.length > 0) {
+      memories.push(...exactMemories.map(m => ({ ...m, relevance: 'exact_match' })))
+      console.log(`🧠 获取到 ${exactMemories.length} 条精确匹配记忆 (task_name=${taskDescription})`)
+    }
+
+    // 3. 如果精确匹配不足，使用关键词匹配
+    const remainingSlots = limit - memories.length
+    if (remainingSlots > 0) {
+      const keywords = extractKeywords(taskDescription)
+      console.log(`🔍 提取关键词: ${keywords.join(', ')}`)
+
+      if (keywords.length > 0) {
+        // 使用 PostgreSQL 全文搜索
+        const searchQuery = keywords.slice(0, 3).join(' | ') // 使用 OR 连接
+        const { data: keywordMemories, error: keywordError } = await supabase
+          .from('user_memories')
+          .select('content, tag')
+          .eq('user_id', userId)
+          .neq('tag', 'PREF')
+          .neq('task_name', taskDescription) // 排除已精确匹配的
+          .gte('confidence', 0.5)
+          .textSearch('content', searchQuery, { type: 'websearch' })
+          .order('confidence', { ascending: false })
+          .limit(remainingSlots)
+
+        if (!keywordError && keywordMemories && keywordMemories.length > 0) {
+          memories.push(...keywordMemories.map(m => ({ ...m, relevance: 'keyword_match' })))
+          console.log(`🧠 获取到 ${keywordMemories.length} 条关键词匹配记忆`)
+        }
+      }
+    }
+
+    if (memories.length === 0) {
       return []
     }
 
-    const data = await response.json()
-    // Extract memory content from results
-    if (data.results && Array.isArray(data.results)) {
-      return data.results.map((item: { memory: string }) => item.memory)
+    // 将记忆格式化为字符串数组
+    const tagContext: Record<string, string> = {
+      'PREF': '(AI 交互偏好)',
+      'PROC': '(拖延模式)',
+      'SOMA': '(身心反应)',
+      'EMO': '(情绪模式)',
+      'SAB': '(自我妨碍)',
     }
-    return []
+
+    return memories.slice(0, limit).map(m => {
+      const context = tagContext[m.tag] || ''
+      return `${m.content} ${context}`.trim()
+    })
   } catch (error) {
-    console.warn('Mem0 search error:', error)
+    console.warn('获取用户记忆出错:', error)
     return []
   }
 }
@@ -639,14 +738,18 @@ serve(async (req) => {
       console.log('🕐 用户本地时间:', localTime, localDate || '');
     }
 
-    // Fetch user memories from Mem0 if userId is provided and MEM0_API_KEY is set
+    // 从 Supabase user_memories 表获取用户记忆
     let userMemories: string[] = []
-    const mem0ApiKey = Deno.env.get('MEM0_API_KEY')
 
-    if (userId && mem0ApiKey) {
-      console.log('🧠 正在获取用户记忆...')
-      // Search for memories related to the current task
-      userMemories = await searchUserMemories(mem0ApiKey, userId, taskInput, 5)
+    if (userId) {
+      console.log('🧠 正在从 Supabase 获取用户记忆...')
+      // 初始化 Supabase client
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+      // 获取用户记忆
+      userMemories = await getUserMemories(supabase, userId, taskInput, 5)
       console.log(`🧠 获取到 ${userMemories.length} 条相关记忆`)
       if (userMemories.length > 0) {
         console.log('🧠 记忆内容:', userMemories)

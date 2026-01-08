@@ -37,22 +37,13 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                 
                 {/* Streak Section - scales proportionally on narrow screens */}
                 <div
-                    className="flex items-center gap-10 mb-0 origin-center"
+                    className="flex items-center gap-10 mb-0 origin-center relative z-20"
                     style={{
                         transform: 'scale(clamp(0.65, calc((100vw - 3rem) / 24rem), 1))',
                     }}
                 >
                     {/* Yellow Circle with Number */}
-                    <div className="relative w-28 h-28 flex-shrink-0">
-                        {/* Shadow layer - matches scaled image size with smooth box-shadow */}
-                        <div
-                            className="absolute rounded-full"
-                            style={{
-                                inset: '-5%',
-                                transform: 'scale(1.1)',
-                                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                            }}
-                        />
+                    <div className="relative w-28 h-28 flex-shrink-0 z-10">
                         <img
                             src={streakCircle}
                             alt="Streak Circle"
@@ -60,6 +51,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                             style={{
                                 transform: 'scale(1.1) translateZ(0)',
                                 backfaceVisibility: 'hidden',
+                                filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))',
                             }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center">

@@ -145,3 +145,86 @@ export function isNativeApp(): boolean {
 
   return false;
 }
+
+/**
+ * P0 修复：原生端启动时全量同步任务
+ *
+ * 解决的问题：
+ * - App 被杀死后重启，原生端丢失所有任务数据
+ * - WebView 加载慢导致事件发出时原生端未准备好
+ *
+ * 触发时机：
+ * - 原生端启动后，WebView 加载完成时
+ * - 用户登录后
+ * - App 从后台恢复时（可选）
+ *
+ * @param tasks - 所有需要提醒的任务列表
+ */
+export function syncAllTasksToNative(tasks: TaskReminderData[]): void {
+  try {
+    // 过滤出有效的任务（有提醒时间的）
+    const validTasks = tasks.filter(task =>
+      task.id &&
+      task.reminder_date &&
+      task.time &&
+      task.status !== 'completed'
+    );
+
+    // 通用 CustomEvent（供 Android WebView 监听）
+    const event = new CustomEvent('mindboat:tasksBulkSync', {
+      detail: {
+        tasks: validTasks,
+        syncedAt: new Date().toISOString(),
+      },
+      bubbles: true,
+      cancelable: false,
+    });
+    window.dispatchEvent(event);
+
+    // iOS: 发送消息给 WKWebView 的 messageHandler
+    if (window.webkit?.messageHandlers?.taskChanged) {
+      window.webkit.messageHandlers.taskChanged.postMessage({
+        action: 'bulk_sync',
+        tasks: validTasks,
+        syncedAt: new Date().toISOString(),
+      });
+      console.log('📱 [iOS] 已发送 taskChanged 批量同步消息', { count: validTasks.length });
+    }
+
+    console.log(`📱 已同步 ${validTasks.length} 个任务到原生端`);
+  } catch (error) {
+    console.error('❌ 同步任务到原生端失败:', error);
+  }
+}
+
+/**
+ * P0 修复：更新任务的 called 状态到原生端
+ *
+ * @param taskId - 任务 ID
+ * @param called - 是否已呼叫
+ */
+export function notifyNativeTaskCalled(taskId: string, called: boolean): void {
+  try {
+    const event = new CustomEvent('mindboat:taskCalled', {
+      detail: { taskId, called },
+      bubbles: true,
+      cancelable: false,
+    });
+    window.dispatchEvent(event);
+
+    // iOS: 发送消息给 WKWebView 的 messageHandler
+    if (window.webkit?.messageHandlers?.taskChanged) {
+      window.webkit.messageHandlers.taskChanged.postMessage({
+        action: 'update_called',
+        taskId,
+        called,
+      });
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('📱 已通知原生端任务呼叫状态', { taskId, called });
+    }
+  } catch (error) {
+    console.error('❌ 通知任务呼叫状态失败:', error);
+  }
+}

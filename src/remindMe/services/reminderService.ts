@@ -166,7 +166,7 @@ function parseTimeToString(time: string): string {
  * Convert Task object to native reminder data format
  * 将 Task 对象转换为原生提醒数据格式（用于 Android/iOS 桥接）
  */
-function taskToNativeReminder(task: Task, userId: string): TaskReminderData {
+export function taskToNativeReminder(task: Task, userId: string): TaskReminderData {
   return {
     id: task.id,
     user_id: userId,

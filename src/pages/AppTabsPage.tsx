@@ -17,8 +17,9 @@ import {
     updateReminder,
     generateTodayRoutineInstances,
     fetchRecurringReminders,
+    taskToNativeReminder,
 } from '../remindMe/services/reminderService';
-import { isNativeApp } from '../utils/nativeTaskEvents';
+import { isNativeApp, syncAllTasksToNative } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
@@ -166,7 +167,16 @@ export function AppTabsPage() {
                 ]);
 
                 // 合并所有任务
-                setTasks([...todayTasks, ...routineTemplates]);
+                const allTasks = [...todayTasks, ...routineTemplates];
+                setTasks(allTasks);
+
+                // P0 修复：同步所有任务到原生端（解决 App 重启后丢失提醒的问题）
+                if (isNativeApp()) {
+                    const tasksForNative = allTasks
+                        .filter(t => t.date && t.time && !t.completed)
+                        .map(t => taskToNativeReminder(t, auth.userId!));
+                    syncAllTasksToNative(tasksForNative);
+                }
             } catch (error) {
                 console.error('Failed to load reminders:', error);
             }
@@ -404,6 +414,17 @@ export function AppTabsPage() {
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
             });
             console.log('✅ AI Coach session started successfully');
+
+            // P0 修复：持久化 called 状态到数据库（解决刷新后重复触发的问题）
+            if (auth.userId) {
+                try {
+                    await updateReminder(task.id, { called: true });
+                    console.log('✅ Task called status persisted to database');
+                } catch (updateError) {
+                    console.error('⚠️ Failed to persist called status:', updateError);
+                    // 即使持久化失败，也更新前端状态
+                }
+            }
             setTasks(prev => prev.map(t => t.id === task.id ? { ...t, called: true } : t));
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);

@@ -6,9 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Azure AI Foundry 配置
-const AZURE_ENDPOINT = Deno.env.get('AZURE_AI_ENDPOINT') || 'https://conta-mcvprtb1-eastus2.services.ai.azure.com'
-const AZURE_PROJECT = Deno.env.get('AZURE_AI_PROJECT') || 'conta-mcvprtb1-eastus2_project'
+// Azure AI Foundry 配置 - 使用 OpenAI 兼容的 REST API
+const AZURE_ENDPOINT = Deno.env.get('AZURE_AI_ENDPOINT') || 'https://conta-mcvprtb1-eastus2.openai.azure.com'
 const AZURE_API_KEY = Deno.env.get('AZURE_AI_API_KEY')
 const MODEL_NAME = Deno.env.get('MEMORY_EXTRACTOR_MODEL') || 'gpt-5.1-chat'
 
@@ -136,19 +135,46 @@ async function extractMemoriesWithAI(
     throw new Error('AZURE_AI_API_KEY environment variable not set')
   }
 
+  // 过滤掉空消息或无效消息
+  const validMessages = messages.filter(m => m && m.content && typeof m.content === 'string' && m.content.trim())
+
+  console.log(`Received ${messages.length} messages, ${validMessages.length} valid`)
+
+  if (validMessages.length === 0) {
+    console.log('No valid messages to process')
+    return []
+  }
+
+  // 合并连续的同角色消息（因为流式输出会把一句话分成多条消息）
+  const mergedMessages: Array<{ role: string; content: string }> = []
+  for (const msg of validMessages) {
+    const lastMsg = mergedMessages[mergedMessages.length - 1]
+    if (lastMsg && lastMsg.role === msg.role) {
+      // 合并到上一条消息
+      lastMsg.content += msg.content
+    } else {
+      // 新角色，创建新消息
+      mergedMessages.push({ role: msg.role, content: msg.content })
+    }
+  }
+
+  console.log(`Merged to ${mergedMessages.length} messages`)
+
   // 构建用户消息，包含对话内容
-  const conversationText = messages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+  const conversationText = mergedMessages
+    .map(m => `${m.role?.toUpperCase() || 'UNKNOWN'}: ${m.content}`)
     .join('\n')
+
+  console.log(`Conversation text length: ${conversationText.length} chars`)
 
   const userPrompt = taskDescription
     ? `Task context: "${taskDescription}"\n\nConversation:\n${conversationText}`
     : `Conversation:\n${conversationText}`
 
-  // 调用 Azure AI Foundry / Azure OpenAI
-  // 使用 api-key 认证时，应该用 /openai/deployments/{model}/chat/completions 格式
-  // /models/chat/completions 格式需要 Bearer token 认证
-  const apiUrl = `${AZURE_ENDPOINT}/openai/deployments/${MODEL_NAME}/chat/completions?api-version=2024-10-21`
+  // 调用 Azure AI Foundry - 使用 OpenAI 兼容的 REST API
+  // URL: {endpoint}/openai/v1/chat/completions
+  // 认证: Authorization: Bearer {api_key}
+  const apiUrl = `${AZURE_ENDPOINT}/openai/v1/chat/completions`
 
   console.log(`Calling Azure AI: ${apiUrl} with model: ${MODEL_NAME}`)
 
@@ -156,16 +182,15 @@ async function extractMemoriesWithAI(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'api-key': AZURE_API_KEY,
+      'Authorization': `Bearer ${AZURE_API_KEY}`,
     },
     body: JSON.stringify({
-      // Azure OpenAI deployments 不需要在 body 中指定 model，由 URL 中的 deployment name 决定
+      model: MODEL_NAME,  // 需要在 body 中指定 model
       messages: [
         { role: 'system', content: EXTRACTION_PROMPT },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.3,  // 低温度，更确定性的输出
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
     }),
   })
 
@@ -201,6 +226,7 @@ async function saveMemories(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   memories: ExtractedMemory[],
+  taskDescription?: string,
   metadata?: Record<string, unknown>
 ) {
   if (memories.length === 0) {
@@ -212,6 +238,7 @@ async function saveMemories(
     content: m.content,
     tag: m.tag,
     confidence: m.confidence,
+    task_name: taskDescription || null, // 新增：保存任务名称
     metadata: metadata || {},
     created_at: new Date().toISOString(),
   }))
@@ -325,7 +352,7 @@ serve(async (req) => {
 
         // 2. 保存到 Supabase
         if (extractedMemories.length > 0) {
-          const saveResult = await saveMemories(supabase, userId, extractedMemories, {
+          const saveResult = await saveMemories(supabase, userId, extractedMemories, taskDescription, {
             ...metadata,
             taskDescription,
             extractedAt: new Date().toISOString(),

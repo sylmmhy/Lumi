@@ -44,15 +44,22 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                 >
                     {/* Yellow Circle with Number */}
                     <div className="relative w-28 h-28 flex-shrink-0">
+                        {/* Shadow layer - matches scaled image size with smooth box-shadow */}
+                        <div
+                            className="absolute rounded-full"
+                            style={{
+                                inset: '-5%',
+                                transform: 'scale(1.1)',
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                            }}
+                        />
                         <img
                             src={streakCircle}
                             alt="Streak Circle"
                             className="w-full h-full object-contain"
                             style={{
-                                /* Force GPU layer and smooth rendering on all devices */
                                 transform: 'scale(1.1) translateZ(0)',
                                 backfaceVisibility: 'hidden',
-                                WebkitBackfaceVisibility: 'hidden',
                             }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center">

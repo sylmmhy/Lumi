@@ -148,14 +148,30 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   }, []);
 
   /**
+   * 获取当前本地时间（24小时制）
+   * 用于在每次触发消息中附带时间，让 AI 知道真实的用户本地时间
+   */
+  const getCurrentLocalTime = useCallback((): string => {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }, []);
+
+  /**
    * 生成语言无关的触发词消息
    * 使用触发词格式，让 AI 根据 System Prompt 中的定义用用户语言回复
    * 这样无论虚拟消息是什么语言，AI 都会用用户选择的语言回复
+   *
+   * 每次触发消息都附带 current_time=HH:MM，让 AI 知道真实的用户本地时间
+   * 这样 AI 就不会使用服务器时间（UTC）来判断时间
    */
   const generateTimeAwareMessage = useCallback(async (category: VirtualMessageCategory): Promise<string> => {
-    // 开场白消息 - 使用触发词
+    const currentTime = getCurrentLocalTime();
+
+    // 开场白消息 - 使用触发词，附带当前时间
     if (category === 'opening') {
-      return '[GREETING]';
+      return `[GREETING] current_time=${currentTime}`;
     }
 
     const elapsedMs = Date.now() - taskStartTime;
@@ -164,27 +180,27 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
 
     // 状态检查消息 - 包含精确时间
     if (category === 'status_check') {
-      return `[STATUS] elapsed=${elapsedMinutes}m${elapsedSeconds % 60}s`;
+      return `[STATUS] elapsed=${elapsedMinutes}m${elapsedSeconds % 60}s current_time=${currentTime}`;
     }
 
     // encouragement_focused - 默认类型
-    // 触发词包含详细时间信息，AI 会根据 System Prompt 用用户语言回复
+    // 触发词包含详细时间信息和当前本地时间，AI 会根据 System Prompt 用用户语言回复
     if (elapsedSeconds < 30) {
-      return '[CHECK_IN] elapsed=just_started';
+      return `[CHECK_IN] elapsed=just_started current_time=${currentTime}`;
     } else if (elapsedMinutes === 0) {
-      return '[CHECK_IN] elapsed=30s';
+      return `[CHECK_IN] elapsed=30s current_time=${currentTime}`;
     } else if (elapsedMinutes === 1) {
-      return '[CHECK_IN] elapsed=1m';
+      return `[CHECK_IN] elapsed=1m current_time=${currentTime}`;
     } else if (elapsedMinutes === 2) {
-      return '[CHECK_IN] elapsed=2m';
+      return `[CHECK_IN] elapsed=2m current_time=${currentTime}`;
     } else if (elapsedMinutes === 3) {
-      return '[CHECK_IN] elapsed=3m';
+      return `[CHECK_IN] elapsed=3m current_time=${currentTime}`;
     } else if (elapsedMinutes === 4) {
-      return '[CHECK_IN] elapsed=4m remaining=1m';
+      return `[CHECK_IN] elapsed=4m remaining=1m current_time=${currentTime}`;
     } else {
-      return '[CHECK_IN] elapsed=5m timer_done=true';
+      return `[CHECK_IN] elapsed=5m timer_done=true current_time=${currentTime}`;
     }
-  }, [taskStartTime]);
+  }, [taskStartTime, getCurrentLocalTime]);
 
   // 使用 ref 存储回调函数，避免 useEffect 依赖变化导致的循环
   const onSendMessageRef = useRef(onSendMessage);

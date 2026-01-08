@@ -39,7 +39,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [taskInput, setTaskInput] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date()); // New State for Date
-    const [isRoutine, setIsRoutine] = useState(true);
+    const [isRoutine, setIsRoutine] = useState(() => {
+        const saved = localStorage.getItem('isRoutinePreference');
+        return saved !== null ? saved === 'true' : true;
+    });
     const [activeTab, setActiveTab] = useState<TaskType>(TaskType.ROUTINE);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -167,7 +170,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onAddTask(newTask);
         setTaskInput('');
         setSelectedTime('');
-        setIsRoutine(false);
         setShowTimePicker(false);
     };
 
@@ -344,7 +346,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex-1 overflow-y-auto no-scrollbar relative" onScroll={handleScroll}>
 
                 {/* Header Section (Scrolls away) - Increased z-index to 45 to be above sticky tabs (z-40) so TimePicker shows on top */}
-                <div className="bg-brand-blue px-6 pt-16 pb-1 relative z-[45] transition-colors duration-500">
+                <div className="bg-brand-blue px-6 pt-16 pb-1 relative z-[45] transition-colors duration-500 overflow-visible">
                     <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
                     <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
 
@@ -388,7 +390,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             type="checkbox"
                             className="hidden"
                             checked={isRoutine}
-                            onChange={() => setIsRoutine(!isRoutine)}
+                            onChange={() => {
+                                const newValue = !isRoutine;
+                                setIsRoutine(newValue);
+                                localStorage.setItem('isRoutinePreference', String(newValue));
+                            }}
                         />
                         <span className="italic text-lg group-hover:text-white transition-colors" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>{t('home.routineTask')}</span>
                     </label>

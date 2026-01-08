@@ -478,11 +478,14 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
                   preferredLanguages,
                   userId,
                   // 注入用户本地时间，让 AI 知道当前是几点
-                  localTime: new Date().toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  }),
+                  // 使用 24 小时制避免 AM/PM 误解
+                  localTime: (() => {
+                    const now = new Date();
+                    const hours = now.getHours();
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    // 24小时制更清晰，不会有 AM/PM 误解
+                    return `${hours}:${minutes} (24-hour format)`;
+                  })(),
                   localDate: new Date().toLocaleDateString('en-US', {
                     weekday: 'long',
                     month: 'short',
@@ -657,14 +660,14 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         });
       }
 
-      const { data, error } = await supabaseClient.functions.invoke('mem0-memory', {
+      const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
         body: {
-          action: 'add',
+          action: 'extract',
           userId,
           messages: mem0Messages,
+          taskDescription,
           metadata: {
             source: 'ai_coach_session',
-            taskDescription,
             sessionDuration: initialTime - state.timeRemaining,
             timestamp: new Date().toISOString(),
           },

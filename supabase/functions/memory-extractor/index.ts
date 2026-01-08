@@ -145,13 +145,10 @@ async function extractMemoriesWithAI(
     ? `Task context: "${taskDescription}"\n\nConversation:\n${conversationText}`
     : `Conversation:\n${conversationText}`
 
-  // 调用 Azure AI Foundry
-  // 支持两种 endpoint 格式：
-  // 1. Azure OpenAI: /openai/deployments/{model}/chat/completions
-  // 2. Azure AI Foundry: /models/chat/completions 或 /openai/deployments/{model}/chat/completions
-  const apiUrl = AZURE_ENDPOINT.includes('services.ai.azure.com')
-    ? `${AZURE_ENDPOINT}/models/chat/completions?api-version=2024-05-01-preview`
-    : `${AZURE_ENDPOINT}/openai/deployments/${MODEL_NAME}/chat/completions?api-version=2024-10-21`
+  // 调用 Azure AI Foundry / Azure OpenAI
+  // 使用 api-key 认证时，应该用 /openai/deployments/{model}/chat/completions 格式
+  // /models/chat/completions 格式需要 Bearer token 认证
+  const apiUrl = `${AZURE_ENDPOINT}/openai/deployments/${MODEL_NAME}/chat/completions?api-version=2024-10-21`
 
   console.log(`Calling Azure AI: ${apiUrl} with model: ${MODEL_NAME}`)
 
@@ -162,7 +159,7 @@ async function extractMemoriesWithAI(
       'api-key': AZURE_API_KEY,
     },
     body: JSON.stringify({
-      model: MODEL_NAME,  // Azure AI Foundry 需要在 body 中指定 model
+      // Azure OpenAI deployments 不需要在 body 中指定 model，由 URL 中的 deployment name 决定
       messages: [
         { role: 'system', content: EXTRACTION_PROMPT },
         { role: 'user', content: userPrompt }

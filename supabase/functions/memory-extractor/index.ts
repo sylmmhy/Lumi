@@ -622,6 +622,8 @@ async function consolidateMemories(
 
   for (const tag of tags) {
     // 获取该标签的所有记忆
+    console.log(`Querying memories for user ${userId}, tag ${tag}...`)
+
     const { data: memories, error } = await supabase
       .from('user_memories')
       .select('*')
@@ -629,7 +631,19 @@ async function consolidateMemories(
       .eq('tag', tag)
       .order('created_at', { ascending: true })
 
-    if (error || !memories || memories.length < 2) {
+    if (error) {
+      console.error(`Query error for tag ${tag}:`, error)
+      continue
+    }
+
+    if (!memories || memories.length === 0) {
+      console.log(`No memories found for tag ${tag}`)
+      continue
+    }
+
+    if (memories.length < 2) {
+      console.log(`Only ${memories.length} memory for tag ${tag}, skipping (need at least 2 to consolidate)`)
+      totalProcessed += memories.length
       continue
     }
 
@@ -908,8 +922,28 @@ serve(async (req) => {
         if (!userId) {
           throw new Error('Missing required field: userId')
         }
-        console.log(`Consolidating memories for user: ${userId}, tag: ${tag || 'all'}`)
+        console.log(`=== CONSOLIDATE REQUEST ===`)
+        console.log(`userId: ${userId}`)
+        console.log(`userId type: ${typeof userId}`)
+        console.log(`tag filter: ${tag || 'all'}`)
+
+        // 先验证用户是否有记忆
+        const { data: checkData, error: checkError } = await supabase
+          .from('user_memories')
+          .select('id, tag')
+          .eq('user_id', userId)
+          .limit(10)
+
+        console.log(`Pre-check: found ${checkData?.length || 0} memories for this user`)
+        if (checkError) {
+          console.error('Pre-check error:', checkError)
+        }
+        if (checkData && checkData.length > 0) {
+          console.log('Sample memories:', checkData.slice(0, 3))
+        }
+
         result = await consolidateMemories(supabase, userId, tag)
+        console.log(`Consolidate result:`, result)
         break
       }
 

@@ -55,7 +55,7 @@ const TAG_CONFIG: Record<string, { label: string; labelZh: string; icon: string;
  * Collapsible design - shows as a single row, expands to show memory list
  */
 export function MemoriesSection() {
-  const { t, uiLanguage } = useTranslation();
+  const { uiLanguage } = useTranslation();
   const auth = useContext(AuthContext);
   const [isExpanded, setIsExpanded] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -121,9 +121,6 @@ export function MemoriesSection() {
     return acc;
   }, {} as Record<string, Memory[]>);
 
-  // Count by type
-  const prefCount = groupedMemories['PREF']?.length || 0;
-  const otherCount = memories.length - prefCount;
 
   if (!auth?.isLoggedIn) {
     return null;

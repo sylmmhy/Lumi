@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { useTranslation } from './useTranslation';
 import { createReminder, generateTodayRoutineInstances } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
+import { DEFAULT_APP_PATH } from '../constants/routes';
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -219,7 +220,7 @@ export function useHabitOnboarding() {
       clearStateFromStorage();
 
       // 成功，导航到主页
-      navigate('/app/urgency');
+      navigate(DEFAULT_APP_PATH);
     } catch (err) {
       console.error('Error saving habit:', err);
       setState(prev => ({

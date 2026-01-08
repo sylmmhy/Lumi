@@ -53,9 +53,9 @@ function initAnalyticsDeferred() {
  * 根路径重定向组件：根据用户登录状态和 onboarding 完成情况决定跳转目标。
  *
  * 跳转逻辑：
- * 1. 未登录 → /app/urgency（允许体验，后续操作会触发登录）
+ * 1. 未登录 → /app/home（允许体验，后续操作会触发登录）
  * 2. 已登录但未完成 habit onboarding → /habit-onboarding
- * 3. 已登录且已完成 habit onboarding → /app/urgency
+ * 3. 已登录且已完成 habit onboarding → /app/home
  *
  * @returns {null} 不渲染任何 UI，仅负责路由跳转。
  */

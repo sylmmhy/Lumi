@@ -67,7 +67,9 @@
       "Bash(npx supabase:*)",
       "mcp__supabase__list_migrations",
       "mcp__mem0__search_memories",
-      "mcp__supabase__get_project_url"
+      "mcp__supabase__get_project_url",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:mem0.ai)"
     ],
     "deny": [],
     "ask": []

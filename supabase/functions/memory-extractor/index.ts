@@ -10,6 +10,10 @@ const corsHeaders = {
 const AZURE_ENDPOINT = Deno.env.get('AZURE_AI_ENDPOINT') || 'https://conta-mcvprtb1-eastus2.openai.azure.com'
 const AZURE_API_KEY = Deno.env.get('AZURE_AI_API_KEY')
 const MODEL_NAME = Deno.env.get('MEMORY_EXTRACTOR_MODEL') || 'gpt-5.1-chat'
+const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embedding-3-large'
+
+// 记忆整合配置
+const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
 
 // 记忆提取的系统提示词
 const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS and PREFERENCES from user conversations, not facts.
@@ -90,6 +94,36 @@ Output:
 - Note frequency if mentioned: "always", "every time", "usually"
 - Include psychological insight when the pattern suggests it`
 
+// 记忆合并的系统提示词
+const MERGE_PROMPT = `You are a memory consolidation expert. Your task is to merge multiple similar memories into ONE concise, comprehensive memory.
+
+## RULES
+1. Preserve ALL unique details from each memory
+2. Remove redundancy and repetition
+3. Keep the merged memory concise but complete
+4. Maintain the same tag type
+5. Use the highest confidence among the memories being merged
+
+## OUTPUT FORMAT
+Return a JSON object:
+{
+  "content": "The merged memory text",
+  "confidence": 0.0-1.0
+}
+
+## EXAMPLE
+
+Input memories:
+1. "User feels unable to sleep when tasks are unfinished"
+2. "User feels strong anxiety about going to bed because tasks feel unfinished"
+3. "User becomes anxious whenever thinking about sleep due to incomplete work"
+
+Output:
+{
+  "content": "User experiences strong anxiety about going to bed when tasks feel unfinished, which prevents them from falling asleep. The thought of incomplete work triggers stress that interferes with winding down.",
+  "confidence": 0.9
+}`
+
 interface ExtractMemoryRequest {
   action: 'extract'
   userId: string
@@ -116,12 +150,147 @@ interface DeleteMemoryRequest {
   memoryId: string
 }
 
-type MemoryRequest = ExtractMemoryRequest | SearchMemoryRequest | GetMemoriesRequest | DeleteMemoryRequest
+interface ConsolidateMemoryRequest {
+  action: 'consolidate'
+  userId: string
+  tag?: string  // 可选：只整合特定标签的记忆
+}
+
+type MemoryRequest = ExtractMemoryRequest | SearchMemoryRequest | GetMemoriesRequest | DeleteMemoryRequest | ConsolidateMemoryRequest
 
 interface ExtractedMemory {
   content: string
   tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB'
   confidence: number
+}
+
+interface ExistingMemory {
+  id: string
+  content: string
+  tag: string
+  confidence: number
+  similarity: number
+}
+
+interface SaveResult {
+  action: 'created' | 'merged' | 'skipped'
+  memoryId: string
+  content: string
+  mergedFrom?: string[]
+}
+
+/**
+ * 生成文本的 embedding 向量
+ */
+async function generateEmbedding(text: string): Promise<number[]> {
+  if (!AZURE_API_KEY) {
+    throw new Error('AZURE_AI_API_KEY environment variable not set')
+  }
+
+  const apiUrl = `${AZURE_ENDPOINT}/openai/v1/embeddings`
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${AZURE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: EMBEDDING_MODEL,
+      input: text,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Embedding API error:', error)
+    throw new Error(`Embedding request failed: ${response.status}`)
+  }
+
+  const result = await response.json()
+  return result.data?.[0]?.embedding || []
+}
+
+/**
+ * 查找相似的现有记忆
+ */
+async function findSimilarMemories(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  embedding: number[],
+  tag: string
+): Promise<ExistingMemory[]> {
+  // 使用数据库函数进行向量相似度搜索
+  const { data, error } = await supabase.rpc('search_similar_memories', {
+    p_user_id: userId,
+    p_embedding: JSON.stringify(embedding),
+    p_tag: tag,
+    p_threshold: SIMILARITY_THRESHOLD,
+    p_limit: 5,
+  })
+
+  if (error) {
+    console.error('Similar memory search error:', error)
+    // 如果函数不存在（迁移未运行），返回空数组
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * 使用 LLM 合并多条相似记忆
+ */
+async function mergeMemoriesWithAI(
+  memories: Array<{ content: string; confidence: number }>
+): Promise<{ content: string; confidence: number }> {
+  if (!AZURE_API_KEY) {
+    throw new Error('AZURE_AI_API_KEY environment variable not set')
+  }
+
+  const memoriesText = memories
+    .map((m, i) => `${i + 1}. "${m.content}"`)
+    .join('\n')
+
+  const apiUrl = `${AZURE_ENDPOINT}/openai/v1/chat/completions`
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${AZURE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: MERGE_PROMPT },
+        { role: 'user', content: `Merge these memories:\n${memoriesText}` }
+      ],
+      max_completion_tokens: 500,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Merge API error:', error)
+    throw new Error(`Merge request failed: ${response.status}`)
+  }
+
+  const result = await response.json()
+  const content = result.choices?.[0]?.message?.content
+
+  try {
+    const parsed = JSON.parse(content)
+    return {
+      content: parsed.content,
+      confidence: Math.max(...memories.map(m => m.confidence), parsed.confidence || 0.8),
+    }
+  } catch (e) {
+    console.error('Failed to parse merge response:', content, e)
+    // 回退：保留置信度最高的那条
+    const best = memories.reduce((a, b) => a.confidence > b.confidence ? a : b)
+    return best
+  }
 }
 
 /**
@@ -220,39 +389,151 @@ async function extractMemoriesWithAI(
 }
 
 /**
- * 保存记忆到 Supabase
+ * 保存或合并记忆到 Supabase（含 Update Phase 逻辑）
+ *
+ * 流程：
+ * 1. 为每条新记忆生成 embedding
+ * 2. 查找相似的现有记忆
+ * 3. 如果找到相似记忆 → 合并并更新
+ * 4. 如果没有相似记忆 → 创建新记忆
  */
-async function saveMemories(
+async function saveOrMergeMemories(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   memories: ExtractedMemory[],
   taskDescription?: string,
   metadata?: Record<string, unknown>
-) {
+): Promise<{ saved: number; merged: number; results: SaveResult[] }> {
   if (memories.length === 0) {
-    return { saved: 0 }
+    return { saved: 0, merged: 0, results: [] }
   }
 
-  const records = memories.map(m => ({
-    user_id: userId,
-    content: m.content,
-    tag: m.tag,
-    confidence: m.confidence,
-    task_name: taskDescription || null, // 新增：保存任务名称
-    metadata: metadata || {},
-    created_at: new Date().toISOString(),
-  }))
+  const results: SaveResult[] = []
+  let savedCount = 0
+  let mergedCount = 0
 
-  const { data, error } = await supabase
-    .from('user_memories')
-    .insert(records)
-    .select()
+  for (const memory of memories) {
+    try {
+      // 1. 生成 embedding
+      console.log(`Generating embedding for: ${memory.content.substring(0, 50)}...`)
+      const embedding = await generateEmbedding(memory.content)
 
-  if (error) {
-    throw new Error(`Failed to save memories: ${error.message}`)
+      if (embedding.length === 0) {
+        console.warn('Failed to generate embedding, saving without dedup')
+        // 回退到简单插入
+        const { data } = await supabase
+          .from('user_memories')
+          .insert({
+            user_id: userId,
+            content: memory.content,
+            tag: memory.tag,
+            confidence: memory.confidence,
+            task_name: taskDescription || null,
+            metadata: metadata || {},
+          })
+          .select()
+          .single()
+
+        if (data) {
+          results.push({ action: 'created', memoryId: data.id, content: memory.content })
+          savedCount++
+        }
+        continue
+      }
+
+      // 2. 查找相似记忆
+      const similarMemories = await findSimilarMemories(supabase, userId, embedding, memory.tag)
+      console.log(`Found ${similarMemories.length} similar memories for tag ${memory.tag}`)
+
+      if (similarMemories.length > 0) {
+        // 3. 有相似记忆 → 合并
+        const allMemories = [
+          { content: memory.content, confidence: memory.confidence },
+          ...similarMemories.map(m => ({ content: m.content, confidence: m.confidence }))
+        ]
+
+        console.log(`Merging ${allMemories.length} memories...`)
+        const merged = await mergeMemoriesWithAI(allMemories)
+
+        // 生成合并后内容的新 embedding
+        const mergedEmbedding = await generateEmbedding(merged.content)
+
+        // 更新最相似的那条记忆（保留其 ID）
+        const targetMemory = similarMemories[0]
+        const mergedFromIds = similarMemories.map(m => m.id)
+
+        const { data, error } = await supabase
+          .from('user_memories')
+          .update({
+            content: merged.content,
+            confidence: merged.confidence,
+            embedding: JSON.stringify(mergedEmbedding),
+            task_name: taskDescription || null,
+            merged_from: mergedFromIds,
+            metadata: {
+              ...metadata,
+              lastMergedAt: new Date().toISOString(),
+              mergeCount: (similarMemories.length + 1),
+            },
+          })
+          .eq('id', targetMemory.id)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Failed to update merged memory:', error)
+          continue
+        }
+
+        // 删除其他被合并的记忆（除了目标记忆）
+        if (similarMemories.length > 1) {
+          const idsToDelete = similarMemories.slice(1).map(m => m.id)
+          await supabase
+            .from('user_memories')
+            .delete()
+            .in('id', idsToDelete)
+          console.log(`Deleted ${idsToDelete.length} merged source memories`)
+        }
+
+        results.push({
+          action: 'merged',
+          memoryId: targetMemory.id,
+          content: merged.content,
+          mergedFrom: mergedFromIds,
+        })
+        mergedCount++
+
+      } else {
+        // 4. 没有相似记忆 → 创建新记忆
+        const { data, error } = await supabase
+          .from('user_memories')
+          .insert({
+            user_id: userId,
+            content: memory.content,
+            tag: memory.tag,
+            confidence: memory.confidence,
+            embedding: JSON.stringify(embedding),
+            task_name: taskDescription || null,
+            metadata: metadata || {},
+          })
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Failed to save new memory:', error)
+          continue
+        }
+
+        results.push({ action: 'created', memoryId: data.id, content: memory.content })
+        savedCount++
+      }
+
+    } catch (err) {
+      console.error(`Error processing memory: ${memory.content.substring(0, 50)}...`, err)
+    }
   }
 
-  return { saved: data?.length || 0, memories: data }
+  return { saved: savedCount, merged: mergedCount, results }
 }
 
 /**
@@ -321,6 +602,228 @@ async function deleteMemory(
   return { success: true, memoryId }
 }
 
+/**
+ * 整合现有记忆（清理重复）
+ * 对用户的每个标签类别，找出相似记忆并合并
+ */
+async function consolidateMemories(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  targetTag?: string
+): Promise<{ processed: number; merged: number; deleted: number }> {
+  const tags = targetTag ? [targetTag] : ['PREF', 'PROC', 'SOMA', 'EMO', 'SAB']
+
+  let totalProcessed = 0
+  let totalMerged = 0
+  let totalDeleted = 0
+
+  // 文本相似度阈值（比 embedding 阈值低一些，因为准确性较低）
+  const TEXT_SIMILARITY_THRESHOLD = 0.4
+
+  for (const tag of tags) {
+    // 获取该标签的所有记忆
+    const { data: memories, error } = await supabase
+      .from('user_memories')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tag', tag)
+      .order('created_at', { ascending: true })
+
+    if (error || !memories || memories.length < 2) {
+      continue
+    }
+
+    console.log(`Processing ${memories.length} memories for tag ${tag}`)
+    totalProcessed += memories.length
+
+    // 尝试为没有 embedding 的记忆生成 embedding（但失败不阻塞流程）
+    let embeddingAvailable = false
+    for (const memory of memories) {
+      if (!memory.embedding) {
+        try {
+          const embedding = await generateEmbedding(memory.content)
+          if (embedding && embedding.length > 0) {
+            await supabase
+              .from('user_memories')
+              .update({ embedding: JSON.stringify(embedding) })
+              .eq('id', memory.id)
+            memory.embedding = embedding
+            embeddingAvailable = true
+          }
+        } catch (err) {
+          console.warn(`Embedding generation failed for ${memory.id}, will use text similarity:`, err)
+        }
+      } else {
+        embeddingAvailable = true
+      }
+    }
+
+    console.log(`Embedding available: ${embeddingAvailable}, using ${embeddingAvailable ? 'vector' : 'text'} similarity`)
+
+    // 找出相似组（使用简单的贪心聚类）
+    const processed = new Set<string>()
+    const groups: typeof memories[] = []
+
+    for (const memory of memories) {
+      if (processed.has(memory.id)) continue
+
+      const group = [memory]
+      processed.add(memory.id)
+
+      // 找出与当前记忆相似的其他记忆
+      for (const other of memories) {
+        if (processed.has(other.id)) continue
+
+        let similarity = 0
+
+        // 优先使用 embedding 相似度
+        if (memory.embedding && other.embedding) {
+          try {
+            similarity = cosineSimilarity(
+              typeof memory.embedding === 'string' ? JSON.parse(memory.embedding) : memory.embedding,
+              typeof other.embedding === 'string' ? JSON.parse(other.embedding) : other.embedding
+            )
+            if (similarity >= SIMILARITY_THRESHOLD) {
+              group.push(other)
+              processed.add(other.id)
+              console.log(`  Embedding match: "${memory.content.substring(0, 30)}..." ~ "${other.content.substring(0, 30)}..." (${(similarity * 100).toFixed(1)}%)`)
+            }
+          } catch (err) {
+            console.warn('Failed to parse embeddings, falling back to text similarity')
+            similarity = textSimilarity(memory.content, other.content)
+            if (similarity >= TEXT_SIMILARITY_THRESHOLD) {
+              group.push(other)
+              processed.add(other.id)
+              console.log(`  Text match: "${memory.content.substring(0, 30)}..." ~ "${other.content.substring(0, 30)}..." (${(similarity * 100).toFixed(1)}%)`)
+            }
+          }
+        } else {
+          // 回退到文本相似度
+          similarity = textSimilarity(memory.content, other.content)
+          if (similarity >= TEXT_SIMILARITY_THRESHOLD) {
+            group.push(other)
+            processed.add(other.id)
+            console.log(`  Text match: "${memory.content.substring(0, 30)}..." ~ "${other.content.substring(0, 30)}..." (${(similarity * 100).toFixed(1)}%)`)
+          }
+        }
+      }
+
+      if (group.length > 1) {
+        groups.push(group)
+      }
+    }
+
+    console.log(`Found ${groups.length} groups of similar memories for tag ${tag}`)
+
+    // 合并每个相似组
+    for (const group of groups) {
+      try {
+        // 用 LLM 合并
+        const merged = await mergeMemoriesWithAI(
+          group.map(m => ({ content: m.content, confidence: m.confidence }))
+        )
+
+        // 尝试生成新的 embedding（可选，失败不阻塞）
+        let mergedEmbedding: number[] | null = null
+        try {
+          mergedEmbedding = await generateEmbedding(merged.content)
+          if (!mergedEmbedding || mergedEmbedding.length === 0) {
+            mergedEmbedding = null
+          }
+        } catch (embeddingErr) {
+          console.warn('Failed to generate embedding for merged content, proceeding without:', embeddingErr)
+        }
+
+        // 更新第一条记忆
+        const targetId = group[0].id
+        const mergedFromIds = group.map(m => m.id)
+
+        // 构建更新对象（embedding 可选）
+        const updateData: Record<string, unknown> = {
+          content: merged.content,
+          confidence: merged.confidence,
+          merged_from: mergedFromIds,
+          metadata: {
+            consolidatedAt: new Date().toISOString(),
+            mergeCount: group.length,
+          },
+        }
+        if (mergedEmbedding) {
+          updateData.embedding = JSON.stringify(mergedEmbedding)
+        }
+
+        await supabase
+          .from('user_memories')
+          .update(updateData)
+          .eq('id', targetId)
+
+        // 删除其他记忆
+        const idsToDelete = group.slice(1).map(m => m.id)
+        if (idsToDelete.length > 0) {
+          await supabase
+            .from('user_memories')
+            .delete()
+            .in('id', idsToDelete)
+
+          totalDeleted += idsToDelete.length
+        }
+
+        totalMerged++
+        console.log(`Merged ${group.length} memories into one (tag: ${tag})`)
+
+      } catch (err) {
+        console.error(`Failed to merge group:`, err)
+      }
+    }
+  }
+
+  return { processed: totalProcessed, merged: totalMerged, deleted: totalDeleted }
+}
+
+/**
+ * 计算两个向量的余弦相似度
+ */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0
+
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
+
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+
+  if (normA === 0 || normB === 0) return 0
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+/**
+ * 计算文本相似度 (Jaccard + 关键词重叠)
+ * 用于在没有 embedding 时作为回退方案
+ */
+function textSimilarity(text1: string, text2: string): number {
+  // 简单分词
+  const tokenize = (text: string) => {
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 2)
+  }
+
+  const tokens1 = new Set(tokenize(text1))
+  const tokens2 = new Set(tokenize(text2))
+
+  // Jaccard 相似度
+  const intersection = [...tokens1].filter(t => tokens2.has(t)).length
+  const union = new Set([...tokens1, ...tokens2]).size
+
+  if (union === 0) return 0
+  return intersection / union
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -350,9 +853,9 @@ serve(async (req) => {
         const extractedMemories = await extractMemoriesWithAI(messages, taskDescription)
         console.log(`Extracted ${extractedMemories.length} memories`)
 
-        // 2. 保存到 Supabase
+        // 2. 保存或合并到 Supabase (Update Phase)
         if (extractedMemories.length > 0) {
-          const saveResult = await saveMemories(supabase, userId, extractedMemories, taskDescription, {
+          const saveResult = await saveOrMergeMemories(supabase, userId, extractedMemories, taskDescription, {
             ...metadata,
             taskDescription,
             extractedAt: new Date().toISOString(),
@@ -360,10 +863,12 @@ serve(async (req) => {
           result = {
             extracted: extractedMemories.length,
             saved: saveResult.saved,
+            merged: saveResult.merged,
+            results: saveResult.results,
             memories: extractedMemories
           }
         } else {
-          result = { extracted: 0, saved: 0, memories: [] }
+          result = { extracted: 0, saved: 0, merged: 0, results: [], memories: [] }
         }
         break
       }
@@ -395,6 +900,16 @@ serve(async (req) => {
         }
         console.log(`Deleting memory: ${memoryId}`)
         result = await deleteMemory(supabase, memoryId)
+        break
+      }
+
+      case 'consolidate': {
+        const { userId, tag } = body as ConsolidateMemoryRequest
+        if (!userId) {
+          throw new Error('Missing required field: userId')
+        }
+        console.log(`Consolidating memories for user: ${userId}, tag: ${tag || 'all'}`)
+        result = await consolidateMemories(supabase, userId, tag)
         break
       }
 

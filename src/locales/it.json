@@ -269,5 +269,12 @@
   "profile.permissions.warning": "Senza questi permessi, l'AI non può fare videochiamate per aiutarti a vincere la procrastinazione.",
   "profile.permissions.enableAll": "Attiva tutti i permessi",
   "profile.permissions.requesting": "Richiesta in corso...",
-  "profile.permissions.allEnabledMessage": "Tutti i permessi attivi! L'AI è pronta a chiamarti."
+  "profile.permissions.allEnabledMessage": "Tutti i permessi attivi! L'AI è pronta a chiamarti.",
+
+  "profile.deleteAccount": "Elimina account",
+  "profile.deleteAccountTitle": "Elimina account",
+  "profile.deleteAccountWarning": "Sei sicuro di voler eliminare il tuo account? Questa azione non può essere annullata. Tutti i tuoi dati saranno eliminati permanentemente.",
+  "profile.deleteAccountConfirm": "Elimina il mio account",
+  "profile.deleteAccountSuccess": "Il tuo account è stato eliminato.",
+  "profile.deleteAccountError": "Impossibile eliminare l'account. Per favore riprova."
 }

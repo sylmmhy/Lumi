@@ -1105,6 +1105,52 @@ export function AuthProvider({
   }, [authState.userId]);
 
   // ==========================================
+  // 删除账户
+  // ==========================================
+
+  const deleteAccount = useCallback(async (): Promise<{ error: string | null }> => {
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    const userId = authState.userId;
+    if (!userId) return { error: 'User not logged in' };
+
+    try {
+      console.log('🗑️ 开始删除账户:', userId);
+
+      // 1. 删除用户相关的任务数据
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', userId);
+
+      if (tasksError) {
+        console.warn('⚠️ 删除任务数据失败（可能没有数据）:', tasksError.message);
+      }
+
+      // 2. 删除用户在 public.users 表中的数据
+      const { error: userError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (userError) {
+        console.error('❌ 删除用户数据失败:', userError);
+        return { error: userError.message };
+      }
+
+      console.log('✅ 用户数据已删除');
+
+      // 3. 登出并清理本地状态
+      await logout();
+
+      return { error: null };
+    } catch (err) {
+      console.error('❌ 删除账户时出错:', err);
+      return { error: String(err) };
+    }
+  }, [authState.userId, logout]);
+
+  // ==========================================
   // Native 登录处理
   // ==========================================
 
@@ -1506,6 +1552,7 @@ export function AuthProvider({
     fullReset,
     markOnboardingCompleted,
     markHabitOnboardingCompleted,
+    deleteAccount,
   }), [
     authState,
     isOAuthProcessing,
@@ -1521,6 +1568,7 @@ export function AuthProvider({
     fullReset,
     markHabitOnboardingCompleted,
     markOnboardingCompleted,
+    deleteAccount,
   ]);
 
   return (

@@ -7,28 +7,15 @@ interface LandingHeroProps {
 export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
     return (
         <section
-            className="relative w-full overflow-hidden"
+            className="relative w-full overflow-hidden px-6"
             style={{
                 fontFamily: 'Nunito, sans-serif',
                 backgroundColor: '#F8F8F8',
                 minHeight: '600px'
             }}
         >
-            {/* Blue circle - large, extends beyond right edge */}
-            <div
-                className="absolute rounded-full hidden lg:block"
-                style={{
-                    width: '400px',
-                    height: '400px',
-                    backgroundColor: '#2545BD',
-                    right: '350px',
-                    top: '180px',
-                    zIndex: 1
-                }}
-            />
-
             {/* Content container */}
-            <div className="max-w-6xl mx-auto px-6 lg:px-12 relative" style={{ zIndex: 10 }}>
+            <div className="max-w-6xl mx-auto relative" style={{ zIndex: 10 }}>
                 <div className="flex flex-col lg:flex-row items-center lg:items-start pt-24 lg:pt-28 pb-16">
                     {/* Left side: Branding + Description + CTA */}
                     <div className="w-full lg:w-[45%] z-10">
@@ -49,9 +36,9 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                             className="mb-10 text-gray-800"
                             style={{
                                 fontWeight: 500,
-                                fontSize: '20px',
-                                lineHeight: '1.6em',
-                                maxWidth: '420px'
+                                fontSize: '32px',
+                                lineHeight: '1.4em',
+                                maxWidth: '500px'
                             }}
                         >
                             Procrastination Champion? Can't Stick To Habits For More Than 3 Days? We Got You.
@@ -78,10 +65,22 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                         </button>
                     </div>
 
-                    {/* Right side: Phone mockup with orange circle */}
+                    {/* Right side: Phone mockup with circles */}
                     <div className="w-full lg:w-[55%] relative flex justify-center lg:justify-end mt-12 lg:mt-0">
                         <div className="relative">
-
+                            {/* Blue circle - behind and to the right */}
+                            <div
+                                className="absolute rounded-full hidden lg:block"
+                                style={{
+                                    width: '380px',
+                                    height: '380px',
+                                    backgroundColor: '#2545BD',
+                                    left: '55%',
+                                    top: '50%',
+                                    transform: 'translate(-20%, -50%)',
+                                    zIndex: 1
+                                }}
+                            />
                             {/* Phone mockup */}
                             <img
                                 src="/hero-phones.png"

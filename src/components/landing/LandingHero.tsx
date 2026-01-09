@@ -7,13 +7,13 @@ interface LandingHeroProps {
 export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
     return (
         <section
-            className="relative w-full min-h-screen overflow-hidden"
-            style={{ backgroundColor: '#EDEDED', fontFamily: 'Nunito, sans-serif' }}
+            className="relative w-full overflow-hidden pt-16"
+            style={{ backgroundColor: '#EDEDED', fontFamily: 'Nunito, sans-serif', minHeight: '600px' }}
         >
             {/* Right side background image */}
             <div
-                className="absolute right-0 top-0 h-full"
-                style={{ width: '55%' }}
+                className="absolute right-0 top-0 h-full hidden lg:block"
+                style={{ width: '50%' }}
             >
                 <img
                     src="/landing-hero-bg.png"
@@ -24,24 +24,20 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
 
             {/* Left side content */}
             <div
-                className="relative z-10 flex flex-col justify-center min-h-screen"
+                className="relative z-10 flex flex-col justify-center px-6 lg:px-0"
                 style={{
-                    paddingLeft: '80px',
-                    paddingTop: '120px',
-                    paddingBottom: '120px',
-                    maxWidth: '650px',
-                    gap: '32px'
+                    paddingLeft: 'max(24px, calc((100vw - 1200px) / 2 + 80px))',
+                    paddingTop: '80px',
+                    paddingBottom: '80px',
+                    maxWidth: '600px',
+                    gap: '24px'
                 }}
             >
                 {/* Logo */}
                 <img
                     src="/landing-logo.png"
                     alt="Lumi"
-                    style={{
-                        width: '462px',
-                        height: 'auto',
-                        maxWidth: '100%'
-                    }}
+                    className="w-full max-w-[380px]"
                 />
 
                 {/* Tagline */}
@@ -50,9 +46,8 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                     style={{
                         fontFamily: 'Nunito, sans-serif',
                         fontWeight: 500,
-                        fontSize: '25px',
-                        lineHeight: '1.44em',
-                        textTransform: 'capitalize'
+                        fontSize: '22px',
+                        lineHeight: '1.5em'
                     }}
                 >
                     Procrastination Champion? Can't Stick To Habits For More Than 3 Days? We Got You.
@@ -65,12 +60,12 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                     style={{
                         fontFamily: 'Nunito, sans-serif',
                         fontWeight: 700,
-                        fontSize: '25px',
+                        fontSize: '20px',
                         lineHeight: '1.85em',
                         backgroundColor: '#2545BD',
                         borderRadius: '26px',
-                        padding: '12px 16px',
-                        width: '271px',
+                        padding: '10px 24px',
+                        width: 'fit-content',
                         textAlign: 'center'
                     }}
                 >

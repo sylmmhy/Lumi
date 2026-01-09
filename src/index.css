@@ -141,3 +141,13 @@ button {
   0% { background-position: -200% center; }
   100% { background-position: 200% center; }
 }
+
+/* Landing page scroll animation */
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll {
+  animation: scroll 20s linear infinite;
+}

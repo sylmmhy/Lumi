@@ -7,6 +7,22 @@ const corsHeaders = {
 }
 
 /**
+ * 用户成功记录的结构
+ */
+interface SuccessRecord {
+  taskType: string
+  lastDuration: number | null
+  lastDate: string | null
+  currentStreak: number
+  totalCompletions: number
+  recentSuccesses: Array<{
+    content: string
+    duration_minutes: number | null
+    overcame_resistance: boolean
+  }>
+}
+
+/**
  * 从任务描述中提取关键词用于模糊匹配
  */
 function extractKeywords(taskDescription: string): string[] {
@@ -42,6 +58,168 @@ function extractKeywords(taskDescription: string): string[] {
   }
 
   return [...new Set(keywords)] // 去重
+}
+
+/**
+ * 从任务描述推断任务类型
+ */
+function inferTaskType(taskDescription: string): string {
+  if (!taskDescription) return 'general'
+
+  const lower = taskDescription.toLowerCase()
+
+  // 运动健身类
+  if (lower.includes('workout') || lower.includes('exercise') || lower.includes('gym') ||
+      lower.includes('fitness') || lower.includes('运动') || lower.includes('健身') ||
+      lower.includes('锻炼') || lower.includes('push-up') || lower.includes('pushup')) {
+    return 'workout'
+  }
+
+  // 睡眠类
+  if (lower.includes('sleep') || lower.includes('bed') || lower.includes('rest') ||
+      lower.includes('nap') || lower.includes('睡') || lower.includes('觉') ||
+      lower.includes('休息')) {
+    return 'sleep'
+  }
+
+  // 刷牙/个人卫生类
+  if (lower.includes('brush') || lower.includes('teeth') || lower.includes('tooth') ||
+      lower.includes('shower') || lower.includes('wash') || lower.includes('刷牙') ||
+      lower.includes('洗') || lower.includes('牙')) {
+    return 'hygiene'
+  }
+
+  // 做饭类
+  if (lower.includes('cook') || lower.includes('meal') || lower.includes('food') ||
+      lower.includes('dinner') || lower.includes('lunch') || lower.includes('breakfast') ||
+      lower.includes('做饭') || lower.includes('烹饪') || lower.includes('饭')) {
+    return 'cooking'
+  }
+
+  // 清洁类
+  if (lower.includes('clean') || lower.includes('tidy') || lower.includes('organize') ||
+      lower.includes('打扫') || lower.includes('清洁') || lower.includes('整理')) {
+    return 'cleaning'
+  }
+
+  // 学习类
+  if (lower.includes('study') || lower.includes('learn') || lower.includes('read') ||
+      lower.includes('homework') || lower.includes('学习') || lower.includes('读书') ||
+      lower.includes('作业') || lower.includes('看书')) {
+    return 'study'
+  }
+
+  // 工作类
+  if (lower.includes('work') || lower.includes('task') || lower.includes('project') ||
+      lower.includes('email') || lower.includes('工作') || lower.includes('任务') ||
+      lower.includes('项目')) {
+    return 'work'
+  }
+
+  // 冥想/放松类
+  if (lower.includes('meditat') || lower.includes('breath') || lower.includes('relax') ||
+      lower.includes('calm') || lower.includes('冥想') || lower.includes('呼吸') ||
+      lower.includes('放松')) {
+    return 'meditation'
+  }
+
+  return 'general'
+}
+
+/**
+ * 获取用户的成功记录
+ * 用于在会话开始时让 AI 知道用户的历史成就
+ */
+async function getSuccessRecords(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskDescription: string
+): Promise<SuccessRecord | null> {
+  try {
+    const taskType = inferTaskType(taskDescription)
+    console.log(`🏆 正在获取 ${taskType} 类型的成功记录...`)
+
+    // 获取该任务类型的 SUCCESS 记忆
+    const { data: successMemories, error } = await supabase
+      .from('user_memories')
+      .select('content, metadata, created_at')
+      .eq('user_id', userId)
+      .eq('tag', 'SUCCESS')
+      .order('created_at', { ascending: false })
+      .limit(20) // 获取更多，然后筛选
+
+    if (error) {
+      console.warn('获取成功记录出错:', error)
+      return null
+    }
+
+    if (!successMemories || successMemories.length === 0) {
+      console.log('🏆 没有找到成功记录')
+      return null
+    }
+
+    // 筛选匹配任务类型的记录
+    const matchingRecords = successMemories.filter(m => {
+      const metadata = m.metadata as Record<string, unknown> | null
+      return metadata?.task_type === taskType
+    })
+
+    if (matchingRecords.length === 0) {
+      console.log(`🏆 没有找到 ${taskType} 类型的成功记录`)
+      return null
+    }
+
+    console.log(`🏆 找到 ${matchingRecords.length} 条 ${taskType} 类型的成功记录`)
+
+    // 获取最近一条记录的详情
+    const latestRecord = matchingRecords[0]
+    const latestMetadata = latestRecord.metadata as Record<string, unknown> | null
+
+    // 计算连胜（尝试调用数据库函数，失败则用本地计算）
+    let currentStreak = 0
+    try {
+      const { data: streakData } = await supabase.rpc('calculate_user_streak', {
+        p_user_id: userId,
+        p_task_type: taskType
+      })
+      currentStreak = streakData || 0
+    } catch (e) {
+      // 如果数据库函数不存在，用元数据中的 streak_count
+      currentStreak = (latestMetadata?.streak_count as number) || matchingRecords.length
+      console.log('使用元数据中的连胜数:', currentStreak)
+    }
+
+    // 提取最近3条的详情
+    const recentSuccesses = matchingRecords.slice(0, 3).map(m => {
+      const metadata = m.metadata as Record<string, unknown> | null
+      return {
+        content: m.content,
+        duration_minutes: (metadata?.duration_minutes as number) || null,
+        overcame_resistance: (metadata?.overcame_resistance as boolean) || false,
+      }
+    })
+
+    const result: SuccessRecord = {
+      taskType,
+      lastDuration: (latestMetadata?.duration_minutes as number) || null,
+      lastDate: (latestMetadata?.completion_date as string) || null,
+      currentStreak,
+      totalCompletions: matchingRecords.length,
+      recentSuccesses,
+    }
+
+    console.log('🏆 成功记录汇总:', {
+      taskType: result.taskType,
+      lastDuration: result.lastDuration,
+      currentStreak: result.currentStreak,
+      totalCompletions: result.totalCompletions,
+    })
+
+    return result
+  } catch (error) {
+    console.warn('获取成功记录出错:', error)
+    return null
+  }
 }
 
 /**
@@ -153,6 +331,7 @@ function getOnboardingSystemInstruction(
   userName?: string,
   preferredLanguages?: string[],
   userMemories?: string[],
+  successRecord?: SuccessRecord | null,
   localTime?: string,
   localDate?: string
 ): string {
@@ -205,6 +384,39 @@ DO NOT:
 - Say "I remember you told me..."
 - List out what you know about them
 - Make it obvious you are reading from a memory database
+`
+    : '';
+
+  // 成功记录部分 - 用于正向激励
+  const successSection = successRecord && successRecord.totalCompletions > 0
+    ? `
+------------------------------------------------------------
+IMPORTANT: USER SUCCESS HISTORY (Use for positive reinforcement!)
+------------------------------------------------------------
+This user has successfully completed similar tasks before. Use this to encourage them!
+
+Task Type: ${successRecord.taskType}
+${successRecord.lastDuration ? `- Last time they did it for: ${successRecord.lastDuration} minutes` : ''}
+${successRecord.lastDate ? `- Last completion: ${successRecord.lastDate}` : ''}
+- Current streak: ${successRecord.currentStreak} day${successRecord.currentStreak !== 1 ? 's' : ''} in a row
+- Total completions: ${successRecord.totalCompletions} time${successRecord.totalCompletions !== 1 ? 's' : ''}
+${successRecord.recentSuccesses.some(s => s.overcame_resistance) ? '- They have overcome resistance before and pushed through!' : ''}
+
+HOW TO USE THIS (pick moments naturally, do not spam all at once):
+- At the START: Casually mention their track record
+  ${successRecord.lastDuration ? `Example: "You did ${successRecord.lastDuration} minutes last time. Ready to match or beat it?"` : ''}
+  ${successRecord.currentStreak > 1 ? `Example: "Day ${successRecord.currentStreak + 1} incoming! Let us keep the streak alive."` : ''}
+- When they STRUGGLE (middle of task): Remind them of past success
+  Example: "You have done this ${successRecord.totalCompletions} time${successRecord.totalCompletions !== 1 ? 's' : ''} before. You know you can."
+  ${successRecord.recentSuccesses.some(s => s.overcame_resistance) ? 'Example: "Last time you wanted to quit too, but you pushed through. You got this."' : ''}
+- At the END: Celebrate the streak
+  ${successRecord.currentStreak > 0 ? `Example: "That makes ${successRecord.currentStreak + 1} days in a row! You are on fire."` : 'Example: "First one done! Tomorrow we build the streak."'}
+
+CRITICAL - DO NOT:
+- Sound like you are reading from a database ("your records show...")
+- Mention exact stats robotically ("you have completed 7 tasks with average duration...")
+- Overuse the data - sprinkle it naturally, maybe 2-3 times during the whole session
+- Use this if it feels forced - only mention when it fits the conversation
 `
     : '';
 
@@ -313,7 +525,7 @@ CRITICAL:
 
   return `You are Lumi, helping the user complete this 5-minute task:
 "${taskDescription}"
-${userNameSection}${timeSection}${memoriesSection}${languageSection}${triggerWordsSection}
+${userNameSection}${timeSection}${memoriesSection}${successSection}${languageSection}${triggerWordsSection}
 
 [CRITICAL: AUDIO-ONLY OUTPUT MODE]
 You are generating a script for a Text-to-Speech engine.
@@ -738,8 +950,9 @@ serve(async (req) => {
       console.log('🕐 用户本地时间:', localTime, localDate || '');
     }
 
-    // 从 Supabase user_memories 表获取用户记忆
+    // 从 Supabase user_memories 表获取用户记忆和成功记录
     let userMemories: string[] = []
+    let successRecord: SuccessRecord | null = null
 
     if (userId) {
       console.log('🧠 正在从 Supabase 获取用户记忆...')
@@ -748,16 +961,26 @@ serve(async (req) => {
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-      // 获取用户记忆
-      userMemories = await getUserMemories(supabase, userId, taskInput, 5)
+      // 并行获取用户记忆和成功记录
+      const [memories, success] = await Promise.all([
+        getUserMemories(supabase, userId, taskInput, 5),
+        getSuccessRecords(supabase, userId, taskInput),
+      ])
+
+      userMemories = memories
+      successRecord = success
+
       console.log(`🧠 获取到 ${userMemories.length} 条相关记忆`)
       if (userMemories.length > 0) {
         console.log('🧠 记忆内容:', userMemories)
       }
+      if (successRecord) {
+        console.log(`🏆 获取到成功记录: ${successRecord.totalCompletions} 次完成, 连胜 ${successRecord.currentStreak} 天`)
+      }
     }
 
-    // Generate system instruction with memories
-    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories, localTime, localDate)
+    // Generate system instruction with memories and success records
+    const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories, successRecord, localTime, localDate)
 
     return new Response(
       JSON.stringify({ systemInstruction }),

@@ -1,5 +1,10 @@
 import React from 'react';
-import LumiSparkle from '../../assets/Lumi-happy.png';
+import LumiMain from '../../assets/new-lumi/lumi-main.png';
+import Zigzag from '../../assets/new-lumi/zigzag.png';
+import ShapeRect from '../../assets/new-lumi/shape-rect.png';
+import DotBlue1 from '../../assets/new-lumi/dot-blue-1.png';
+import DotBlue2 from '../../assets/new-lumi/dot-blue-2.png';
+import RingBlue from '../../assets/new-lumi/ring-blue.png';
 
 interface LandingCTAProps {
     onGetStarted?: () => void;
@@ -20,11 +25,18 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
                     <div className="absolute top-[-50px] left-[-50px] w-64 h-64 rounded-full bg-blue-400/20 blur-3xl" />
                     <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 rounded-full bg-blue-800/40 blur-3xl opacity-50" />
 
-                    {/* Orange Zigzag Decoration */}
-                    <div className="absolute top-12 right-24 w-32 h-32 opacity-20 rotate-12 hidden lg:block">
-                        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M10 50L30 30L50 50L70 30L90 50" stroke="#FE8D00" strokeWidth="12" strokeLinecap="round" />
-                        </svg>
+                    {/* New Decorative Shapes from Assets */}
+                    <div className="absolute top-8 right-16 w-32 h-auto opacity-30 rotate-[-15deg] hidden lg:block z-0">
+                        <img src={Zigzag} alt="" className="w-full h-auto" />
+                    </div>
+                    <div className="absolute bottom-12 right-1/3 w-24 h-auto opacity-20 rotate-12 hidden lg:block z-0">
+                        <img src={ShapeRect} alt="" className="w-full h-auto" />
+                    </div>
+                    <div className="absolute top-1/4 left-1/4 w-8 h-8 opacity-40 hidden lg:block z-0">
+                        <img src={DotBlue1} alt="" className="w-full h-auto" />
+                    </div>
+                    <div className="absolute bottom-1/4 right-1/4 w-6 h-6 opacity-30 hidden lg:block z-0">
+                        <img src={DotBlue2} alt="" className="w-full h-auto" />
                     </div>
 
                     <div className="flex flex-col lg:flex-row items-center p-10 lg:p-20 relative z-10 text-center lg:text-left">
@@ -71,15 +83,21 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
 
                                 {/* The High-Res Mascot */}
                                 <img
-                                    src={LumiSparkle}
+                                    src={LumiMain}
                                     alt="Lumi Mascot"
-                                    className="w-64 md:w-80 z-20 relative animate-lumi"
-                                    style={{ filter: 'drop-shadow(0 20px 50px rgba(254, 141, 0, 0.3))' }}
+                                    className="w-72 md:w-[400px] z-20 relative animate-lumi"
+                                    style={{
+                                        filter: 'drop-shadow(0 20px 60px rgba(254, 141, 0, 0.4))',
+                                    }}
                                 />
 
-                                {/* Orbiting Dots (Vitality elements) */}
-                                <div className="absolute top-0 right-0 w-3 h-3 bg-orange-300 rounded-full animate-ping opacity-60" />
-                                <div className="absolute bottom-10 left-0 w-2 h-2 bg-blue-300 rounded-full animate-pulse opacity-40" />
+                                {/* Orbiting Elements */}
+                                <div className="absolute -top-10 -right-10 w-20 h-20 opacity-40 animate-pulse">
+                                    <img src={RingBlue} alt="" className="w-full h-auto" />
+                                </div>
+                                <div className="absolute -bottom-4 left-4 w-4 h-4 opacity-60">
+                                    <img src={DotBlue1} alt="" className="w-full h-auto" />
+                                </div>
                             </div>
                         </div>
                     </div>

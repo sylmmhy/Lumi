@@ -127,6 +127,8 @@
 
   "profile.uiLanguage": "アプリの言語",
   "profile.uiLanguageHint": "画面の文字の言語",
+  "profile.timeFormat": "時刻形式",
+  "profile.timeFormatHint": "24時間制または12時間制",
 
   "feedback.title": "感想ありがとう！",
   "feedback.contactInfo": "連絡先",

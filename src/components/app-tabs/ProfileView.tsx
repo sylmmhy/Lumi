@@ -10,6 +10,7 @@ import { MemoriesSection } from '../profile/MemoriesSection';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
+import { getTimeFormat, setTimeFormat, TimeFormat } from '../../lib/timeFormat';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -50,6 +51,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // Time format state
+    const [currentTimeFormat, setCurrentTimeFormat] = useState<TimeFormat>(getTimeFormat());
+
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
@@ -57,6 +61,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     useEffect(() => {
         setCurrentLanguages(getPreferredLanguages());
     }, [showLanguageModal, showUILanguageModal]); // Refresh when either modal closes
+
+    // Handle time format toggle
+    const handleTimeFormatToggle = () => {
+        const newFormat: TimeFormat = currentTimeFormat === '24h' ? '12h' : '24h';
+        setTimeFormat(newFormat);
+        setCurrentTimeFormat(newFormat);
+    };
 
     const handleClosePremium = () => {
         setShowPremiumModal(false);
@@ -368,7 +379,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Lumi Voice Language Setting */}
                     <button
                         onClick={() => setShowLanguageModal(true)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
@@ -384,6 +395,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 {getLanguagesDisplayText(currentLanguages)}
                             </span>
                             <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </div>
+                    </button>
+
+                    {/* Time Format Setting */}
+                    <button
+                        onClick={handleTimeFormatToggle}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-clock text-orange-500"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.timeFormat')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.timeFormatHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {currentTimeFormat === '24h' ? '24H' : '12H'}
+                            </span>
+                            <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentTimeFormat === '24h' ? 'bg-brand-blue' : 'bg-gray-300'}`}>
+                                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentTimeFormat === '24h' ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </div>
                         </div>
                     </button>
                 </div>

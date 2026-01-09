@@ -127,6 +127,8 @@
 
   "profile.uiLanguage": "Lingua dell'app",
   "profile.uiLanguageHint": "Lingua del testo dell'interfaccia",
+  "profile.timeFormat": "Formato ora",
+  "profile.timeFormatHint": "Orologio a 24 o 12 ore",
 
   "feedback.title": "Grazie per il feedback!",
   "feedback.contactInfo": "Contatti",

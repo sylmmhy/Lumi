@@ -13,16 +13,8 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
             <div className="max-w-6xl mx-auto">
                 <div
                     className="rounded-3xl overflow-hidden relative"
-                    style={{ backgroundColor: '#2545BD' }}
+                    style={{ backgroundColor: '#F59E0B' }}
                 >
-                    {/* Background decorative elements */}
-                    <div className="absolute top-8 left-1/2 transform -translate-x-1/2">
-                        <span className="text-pink-400 text-2xl">✕</span>
-                    </div>
-                    <div className="absolute top-16 right-1/3">
-                        <span className="text-yellow-400 text-3xl">◆</span>
-                    </div>
-
                     <div className="flex flex-col lg:flex-row items-center p-8 lg:p-16">
                         {/* Left: Content */}
                         <div className="w-full lg:w-1/2 text-white mb-8 lg:mb-0">
@@ -36,12 +28,9 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
                             <div className="flex flex-wrap gap-4">
                                 <button
                                     onClick={onGetStarted}
-                                    className="px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:bg-gray-100 transition-all"
+                                    className="px-8 py-4 bg-white text-[#F59E0B] font-bold rounded-full hover:bg-gray-100 transition-all shadow-lg"
                                 >
                                     Request Beta Access
-                                </button>
-                                <button className="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-full hover:bg-white/10 transition-all">
-                                    Learn More
                                 </button>
                             </div>
                         </div>
@@ -53,23 +42,22 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
                                 <img
                                     src={Feature1}
                                     alt="Lumi App"
-                                    className="w-48 md:w-56 rounded-2xl shadow-xl z-10 relative"
+                                    className="w-48 md:w-56 z-10 relative"
+                                    style={{ borderRadius: '24px' }}
                                 />
                                 {/* Secondary images */}
                                 <img
                                     src={Feature4}
                                     alt="Video Check-in"
-                                    className="absolute -top-4 -right-16 w-32 md:w-40 rounded-xl shadow-lg transform rotate-6"
+                                    className="absolute -top-4 -right-16 w-32 md:w-40 shadow-lg transform rotate-6"
+                                    style={{ borderRadius: '24px' }}
                                 />
                                 <img
                                     src={Feature5}
                                     alt="Progress Tracking"
-                                    className="absolute -bottom-4 -left-16 w-32 md:w-40 rounded-xl shadow-lg transform -rotate-6"
+                                    className="absolute -bottom-4 -left-16 w-32 md:w-40 shadow-lg transform -rotate-6"
+                                    style={{ borderRadius: '24px' }}
                                 />
-                            </div>
-                            {/* Decorative cloud */}
-                            <div className="absolute bottom-0 right-0 text-6xl opacity-50">
-                                ☁️
                             </div>
                         </div>
                     </div>

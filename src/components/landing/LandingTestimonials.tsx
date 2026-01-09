@@ -20,34 +20,9 @@ const testimonials: Testimonial[] = [
     }
 ];
 
-// Decorative emoji/icons for visual interest
-const decorativeElements = [
-    { emoji: '🔥', color: '#FF6B35', top: '10%', left: '15%' },
-    { emoji: '⭐', color: '#FFD700', top: '5%', right: '30%' },
-    { emoji: '💪', color: '#10B981', top: '15%', right: '10%' },
-    { emoji: '🎯', color: '#8B5CF6', bottom: '20%', left: '20%' },
-    { emoji: '✨', color: '#F472B6', bottom: '15%', right: '25%' }
-];
-
 export const LandingTestimonials: React.FC = () => {
     return (
         <section className="py-20 px-6 bg-white relative overflow-hidden" style={{ fontFamily: 'Nunito, sans-serif' }}>
-            {/* Decorative Elements */}
-            {decorativeElements.map((el, idx) => (
-                <div
-                    key={idx}
-                    className="absolute text-4xl md:text-5xl opacity-60 animate-pulse"
-                    style={{
-                        top: el.top,
-                        left: el.left,
-                        right: el.right,
-                        bottom: el.bottom
-                    }}
-                >
-                    {el.emoji}
-                </div>
-            ))}
-
             <div className="max-w-6xl mx-auto relative z-10">
                 {/* Section Title */}
                 <h2 className="text-4xl md:text-5xl font-bold text-center text-gray-900 mb-16">

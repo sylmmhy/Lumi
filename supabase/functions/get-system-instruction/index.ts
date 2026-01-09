@@ -146,10 +146,10 @@ async function getSuccessRecords(
     const keywords = extractKeywords(taskDescription)
     console.log(`🔍 任务匹配关键词: ${keywords.join(', ')}`)
 
-    // 1. 从 tasks 表获取已完成的任务
+    // 1. 从 tasks 表获取已完成的任务（包含新的成功元数据字段）
     const { data: completedTasks, error: tasksError } = await supabase
       .from('tasks')
-      .select('id, title, category, task_type, completed_at, created_at')
+      .select('id, title, category, task_type, completed_at, created_at, completion_mood, difficulty_perception, overcame_resistance, actual_duration_minutes, personal_best_at_completion')
       .eq('user_id', userId)
       .eq('status', 'completed')
       .not('completed_at', 'is', null)
@@ -230,30 +230,45 @@ async function getSuccessRecords(
       currentStreak = calculateStreakFromDates(completionDates)
     }
 
-    // 6. 构建最近成功记录
-    const recentSuccesses = matchingTasks.slice(0, 3).map(task => ({
+    // 6. 构建最近成功记录（使用新的成功元数据字段）
+    const recentSuccesses = matchingTasks.slice(0, 3).map((task: any) => ({
       content: task.title,
-      duration_minutes: null, // tasks 表没有时长字段
-      overcame_resistance: false, // 无法从 tasks 表获取
-      completion_mood: null,
-      difficulty_perception: null,
+      duration_minutes: task.actual_duration_minutes || null,
+      overcame_resistance: task.overcame_resistance || false,
+      completion_mood: task.completion_mood || null,
+      difficulty_perception: task.difficulty_perception || null,
     }))
+
+    // 计算个人最佳（从匹配任务中找最大时长）
+    const personalBest = matchingTasks
+      .filter((t: any) => t.actual_duration_minutes != null)
+      .reduce((max: number | null, t: any) => {
+        if (max === null) return t.actual_duration_minutes
+        return Math.max(max, t.actual_duration_minutes)
+      }, null as number | null)
+
+    // 获取最近一次的时长
+    const lastDuration = (matchingTasks[0] as any)?.actual_duration_minutes || null
 
     const result: SuccessRecord = {
       taskType,
-      lastDuration: null, // tasks 表没有时长字段
+      lastDuration,
       lastDate,
       currentStreak,
       totalCompletions: matchingTasks.length,
-      personalBest: null, // tasks 表没有时长字段
+      personalBest,
       recentSuccesses,
     }
 
     console.log('🏆 成功记录汇总:', {
       taskType: result.taskType,
       lastDate: result.lastDate,
+      lastDuration: result.lastDuration,
       currentStreak: result.currentStreak,
       totalCompletions: result.totalCompletions,
+      personalBest: result.personalBest,
+      hasOvercomeResistance: result.recentSuccesses.some(s => s.overcame_resistance),
+      hasProudMoment: result.recentSuccesses.some(s => s.completion_mood === 'proud'),
     })
 
     return result

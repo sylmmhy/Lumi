@@ -18,11 +18,11 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
             <div
                 className="absolute rounded-full hidden lg:block"
                 style={{
-                    width: '600px',
-                    height: '600px',
+                    width: '400px',
+                    height: '400px',
                     backgroundColor: '#2545BD',
-                    right: '-120px',
-                    top: '-50px',
+                    right: '350px',
+                    top: '180px',
                     zIndex: 1
                 }}
             />
@@ -81,25 +81,13 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                     {/* Right side: Phone mockup with orange circle */}
                     <div className="w-full lg:w-[55%] relative flex justify-center lg:justify-end mt-12 lg:mt-0">
                         <div className="relative">
-                            {/* Orange circle - behind phone */}
-                            <div
-                                className="absolute rounded-full hidden lg:block"
-                                style={{
-                                    width: '380px',
-                                    height: '380px',
-                                    backgroundColor: '#F5A623',
-                                    left: '50%',
-                                    top: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    zIndex: 2
-                                }}
-                            />
+
                             {/* Phone mockup */}
                             <img
                                 src="/hero-phones.png"
                                 alt="Lumi App"
                                 style={{
-                                    width: '340px',
+                                    width: '500px',
                                     height: 'auto',
                                     objectFit: 'contain',
                                     position: 'relative',
@@ -123,17 +111,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                     zIndex: 0
                 }}
             />
-            <div
-                className="absolute rounded-full lg:hidden"
-                style={{
-                    width: '250px',
-                    height: '250px',
-                    backgroundColor: '#F5A623',
-                    right: '0px',
-                    top: '280px',
-                    zIndex: 1
-                }}
-            />
+
         </section>
     );
 };

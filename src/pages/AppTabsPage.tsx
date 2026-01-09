@@ -700,6 +700,22 @@ export function AppTabsPage() {
     }, []);
 
     /**
+     * 用户点击「END CALL」- 仅结束通话，不触发庆祝
+     * - 保存会话记忆到 Mem0（标记为未完成）
+     * - 结束当前 AI 会话
+     * - 返回主界面
+     */
+    const handleEndCall = useCallback(async () => {
+        // 保存会话记忆（不标记为成功完成）
+        await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
+        aiCoach.endSession();
+
+        // 重置状态，返回主界面
+        setCurrentTaskId(null);
+        console.log('📞 通话已结束，返回主界面');
+    }, [aiCoach]);
+
+    /**
      * 用户在任务执行视图中点击「I'M DOING IT!」
      * - 保存会话记忆到 Mem0
      * - 结束当前 AI 会话
@@ -797,7 +813,7 @@ export function AppTabsPage() {
                         secondaryButton={{
                             label: 'END CALL',
                             emoji: '🛑',
-                            onClick: handleEndAICoachSession,
+                            onClick: handleEndCall,
                         }}
                         hasBottomNav={false}
                     />

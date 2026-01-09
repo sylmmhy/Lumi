@@ -127,8 +127,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         const [h, m] = finalTime.split(':').map(Number);
         let category: Task['category'] = 'morning';
-        if (h >= 12 && h < 17) category = 'afternoon';
-        if (h >= 17) category = 'evening';
+        if (h >= 0 && h < 5) category = 'latenight';
+        else if (h >= 5 && h < 12) category = 'morning';
+        else if (h >= 12 && h < 14) category = 'noon';
+        else if (h >= 14 && h < 18) category = 'afternoon';
+        else if (h >= 18 && h < 23) category = 'evening';
+        else category = 'latenight';
 
         // For routine templates, don't set a specific date (they generate daily instances)
         // For todo tasks, use the selected date (using local date to avoid UTC timezone issues)
@@ -242,8 +246,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         const [h, m] = editTaskTime.split(':').map(Number);
         let category: Task['category'] = 'morning';
-        if (h >= 12 && h < 17) category = 'afternoon';
-        if (h >= 17) category = 'evening';
+        if (h >= 0 && h < 5) category = 'latenight';
+        else if (h >= 5 && h < 12) category = 'morning';
+        else if (h >= 12 && h < 14) category = 'noon';
+        else if (h >= 14 && h < 18) category = 'afternoon';
+        else if (h >= 18 && h < 23) category = 'evening';
+        else category = 'latenight';
 
         let taskDate = editingTask.type === 'routine' ? undefined : getLocalDateString(editTaskDate);
 
@@ -308,15 +316,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
             isToday: date === today,
             tasks: grouped[date],
             morningTasks: grouped[date].filter(task => task.category === 'morning'),
+            noonTasks: grouped[date].filter(task => task.category === 'noon'),
             afternoonTasks: grouped[date].filter(task => task.category === 'afternoon'),
             eveningTasks: grouped[date].filter(task => task.category === 'evening'),
+            latenightTasks: grouped[date].filter(task => task.category === 'latenight'),
         }));
     }, [filteredTasks, activeTab]);
 
     // For Routine tab, use flat category grouping (no date separation)
     const morningTasks = filteredTasks.filter(task => task.category === 'morning');
+    const noonTasks = filteredTasks.filter(task => task.category === 'noon');
     const afternoonTasks = filteredTasks.filter(task => task.category === 'afternoon');
     const eveningTasks = filteredTasks.filter(task => task.category === 'evening');
+    const latenightTasks = filteredTasks.filter(task => task.category === 'latenight');
 
     const exampleNowTasks = [
         { title: t('home.exampleVehicle'), time: '6:00 pm' },
@@ -476,8 +488,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onEdit={handleEditTask}
                                     />
                                 )}
-                                {dateGroup.afternoonTasks.length > 0 && (
+                                {dateGroup.noonTasks.length > 0 && (
                                     <div className={dateGroup.morningTasks.length > 0 ? 'mt-6' : ''}>
+                                        <TaskGroup
+                                            title={t('home.noon')}
+                                            icon="🌞"
+                                            tasks={dateGroup.noonTasks}
+                                            onToggle={onToggleComplete}
+                                            onDelete={onDeleteTask}
+                                            onEdit={handleEditTask}
+                                        />
+                                    </div>
+                                )}
+                                {dateGroup.afternoonTasks.length > 0 && (
+                                    <div className={(dateGroup.morningTasks.length > 0 || dateGroup.noonTasks.length > 0) ? 'mt-6' : ''}>
                                         <TaskGroup
                                             title={t('home.afternoon')}
                                             icon="🌤️"
@@ -489,11 +513,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     </div>
                                 )}
                                 {dateGroup.eveningTasks.length > 0 && (
-                                    <div className={(dateGroup.morningTasks.length > 0 || dateGroup.afternoonTasks.length > 0) ? 'mt-6' : ''}>
+                                    <div className={(dateGroup.morningTasks.length > 0 || dateGroup.noonTasks.length > 0 || dateGroup.afternoonTasks.length > 0) ? 'mt-6' : ''}>
                                         <TaskGroup
                                             title={t('home.evening')}
                                             icon="🌙"
                                             tasks={dateGroup.eveningTasks}
+                                            onToggle={onToggleComplete}
+                                            onDelete={onDeleteTask}
+                                            onEdit={handleEditTask}
+                                        />
+                                    </div>
+                                )}
+                                {dateGroup.latenightTasks.length > 0 && (
+                                    <div className={(dateGroup.morningTasks.length > 0 || dateGroup.noonTasks.length > 0 || dateGroup.afternoonTasks.length > 0 || dateGroup.eveningTasks.length > 0) ? 'mt-6' : ''}>
+                                        <TaskGroup
+                                            title={t('home.latenight')}
+                                            icon="🌃"
+                                            tasks={dateGroup.latenightTasks}
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
@@ -516,6 +552,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onEdit={handleEditTask}
                                     />
                                 )}
+                                {noonTasks.length > 0 && (
+                                    <TaskGroup
+                                        title={t('home.noon')}
+                                        icon="🌞"
+                                        tasks={noonTasks}
+                                        onToggle={onToggleComplete}
+                                        onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
+                                    />
+                                )}
                                 {afternoonTasks.length > 0 && (
                                     <TaskGroup
                                         title={t('home.afternoon')}
@@ -531,6 +577,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         title={t('home.evening')}
                                         icon="🌙"
                                         tasks={eveningTasks}
+                                        onToggle={onToggleComplete}
+                                        onDelete={onDeleteTask}
+                                        onEdit={handleEditTask}
+                                    />
+                                )}
+                                {latenightTasks.length > 0 && (
+                                    <TaskGroup
+                                        title={t('home.latenight')}
+                                        icon="🌃"
+                                        tasks={latenightTasks}
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
                                         onEdit={handleEditTask}

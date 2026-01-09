@@ -2,14 +2,30 @@ import { useRef, useCallback, useEffect } from 'react';
 
 /**
  * Virtual Messages Hook - AI 消息调度
- * 
+ *
  * 职责：
  * - 定时发送虚拟消息鼓励用户
  * - 检测用户/AI 是否在说话，避免打断
  * - 生成带时间感知的消息内容
+ * - 在关键时刻注入用户成功记录，激励坚持
  */
 
-export type VirtualMessageCategory = 'encouragement_focused' | 'status_check' | 'opening';
+/**
+ * 用户成功记录（简化版，用于虚拟消息）
+ */
+export interface SuccessRecordForVM {
+  taskType: string;
+  lastDuration: number | null;
+  currentStreak: number;
+  totalCompletions: number;
+  hasOvercomeResistance: boolean;
+}
+
+export type VirtualMessageCategory =
+  | 'encouragement_focused'
+  | 'status_check'
+  | 'opening'
+  | 'memory_boost';  // 新增：记忆增强
 
 export interface UseVirtualMessagesOptions {
   /** 是否启用虚拟消息 */
@@ -26,6 +42,10 @@ export interface UseVirtualMessagesOptions {
   onSendMessage: (message: string) => void;
   /** 添加消息到记录的回调 */
   onAddMessage?: (role: 'user' | 'ai', content: string, isVirtual?: boolean) => void;
+  /** 用户成功记录（用于记忆增强） */
+  successRecord?: SuccessRecordForVM | null;
+  /** 任务初始时长（秒），用于计算剩余时间 */
+  initialDuration?: number;
 }
 
 // 冷却时间：15秒
@@ -44,6 +64,8 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     lastUserSpeechTime,
     onSendMessage,
     onAddMessage,
+    successRecord,
+    initialDuration = 300, // 默认5分钟
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -183,6 +205,45 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       return `[STATUS] elapsed=${elapsedMinutes}m${elapsedSeconds % 60}s current_time=${currentTime}`;
     }
 
+    // 记忆增强消息 - 在关键时刻注入用户成功记录
+    if (category === 'memory_boost' && successRecord && successRecord.totalCompletions > 0) {
+      const remainingSeconds = initialDuration - elapsedSeconds;
+      const remainingMinutes = Math.floor(remainingSeconds / 60);
+
+      // 根据任务进度选择不同的记忆触发类型
+      if (elapsedMinutes <= 1) {
+        // 开始阶段（0-1分钟）：提醒过去成功，建立信心
+        const parts = [`[MEMORY_BOOST] type=past_success`];
+        if (successRecord.lastDuration) {
+          parts.push(`last_duration=${successRecord.lastDuration}min`);
+        }
+        if (successRecord.currentStreak > 0) {
+          parts.push(`streak=${successRecord.currentStreak}`);
+        }
+        parts.push(`total=${successRecord.totalCompletions}`);
+        parts.push(`current_time=${currentTime}`);
+        return parts.join(' ');
+      } else if (elapsedMinutes >= 2 && elapsedMinutes <= 3) {
+        // 中间阶段（2-3分钟）：如果用户上次也在这个时候坚持下来了
+        if (successRecord.hasOvercomeResistance) {
+          return `[MEMORY_BOOST] type=overcame_before elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+        }
+        // 如果接近上次的记录时长
+        if (successRecord.lastDuration && elapsedMinutes >= successRecord.lastDuration - 1) {
+          return `[MEMORY_BOOST] type=approaching_record approaching=${successRecord.lastDuration}min elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+        }
+        // 默认：提醒他们做过很多次了
+        return `[MEMORY_BOOST] type=experience total=${successRecord.totalCompletions} elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+      } else if (remainingMinutes <= 1) {
+        // 接近结束（剩余1分钟以内）：庆祝即将到来的连胜
+        const newStreak = successRecord.currentStreak + 1;
+        return `[MEMORY_BOOST] type=streak_building new_streak=${newStreak} remaining=${remainingSeconds}s current_time=${currentTime}`;
+      }
+
+      // 默认 memory_boost：提供总体鼓励
+      return `[MEMORY_BOOST] type=general total=${successRecord.totalCompletions} streak=${successRecord.currentStreak} current_time=${currentTime}`;
+    }
+
     // encouragement_focused - 默认类型
     // 触发词包含详细时间信息和当前本地时间，AI 会根据 System Prompt 用用户语言回复
     if (elapsedSeconds < 30) {
@@ -200,7 +261,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     } else {
       return `[CHECK_IN] elapsed=5m timer_done=true current_time=${currentTime}`;
     }
-  }, [taskStartTime, getCurrentLocalTime]);
+  }, [taskStartTime, getCurrentLocalTime, successRecord, initialDuration]);
 
   // 使用 ref 存储回调函数，避免 useEffect 依赖变化导致的循环
   const onSendMessageRef = useRef(onSendMessage);

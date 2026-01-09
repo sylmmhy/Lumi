@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
-const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 const PERIODS = ['AM', 'PM'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
 
-const parseTime = (str: string) => {
+const parseTime12 = (str: string) => {
     const now = new Date();
     const [rawH, rawM] = str ? str.split(':').map(Number) : [now.getHours(), now.getMinutes()];
     const h = Number.isFinite(rawH) ? rawH : now.getHours();
@@ -19,6 +20,20 @@ const parseTime = (str: string) => {
     const minuteValue = Math.min(59, Math.max(0, Math.round(m)));
     const mStr = String(minuteValue).padStart(2, '0');
     return { h: String(hour12), m: mStr, p: period };
+};
+
+const parseTime24 = (str: string) => {
+    const now = new Date();
+    const [rawH, rawM] = str ? str.split(':').map(Number) : [now.getHours(), now.getMinutes()];
+    const h = Number.isFinite(rawH) ? rawH : now.getHours();
+    const m = Number.isFinite(rawM) ? rawM : now.getMinutes();
+
+    const hourValue = Math.min(23, Math.max(0, h));
+    const minuteValue = Math.min(59, Math.max(0, Math.round(m)));
+
+    const hStr = String(hourValue).padStart(2, '0');
+    const mStr = String(minuteValue).padStart(2, '0');
+    return { h: hStr, m: mStr };
 };
 
 // --- Time Picker Components ---
@@ -281,6 +296,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
  * @property {(val: Date) => void} onDateChange - 变更日期时的回调，向上层同步新日期
  * @property {() => void} onClose - 关闭选择面板的回调
  * @property {boolean} embedded - 是否为嵌入模式（不显示遮罩层和关闭按钮）
+ * @property {boolean} use24Hour - 是否使用24小时制显示（默认 true）
  */
 export interface TimePickerProps {
     timeValue: string;
@@ -289,6 +305,7 @@ export interface TimePickerProps {
     onDateChange: (val: Date) => void;
     onClose: () => void;
     embedded?: boolean;
+    use24Hour?: boolean;
 }
 
 /**
@@ -298,32 +315,58 @@ export interface TimePickerProps {
  *
  * @param {TimePickerProps} props - 组件的受控参数与关闭行为
  */
-export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false }: TimePickerProps) => {
+export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false, use24Hour = true }: TimePickerProps) => {
     const [mode, setMode] = useState<'time' | 'date'>('time');
 
     // --- Time Logic ---
-    const hours = HOURS;
+    const hours = use24Hour ? HOURS_24 : HOURS_12;
     const minutes = MINUTES;
     const periods = PERIODS;
 
-    const [timeState, setTimeState] = useState(parseTime(timeValue));
+    // State for 12-hour mode: { h, m, p }
+    // State for 24-hour mode: { h, m }
+    const [timeState12, setTimeState12] = useState(parseTime12(timeValue));
+    const [timeState24, setTimeState24] = useState(parseTime24(timeValue));
 
+    // Sync from parent timeValue (12-hour mode)
     useEffect(() => {
-        const parsed = parseTime(timeValue);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setTimeState((prev) => (prev.h === parsed.h && prev.m === parsed.m && prev.p === parsed.p ? prev : parsed));
-    }, [timeValue]);
-
-    useEffect(() => {
-        let h24 = parseInt(timeState.h);
-        if (timeState.p === 'PM' && h24 !== 12) h24 += 12;
-        if (timeState.p === 'AM' && h24 === 12) h24 = 0;
-
-        const timeStr = `${String(h24).padStart(2, '0')}:${timeState.m}`;
-        if (timeStr !== timeValue) {
-            onTimeChange(timeStr);
+        if (!use24Hour) {
+            const parsed = parseTime12(timeValue);
+            setTimeState12((prev) => (prev.h === parsed.h && prev.m === parsed.m && prev.p === parsed.p ? prev : parsed));
         }
-    }, [timeState, timeValue, onTimeChange]);
+    }, [timeValue, use24Hour]);
+
+    // Sync from parent timeValue (24-hour mode)
+    useEffect(() => {
+        if (use24Hour) {
+            const parsed = parseTime24(timeValue);
+            setTimeState24((prev) => (prev.h === parsed.h && prev.m === parsed.m ? prev : parsed));
+        }
+    }, [timeValue, use24Hour]);
+
+    // Sync to parent (12-hour mode)
+    useEffect(() => {
+        if (!use24Hour) {
+            let h24 = parseInt(timeState12.h);
+            if (timeState12.p === 'PM' && h24 !== 12) h24 += 12;
+            if (timeState12.p === 'AM' && h24 === 12) h24 = 0;
+
+            const timeStr = `${String(h24).padStart(2, '0')}:${timeState12.m}`;
+            if (timeStr !== timeValue) {
+                onTimeChange(timeStr);
+            }
+        }
+    }, [timeState12, timeValue, onTimeChange, use24Hour]);
+
+    // Sync to parent (24-hour mode)
+    useEffect(() => {
+        if (use24Hour) {
+            const timeStr = `${timeState24.h}:${timeState24.m}`;
+            if (timeStr !== timeValue) {
+                onTimeChange(timeStr);
+            }
+        }
+    }, [timeState24, timeValue, onTimeChange, use24Hour]);
 
     // --- Date Logic ---
     const months = MONTHS;
@@ -366,7 +409,9 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
 
     // Formatted strings for pills
     const formattedDate = dateValue.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const formattedTime = `${timeState.h}:${timeState.m} ${timeState.p}`;
+    const formattedTime = use24Hour
+        ? `${timeState24.h}:${timeState24.m}`
+        : `${timeState12.h}:${timeState12.m} ${timeState12.p}`;
 
     // Content that's shared between embedded and modal modes
     const pickerContent = (
@@ -396,11 +441,18 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
                 <div className="absolute top-1/2 -translate-y-1/2 w-full h-[36px] bg-gray-100/40 rounded-lg pointer-events-none z-0"></div>
 
                 {mode === 'time' ? (
-                    <div className="flex gap-4 z-10 w-full justify-center">
-                        <ScrollWheel items={hours} value={timeState.h} onChange={(val) => setTimeState(s => ({ ...s, h: val }))} loop />
-                        <ScrollWheel items={minutes} value={timeState.m} onChange={(val) => setTimeState(s => ({ ...s, m: val }))} loop />
-                        <ScrollWheel items={periods} value={timeState.p} onChange={(val) => setTimeState(s => ({ ...s, p: val }))} />
-                    </div>
+                    use24Hour ? (
+                        <div className="flex gap-4 z-10 w-full justify-center">
+                            <ScrollWheel items={hours} value={timeState24.h} onChange={(val) => setTimeState24(s => ({ ...s, h: val }))} loop />
+                            <ScrollWheel items={minutes} value={timeState24.m} onChange={(val) => setTimeState24(s => ({ ...s, m: val }))} loop />
+                        </div>
+                    ) : (
+                        <div className="flex gap-4 z-10 w-full justify-center">
+                            <ScrollWheel items={hours} value={timeState12.h} onChange={(val) => setTimeState12(s => ({ ...s, h: val }))} loop />
+                            <ScrollWheel items={minutes} value={timeState12.m} onChange={(val) => setTimeState12(s => ({ ...s, m: val }))} loop />
+                            <ScrollWheel items={periods} value={timeState12.p} onChange={(val) => setTimeState12(s => ({ ...s, p: val }))} />
+                        </div>
+                    )
                 ) : (
                     <div className="flex gap-4 z-10 w-full justify-center">
                         <ScrollWheel items={months} value={dateState.month} onChange={(val) => setDateState(s => ({ ...s, month: val }))} loop />

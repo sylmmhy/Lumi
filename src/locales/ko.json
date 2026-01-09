@@ -127,6 +127,8 @@
 
   "profile.uiLanguage": "앱 언어",
   "profile.uiLanguageHint": "화면 텍스트 언어",
+  "profile.timeFormat": "시간 형식",
+  "profile.timeFormatHint": "24시간제 또는 12시간제",
 
   "feedback.title": "피드백 고마워!",
   "feedback.contactInfo": "연락처",

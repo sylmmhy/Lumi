@@ -24,6 +24,28 @@ export interface Task {
    * 对于 routine_instance，指向父 routine 模板的 ID
    */
   parentRoutineId?: string | null
+
+  // Success metadata fields - 成功元数据字段
+  /**
+   * 完成时的情绪
+   */
+  completionMood?: 'proud' | 'relieved' | 'satisfied' | 'neutral' | null
+  /**
+   * 难度感知
+   */
+  difficultyPerception?: 'easier_than_usual' | 'normal' | 'harder_than_usual' | null
+  /**
+   * 是否克服了阻力
+   */
+  overcameResistance?: boolean | null
+  /**
+   * 实际完成时长（分钟）
+   */
+  actualDurationMinutes?: number | null
+  /**
+   * 完成时的个人最佳记录
+   */
+  personalBestAtCompletion?: number | null
 }
 
 export const TaskType = {

@@ -5,6 +5,7 @@ import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { getSupabaseClient } from '../lib/supabase';
+import { updateReminder } from '../remindMe/services/reminderService';
 
 // ==========================================
 // 配置常量
@@ -131,6 +132,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 使用 ref 存储当前会话信息
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
+  const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
 
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
@@ -375,15 +377,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param options.customSystemInstruction 自定义系统指令
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
+   * @param options.taskId 任务 ID（用于保存 actual_duration_minutes 到 tasks 表）
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[] }
+    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string }
   ) => {
-    const { userId, customSystemInstruction, userName, preferredLanguages } = options || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId } = options || {};
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
+    currentTaskIdRef.current = taskId || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 
@@ -717,6 +721,24 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       if (import.meta.env.DEV) {
         console.log('✅ 会话记忆已保存:', data);
+      }
+
+      // 🆕 如果任务完成且有 taskId，保存 actualDurationMinutes 到 tasks 表
+      const taskId = currentTaskIdRef.current;
+      if (wasTaskCompleted && taskId && actualDurationMinutes > 0) {
+        try {
+          await updateReminder(taskId, {
+            actualDurationMinutes,
+            // 可以在这里添加其他成功元数据，例如 completionMood, difficultyPerception 等
+            // 这些可以通过 AI 从对话中推断，或者让用户在完成时选择
+          });
+          if (import.meta.env.DEV) {
+            console.log('✅ 任务完成时长已保存到数据库:', { taskId, actualDurationMinutes });
+          }
+        } catch (updateError) {
+          console.error('⚠️ 保存任务完成时长失败:', updateError);
+          // 不影响整体流程，继续返回 true
+        }
       }
 
       return true;

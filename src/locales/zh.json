@@ -279,5 +279,12 @@
   "profile.permissions.warning": "没有这些权限，AI 无法进行视频通话来帮你战胜拖延。",
   "profile.permissions.enableAll": "开启全部权限",
   "profile.permissions.requesting": "请求中...",
-  "profile.permissions.allEnabledMessage": "所有权限已开启！AI 已准备好给你打视频电话。"
+  "profile.permissions.allEnabledMessage": "所有权限已开启！AI 已准备好给你打视频电话。",
+
+  "profile.deleteAccount": "删除账户",
+  "profile.deleteAccountTitle": "删除账户",
+  "profile.deleteAccountWarning": "确定要删除账户吗？此操作无法撤销，你的所有数据将被永久删除。",
+  "profile.deleteAccountConfirm": "删除我的账户",
+  "profile.deleteAccountSuccess": "你的账户已被删除。",
+  "profile.deleteAccountError": "删除账户失败，请重试。"
 }

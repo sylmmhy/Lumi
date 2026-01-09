@@ -26,8 +26,17 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) =>
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
                     <div className="flex items-center gap-2">
-                        <span className="text-2xl">🔥</span>
-                        <span className={`text-xl font-bold transition-colors ${isScrolled ? 'text-gray-900' : 'text-white'}`}>
+                        <img
+                            src="/lumi-icon.png"
+                            alt="Lumi"
+                            style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '10px',
+                                objectFit: 'cover'
+                            }}
+                        />
+                        <span className={`text-xl font-bold transition-colors ${isScrolled ? 'text-gray-900' : 'text-gray-900'}`}>
                             Lumi
                         </span>
                     </div>
@@ -36,25 +45,19 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) =>
                     <div className="hidden md:flex items-center gap-8">
                         <a
                             href="#features"
-                            className={`text-sm font-medium transition-colors ${
-                                isScrolled ? 'text-gray-600 hover:text-gray-900' : 'text-white/80 hover:text-white'
-                            }`}
+                            className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             Features
                         </a>
                         <a
                             href="#testimonials"
-                            className={`text-sm font-medium transition-colors ${
-                                isScrolled ? 'text-gray-600 hover:text-gray-900' : 'text-white/80 hover:text-white'
-                            }`}
+                            className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             Testimonials
                         </a>
                         <a
                             href="#faq"
-                            className={`text-sm font-medium transition-colors ${
-                                isScrolled ? 'text-gray-600 hover:text-gray-900' : 'text-white/80 hover:text-white'
-                            }`}
+                            className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             FAQ
                         </a>
@@ -64,19 +67,13 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) =>
                     <div className="flex items-center gap-4">
                         <a
                             href="/login"
-                            className={`hidden md:block text-sm font-medium transition-colors ${
-                                isScrolled ? 'text-gray-600 hover:text-gray-900' : 'text-white/80 hover:text-white'
-                            }`}
+                            className="hidden md:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             Log in
                         </a>
                         <button
                             onClick={onGetStarted}
-                            className={`px-5 py-2.5 text-sm font-semibold rounded-full transition-all ${
-                                isScrolled
-                                    ? 'bg-[#2545BD] text-white hover:bg-[#1e3a9f]'
-                                    : 'bg-yellow-400 text-gray-900 hover:bg-yellow-300'
-                            }`}
+                            className="px-5 py-2.5 text-sm font-semibold rounded-full bg-yellow-400 text-gray-900 hover:bg-yellow-300 transition-all"
                         >
                             Try for free
                         </button>

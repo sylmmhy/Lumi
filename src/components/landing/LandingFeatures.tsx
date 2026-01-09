@@ -21,7 +21,7 @@ const features: Feature[] = [
         title: 'Meet Lumi, Your Body Double',
         description: "An AI coach who's as persistent as your mom, but way less judgmental. Lumi stays with you through tasks, providing the accountability you need without the guilt trips.",
         image: Feature1,
-        bgColor: '#E6EFFF' // Lightest Blue to match Blue mockup
+        bgColor: '#E6EFFF'
     },
     {
         id: 'awareness',
@@ -29,7 +29,7 @@ const features: Feature[] = [
         title: 'I Know What You\'re Avoiding',
         description: "Lumi learns your patterns and gently calls out procrastination before it spirals. No more hiding from that task you've been putting off for weeks.",
         image: Feature2,
-        bgColor: '#FFF2E6' // Lightest Orange to match Orange mockup
+        bgColor: '#FFF2E6'
     },
     {
         id: 'habits',
@@ -37,7 +37,7 @@ const features: Feature[] = [
         title: 'Set A Habit. AI Will Call You.',
         description: "Habit tracking that actually works. Set your goals, and Lumi will check in with you at the right moments. Finally, a system that won't become a graveyard of good intentions.",
         image: Feature3,
-        bgColor: '#EBF5FF' // Lightest Sky Blue
+        bgColor: '#EBF5FF'
     },
     {
         id: 'checkin',
@@ -45,7 +45,7 @@ const features: Feature[] = [
         title: 'Quick Video Check-In. Get Started.',
         description: "Like having a supportive friend who never gets tired of you. Quick video sessions to build momentum and get you moving on your tasks.",
         image: Feature4,
-        bgColor: '#FEEBED' // Lightest Soft Red
+        bgColor: '#FEEBED'
     },
     {
         id: 'streak',
@@ -53,84 +53,90 @@ const features: Feature[] = [
         title: 'Ready? Let\'s Get Moving.',
         description: "Watch your streaks grow and celebrate your wins. Track your progress with beautiful visualizations that make consistency feel rewarding.",
         image: Feature5,
-        bgColor: '#ECFDF5' // Lightest Mint Green
+        bgColor: '#ECFDF5'
     }
 ];
 
 export const LandingFeatures: React.FC = () => {
-    const [activeFeature, setActiveFeature] = useState(features[0]);
+    const [activeTab, setActiveTab] = useState(features[0].id);
+    const activeFeature = features.find(f => f.id === activeTab) || features[0];
 
     return (
-        <section className="py-20 px-6 bg-white" style={{ fontFamily: 'Nunito, sans-serif' }}>
+        <section className="py-24 px-6 bg-white" style={{ fontFamily: 'Nunito, sans-serif' }}>
             <div className="max-w-6xl mx-auto">
-                {/* Section Title */}
-                <h2 className="text-4xl md:text-5xl font-bold text-center text-gray-900 mb-4">
-                    The productivity app for<br />every procrastinator
-                </h2>
-                <p className="text-xl text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-                    Stop saying "I'll do it tomorrow." Start today with Lumi by your side.
-                </p>
-
-                {/* Feature Tabs */}
-                <div className="flex flex-wrap justify-center gap-3 mb-12">
+                {/* Tabs Navigation */}
+                <div className="flex flex-wrap justify-center gap-4 mb-20">
                     {features.map((feature) => (
                         <button
                             key={feature.id}
-                            onClick={() => setActiveFeature(feature)}
-                            className={`px-6 py-3 rounded-full text-base font-semibold transition-all ${activeFeature.id === feature.id
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            onClick={() => setActiveTab(feature.id)}
+                            className={`px-8 py-3 rounded-full text-base font-bold transition-all duration-300 ${activeTab === feature.id
+                                    ? 'bg-[#2545BD] text-white shadow-xl transform scale-105'
+                                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                                 }`}
                         >
-                            {activeFeature.id === feature.id && (
-                                <span className="inline-block w-2 h-2 bg-white rounded-full mr-2"></span>
-                            )}
                             {feature.tab}
                         </button>
                     ))}
                 </div>
 
-                {/* Feature Content */}
+                {/* Feature Content Box */}
                 <div
-                    className="rounded-3xl overflow-hidden transition-all duration-500"
-                    style={{ backgroundColor: activeFeature.bgColor }}
+                    className="rounded-[40px] overflow-hidden transition-all duration-700 ease-in-out border border-black/5"
+                    style={{
+                        background: `linear-gradient(135deg, ${activeFeature.bgColor} 0%, #FFFFFF 100%)`,
+                        boxShadow: '0 40px 100px -20px rgba(0,0,0,0.05)'
+                    }}
                 >
-                    <div className="flex flex-col lg:flex-row items-center">
-                        {/* Left: Image */}
-                        <div className="w-full lg:w-1/2 p-8 lg:p-12 flex justify-center">
-                            <img
-                                src={activeFeature.image}
-                                alt={activeFeature.title}
-                                className="max-h-[500px] w-auto object-contain transition-all duration-500"
-                                style={{ borderRadius: '24px' }}
-                            />
+                    <div className="flex flex-col lg:flex-row items-center min-h-[550px]">
+                        {/* Left: Image Side */}
+                        <div className="w-full lg:w-1/2 p-8 lg:p-16 flex justify-center items-center">
+                            <div className="relative">
+                                {/* Soft Glow behind image */}
+                                <div
+                                    className="absolute -inset-10 rounded-full blur-3xl opacity-20 transition-all duration-700"
+                                    style={{ backgroundColor: activeFeature.bgColor }}
+                                />
+                                <img
+                                    src={activeFeature.image}
+                                    alt={activeFeature.title}
+                                    className="max-h-[520px] w-auto object-contain relative z-10 transition-all duration-700"
+                                    style={{
+                                        borderRadius: '24px',
+                                        filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.08))'
+                                    }}
+                                />
+                            </div>
                         </div>
 
-                        {/* Right: Content */}
-                        <div className="w-full lg:w-1/2 p-8 lg:p-12 text-gray-900">
-                            <h3 className="text-3xl md:text-4xl font-bold mb-6">
+                        {/* Right: Text Side */}
+                        <div className="w-full lg:w-1/2 p-8 lg:p-16">
+                            <h3
+                                className="text-4xl md:text-5xl font-black mb-8 tracking-tight text-gray-900 leading-tight"
+                            >
                                 {activeFeature.title}
                             </h3>
-                            <p className="text-xl text-gray-700 mb-8 leading-relaxed">
+                            <p className="text-xl text-gray-500 font-medium leading-relaxed mb-10 max-w-md">
                                 {activeFeature.description}
                             </p>
+
+                            {/* Premium Feature Points */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 rounded-full bg-[#2545BD]/10 flex items-center justify-center">
+                                        <div className="w-2 h-2 rounded-full bg-[#2545BD]" />
+                                    </div>
+                                    <span className="text-gray-700 font-bold">Scientifically proven method</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 rounded-full bg-[#2545BD]/10 flex items-center justify-center">
+                                        <div className="w-2 h-2 rounded-full bg-[#2545BD]" />
+                                    </div>
+                                    <span className="text-gray-700 font-bold">No-judgment accountability</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Pagination Dots */}
-                <div className="flex justify-center gap-2 mt-8">
-                    {features.map((feature, index) => (
-                        <button
-                            key={feature.id}
-                            onClick={() => setActiveFeature(feature)}
-                            className={`w-3 h-3 rounded-full transition-all ${activeFeature.id === feature.id
-                                ? 'bg-gray-900 w-6'
-                                : 'bg-gray-300 hover:bg-gray-400'
-                                }`}
-                            aria-label={`Go to feature ${index + 1}`}
-                        />
-                    ))}
                 </div>
             </div>
         </section>

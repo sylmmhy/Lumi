@@ -4,6 +4,8 @@ import { useVirtualMessages } from './useVirtualMessages';
 import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
+import { useToneManager } from './useToneManager';
+import type { ToneStyle, ToneState } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
 
@@ -19,6 +21,9 @@ const MAX_CAMERA_RETRIES = 2;
 
 /** 摄像头重试间隔（毫秒） */
 const CAMERA_RETRY_DELAY_MS = 1000;
+
+/** Tone 切换触发词发送延迟（毫秒） */
+const TONE_TRIGGER_DELAY_MS = 500;
 
 // ==========================================
 // 工具函数
@@ -78,6 +83,8 @@ export interface UseAICoachSessionOptions {
   enableVirtualMessages?: boolean;
   /** 是否启用 VAD（用户说话检测），默认 true */
   enableVAD?: boolean;
+  /** 是否启用动态语气管理（检测用户抗拒并切换AI风格），默认 true */
+  enableToneManager?: boolean;
 }
 
 /**
@@ -96,6 +103,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onCountdownComplete,
     enableVirtualMessages = true,
     enableVAD = true,
+    enableToneManager = true,
   } = options;
 
   // ==========================================
@@ -122,7 +130,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   /**
    * 保存最新的 saveSessionMemory 引用，确保倒计时结束时可以稳定触发记忆保存
    */
-  const saveSessionMemoryRef = useRef<(additionalContext?: string) => Promise<boolean>>(
+  const saveSessionMemoryRef = useRef<(options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => Promise<boolean>>(
     async () => false
   );
 
@@ -137,8 +145,27 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
+  // 🔧 修复流式响应问题：跟踪当前 AI 回复是否已检测到 [RESIST]
+  // 因为 AI 回复是分 chunks 发送的，[RESIST] 只在第一个 chunk
+  // 后续 chunks 不应该触发 recordAcceptance()
+  const currentTurnHasResistRef = useRef<boolean>(false);
+  // 跟踪上一条消息的角色，用于检测"新一轮"的开始
+  const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
+
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
+
+  // ==========================================
+  // 动态语气管理（Tone Manager）
+  // ==========================================
+  const toneManager = useToneManager({
+    rejectionThreshold: 2,           // 连续2次抗拒后切换语气
+    minToneChangeInterval: 30000,    // 30秒内不重复切换
+    enableDebugLog: import.meta.env.DEV,
+  });
+
+  // 用于发送 tone 切换触发词的 ref（避免循环依赖）
+  const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
 
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
@@ -194,11 +221,58 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userSpeechBufferRef.current = '';
         }
 
-        // 存储 AI 消息
-        addMessageRef.current('ai', lastMessage.text);
-        if (import.meta.env.DEV) {
-          console.log('🤖 AI 说:', lastMessage.text);
+        // 🔧 检测新一轮 AI 回复的开始（上一条是用户消息）
+        const isNewAITurn = lastProcessedRoleRef.current === 'user';
+
+        // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
+        let displayText = lastMessage.text;
+        if (enableToneManager) {
+          // 🔧 新一轮开始时，判断上一轮是否有抗拒
+          if (isNewAITurn) {
+            if (!currentTurnHasResistRef.current) {
+              // 上一轮没有 [RESIST]，说明用户在配合
+              toneManager.recordAcceptance();
+            }
+            // 重置 flag，准备新一轮的检测
+            currentTurnHasResistRef.current = false;
+          }
+
+          const hasResistTag = lastMessage.text.startsWith('[RESIST]');
+
+          if (hasResistTag) {
+            // 移除 [RESIST] 标记
+            displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
+
+            // 🔧 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
+            currentTurnHasResistRef.current = true;
+
+            // 记录抗拒（AI 检测到用户在抗拒）
+            const newTone = toneManager.recordResistance('ai_detected');
+
+            if (import.meta.env.DEV) {
+              console.log('🚫 [ToneManager] AI 检测到用户抗拒');
+            }
+
+            // 如果触发了语气切换，稍后发送触发词
+            if (newTone) {
+              setTimeout(() => {
+                const trigger = toneManager.generateToneTrigger();
+                if (trigger) {
+                  sendToneTriggerRef.current(trigger.trigger);
+                }
+              }, TONE_TRIGGER_DELAY_MS);
+            }
+          }
         }
+
+        // 存储 AI 消息（使用处理后的文本）
+        addMessageRef.current('ai', displayText);
+        if (import.meta.env.DEV) {
+          console.log('🤖 AI 说:', displayText);
+        }
+
+        // 更新角色跟踪
+        lastProcessedRoleRef.current = 'assistant';
       }
 
       if (lastMessage.role === 'user') {
@@ -206,9 +280,24 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
         }
+
+        // 更新角色跟踪
+        lastProcessedRoleRef.current = 'user';
       }
     },
   });
+
+  // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
+  useEffect(() => {
+    sendToneTriggerRef.current = (trigger: string) => {
+      if (geminiLive.isConnected && isSessionActive) {
+        geminiLive.sendTextMessage(trigger);
+        if (import.meta.env.DEV) {
+          console.log('📤 发送语气切换触发词:', trigger);
+        }
+      }
+    };
+  }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -387,9 +476,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
+    // 🔧 重置流式响应相关的 refs
+    currentTurnHasResistRef.current = false;
+    lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
+
+    // 重置语气管理器状态（新会话从 friendly 开始）
+    if (enableToneManager) {
+      toneManager.resetToneState();
+    }
 
    try {
       if (import.meta.env.DEV) {
@@ -597,9 +694,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   /**
    * 保存会话记忆到 Mem0
    * 调用此函数将当前会话的对话内容保存为长期记忆
-   * @param additionalContext 可选的额外上下文信息
+   * @param options.additionalContext 可选的额外上下文信息
+   * @param options.forceTaskCompleted 强制标记任务为已完成（用于用户主动点击完成按钮的场景）
    */
-  const saveSessionMemory = useCallback(async (additionalContext?: string) => {
+  const saveSessionMemory = useCallback(async (options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => {
+    const { additionalContext, forceTaskCompleted } = options || {};
     const userId = currentUserIdRef.current;
     const taskDescription = currentTaskDescriptionRef.current;
 
@@ -684,14 +783,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         });
       }
 
-      // 判断任务是否完成（倒计时结束）
-      const wasTaskCompleted = state.timeRemaining === 0;
+      // 判断任务是否完成
+      // 1. 倒计时结束 (timeRemaining === 0)
+      // 2. 用户主动点击完成按钮 (forceTaskCompleted === true)
+      const wasTaskCompleted = forceTaskCompleted === true || state.timeRemaining === 0;
       // 计算实际完成时长（分钟）
       const actualDurationMinutes = Math.round((initialTime - state.timeRemaining) / 60);
 
       if (import.meta.env.DEV) {
         console.log('📊 任务完成状态:', {
           wasTaskCompleted,
+          forceTaskCompleted,
           actualDurationMinutes,
           timeRemaining: state.timeRemaining,
           initialTime,
@@ -762,6 +864,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession();
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
+    // 🔧 重置流式响应相关的 refs
+    currentTurnHasResistRef.current = false;
+    lastProcessedRoleRef.current = null;
     setConnectionError(null); // 清除错误状态
     setState({
       taskDescription: '',
@@ -811,6 +916,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // 波形动画
     waveformHeights: waveformAnimation.heights,
 
+    // 动态语气管理状态
+    toneState: toneManager.toneState,
+    currentTone: toneManager.toneState.currentTone,
+    currentToneDescription: toneManager.currentToneDescription,
+
     // 操作
     startSession,
     endSession,
@@ -818,6 +928,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     saveSessionMemory,
     sendTextMessage: geminiLive.sendTextMessage,
     toggleCamera: geminiLive.toggleCamera,
+
+    // 语气管理操作（高级用法，通常不需要手动调用）
+    forceToneChange: toneManager.forceToneChange,
 
     // Refs（用于 UI）
     videoRef: geminiLive.videoRef,

@@ -68,12 +68,31 @@ Examples:
 - "User needs to finish other work before exercising"
 - "User is procrastinating on gym, wants to shower first"
 
+**7. EFFECTIVE ENCOURAGEMENT TECHNIQUES** [Tag: EFFECTIVE] ⭐ IMPORTANT FOR SUCCESSFUL SESSIONS
+When task_completed=true, identify what AI said or did that helped user take action.
+Look for:
+- What AI said RIGHT BEFORE user decided to act
+- Techniques that got positive response from user
+- Phrases or approaches that broke through resistance
+
+Examples:
+- "Countdown technique worked - AI said 'let's count 3,2,1 and just start' and user responded positively"
+- "Empathy before push - AI acknowledged user's tiredness first, then encouraged, user started the task"
+- "Breaking task into tiny step worked - AI suggested 'just put on your shoes first' and user agreed"
+- "Playful challenge effective - AI said 'bet you can't do 10 seconds' and user took the challenge"
+- "Validation helped - AI said 'it's normal to feel resistance' and user felt understood then acted"
+
+ONLY extract EFFECTIVE when:
+- task_completed metadata is TRUE
+- You can identify a specific AI technique that preceded user action
+- User showed positive response or agreement before/after taking action
+
 ## OUTPUT FORMAT
 
 Return a JSON array. Each memory:
 - "content": The insight (be specific about WHAT and WHY)
-- "tag": One of PREF, PROC, SOMA, EMO, SAB
-- "confidence": 0.3-1.0 (use lower values like 0.5-0.7 for single mentions)
+- "tag": One of PREF, PROC, SOMA, EMO, SAB, EFFECTIVE
+- "confidence": 0.3-1.0 (use lower values like 0.5-0.7 for single mentions, use 0.7+ for EFFECTIVE techniques that clearly worked)
 
 **IMPORTANT: Be generous with extraction. Even single mentions can be valuable insights. If user expresses ANY emotion, reason for delay, or preference - extract it.**
 
@@ -181,7 +200,7 @@ type MemoryRequest = ExtractMemoryRequest | SearchMemoryRequest | GetMemoriesReq
 
 interface ExtractedMemory {
   content: string
-  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB'
+  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'EFFECTIVE'
   confidence: number
 }
 
@@ -317,10 +336,14 @@ async function mergeMemoriesWithAI(
 
 /**
  * 调用 Azure AI 提取记忆
+ * @param messages 对话消息
+ * @param taskDescription 任务描述
+ * @param taskCompleted 任务是否成功完成（用于提取 EFFECTIVE 激励方式）
  */
 async function extractMemoriesWithAI(
   messages: Array<{ role: string; content: string }>,
-  taskDescription?: string
+  taskDescription?: string,
+  taskCompleted?: boolean
 ): Promise<ExtractedMemory[]> {
   if (!AZURE_API_KEY) {
     throw new Error('AZURE_AI_API_KEY environment variable not set')
@@ -358,9 +381,18 @@ async function extractMemoriesWithAI(
 
   console.log(`Conversation text length: ${conversationText.length} chars`)
 
-  const userPrompt = taskDescription
-    ? `Task context: "${taskDescription}"\n\nConversation:\n${conversationText}`
-    : `Conversation:\n${conversationText}`
+  // 构建用户提示，包含任务完成状态
+  let userPrompt = ''
+  if (taskDescription) {
+    userPrompt += `Task context: "${taskDescription}"\n`
+  }
+  if (taskCompleted !== undefined) {
+    userPrompt += `task_completed: ${taskCompleted}\n`
+    if (taskCompleted) {
+      userPrompt += `⭐ This was a SUCCESSFUL session - user completed the task! Look for EFFECTIVE encouragement techniques that helped.\n`
+    }
+  }
+  userPrompt += `\nConversation:\n${conversationText}`
 
   // 调用 Azure AI Foundry - 使用 OpenAI 兼容的 REST API
   // URL: {endpoint}/openai/v1/chat/completions
@@ -633,8 +665,8 @@ async function consolidateMemories(
   userId: string,
   targetTag?: string
 ): Promise<{ processed: number; merged: number; deleted: number }> {
-  // 只整合行为模式记忆，不包括 SUCCESS（已从 tasks 表获取）
-  const tags = targetTag ? [targetTag] : ['PREF', 'PROC', 'SOMA', 'EMO', 'SAB']
+  // 整合行为模式记忆，包括 EFFECTIVE（有效激励方式）
+  const tags = targetTag ? [targetTag] : ['PREF', 'PROC', 'SOMA', 'EMO', 'SAB', 'EFFECTIVE']
 
   let totalProcessed = 0
   let totalMerged = 0
@@ -885,11 +917,12 @@ serve(async (req) => {
         }
 
         console.log(`Extracting memories for user: ${userId}, messages: ${messages.length}`)
-        console.log(`Task completed: ${(metadata as Record<string, unknown>)?.task_completed}, duration: ${(metadata as Record<string, unknown>)?.actual_duration_minutes} min`)
+        const taskCompleted = (metadata as Record<string, unknown>)?.task_completed === true
+        console.log(`Task completed: ${taskCompleted}, duration: ${(metadata as Record<string, unknown>)?.actual_duration_minutes} min`)
 
-        // 1. 用 AI 提取记忆
-        const extractedMemories = await extractMemoriesWithAI(messages, taskDescription)
-        console.log(`Extracted ${extractedMemories.length} memories`)
+        // 1. 用 AI 提取记忆（传入任务完成状态，用于提取 EFFECTIVE 激励方式）
+        const extractedMemories = await extractMemoriesWithAI(messages, taskDescription, taskCompleted)
+        console.log(`Extracted ${extractedMemories.length} memories (task_completed=${taskCompleted})`)
 
         // 注意：SUCCESS 记录不再在此处理，任务完成状态已在 tasks 表中跟踪
 

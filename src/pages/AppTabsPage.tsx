@@ -101,6 +101,14 @@ export function AppTabsPage() {
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
     const [showTestVersionModal, setShowTestVersionModal] = useState(false);
+
+    // 庆祝流程相关状态
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [celebrationFlow, setCelebrationFlow] = useState<CelebrationFlow>('confirm');
+    const [completionTime, setCompletionTime] = useState(0);
+    const [currentTaskDescription, setCurrentTaskDescription] = useState('');
+    const [currentTaskId, setCurrentTaskId] = useState<string | null>(null); // 当前正在进行的任务 ID
+
     const [hasSeenVoicePrompt, setHasSeenVoicePrompt] = useState(() => {
         try {
             return localStorage.getItem('hasSeenVoiceCameraPrompt') === 'true';
@@ -197,6 +205,19 @@ export function AppTabsPage() {
     /** AI 教练会话（封装了 Gemini Live + 计时器 + 虚拟消息等） */
     const aiCoach = useAICoachSession({
         initialTime: 300, // 5 分钟
+        onCountdownComplete: () => {
+            // 倒计时结束时，显示任务完成确认页面
+            setCompletionTime(300); // 倒计时结束意味着用了全部时间
+            setCurrentTaskDescription(aiCoach.state.taskDescription);
+            setCelebrationFlow('confirm');
+            setShowCelebration(true);
+        },
+    });
+
+    // 庆祝动画控制
+    const celebrationAnimation = useCelebrationAnimation({
+        enabled: showCelebration && celebrationFlow === 'success',
+        remainingTime: 300 - completionTime, // 剩余时间用于计算奖励
     });
 
     // Handle Stripe success return without setting state inside the effect body
@@ -457,6 +478,9 @@ export function AppTabsPage() {
             });
             console.log('✅ AI Coach session started successfully');
 
+            // 保存当前任务 ID，用于完成时更新数据库
+            setCurrentTaskId(taskId);
+
             // P0 修复：持久化 called 状态到数据库（解决刷新后重复触发的问题）
             if (auth.userId && !isTemporaryId) {
                 // 只有非临时任务才需要单独更新 called 状态
@@ -640,14 +664,100 @@ export function AppTabsPage() {
     }, []);
 
     /**
-     * 用户在任务执行视图中点击「I'M DOING IT!」或「END CALL」
+     * 标记任务为已完成，更新数据库
+     * @param taskId 任务 ID
+     * @param actualDurationMinutes 实际完成时长（分钟）
+     */
+    const markTaskAsCompleted = useCallback(async (taskId: string | null, actualDurationMinutes: number) => {
+        if (!taskId) {
+            console.warn('⚠️ 无法标记任务完成：缺少 taskId');
+            return;
+        }
+
+        // 检查是否是临时 ID（不更新数据库）
+        const isTemporaryId = /^\d+$/.test(taskId) || taskId.startsWith('temp-');
+        if (isTemporaryId) {
+            console.log('⚠️ 临时任务 ID，跳过数据库更新');
+            return;
+        }
+
+        try {
+            console.log('✅ 标记任务完成:', { taskId, actualDurationMinutes });
+            await updateReminder(taskId, {
+                completed: true,
+                actualDurationMinutes,
+            });
+
+            // 同步更新前端任务列表
+            setTasks(prev => prev.map(t =>
+                t.id === taskId ? { ...t, completed: true } : t
+            ));
+
+            console.log('✅ 任务已标记为完成');
+        } catch (error) {
+            console.error('❌ 标记任务完成失败:', error);
+        }
+    }, []);
+
+    /**
+     * 用户在任务执行视图中点击「I'M DOING IT!」
      * - 保存会话记忆到 Mem0
      * - 结束当前 AI 会话
+     * - 直接显示庆祝页面（跳过确认页面）
+     * - 标记任务为已完成
      */
     const handleEndAICoachSession = useCallback(async () => {
-        await aiCoach.saveSessionMemory();
+        // 计算完成时间（已用时间 = 初始时间 - 剩余时间）
+        const usedTime = 300 - aiCoach.state.timeRemaining;
+        const actualDurationMinutes = Math.round(usedTime / 60);
+
+        setCompletionTime(usedTime);
+        setCurrentTaskDescription(aiCoach.state.taskDescription);
+
+        // 用户主动点击完成，强制标记为成功会话（用于提取 EFFECTIVE 激励方式）
+        await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
         aiCoach.endSession();
-    }, [aiCoach]);
+
+        // 标记任务为已完成
+        await markTaskAsCompleted(currentTaskId, actualDurationMinutes);
+
+        // 直接显示庆祝页面（跳过确认页面）
+        setCelebrationFlow('success');
+        setShowCelebration(true);
+    }, [aiCoach, currentTaskId, markTaskAsCompleted]);
+
+    /**
+     * 用户在确认页面点击「YES, I DID IT!」
+     * - 显示庆祝页面
+     * - 标记任务为已完成
+     */
+    const handleConfirmTaskComplete = useCallback(async () => {
+        const actualDurationMinutes = Math.round(completionTime / 60);
+
+        // 标记任务为已完成
+        await markTaskAsCompleted(currentTaskId, actualDurationMinutes);
+
+        // 显示庆祝页面
+        setCelebrationFlow('success');
+    }, [currentTaskId, completionTime, markTaskAsCompleted]);
+
+    /**
+     * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
+     */
+    const handleConfirmTaskIncomplete = useCallback(() => {
+        setCelebrationFlow('failure');
+    }, []);
+
+    /**
+     * 关闭庆祝页面，返回主界面
+     */
+    const handleCloseCelebration = useCallback(() => {
+        setShowCelebration(false);
+        setCelebrationFlow('confirm');
+        setCompletionTime(0);
+        setCurrentTaskDescription('');
+        setCurrentTaskId(null);
+    }, []);
 
     return (
         <div className="fixed inset-0 w-full h-full bg-white md:bg-gray-100 flex flex-col items-center md:justify-center font-sans overflow-hidden">
@@ -660,7 +770,7 @@ export function AppTabsPage() {
             )}
 
             {/* 为了保证前端有明显反馈，这里在「连接中」和「会话进行中」两种状态下都显示任务执行视图 */}
-            {(aiCoach.isSessionActive || aiCoach.isConnecting) && (
+            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && (
                 <>
                     <canvas ref={aiCoach.canvasRef} className="hidden" />
                     <TaskWorkingView
@@ -694,8 +804,49 @@ export function AppTabsPage() {
                 </>
             )}
 
+            {/* 任务完成确认 & 庆祝页面 - 使用高 z-index 确保覆盖在最上层 */}
+            {showCelebration && (
+                <div className="fixed inset-0 z-[200]">
+                    <CelebrationView
+                        flow={celebrationFlow}
+                        onFlowChange={setCelebrationFlow}
+                        success={{
+                            scene: celebrationAnimation.scene,
+                            coins: celebrationAnimation.coins,
+                            progressPercent: celebrationAnimation.progressPercent,
+                            showConfetti: celebrationAnimation.showConfetti,
+                            completionTime: completionTime,
+                            taskDescription: currentTaskDescription,
+                            ctaButton: {
+                                label: 'TAKE MORE CHALLENGE',
+                                onClick: handleCloseCelebration,
+                            },
+                        }}
+                        failure={{
+                            button: {
+                                label: 'TRY AGAIN',
+                                onClick: handleCloseCelebration,
+                            },
+                        }}
+                        confirm={{
+                            title: "Time's Up!",
+                            subtitle: 'Did you complete your task?',
+                            yesButton: {
+                                label: '✅ YES, I DID IT!',
+                                onClick: handleConfirmTaskComplete,
+                            },
+                            noButton: {
+                                label: "✕ NO, NOT YET",
+                                onClick: handleConfirmTaskIncomplete,
+                            },
+                        }}
+                    />
+                </div>
+            )}
+
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
-            <div className="w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col">
+            {/* 当显示庆祝页面时隐藏主内容 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${showCelebration ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView
@@ -737,8 +888,8 @@ export function AppTabsPage() {
                     />
                 )}
 
-                {/* AI 会话全屏展示时隐藏底部导航，避免与浮层控件重叠 */}
-                {!(aiCoach.isSessionActive || aiCoach.isConnecting) && (
+                {/* AI 会话全屏展示或庆祝页面时隐藏底部导航，避免与浮层控件重叠 */}
+                {!(aiCoach.isSessionActive || aiCoach.isConnecting || showCelebration) && (
                     <BottomNavBar
                         currentView={currentView}
                         onChange={(view) => handleChangeView(view)}

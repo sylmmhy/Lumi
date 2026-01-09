@@ -8,7 +8,7 @@ export interface Task {
   date?: string // ISO date string (YYYY-MM-DD), defaults to today
   completed: boolean
   type: 'todo' | 'routine' | 'routine_instance'
-  category?: 'morning' | 'afternoon' | 'evening'
+  category?: 'morning' | 'noon' | 'afternoon' | 'evening' | 'latenight'
   called: boolean // Has the reminder call been triggered?
 
   // Recurrence fields for routine tasks

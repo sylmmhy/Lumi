@@ -134,11 +134,23 @@ const taskToHabit = (task: Task, completions: Set<string>): Habit => {
     // 根据时间分类选择主题颜色
     let theme: HabitTheme = 'gold';
     if (task.category === 'morning') theme = 'gold';
+    else if (task.category === 'noon') theme = 'gold';
     else if (task.category === 'afternoon') theme = 'blue';
     else if (task.category === 'evening') theme = 'pink';
+    else if (task.category === 'latenight') theme = 'pink';
 
     // 获取时间图标
-    const icon = task.category === 'morning' ? '☀️' : task.category === 'afternoon' ? '🌤️' : '🌙';
+    const getTimeIcon = (category: Task['category']) => {
+        switch (category) {
+            case 'morning': return '☀️';
+            case 'noon': return '🌞';
+            case 'afternoon': return '🌤️';
+            case 'evening': return '🌙';
+            case 'latenight': return '🌃';
+            default: return '☀️';
+        }
+    };
+    const icon = getTimeIcon(task.category);
 
     return {
         id: task.id,
@@ -526,11 +538,32 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                             // 根据时间计算 category
                             const [h] = newTime.split(':').map(Number);
                             let category: Task['category'] = 'morning';
-                            if (h >= 12 && h < 17) category = 'afternoon';
-                            if (h >= 17) category = 'evening';
+                            if (h >= 0 && h < 5) category = 'latenight';
+                            else if (h >= 5 && h < 12) category = 'morning';
+                            else if (h >= 12 && h < 14) category = 'noon';
+                            else if (h >= 14 && h < 18) category = 'afternoon';
+                            else if (h >= 18 && h < 23) category = 'evening';
+                            else category = 'latenight';
 
                             // 获取时间图标
-                            const icon = category === 'morning' ? '☀️' : category === 'afternoon' ? '🌤️' : '🌙';
+                            const getTimeIcon = (cat: Task['category']) => {
+                                switch (cat) {
+                                    case 'morning': return '☀️';
+                                    case 'noon': return '🌞';
+                                    case 'afternoon': return '🌤️';
+                                    case 'evening': return '🌙';
+                                    case 'latenight': return '🌃';
+                                    default: return '☀️';
+                                }
+                            };
+                            const icon = getTimeIcon(category);
+
+                            // 获取主题颜色
+                            const getTheme = (cat: Task['category']): HabitTheme => {
+                                if (cat === 'morning' || cat === 'noon') return 'gold';
+                                if (cat === 'afternoon') return 'blue';
+                                return 'pink';
+                            };
 
                             // 格式化显示时间
                             const h12 = h % 12 || 12;
@@ -552,7 +585,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                 title: newName,
                                 time: newTime,
                                 timeLabel: `${displayTime} ${icon}`,
-                                theme: category === 'morning' ? 'gold' : category === 'afternoon' ? 'blue' : 'pink' as HabitTheme,
+                                theme: getTheme(category),
                             };
 
                             setHabits(prev => prev.map(h =>

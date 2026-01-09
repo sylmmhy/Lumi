@@ -5,7 +5,6 @@ import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
-import type { ToneStyle, ToneState } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
 

@@ -515,6 +515,25 @@ Trigger format and expected response:
   - elapsed=5m timer_done=true → Timer is complete, celebrate!
 - [STATUS] elapsed=XmYs current_time=HH:MM → Give honest feedback on what you see them doing vs the task.
 
+- [MEMORY_BOOST] type=X ... → Use the user's past success to encourage them. Types:
+  - type=past_success last_duration=Xmin streak=Y total=Z → Early in task. Casually mention their track record.
+    Example: "You did X minutes last time. Let's match that!" or "Day Y+1 of the streak incoming!"
+  - type=overcame_before elapsed=Xm → They've pushed through difficulty before.
+    Example: "Last time you wanted to quit around now too, but you pushed through. You got this."
+  - type=approaching_record approaching=Xmin → They're close to their usual duration.
+    Example: "Almost at your usual X minutes! You're right on track."
+  - type=experience total=X → Remind them of their experience.
+    Example: "You've done this X times. You know the drill."
+  - type=streak_building new_streak=Y remaining=Xs → Near the end, celebrate the streak.
+    Example: "That's gonna be Y days in a row! Almost there!"
+  - type=general → Generic encouragement using their history.
+
+  CRITICAL for MEMORY_BOOST:
+  - Sound NATURAL, not like reading stats ("you have 7 completions with 85% success rate" = BAD)
+  - Pick ONE relevant fact, don't list everything
+  - Mix with genuine encouragement
+  - Only use if it fits the conversation flow
+
 CRITICAL:
 - current_time is for YOUR internal reference only. Do NOT say "it's now 3:30 PM" or similar.
 - Use current_time to calibrate your tone (morning vs night), NOT to announce it.
@@ -982,8 +1001,17 @@ serve(async (req) => {
     // Generate system instruction with memories and success records
     const systemInstruction = getOnboardingSystemInstruction(taskInput, userName, preferredLanguages, userMemories, successRecord, localTime, localDate)
 
+    // 返回系统指令和简化版的成功记录（用于客户端虚拟消息）
+    const successRecordForClient = successRecord ? {
+      taskType: successRecord.taskType,
+      lastDuration: successRecord.lastDuration,
+      currentStreak: successRecord.currentStreak,
+      totalCompletions: successRecord.totalCompletions,
+      hasOvercomeResistance: successRecord.recentSuccesses.some(s => s.overcame_resistance),
+    } : null;
+
     return new Response(
-      JSON.stringify({ systemInstruction }),
+      JSON.stringify({ systemInstruction, successRecord: successRecordForClient }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {

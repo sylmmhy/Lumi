@@ -331,11 +331,15 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     if (import.meta.env.DEV) {
       console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);
       console.log('🔄 冷却时间已重置');
+      if (successRecord && successRecord.totalCompletions > 0) {
+        console.log(`🏆 记忆增强已启用 - 用户有 ${successRecord.totalCompletions} 次成功记录，连胜 ${successRecord.currentStreak} 天`);
+      }
     }
 
     // 使用标志位防止组件卸载后继续执行
     let isActive = true;
     let recurringTimeoutId: NodeJS.Timeout | null = null;
+    const memoryBoostTimeouts: NodeJS.Timeout[] = [];
 
     const scheduleNextCheck = () => {
       if (!isActive) return;
@@ -354,18 +358,49 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       scheduleNextCheck();
     }, INITIAL_DELAY_MS);
 
+    // 🏆 记忆增强检查点 - 在关键时刻注入成功记录
+    // 只有当用户有成功记录时才启用
+    if (successRecord && successRecord.totalCompletions > 0) {
+      // 检查点时间（毫秒）：1分钟、2.5分钟、4分钟
+      const memoryBoostCheckpoints = [
+        { time: 60 * 1000, label: '1分钟' },      // 1分钟：提醒过去成功
+        { time: 150 * 1000, label: '2.5分钟' },   // 2.5分钟：中间鼓励
+        { time: 240 * 1000, label: '4分钟' },     // 4分钟：接近结束，庆祝连胜
+      ];
+
+      for (const checkpoint of memoryBoostCheckpoints) {
+        const timeout = setTimeout(async () => {
+          if (!isActive) return;
+          // 只有在用户不说话时才发送
+          if (!isUserInConversation()) {
+            if (import.meta.env.DEV) {
+              console.log(`🏆 记忆增强检查点 [${checkpoint.label}] - 发送 memory_boost`);
+            }
+            await sendVirtualMessageInternal('memory_boost');
+          } else if (import.meta.env.DEV) {
+            console.log(`🏆 记忆增强检查点 [${checkpoint.label}] - 跳过（用户在对话中）`);
+          }
+        }, checkpoint.time);
+        memoryBoostTimeouts.push(timeout);
+      }
+    }
+
     return () => {
       isActive = false;
       clearTimeout(initialTimeoutId);
       if (recurringTimeoutId) {
         clearTimeout(recurringTimeoutId);
       }
+      // 清理所有记忆增强检查点
+      for (const timeout of memoryBoostTimeouts) {
+        clearTimeout(timeout);
+      }
       if (import.meta.env.DEV) {
         console.log('🛑 虚拟消息系统已停止');
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, taskStartTime]);
+  }, [enabled, taskStartTime, successRecord]);
 
   return {
     sendVirtualMessage,

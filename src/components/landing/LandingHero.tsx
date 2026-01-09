@@ -8,69 +8,85 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
     return (
         <section
             className="relative w-full overflow-hidden pt-16"
-            style={{ backgroundColor: '#EDEDED', fontFamily: 'Nunito, sans-serif', minHeight: '600px' }}
+            style={{
+                fontFamily: 'Nunito, sans-serif',
+                background: 'linear-gradient(124deg, #2377E1 0%, #13417B 100%)'
+            }}
         >
-            {/* Right side background image */}
-            <div
-                className="absolute right-0 top-0 h-full hidden lg:block"
-                style={{ width: '50%' }}
-            >
-                <img
-                    src="/landing-hero-bg.png"
-                    alt=""
-                    className="w-full h-full object-cover object-left"
-                />
-            </div>
+            {/* Content container - same max-width as other sections */}
+            <div className="max-w-6xl mx-auto px-6 relative">
+                <div className="flex flex-col lg:flex-row items-center lg:items-start py-16 lg:py-20 gap-8 lg:gap-0">
+                    {/* Left: Text content */}
+                    <div className="w-full lg:w-1/2 text-center lg:text-left z-10">
+                        {/* Main headline */}
+                        <h1
+                            className="text-white mb-6"
+                            style={{
+                                fontFamily: 'Nunito, sans-serif',
+                                fontWeight: 700,
+                                fontSize: 'clamp(32px, 4vw, 48px)',
+                                lineHeight: '1.3em',
+                                textTransform: 'capitalize'
+                            }}
+                        >
+                            Your Best Year Starts With Your Body Double
+                        </h1>
 
-            {/* Left side content */}
-            <div
-                className="relative z-10 flex flex-col justify-center px-6 lg:px-0"
-                style={{
-                    paddingLeft: 'max(24px, calc((100vw - 1200px) / 2 + 80px))',
-                    paddingTop: '80px',
-                    paddingBottom: '80px',
-                    maxWidth: '600px',
-                    gap: '24px'
-                }}
-            >
-                {/* Logo */}
-                <img
-                    src="/landing-logo.png"
-                    alt="Lumi"
-                    className="w-full max-w-[380px]"
-                />
+                        {/* Subheadline */}
+                        <p
+                            className="text-white/90 mb-8"
+                            style={{
+                                fontFamily: 'Nunito, sans-serif',
+                                fontWeight: 500,
+                                fontSize: 'clamp(16px, 2vw, 20px)',
+                                lineHeight: '1.5em'
+                            }}
+                        >
+                            Procrastination Champion? Can't Stick To Habits For More Than 3 Days? We Got You.
+                        </p>
 
-                {/* Tagline */}
-                <h1
-                    className="text-black leading-relaxed"
-                    style={{
-                        fontFamily: 'Nunito, sans-serif',
-                        fontWeight: 500,
-                        fontSize: '22px',
-                        lineHeight: '1.5em'
-                    }}
-                >
-                    Procrastination Champion? Can't Stick To Habits For More Than 3 Days? We Got You.
-                </h1>
+                        {/* CTA Button */}
+                        <button
+                            onClick={onGetStarted}
+                            className="transition-all hover:opacity-90 transform hover:scale-105"
+                            style={{
+                                fontFamily: 'Nunito, sans-serif',
+                                fontWeight: 700,
+                                fontSize: '18px',
+                                backgroundColor: '#FCD351',
+                                color: '#000000',
+                                borderRadius: '26px',
+                                padding: '14px 28px',
+                                textAlign: 'center'
+                            }}
+                        >
+                            Request Beta Test
+                        </button>
+                    </div>
 
-                {/* CTA Button */}
-                <button
-                    onClick={onGetStarted}
-                    className="text-white transition-all hover:opacity-90 transform hover:scale-105"
-                    style={{
-                        fontFamily: 'Nunito, sans-serif',
-                        fontWeight: 700,
-                        fontSize: '20px',
-                        lineHeight: '1.85em',
-                        backgroundColor: '#2545BD',
-                        borderRadius: '26px',
-                        padding: '10px 24px',
-                        width: 'fit-content',
-                        textAlign: 'center'
-                    }}
-                >
-                    Request Beta Test
-                </button>
+                    {/* Right: Phone mockup */}
+                    <div className="w-full lg:w-1/2 relative flex justify-center lg:justify-end">
+                        {/* Orange ellipse background */}
+                        <div
+                            className="absolute rounded-full"
+                            style={{
+                                width: 'clamp(280px, 35vw, 380px)',
+                                height: 'clamp(280px, 35vw, 380px)',
+                                backgroundColor: '#FFC676',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-30%, -45%)'
+                            }}
+                        />
+
+                        {/* Phone image */}
+                        <img
+                            src="/hero-phones.png"
+                            alt="Lumi App"
+                            className="relative z-10 w-[280px] lg:w-[400px] h-auto object-contain"
+                        />
+                    </div>
+                </div>
             </div>
         </section>
     );

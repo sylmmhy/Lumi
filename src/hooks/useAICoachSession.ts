@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useGeminiLive, fetchGeminiToken } from './useGeminiLive';
 import { useVirtualMessages } from './useVirtualMessages';
+import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { getSupabaseClient } from '../lib/supabase';
@@ -134,6 +135,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
+  // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
+  const successRecordRef = useRef<SuccessRecordForVM | null>(null);
+
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
   // ==========================================
@@ -233,6 +237,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     lastUserSpeechTime: vad.lastSpeakingTime,
     onSendMessage: (message) => geminiLive.sendTextMessage(message),
     onAddMessage: (role, content, isVirtual) => addMessageRef.current(role, content, isVirtual),
+    // Phase 3: Memory Boost - 传入成功记录用于动态记忆注入
+    successRecord: successRecordRef.current,
+    initialDuration: initialTime,
   });
 
   const { setOnTurnComplete } = geminiLive;
@@ -508,6 +515,19 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           throw new Error(`获取系统指令失败: ${instructionResult.error.message}`);
         }
         systemInstruction = instructionResult.data.systemInstruction;
+
+        // Phase 3: 提取成功记录，用于虚拟消息系统的 memory boost
+        if (instructionResult.data.successRecord) {
+          successRecordRef.current = instructionResult.data.successRecord;
+          if (import.meta.env.DEV) {
+            console.log('📊 获取到用户成功记录:', successRecordRef.current);
+          }
+        } else {
+          successRecordRef.current = null;
+        }
+      } else {
+        // 使用自定义 instruction 时，清空成功记录
+        successRecordRef.current = null;
       }
 
       if (import.meta.env.DEV) {

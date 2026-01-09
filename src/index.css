@@ -96,6 +96,10 @@ html, body {
   overscroll-behavior: none;
   touch-action: manipulation;
   -webkit-overflow-scrolling: touch;
+  /* 禁用系统字体缩放，防止用户自定义字体大小导致排版错乱 */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

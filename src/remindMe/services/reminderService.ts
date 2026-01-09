@@ -32,6 +32,12 @@ interface TaskRecord {
   parent_routine_id: string | null; // 父 routine 模板 ID（仅用于 routine_instance）
   created_at: string;
   updated_at: string;
+  // Success metadata fields - 成功元数据字段
+  completion_mood: 'proud' | 'relieved' | 'satisfied' | 'neutral' | null;
+  difficulty_perception: 'easier_than_usual' | 'normal' | 'harder_than_usual' | null;
+  overcame_resistance: boolean | null;
+  actual_duration_minutes: number | null;
+  personal_best_at_completion: number | null;
 }
 
 /**
@@ -120,6 +126,12 @@ function dbToTask(record: TaskRecord): Task {
     recurrenceDays: record.recurrence_days || undefined,
     recurrenceEndDate: record.recurrence_end_date || undefined,
     parentRoutineId: record.parent_routine_id || undefined,
+    // Success metadata fields
+    completionMood: record.completion_mood || undefined,
+    difficultyPerception: record.difficulty_perception || undefined,
+    overcameResistance: record.overcame_resistance ?? undefined,
+    actualDurationMinutes: record.actual_duration_minutes ?? undefined,
+    personalBestAtCompletion: record.personal_best_at_completion ?? undefined,
   };
 }
 
@@ -376,6 +388,13 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   if (updates.recurrencePattern !== undefined) dbUpdates.recurrence_pattern = updates.recurrencePattern || null;
   if (updates.recurrenceDays !== undefined) dbUpdates.recurrence_days = updates.recurrenceDays || null;
   if (updates.recurrenceEndDate !== undefined) dbUpdates.recurrence_end_date = updates.recurrenceEndDate || null;
+
+  // Success metadata fields - 成功元数据字段
+  if (updates.completionMood !== undefined) dbUpdates.completion_mood = updates.completionMood || null;
+  if (updates.difficultyPerception !== undefined) dbUpdates.difficulty_perception = updates.difficultyPerception || null;
+  if (updates.overcameResistance !== undefined) dbUpdates.overcame_resistance = updates.overcameResistance ?? null;
+  if (updates.actualDurationMinutes !== undefined) dbUpdates.actual_duration_minutes = updates.actualDurationMinutes ?? null;
+  if (updates.personalBestAtCompletion !== undefined) dbUpdates.personal_best_at_completion = updates.personalBestAtCompletion ?? null;
 
   // 安全性：添加 user_id 条件，确保只能更新属于当前用户的任务
   const { data, error } = await supabase

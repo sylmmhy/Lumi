@@ -412,6 +412,7 @@ export function AppTabsPage() {
                 userId: auth.userId ?? undefined,  // 传入 userId 用于 Mem0 记忆保存
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
+                taskId: task.id,  // 传入 taskId 用于保存 actual_duration_minutes
             });
             console.log('✅ AI Coach session started successfully');
 

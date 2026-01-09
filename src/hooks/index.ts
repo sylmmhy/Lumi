@@ -54,3 +54,13 @@ export type {
 
 // Onboarding 编排（组合层）
 export { useOnboardingFlow } from './useOnboardingFlow';
+
+// 语气管理（动态Tone切换）
+export { useToneManager } from './useToneManager';
+export type {
+  ToneStyle,
+  ToneState,
+  ResistanceSignal,
+  UseToneManagerOptions,
+  ToneTrigger,
+} from './useToneManager';

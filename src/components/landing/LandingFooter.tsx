@@ -43,8 +43,8 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onGetStarted }) =>
                         <div>
                             <h4 className="font-semibold mb-4">Company</h4>
                             <ul className="space-y-3 text-gray-400">
-                                <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                                <li><a href="/terms" className="hover:text-white transition-colors">Terms of Use</a></li>
+                                <li><a href="https://meetlumi.org/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                                <li><a href="https://meetlumi.org/terms" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Terms of Use</a></li>
                                 <li><a href="mailto:support@getlumi.app" className="hover:text-white transition-colors">Contact</a></li>
                             </ul>
                         </div>

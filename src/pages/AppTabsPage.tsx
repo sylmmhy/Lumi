@@ -5,7 +5,9 @@ import type { AppTab } from '../constants/routes';
 import type { Task } from '../remindMe/types';
 import { useAuth } from '../hooks/useAuth';
 import { useAICoachSession } from '../hooks/useAICoachSession';
+import { useCelebrationAnimation } from '../hooks/useCelebrationAnimation';
 import { TaskWorkingView } from '../components/task/TaskWorkingView';
+import { CelebrationView, type CelebrationFlow } from '../components/celebration/CelebrationView';
 import { AuthModal } from '../components/modals/AuthModal';
 import { VoicePermissionModal } from '../components/modals/VoicePermissionModal';
 import { TestVersionModal } from '../components/modals/TestVersionModal';
@@ -403,30 +405,70 @@ export function AppTabsPage() {
      * 为某个任务启动 AI 教练会话
      * - 调用 useAICoachSession.startSession，复用与 DevTestPage / 示例中相同的 AI 流程
      * - 会在会话成功建立后，将该任务标记为已被呼叫（called=true），防止重复触发
+     * - 如果任务是临时任务（ID 是时间戳），先保存到数据库获取真实 UUID
      */
     const startAICoachForTask = useCallback(async (task: Task) => {
         console.log('🤖 Starting AI Coach session for task:', task.text);
+
+        let taskToUse = task;
+        let taskId = task.id;
+
+        // 检查任务 ID 是否是临时的（时间戳格式，全数字）
+        // UUID 格式包含连字符，而时间戳是纯数字
+        const isTemporaryId = /^\d+$/.test(task.id) || task.id.startsWith('temp-');
+
+        if (isTemporaryId && auth.userId) {
+            console.log('📝 检测到临时任务 ID，先保存到数据库...');
+            try {
+                const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
+                if (sessionData?.session?.user?.id) {
+                    const savedTask = await createReminder(task, sessionData.session.user.id);
+                    if (savedTask) {
+                        console.log('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
+                        taskToUse = savedTask;
+                        taskId = savedTask.id;
+                        // 更新前端任务列表中的任务（用真实 ID 替换临时 ID）
+                        setTasks(prev => {
+                            // 如果临时任务已在列表中，替换它
+                            const existingIndex = prev.findIndex(t => t.id === task.id);
+                            if (existingIndex >= 0) {
+                                const newTasks = [...prev];
+                                newTasks[existingIndex] = savedTask;
+                                return newTasks;
+                            }
+                            // 否则添加新任务
+                            return [...prev, savedTask];
+                        });
+                    }
+                }
+            } catch (saveError) {
+                console.error('⚠️ 保存临时任务失败，继续使用临时 ID:', saveError);
+                // 继续使用临时 ID，但 actual_duration_minutes 将无法保存
+            }
+        }
+
         try {
             const preferredLanguages = getPreferredLanguages();
-            await aiCoach.startSession(task.text, {
+            await aiCoach.startSession(taskToUse.text, {
                 userId: auth.userId ?? undefined,  // 传入 userId 用于 Mem0 记忆保存
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
-                taskId: task.id,  // 传入 taskId 用于保存 actual_duration_minutes
+                taskId: taskId,  // 传入真实的 taskId 用于保存 actual_duration_minutes
             });
             console.log('✅ AI Coach session started successfully');
 
             // P0 修复：持久化 called 状态到数据库（解决刷新后重复触发的问题）
-            if (auth.userId) {
+            if (auth.userId && !isTemporaryId) {
+                // 只有非临时任务才需要单独更新 called 状态
+                // 临时任务已经在上面保存时处理了
                 try {
-                    await updateReminder(task.id, { called: true });
+                    await updateReminder(taskId, { called: true });
                     console.log('✅ Task called status persisted to database');
                 } catch (updateError) {
                     console.error('⚠️ Failed to persist called status:', updateError);
-                    // 即使持久化失败，也更新前端状态
                 }
             }
-            setTasks(prev => prev.map(t => t.id === task.id ? { ...t, called: true } : t));
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, called: true } : t));
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);
         }

@@ -17,95 +17,103 @@ const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
 
 // 记忆提取的系统提示词
 // 注意：SUCCESS 记录已从 tasks 表获取，不再在此提取
-const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS and PREFERENCES from user conversations.
+const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS, PREFERENCES, and INSIGHTS from user conversations.
 
-## STRICT RULES - MUST FOLLOW
+## EXTRACTION GUIDELINES
 
-### NEVER EXTRACT (Auto-reject these):
-- Time/date mentions ("it's 4pm", "today", "morning")
-- Basic intentions ("wants to workout", "going to read")
-- Greetings or small talk
-- Single events without pattern significance
-- What AI said (only extract USER patterns)
-- Task completion facts (these are tracked separately in the tasks table)
+### DO NOT EXTRACT:
+- Pure time/date mentions without context ("it's 4pm")
+- Simple greetings or small talk ("hello", "hi")
+- What AI said (only extract USER insights)
 
-### ONLY EXTRACT (High-value insights):
+### EXTRACT THESE (Be generous - if in doubt, extract it):
 
 **1. AI INTERACTION PREFERENCES** [Tag: PREF]
-User feedback on how AI should communicate.
+How user prefers to be communicated with.
 Examples:
-- "User dislikes being rushed or pressured by AI"
-- "User prefers gentle encouragement over strict commands"
-- "User wants AI to be more direct and less chatty"
+- "User dislikes being rushed or pressured"
+- "User prefers gentle encouragement"
+- "User wants shorter responses"
 
 **2. PROCRASTINATION TRIGGERS** [Tag: PROC]
-WHY user avoids or delays specific tasks.
+Reasons or excuses user gives for delaying tasks.
 Examples:
-- "User avoids exercise because it feels overwhelming to start"
-- "User procrastinates on reading due to fear of not understanding"
+- "User delays exercise because other work isn't done"
+- "User feels they can't enjoy leisure until tasks are complete"
+- "User says there's never enough time for reading"
 
 **3. PSYCHOSOMATIC PATTERNS** [Tag: SOMA]
-Physical symptoms tied to specific activities (possible psychological resistance).
+Physical feelings tied to activities.
 Examples:
-- "User reports recurring headaches specifically before workout - possible avoidance pattern"
-- "User feels tired only when it's time to study"
+- "User feels tired when it's time to exercise"
+- "User gets headaches before studying"
 
 **4. EMOTIONAL TRIGGERS** [Tag: EMO]
-Emotions consistently tied to specific tasks or situations.
+Emotions or feelings about tasks/situations.
 Examples:
-- "User feels anxious when facing deadlines"
-- "User gets frustrated when interrupted during focus time"
+- "User feels guilty about relaxing when work is unfinished"
+- "User feels overwhelmed by too many tasks"
+- "User feels anxious about not completing things"
 
 **5. SELF-SABOTAGE PATTERNS** [Tag: SAB]
-Recurring behaviors that undermine user's goals.
+Behaviors that undermine user's goals.
 Examples:
-- "User checks phone immediately before important tasks"
-- "User makes excuses about time when avoiding exercise"
+- "User checks phone before starting important tasks"
+- "User makes excuses about time"
+- "User keeps delaying things they want to do"
+
+**6. TASK CONTEXT** [Tag: PROC]
+Context about why user is doing or avoiding a task.
+Examples:
+- "User needs to finish other work before exercising"
+- "User is procrastinating on gym, wants to shower first"
 
 ## OUTPUT FORMAT
 
-Return a JSON array of extracted memories. Each memory should have:
-- "content": The memory text (be specific, include TASK and PATTERN)
+Return a JSON array. Each memory:
+- "content": The insight (be specific about WHAT and WHY)
 - "tag": One of PREF, PROC, SOMA, EMO, SAB
-- "confidence": 0.0-1.0 how confident you are this is a real pattern
+- "confidence": 0.3-1.0 (use lower values like 0.5-0.7 for single mentions)
 
-If there are NO meaningful patterns to extract, return an empty array: []
+**IMPORTANT: Be generous with extraction. Even single mentions can be valuable insights. If user expresses ANY emotion, reason for delay, or preference - extract it.**
+
+Return empty array [] ONLY if conversation is purely greetings or completely meaningless.
 
 ## EXAMPLES
 
-Input conversation about workout with user saying "Every time when about workout, I feel headache"
-
+Input: User says "I can't enjoy leisure because my work isn't done"
 Output:
 [
   {
-    "content": "User experiences recurring headaches specifically when thinking about working out - likely psychological resistance to exercise",
-    "tag": "SOMA",
-    "confidence": 0.85
+    "content": "User feels unable to enjoy leisure activities when work tasks are incomplete - guilt-driven work pattern",
+    "tag": "EMO",
+    "confidence": 0.7
   }
 ]
 
-Input conversation with user just saying "It's 4pm and I need to work out"
-
-Output:
-[]
-
-Input conversation where user says "I hate when you rush me, just let me take my time"
-
+Input: User says "I'm procrastinating going to gym, need to shower first"
 Output:
 [
   {
-    "content": "User dislikes being rushed or pressured by AI - prefers to take their own pace",
-    "tag": "PREF",
-    "confidence": 0.9
+    "content": "User delays going to gym by creating prerequisite tasks (showering first) - possible avoidance behavior",
+    "tag": "PROC",
+    "confidence": 0.6
   }
 ]
 
-## IMPORTANT
-- Quality over quantity: Only extract MEANINGFUL patterns
-- Be specific: Include the TASK and the PATTERN
-- Note frequency if mentioned: "always", "every time", "usually"
-- Include psychological insight when the pattern suggests it
-- Do NOT extract task completion - this is tracked in the tasks table`
+Input: User says "There's never enough time for reading"
+Output:
+[
+  {
+    "content": "User perceives lack of time for reading - may indicate low priority or avoidance pattern",
+    "tag": "PROC",
+    "confidence": 0.6
+  }
+]
+
+Input: User just says "Hello, good morning"
+Output:
+[]`
 
 // 记忆合并的系统提示词
 const MERGE_PROMPT = `You are a memory consolidation expert. Your task is to merge multiple similar memories into ONE concise, comprehensive memory.
@@ -395,7 +403,7 @@ async function extractMemoriesWithAI(
     const parsed = JSON.parse(content)
     // 处理可能的不同格式
     const memories = Array.isArray(parsed) ? parsed : (parsed.memories || parsed.results || [])
-    return memories.filter((m: ExtractedMemory) => m.content && m.tag && m.confidence >= 0.5)
+    return memories.filter((m: ExtractedMemory) => m.content && m.tag && m.confidence >= 0.3)
   } catch (e) {
     console.error('Failed to parse AI response:', content, e)
     return []

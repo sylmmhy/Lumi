@@ -10,7 +10,7 @@ import { MemoriesSection } from '../profile/MemoriesSection';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
-import { getTimeFormat, setTimeFormat, TimeFormat } from '../../lib/timeFormat';
+import { getTimeFormat, setTimeFormat, type TimeFormat } from '../../lib/timeFormat';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {

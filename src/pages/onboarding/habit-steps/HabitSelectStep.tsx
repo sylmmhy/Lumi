@@ -62,14 +62,17 @@ export function HabitSelectStep({
   });
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* 标题 */}
-      <h1 className="text-3xl font-bold text-gray-900 text-center mt-8 mb-10">
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mt-4 sm:mt-8 mb-6 sm:mb-10 shrink-0">
         {t('habitOnboarding.habitSelect.title')}
       </h1>
 
-      {/* 习惯选项列表 */}
-      <div className="flex-1 flex flex-col gap-3">
+      {/* 习惯选项列表 - 可滚动区域 */}
+      <div
+        className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 pb-2"
+        data-scrollable
+      >
         {displayHabits.map((habit) => (
           <HabitButton
             key={habit.id}
@@ -80,8 +83,8 @@ export function HabitSelectStep({
         ))}
       </div>
 
-      {/* 下一步按钮 */}
-      <div className="mt-6 mb-4">
+      {/* 下一步按钮 - 固定在底部 */}
+      <div className="mt-4 mb-2 sm:mt-6 sm:mb-4 shrink-0">
         <button
           onClick={onNext}
           disabled={!canProceed}

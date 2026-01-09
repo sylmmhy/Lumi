@@ -67,11 +67,17 @@ Examples:
 - "User finished brushing teeth task"
 - "User overcame initial resistance and completed the full task"
 
-IMPORTANT for SUCCESS:
+IMPORTANT for SUCCESS - Extract rich details:
 - Extract when user completed the task (timer ended, user said "done", "finished", etc.)
-- Note if user overcame difficulty during the task
-- Note emotional state at completion if mentioned ("felt proud", "relieved")
-- For SUCCESS tag, also include "metadata" field with: duration_minutes (if known), overcame_resistance (boolean)
+- Note if user overcame difficulty during the task (wanted to quit but pushed through)
+- Note emotional state at completion if mentioned ("felt proud", "relieved", "happy")
+- Note any specific achievements ("did more reps than usual", "finished faster")
+- Note if this seemed easier or harder than usual for them
+- For SUCCESS tag, include "metadata" field with:
+  - duration_minutes: number (if known)
+  - overcame_resistance: boolean (true if they struggled but pushed through)
+  - completion_mood: string ("proud" | "relieved" | "satisfied" | "neutral" | null)
+  - difficulty_perception: string ("easier_than_usual" | "normal" | "harder_than_usual" | null)
 
 ## OUTPUT FORMAT
 
@@ -79,7 +85,12 @@ Return a JSON array of extracted memories. Each memory should have:
 - "content": The memory text (be specific, include TASK and PATTERN)
 - "tag": One of PREF, PROC, SOMA, EMO, SAB, SUCCESS
 - "confidence": 0.0-1.0 how confident you are this is a real pattern
-- "metadata": (optional, mainly for SUCCESS) { "duration_minutes": number, "overcame_resistance": boolean }
+- "metadata": (optional, mainly for SUCCESS) {
+    "duration_minutes": number,
+    "overcame_resistance": boolean,
+    "completion_mood": "proud" | "relieved" | "satisfied" | "neutral" | null,
+    "difficulty_perception": "easier_than_usual" | "normal" | "harder_than_usual" | null
+  }
 
 If there are NO meaningful patterns to extract, return an empty array: []
 
@@ -101,22 +112,22 @@ Input conversation where user completed a 5-minute workout task and said "I did 
 Output:
 [
   {
-    "content": "User successfully completed workout task and expressed positive surprise at the experience",
+    "content": "User successfully completed workout task and expressed positive surprise - found it easier than expected",
     "tag": "SUCCESS",
     "confidence": 0.95,
-    "metadata": { "overcame_resistance": false }
+    "metadata": { "overcame_resistance": false, "completion_mood": "satisfied", "difficulty_perception": "easier_than_usual" }
   }
 ]
 
-Input conversation where user struggled but finished, saying "I wanted to quit at minute 2 but I pushed through"
+Input conversation where user struggled but finished, saying "I wanted to quit at minute 2 but I pushed through. I'm so proud of myself!"
 
 Output:
 [
   {
-    "content": "User completed task despite wanting to quit at the 2-minute mark - showed strong persistence",
+    "content": "User completed task despite wanting to quit at the 2-minute mark - showed strong persistence and felt proud of pushing through",
     "tag": "SUCCESS",
     "confidence": 0.95,
-    "metadata": { "overcame_resistance": true }
+    "metadata": { "overcame_resistance": true, "completion_mood": "proud", "difficulty_perception": "harder_than_usual" }
   }
 ]
 
@@ -204,6 +215,8 @@ interface ExtractedMemory {
   metadata?: {
     duration_minutes?: number
     overcame_resistance?: boolean
+    completion_mood?: 'proud' | 'relieved' | 'satisfied' | 'neutral' | null
+    difficulty_perception?: 'easier_than_usual' | 'normal' | 'harder_than_usual' | null
   }
 }
 
@@ -547,6 +560,35 @@ async function saveOrMergeMemories(
 
         // 从请求的 metadata 中获取实际时长
         const actualDuration = (metadata as Record<string, unknown>)?.actual_duration_minutes as number | undefined
+        const thisDuration = memory.metadata?.duration_minutes || actualDuration || null
+
+        // 查询该任务类型的历史最佳时长
+        let personalBest: number | null = null
+        let isNewPersonalBest = false
+        try {
+          const { data: bestData } = await supabase
+            .from('user_memories')
+            .select('metadata')
+            .eq('user_id', userId)
+            .eq('tag', 'SUCCESS')
+            .not('metadata->duration_minutes', 'is', null)
+            .order('metadata->duration_minutes', { ascending: false })
+            .limit(1)
+
+          if (bestData && bestData.length > 0) {
+            const bestMetadata = bestData[0].metadata as Record<string, unknown>
+            personalBest = (bestMetadata?.duration_minutes as number) || null
+          }
+
+          // 判断是否创造新的个人最佳
+          if (thisDuration && (!personalBest || thisDuration > personalBest)) {
+            isNewPersonalBest = true
+            personalBest = thisDuration
+            console.log(`🏆 New personal best: ${thisDuration} minutes!`)
+          }
+        } catch (e) {
+          console.warn('Failed to check personal best:', e)
+        }
 
         // 构建 SUCCESS 记忆的完整 metadata
         const successMetadata = {
@@ -555,8 +597,13 @@ async function saveOrMergeMemories(
           completion_date: new Date().toISOString().split('T')[0],
           streak_count: currentStreak + 1, // 新的连胜数
           // AI 提取的元数据
-          duration_minutes: memory.metadata?.duration_minutes || actualDuration || null,
+          duration_minutes: thisDuration,
           overcame_resistance: memory.metadata?.overcame_resistance || false,
+          completion_mood: memory.metadata?.completion_mood || null,
+          difficulty_perception: memory.metadata?.difficulty_perception || null,
+          // 个人最佳追踪
+          is_personal_best: isNewPersonalBest,
+          personal_best_at_time: personalBest,
           // 请求带来的其他元数据
           source: (metadata as Record<string, unknown>)?.source || 'ai_coach_session',
           extractedAt: new Date().toISOString(),

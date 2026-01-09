@@ -1,259 +1,259 @@
 /**
- * P0 修复：VoIP 推送通知 Edge Function
+ * VoIP 推送通知 Edge Function
  *
  * 功能：
- * 1. 从 pending_push_notifications 表获取待发送的通知
- * 2. 通过 APNs 发送 VoIP 推送到 iOS 设备
- * 3. 标记发送结果
+ * - 接收 userId, taskId, taskTitle, deviceToken, isSandbox 参数
+ * - 通过 APNs 发送 VoIP 推送到 iOS 设备
  *
- * 触发方式：
- * - pg_cron 每分钟调用（通过 HTTP trigger）
- * - 或由 Supabase Webhook 触发
+ * 调用方式：
+ * - 由 pg_cron 通过 check_and_send_task_notifications SQL 函数调用
+ * - 直接 HTTP POST 调用
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-// @ts-ignore - jose 库用于 JWT 签名
-import * as jose from 'https://deno.land/x/jose@v4.14.4/index.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-interface PendingNotification {
-  notification_id: string
-  user_id: string
-  task_id: string
-  task_title: string
-  task_time: string
-  device_token: string
-  scheduled_time: string
-}
+// APNs 配置
+const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID") || "";
+const APNS_TEAM_ID = Deno.env.get("APNS_TEAM_ID") || "";
+const APNS_AUTH_KEY = Deno.env.get("APNS_AUTH_KEY") || "";
+const APNS_BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID") || "com.mindboat.app";
 
-interface APNsConfig {
-  teamId: string
-  keyId: string
-  privateKey: string
-  bundleId: string
-  production: boolean
-}
+const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
+const APNS_PRODUCTION_HOST = "https://api.push.apple.com";
 
 /**
  * 生成 APNs JWT Token
- * 支持两种私钥格式：
- * 1. 完整 PEM 格式 (带 -----BEGIN PRIVATE KEY-----)
- * 2. 纯 base64 格式 (Supabase 环境变量中的格式)
  */
-async function generateAPNsToken(config: APNsConfig): Promise<string> {
-  let privateKeyPEM = config.privateKey.replace(/\\n/g, '\n')
-
-  // 如果不是 PEM 格式，添加 header/footer
-  if (!privateKeyPEM.includes('-----BEGIN PRIVATE KEY-----')) {
-    // 移除可能的空白字符
-    const cleanBase64 = privateKeyPEM.replace(/\s/g, '')
-    privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${cleanBase64}\n-----END PRIVATE KEY-----`
+async function generateAPNsJWT(): Promise<string> {
+  if (!APNS_AUTH_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
+    throw new Error("Missing APNs configuration");
   }
 
-  const privateKey = await jose.importPKCS8(privateKeyPEM, 'ES256')
+  const pemKey = APNS_AUTH_KEY.replace(/\\n/g, "\n");
+  const pemContents = pemKey
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s/g, "");
 
-  const jwt = await new jose.SignJWT({})
-    .setProtectedHeader({
-      alg: 'ES256',
-      kid: config.keyId,
-    })
-    .setIssuer(config.teamId)
-    .setIssuedAt()
-    .sign(privateKey)
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-  return jwt
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    binaryKey,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+
+  const jwt = await create(
+    { alg: "ES256", kid: APNS_KEY_ID },
+    {
+      iss: APNS_TEAM_ID,
+      iat: getNumericDate(0),
+    },
+    key
+  );
+
+  return jwt;
 }
 
 /**
- * 发送 VoIP 推送到 iOS 设备
+ * 发送 VoIP 推送
  */
 async function sendVoIPPush(
   deviceToken: string,
-  payload: object,
-  config: APNsConfig
+  taskTitle: string,
+  taskId: string,
+  isSandbox: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const token = await generateAPNsToken(config)
+    console.log(`\n📤 ========== Sending VoIP Push ==========`);
+    console.log(`   Device Token: ${deviceToken.substring(0, 30)}...`);
+    console.log(`   Task Title: ${taskTitle}`);
+    console.log(`   Task ID: ${taskId}`);
+    console.log(`   Sandbox: ${isSandbox}`);
 
-    // APNs 服务器地址
-    const apnsHost = config.production
-      ? 'https://api.push.apple.com'
-      : 'https://api.sandbox.push.apple.com'
+    const jwt = await generateAPNsJWT();
 
-    const url = `${apnsHost}/3/device/${deviceToken}`
+    const payload = {
+      aps: {},
+      task: taskTitle,
+      taskId: taskId,
+      caller: "MindBoat",
+      type: "voip_call"
+    };
+
+    const apnsHost = isSandbox ? APNS_SANDBOX_HOST : APNS_PRODUCTION_HOST;
+    const url = `${apnsHost}/3/device/${deviceToken}`;
+
+    console.log(`   APNs Host: ${apnsHost}`);
 
     const response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'authorization': `bearer ${token}`,
-        'apns-topic': `${config.bundleId}.voip`,
-        'apns-push-type': 'voip',
-        'apns-priority': '10',
-        'apns-expiration': '0',
-        'content-type': 'application/json',
+        "authorization": `bearer ${jwt}`,
+        "apns-topic": `${APNS_BUNDLE_ID}.voip`,
+        "apns-push-type": "voip",
+        "apns-priority": "10",
+        "apns-expiration": "0",
+        "content-type": "application/json"
       },
-      body: JSON.stringify(payload),
-    })
+      body: JSON.stringify(payload)
+    });
 
-    if (response.ok) {
-      return { success: true }
-    } else {
-      const errorBody = await response.text()
-      console.error('APNs error:', response.status, errorBody)
-      return {
-        success: false,
-        error: `APNs ${response.status}: ${errorBody}`
-      }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ APNs error (${response.status}):`, errorText);
+      return { success: false, error: `APNs error: ${response.status} - ${errorText}` };
     }
+
+    console.log(`✅ VoIP push sent successfully`);
+    return { success: true };
   } catch (error) {
-    console.error('VoIP push error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }
+    console.error(`❌ Failed to send VoIP push:`, error);
+    return { success: false, error: error.message };
   }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // 获取环境变量
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const { userId, taskId, taskTitle, deviceToken, isSandbox } = await req.json();
 
-    // APNs 配置（从环境变量获取）
-    const apnsConfig: APNsConfig = {
-      teamId: Deno.env.get('APNS_TEAM_ID') || '',
-      keyId: Deno.env.get('APNS_KEY_ID') || '',
-      privateKey: Deno.env.get('APNS_AUTH_KEY') || Deno.env.get('APNS_PRIVATE_KEY') || '',
-      bundleId: Deno.env.get('APNS_BUNDLE_ID') || '',
-      production: Deno.env.get('APNS_PRODUCTION') === 'true',
-    }
+    console.log(`\n🔔 ========== Send VoIP Push Request ==========`);
+    console.log(`   Time: ${new Date().toISOString()}`);
+    console.log(`   User ID: ${userId}`);
+    console.log(`   Task ID: ${taskId}`);
+    console.log(`   Task Title: ${taskTitle}`);
+    console.log(`   Device Token provided: ${deviceToken ? 'Yes' : 'No'}`);
+    console.log(`   Is Sandbox: ${isSandbox}`);
 
-    // 验证 APNs 配置
-    if (!apnsConfig.teamId || !apnsConfig.keyId || !apnsConfig.privateKey || !apnsConfig.bundleId) {
-      console.error('Missing APNs configuration')
-      return new Response(
-        JSON.stringify({
-          error: 'APNs not configured',
-          missing: {
-            teamId: !apnsConfig.teamId,
-            keyId: !apnsConfig.keyId,
-            privateKey: !apnsConfig.privateKey,
-            bundleId: !apnsConfig.bundleId,
-          }
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    let targetDeviceToken = deviceToken;
+    let targetIsSandbox = isSandbox ?? false;
 
-    // 创建 Supabase 客户端（使用 service role）
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+    // 如果没有提供 deviceToken，从数据库查询
+    if (!targetDeviceToken && userId) {
+      console.log(`   Fetching VoIP device info from database...`);
 
-    // 获取待发送的通知
-    const { data: notifications, error: fetchError } = await supabase
-      .rpc('get_pending_notifications', { p_limit: 100 })
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
 
-    if (fetchError) {
-      console.error('Failed to fetch notifications:', fetchError)
-      return new Response(
-        JSON.stringify({ error: fetchError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+      // 查询 VoIP 设备信息
+      const { data: devices, error: deviceError } = await supabase
+        .from("user_devices")
+        .select("device_token, is_sandbox")
+        .eq("user_id", userId)
+        .eq("platform", "voip")
+        .order("updated_at", { ascending: false })
+        .limit(1);
 
-    if (!notifications || notifications.length === 0) {
-      return new Response(
-        JSON.stringify({ message: 'No pending notifications', processed: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log(`Processing ${notifications.length} notifications`)
-
-    // 处理每个通知
-    const results: Array<{ id: string; success: boolean; error?: string }> = []
-
-    for (const notification of notifications as PendingNotification[]) {
-      // 跳过没有 device_token 的
-      if (!notification.device_token) {
-        await supabase.rpc('mark_notification_sent', {
-          p_notification_id: notification.notification_id,
-          p_success: false,
-          p_error: 'No device token'
-        })
-        results.push({ id: notification.notification_id, success: false, error: 'No device token' })
-        continue
+      if (deviceError) {
+        console.error(`❌ Failed to fetch VoIP device token:`, deviceError);
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch VoIP device token", details: deviceError }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // 构建 VoIP 推送负载
-      // 这个格式需要与 iOS 原生端期望的格式匹配
-      const payload = {
-        aps: {
-          alert: {
-            title: 'Time for your routine',
-            body: notification.task_title,
-          },
-        },
-        // 自定义数据，原生端用来识别任务
-        mindboat: {
-          type: 'routine_reminder',
-          task_id: notification.task_id,
-          task_title: notification.task_title,
-          task_time: notification.task_time,
-          action: 'start_ai_call',
-        },
+      if (!devices || devices.length === 0) {
+        // 尝试从 users 表获取旧的 voip_token
+        const { data: user, error: userError } = await supabase
+          .from("users")
+          .select("voip_token")
+          .eq("id", userId)
+          .single();
+
+        if (userError || !user?.voip_token) {
+          console.log(`⚠️ No VoIP token found for user ${userId}`);
+          return new Response(
+            JSON.stringify({ error: "No VoIP token found for user" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        targetDeviceToken = user.voip_token;
+        targetIsSandbox = false; // 旧表没有 sandbox 信息，默认生产
+        console.log(`   📱 VoIP Token from users table: ${targetDeviceToken.substring(0, 30)}...`);
+      } else {
+        targetDeviceToken = devices[0].device_token;
+        targetIsSandbox = devices[0].is_sandbox ?? false;
+        console.log(`   📱 VoIP Token from user_devices: ${targetDeviceToken.substring(0, 30)}...`);
+        console.log(`   📱 Is Sandbox: ${targetIsSandbox}`);
       }
-
-      // 发送推送
-      const result = await sendVoIPPush(notification.device_token, payload, apnsConfig)
-
-      // 更新状态
-      await supabase.rpc('mark_notification_sent', {
-        p_notification_id: notification.notification_id,
-        p_success: result.success,
-        p_error: result.error || null
-      })
-
-      results.push({
-        id: notification.notification_id,
-        success: result.success,
-        error: result.error
-      })
-
-      // 小延迟避免 APNs 限流
-      await new Promise(resolve => setTimeout(resolve, 50))
     }
 
-    const successful = results.filter(r => r.success).length
-    const failed = results.filter(r => !r.success).length
+    if (!targetDeviceToken) {
+      return new Response(
+        JSON.stringify({ error: "No device token available" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    console.log(`Processed: ${successful} successful, ${failed} failed`)
+    const result = await sendVoIPPush(
+      targetDeviceToken,
+      taskTitle || "任务提醒",
+      taskId || "",
+      targetIsSandbox
+    );
 
-    return new Response(
-      JSON.stringify({
-        processed: results.length,
-        successful,
-        failed,
-        results,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
+    if (result.success) {
+      // 推送成功，标记任务为已调用
+      if (taskId) {
+        await supabase
+          .from("tasks")
+          .update({
+            called: true,
+            push_last_error: null  // 清除之前的错误
+          })
+          .eq("id", taskId);
+
+        console.log(`✅ Task ${taskId} marked as called`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "VoIP push sent successfully" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      // 推送失败，记录错误信息（不设置 called = true，允许重试）
+      if (taskId) {
+        await supabase
+          .from("tasks")
+          .update({
+            push_last_error: result.error?.substring(0, 500)  // 限制错误信息长度
+          })
+          .eq("id", taskId);
+
+        console.log(`⚠️ Task ${taskId} push failed, error recorded for retry`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: false, error: result.error }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   } catch (error) {
-    console.error('Edge function error:', error)
+    console.error(`❌ Edge function error:`, error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
-})
+});

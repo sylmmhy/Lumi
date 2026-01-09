@@ -7,39 +7,51 @@ interface LandingHeroProps {
 export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
     return (
         <section
-            className="relative w-full overflow-hidden pt-16"
+            className="relative w-full overflow-hidden"
             style={{
                 fontFamily: 'Nunito, sans-serif',
-                background: 'linear-gradient(124deg, #2377E1 0%, #13417B 100%)'
+                backgroundColor: '#F8F8F8',
+                minHeight: '600px'
             }}
         >
-            {/* Content container - same max-width as other sections */}
-            <div className="max-w-6xl mx-auto px-6 relative">
-                <div className="flex flex-col lg:flex-row items-center lg:items-start py-16 lg:py-20 gap-8 lg:gap-0">
-                    {/* Left: Text content */}
-                    <div className="w-full lg:w-1/2 text-center lg:text-left z-10">
-                        {/* Main headline */}
-                        <h1
-                            className="text-white mb-6"
-                            style={{
-                                fontFamily: 'Nunito, sans-serif',
-                                fontWeight: 700,
-                                fontSize: 'clamp(32px, 4vw, 48px)',
-                                lineHeight: '1.3em',
-                                textTransform: 'capitalize'
-                            }}
-                        >
-                            Your Best Year Starts With Your Body Double
-                        </h1>
+            {/* Blue circle - large, extends beyond right edge */}
+            <div
+                className="absolute rounded-full hidden lg:block"
+                style={{
+                    width: '600px',
+                    height: '600px',
+                    backgroundColor: '#2545BD',
+                    right: '-120px',
+                    top: '-50px',
+                    zIndex: 1
+                }}
+            />
 
-                        {/* Subheadline */}
-                        <p
-                            className="text-white/90 mb-8"
+            {/* Content container */}
+            <div className="max-w-6xl mx-auto px-6 lg:px-12 relative" style={{ zIndex: 10 }}>
+                <div className="flex flex-col lg:flex-row items-center lg:items-start pt-24 lg:pt-28 pb-16">
+                    {/* Left side: Branding + Description + CTA */}
+                    <div className="w-full lg:w-[45%] z-10">
+                        {/* Logo + Title image */}
+                        <img
+                            src="/lumi-logo-title.png"
+                            alt="LUMI - Your Body Double."
+                            className="mb-10"
                             style={{
-                                fontFamily: 'Nunito, sans-serif',
+                                height: '90px',
+                                width: 'auto',
+                                objectFit: 'contain'
+                            }}
+                        />
+
+                        {/* Description text */}
+                        <p
+                            className="mb-10 text-gray-800"
+                            style={{
                                 fontWeight: 500,
-                                fontSize: 'clamp(16px, 2vw, 20px)',
-                                lineHeight: '1.5em'
+                                fontSize: '20px',
+                                lineHeight: '1.6em',
+                                maxWidth: '420px'
                             }}
                         >
                             Procrastination Champion? Can't Stick To Habits For More Than 3 Days? We Got You.
@@ -50,44 +62,78 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onGetStarted }) => {
                             onClick={onGetStarted}
                             className="transition-all hover:opacity-90 transform hover:scale-105"
                             style={{
-                                fontFamily: 'Nunito, sans-serif',
                                 fontWeight: 700,
-                                fontSize: '18px',
-                                backgroundColor: '#FCD351',
-                                color: '#000000',
-                                borderRadius: '26px',
-                                padding: '14px 28px',
-                                textAlign: 'center'
+                                fontSize: '16px',
+                                lineHeight: '1.5em',
+                                backgroundColor: '#2545BD',
+                                color: '#FFFFFF',
+                                borderRadius: '8px',
+                                padding: '16px 32px',
+                                textAlign: 'center',
+                                border: 'none',
+                                cursor: 'pointer'
                             }}
                         >
                             Request Beta Test
                         </button>
                     </div>
 
-                    {/* Right: Phone mockup */}
-                    <div className="w-full lg:w-1/2 relative flex justify-center lg:justify-end">
-                        {/* Orange ellipse background */}
-                        <div
-                            className="absolute rounded-full"
-                            style={{
-                                width: 'clamp(280px, 35vw, 380px)',
-                                height: 'clamp(280px, 35vw, 380px)',
-                                backgroundColor: '#FFC676',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-30%, -45%)'
-                            }}
-                        />
-
-                        {/* Phone image */}
-                        <img
-                            src="/hero-phones.png"
-                            alt="Lumi App"
-                            className="relative z-10 w-[280px] lg:w-[400px] h-auto object-contain"
-                        />
+                    {/* Right side: Phone mockup with orange circle */}
+                    <div className="w-full lg:w-[55%] relative flex justify-center lg:justify-end mt-12 lg:mt-0">
+                        <div className="relative">
+                            {/* Orange circle - behind phone */}
+                            <div
+                                className="absolute rounded-full hidden lg:block"
+                                style={{
+                                    width: '380px',
+                                    height: '380px',
+                                    backgroundColor: '#F5A623',
+                                    left: '50%',
+                                    top: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    zIndex: 2
+                                }}
+                            />
+                            {/* Phone mockup */}
+                            <img
+                                src="/hero-phones.png"
+                                alt="Lumi App"
+                                style={{
+                                    width: '340px',
+                                    height: 'auto',
+                                    objectFit: 'contain',
+                                    position: 'relative',
+                                    zIndex: 3
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Mobile circles */}
+            <div
+                className="absolute rounded-full lg:hidden"
+                style={{
+                    width: '300px',
+                    height: '300px',
+                    backgroundColor: '#2545BD',
+                    right: '-80px',
+                    top: '200px',
+                    zIndex: 0
+                }}
+            />
+            <div
+                className="absolute rounded-full lg:hidden"
+                style={{
+                    width: '250px',
+                    height: '250px',
+                    backgroundColor: '#F5A623',
+                    right: '0px',
+                    top: '280px',
+                    zIndex: 1
+                }}
+            />
         </section>
     );
 };

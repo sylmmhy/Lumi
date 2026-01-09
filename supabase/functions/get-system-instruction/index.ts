@@ -15,10 +15,13 @@ interface SuccessRecord {
   lastDate: string | null
   currentStreak: number
   totalCompletions: number
+  personalBest: number | null
   recentSuccesses: Array<{
     content: string
     duration_minutes: number | null
     overcame_resistance: boolean
+    completion_mood: string | null
+    difficulty_perception: string | null
   }>
 }
 
@@ -128,7 +131,7 @@ function inferTaskType(taskDescription: string): string {
 
 /**
  * 获取用户的成功记录
- * 用于在会话开始时让 AI 知道用户的历史成就
+ * 从 tasks 表和 routine_completions 表查询用户的任务完成历史
  */
 async function getSuccessRecords(
   supabase: ReturnType<typeof createClient>,
@@ -137,80 +140,118 @@ async function getSuccessRecords(
 ): Promise<SuccessRecord | null> {
   try {
     const taskType = inferTaskType(taskDescription)
-    console.log(`🏆 正在获取 ${taskType} 类型的成功记录...`)
+    console.log(`🏆 正在获取 ${taskType} 类型的成功记录（从 tasks 表）...`)
 
-    // 获取该任务类型的 SUCCESS 记忆
-    const { data: successMemories, error } = await supabase
-      .from('user_memories')
-      .select('content, metadata, created_at')
+    // 获取用于匹配的关键词
+    const keywords = extractKeywords(taskDescription)
+    console.log(`🔍 任务匹配关键词: ${keywords.join(', ')}`)
+
+    // 1. 从 tasks 表获取已完成的任务
+    const { data: completedTasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('id, title, category, task_type, completed_at, created_at')
       .eq('user_id', userId)
-      .eq('tag', 'SUCCESS')
-      .order('created_at', { ascending: false })
-      .limit(20) // 获取更多，然后筛选
+      .eq('status', 'completed')
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(50) // 获取更多，然后筛选
 
-    if (error) {
-      console.warn('获取成功记录出错:', error)
+    if (tasksError) {
+      console.warn('获取已完成任务出错:', tasksError)
       return null
     }
 
-    if (!successMemories || successMemories.length === 0) {
-      console.log('🏆 没有找到成功记录')
+    if (!completedTasks || completedTasks.length === 0) {
+      console.log('🏆 没有找到已完成的任务')
       return null
     }
 
-    // 筛选匹配任务类型的记录
-    const matchingRecords = successMemories.filter(m => {
-      const metadata = m.metadata as Record<string, unknown> | null
-      return metadata?.task_type === taskType
+    console.log(`🏆 找到 ${completedTasks.length} 条已完成任务`)
+
+    // 2. 筛选匹配当前任务类型的记录
+    const matchingTasks = completedTasks.filter(task => {
+      // 方法1: 通过推断的任务类型匹配
+      const inferredType = inferTaskType(task.title)
+      if (inferredType === taskType && taskType !== 'general') {
+        return true
+      }
+
+      // 方法2: 通过关键词匹配标题
+      const lowerTitle = task.title.toLowerCase()
+      return keywords.some(keyword => lowerTitle.includes(keyword.toLowerCase()))
     })
 
-    if (matchingRecords.length === 0) {
-      console.log(`🏆 没有找到 ${taskType} 类型的成功记录`)
+    if (matchingTasks.length === 0) {
+      console.log(`🏆 没有找到与 "${taskDescription}" 匹配的已完成任务`)
       return null
     }
 
-    console.log(`🏆 找到 ${matchingRecords.length} 条 ${taskType} 类型的成功记录`)
+    console.log(`🏆 找到 ${matchingTasks.length} 条匹配的已完成任务`)
 
-    // 获取最近一条记录的详情
-    const latestRecord = matchingRecords[0]
-    const latestMetadata = latestRecord.metadata as Record<string, unknown> | null
+    // 3. 获取最近一条记录的详情
+    const latestTask = matchingTasks[0]
+    const lastDate = latestTask.completed_at
+      ? new Date(latestTask.completed_at).toISOString().split('T')[0]
+      : null
 
-    // 计算连胜（尝试调用数据库函数，失败则用本地计算）
+    // 4. 计算连胜天数（从 routine_completions 表或根据 completed_at 日期计算）
     let currentStreak = 0
     try {
-      const { data: streakData } = await supabase.rpc('calculate_user_streak', {
-        p_user_id: userId,
-        p_task_type: taskType
-      })
-      currentStreak = streakData || 0
+      // 尝试从 routine_completions 表计算连胜
+      const { data: completions, error: completionsError } = await supabase
+        .from('routine_completions')
+        .select('completion_date, task_name')
+        .eq('user_id', userId)
+        .order('completion_date', { ascending: false })
+        .limit(30)
+
+      if (!completionsError && completions && completions.length > 0) {
+        // 筛选匹配的任务
+        const matchingCompletions = completions.filter(c => {
+          const lowerName = (c.task_name || '').toLowerCase()
+          return keywords.some(keyword => lowerName.includes(keyword.toLowerCase()))
+        })
+
+        if (matchingCompletions.length > 0) {
+          currentStreak = calculateStreakFromDates(
+            matchingCompletions.map(c => c.completion_date)
+          )
+        }
+      }
     } catch (e) {
-      // 如果数据库函数不存在，用元数据中的 streak_count
-      currentStreak = (latestMetadata?.streak_count as number) || matchingRecords.length
-      console.log('使用元数据中的连胜数:', currentStreak)
+      console.log('计算连胜出错，使用备用方法:', e)
     }
 
-    // 提取最近3条的详情
-    const recentSuccesses = matchingRecords.slice(0, 3).map(m => {
-      const metadata = m.metadata as Record<string, unknown> | null
-      return {
-        content: m.content,
-        duration_minutes: (metadata?.duration_minutes as number) || null,
-        overcame_resistance: (metadata?.overcame_resistance as boolean) || false,
-      }
-    })
+    // 5. 如果 routine_completions 没有数据，从 tasks 的 completed_at 计算
+    if (currentStreak === 0 && matchingTasks.length > 0) {
+      const completionDates = matchingTasks
+        .filter(t => t.completed_at)
+        .map(t => new Date(t.completed_at).toISOString().split('T')[0])
+      currentStreak = calculateStreakFromDates(completionDates)
+    }
+
+    // 6. 构建最近成功记录
+    const recentSuccesses = matchingTasks.slice(0, 3).map(task => ({
+      content: task.title,
+      duration_minutes: null, // tasks 表没有时长字段
+      overcame_resistance: false, // 无法从 tasks 表获取
+      completion_mood: null,
+      difficulty_perception: null,
+    }))
 
     const result: SuccessRecord = {
       taskType,
-      lastDuration: (latestMetadata?.duration_minutes as number) || null,
-      lastDate: (latestMetadata?.completion_date as string) || null,
+      lastDuration: null, // tasks 表没有时长字段
+      lastDate,
       currentStreak,
-      totalCompletions: matchingRecords.length,
+      totalCompletions: matchingTasks.length,
+      personalBest: null, // tasks 表没有时长字段
       recentSuccesses,
     }
 
     console.log('🏆 成功记录汇总:', {
       taskType: result.taskType,
-      lastDuration: result.lastDuration,
+      lastDate: result.lastDate,
       currentStreak: result.currentStreak,
       totalCompletions: result.totalCompletions,
     })
@@ -220,6 +261,57 @@ async function getSuccessRecords(
     console.warn('获取成功记录出错:', error)
     return null
   }
+}
+
+/**
+ * 从日期数组计算连胜天数
+ * @param dates - 完成日期数组（格式：YYYY-MM-DD），已按降序排列
+ * @returns 连续完成的天数
+ */
+function calculateStreakFromDates(dates: string[]): number {
+  if (!dates || dates.length === 0) return 0
+
+  // 去重并排序（降序）
+  const uniqueDates = [...new Set(dates)].sort((a, b) => b.localeCompare(a))
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayStr = today.toISOString().split('T')[0]
+
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+  let streak = 0
+  let lastDate: Date | null = null
+
+  for (const dateStr of uniqueDates) {
+    const date = new Date(dateStr)
+    date.setHours(0, 0, 0, 0)
+
+    if (lastDate === null) {
+      // 第一条记录：必须是今天或昨天
+      if (dateStr === todayStr || dateStr === yesterdayStr) {
+        streak = 1
+        lastDate = date
+      } else {
+        // 最近的完成日期超过1天前，连胜为0
+        break
+      }
+    } else {
+      // 检查是否连续（差1天）
+      const diffDays = Math.round((lastDate.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+      if (diffDays === 1) {
+        streak++
+        lastDate = date
+      } else {
+        // 断档，停止计数
+        break
+      }
+    }
+  }
+
+  return streak
 }
 
 /**
@@ -400,15 +492,19 @@ ${successRecord.lastDuration ? `- Last time they did it for: ${successRecord.las
 ${successRecord.lastDate ? `- Last completion: ${successRecord.lastDate}` : ''}
 - Current streak: ${successRecord.currentStreak} day${successRecord.currentStreak !== 1 ? 's' : ''} in a row
 - Total completions: ${successRecord.totalCompletions} time${successRecord.totalCompletions !== 1 ? 's' : ''}
+${successRecord.personalBest ? `- Personal best: ${successRecord.personalBest} minutes (their longest session ever!)` : ''}
 ${successRecord.recentSuccesses.some(s => s.overcame_resistance) ? '- They have overcome resistance before and pushed through!' : ''}
+${successRecord.recentSuccesses.some(s => s.completion_mood === 'proud') ? '- They felt PROUD after completing - tap into that feeling!' : ''}
 
 HOW TO USE THIS (pick moments naturally, do not spam all at once):
 - At the START: Casually mention their track record
   ${successRecord.lastDuration ? `Example: "You did ${successRecord.lastDuration} minutes last time. Ready to match or beat it?"` : ''}
   ${successRecord.currentStreak > 1 ? `Example: "Day ${successRecord.currentStreak + 1} incoming! Let us keep the streak alive."` : ''}
+  ${successRecord.personalBest ? `Example: "Your record is ${successRecord.personalBest} minutes. No pressure, but just saying..."` : ''}
 - When they STRUGGLE (middle of task): Remind them of past success
   Example: "You have done this ${successRecord.totalCompletions} time${successRecord.totalCompletions !== 1 ? 's' : ''} before. You know you can."
   ${successRecord.recentSuccesses.some(s => s.overcame_resistance) ? 'Example: "Last time you wanted to quit too, but you pushed through. You got this."' : ''}
+  ${successRecord.recentSuccesses.some(s => s.completion_mood === 'proud') ? 'Example: "Remember how proud you felt last time? That feeling is waiting for you."' : ''}
 - At the END: Celebrate the streak
   ${successRecord.currentStreak > 0 ? `Example: "That makes ${successRecord.currentStreak + 1} days in a row! You are on fire."` : 'Example: "First one done! Tomorrow we build the streak."'}
 
@@ -516,12 +612,17 @@ Trigger format and expected response:
 - [STATUS] elapsed=XmYs current_time=HH:MM → Give honest feedback on what you see them doing vs the task.
 
 - [MEMORY_BOOST] type=X ... → Use the user's past success to encourage them. Types:
-  - type=past_success last_duration=Xmin streak=Y total=Z → Early in task. Casually mention their track record.
-    Example: "You did X minutes last time. Let's match that!" or "Day Y+1 of the streak incoming!"
+  - type=past_success last_duration=Xmin personal_best=Ymin streak=Z total=N → Early in task. Casually mention their track record.
+    Example: "You did X minutes last time. Let's match that!" or "Day Z+1 of the streak incoming!"
+    Example with personal best: "Your record is Y minutes. No pressure, but just saying..."
   - type=overcame_before elapsed=Xm → They've pushed through difficulty before.
     Example: "Last time you wanted to quit around now too, but you pushed through. You got this."
+  - type=proud_feeling elapsed=Xm → They felt proud after completing last time.
+    Example: "Remember how proud you felt last time? That feeling is waiting for you at the finish line."
   - type=approaching_record approaching=Xmin → They're close to their usual duration.
     Example: "Almost at your usual X minutes! You're right on track."
+  - type=near_personal_best personal_best=Xmin elapsed=Ym → They're approaching their all-time best.
+    Example: "You're almost at your personal best of X minutes! Can you beat it?"
   - type=experience total=X → Remind them of their experience.
     Example: "You've done this X times. You know the drill."
   - type=streak_building new_streak=Y remaining=Xs → Near the end, celebrate the streak.
@@ -539,7 +640,8 @@ CRITICAL:
 - Use current_time to calibrate your tone (morning vs night), NOT to announce it.
 - Only mention the actual time if user asks or if it's genuinely relevant.
 - These triggers are language-neutral. Always respond in the user's preferred language.
-- Do NOT read the trigger literally. Transform it into natural speech.
+- ABSOLUTELY NEVER include trigger words in your spoken response. NEVER say "[GREETING]", "[CHECK_IN]", "[STATUS]", "[MEMORY_BOOST]", "current_time=", "elapsed=", or any similar system syntax out loud.
+- Transform triggers into natural speech. The trigger is a silent instruction, NOT something to read aloud.
 `;
 
   return `You are Lumi, helping the user complete this 5-minute task:
@@ -1007,7 +1109,9 @@ serve(async (req) => {
       lastDuration: successRecord.lastDuration,
       currentStreak: successRecord.currentStreak,
       totalCompletions: successRecord.totalCompletions,
+      personalBest: successRecord.personalBest,
       hasOvercomeResistance: successRecord.recentSuccesses.some(s => s.overcame_resistance),
+      hasProudMoment: successRecord.recentSuccesses.some(s => s.completion_mood === 'proud'),
     } : null;
 
     return new Response(

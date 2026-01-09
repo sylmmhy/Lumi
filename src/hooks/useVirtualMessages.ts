@@ -18,7 +18,9 @@ export interface SuccessRecordForVM {
   lastDuration: number | null;
   currentStreak: number;
   totalCompletions: number;
+  personalBest: number | null;
   hasOvercomeResistance: boolean;
+  hasProudMoment: boolean;
 }
 
 export type VirtualMessageCategory =
@@ -217,6 +219,9 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         if (successRecord.lastDuration) {
           parts.push(`last_duration=${successRecord.lastDuration}min`);
         }
+        if (successRecord.personalBest) {
+          parts.push(`personal_best=${successRecord.personalBest}min`);
+        }
         if (successRecord.currentStreak > 0) {
           parts.push(`streak=${successRecord.currentStreak}`);
         }
@@ -228,9 +233,17 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         if (successRecord.hasOvercomeResistance) {
           return `[MEMORY_BOOST] type=overcame_before elapsed=${elapsedMinutes}m current_time=${currentTime}`;
         }
+        // 如果用户上次感到骄傲，提醒这种感觉
+        if (successRecord.hasProudMoment) {
+          return `[MEMORY_BOOST] type=proud_feeling elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+        }
         // 如果接近上次的记录时长
         if (successRecord.lastDuration && elapsedMinutes >= successRecord.lastDuration - 1) {
           return `[MEMORY_BOOST] type=approaching_record approaching=${successRecord.lastDuration}min elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+        }
+        // 如果接近个人最佳
+        if (successRecord.personalBest && elapsedMinutes >= successRecord.personalBest - 1) {
+          return `[MEMORY_BOOST] type=near_personal_best personal_best=${successRecord.personalBest}min elapsed=${elapsedMinutes}m current_time=${currentTime}`;
         }
         // 默认：提醒他们做过很多次了
         return `[MEMORY_BOOST] type=experience total=${successRecord.totalCompletions} elapsed=${elapsedMinutes}m current_time=${currentTime}`;

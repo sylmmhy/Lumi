@@ -279,5 +279,12 @@
   "profile.permissions.warning": "Without these permissions, AI cannot make video calls to help you beat procrastination.",
   "profile.permissions.enableAll": "Enable All Permissions",
   "profile.permissions.requesting": "Requesting...",
-  "profile.permissions.allEnabledMessage": "All permissions enabled! AI is ready to video call you."
+  "profile.permissions.allEnabledMessage": "All permissions enabled! AI is ready to video call you.",
+
+  "profile.deleteAccount": "Delete Account",
+  "profile.deleteAccountTitle": "Delete Account",
+  "profile.deleteAccountWarning": "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
+  "profile.deleteAccountConfirm": "Delete My Account",
+  "profile.deleteAccountSuccess": "Your account has been deleted.",
+  "profile.deleteAccountError": "Failed to delete account. Please try again."
 }

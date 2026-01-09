@@ -46,6 +46,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     const [currentLanguages, setCurrentLanguages] = useState<string[]>([]);
 
+    // Delete account state
+    const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
@@ -187,6 +191,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             alert('Failed to upload avatar. Please make sure you have created an "avatars" bucket in Supabase Storage.');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!auth?.deleteAccount) return;
+
+        setIsDeleting(true);
+        try {
+            const result = await auth.deleteAccount();
+            if (result.error) {
+                alert(t('profile.deleteAccountError'));
+                console.error('Delete account error:', result.error);
+            } else {
+                setShowDeleteAccountModal(false);
+                alert(t('profile.deleteAccountSuccess'));
+            }
+        } catch (error) {
+            alert(t('profile.deleteAccountError'));
+            console.error('Delete account error:', error);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -372,11 +397,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 {/* Login/Logout Button - Below Language Settings */}
                 <button
                     onClick={handleAuthAction}
-                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-6"
+                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-3"
                 >
                     <i className={`fa-solid ${isGuest ? 'fa-right-to-bracket' : 'fa-right-from-bracket'}`}></i>
                     <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
                 </button>
+
+                {/* Delete Account Button - Only show for logged in users */}
+                {!isGuest && (
+                    <button
+                        onClick={() => setShowDeleteAccountModal(true)}
+                        className="w-full py-3 text-gray-400 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-6"
+                    >
+                        <i className="fa-solid fa-trash-can"></i>
+                        <span>{t('profile.deleteAccount')}</span>
+                    </button>
+                )}
 
                 {/* Biography Section */}
                 <div className="mb-8 mt-4">
@@ -471,6 +507,48 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     setTimeout(() => setShowInterviewModal(true), 300);
                 }}
             />
+
+            {/* Delete Account Confirmation Modal */}
+            {showDeleteAccountModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                <i className="fa-solid fa-triangle-exclamation text-red-500 text-2xl"></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                {t('profile.deleteAccountTitle')}
+                            </h3>
+                            <p className="text-gray-500 text-sm mb-6">
+                                {t('profile.deleteAccountWarning')}
+                            </p>
+                            <div className="flex flex-col gap-3 w-full">
+                                <button
+                                    onClick={handleDeleteAccount}
+                                    disabled={isDeleting}
+                                    className="w-full py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 active:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <i className="fa-solid fa-spinner fa-spin"></i>
+                                            <span>{t('common.processing')}</span>
+                                        </>
+                                    ) : (
+                                        <span>{t('profile.deleteAccountConfirm')}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setShowDeleteAccountModal(false)}
+                                    disabled={isDeleting}
+                                    className="w-full py-3 text-gray-500 font-medium bg-gray-100 rounded-xl hover:bg-gray-200 active:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {t('common.cancel')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

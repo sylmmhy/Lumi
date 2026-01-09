@@ -5,22 +5,38 @@ interface LandingNavbarProps {
 }
 
 export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) => {
-    const [isScrolled, setIsScrolled] = useState(false);
+    const [isVisible, setIsVisible] = useState(true);
+    const [lastScrollY, setLastScrollY] = useState(0);
 
     useEffect(() => {
         const handleScroll = () => {
-            setIsScrolled(window.scrollY > 50);
+            const currentScrollY = window.scrollY;
+
+            // Show navbar when scrolling up, hide when scrolling down
+            if (currentScrollY < lastScrollY || currentScrollY < 50) {
+                setIsVisible(true);
+            } else if (currentScrollY > lastScrollY && currentScrollY > 50) {
+                setIsVisible(false);
+            }
+
+            setLastScrollY(currentScrollY);
         };
-        window.addEventListener('scroll', handleScroll);
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
+    }, [lastScrollY]);
 
     return (
         <nav
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-                isScrolled ? 'bg-white shadow-md' : 'bg-transparent'
-            }`}
-            style={{ fontFamily: 'Nunito, sans-serif' }}
+            className="fixed top-0 left-0 right-0 z-50 transition-transform duration-300"
+            style={{
+                fontFamily: 'Nunito, sans-serif',
+                backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+                transform: isVisible ? 'translateY(0)' : 'translateY(-100%)'
+            }}
         >
             <div className="max-w-7xl mx-auto px-6 lg:px-12">
                 <div className="flex items-center justify-between h-16">
@@ -36,7 +52,7 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) =>
                                 objectFit: 'cover'
                             }}
                         />
-                        <span className={`text-xl font-bold transition-colors ${isScrolled ? 'text-gray-900' : 'text-gray-900'}`}>
+                        <span className="text-xl font-bold text-gray-900">
                             Lumi
                         </span>
                     </div>

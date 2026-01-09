@@ -269,5 +269,12 @@
   "profile.permissions.warning": "이 권한들이 없으면 AI가 미루기 극복을 도와주는 영상 통화를 할 수 없어요.",
   "profile.permissions.enableAll": "모든 권한 허용하기",
   "profile.permissions.requesting": "요청 중...",
-  "profile.permissions.allEnabledMessage": "모든 권한이 활성화됐어요! AI가 영상 통화할 준비 완료!"
+  "profile.permissions.allEnabledMessage": "모든 권한이 활성화됐어요! AI가 영상 통화할 준비 완료!",
+
+  "profile.deleteAccount": "계정 삭제",
+  "profile.deleteAccountTitle": "계정 삭제",
+  "profile.deleteAccountWarning": "정말로 계정을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다. 모든 데이터가 영구적으로 삭제됩니다.",
+  "profile.deleteAccountConfirm": "내 계정 삭제하기",
+  "profile.deleteAccountSuccess": "계정이 삭제되었습니다.",
+  "profile.deleteAccountError": "계정 삭제에 실패했습니다. 다시 시도해 주세요."
 }

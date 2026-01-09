@@ -72,7 +72,8 @@
       "WebFetch(domain:mem0.ai)",
       "mcp__supabase__get_publishable_keys",
       "mcp__figma__get_figma_data",
-      "mcp__figma__download_figma_images"
+      "mcp__figma__download_figma_images",
+      "Bash(xargs cat:*)"
     ],
     "deny": [],
     "ask": []

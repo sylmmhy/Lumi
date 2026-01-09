@@ -269,5 +269,12 @@
   "profile.permissions.warning": "これらの権限がないと、AIは先延ばしを克服するためのビデオ通話ができません。",
   "profile.permissions.enableAll": "すべての権限を有効にする",
   "profile.permissions.requesting": "リクエスト中...",
-  "profile.permissions.allEnabledMessage": "すべての権限が有効になりました！AIはビデオ通話の準備ができています。"
+  "profile.permissions.allEnabledMessage": "すべての権限が有効になりました！AIはビデオ通話の準備ができています。",
+
+  "profile.deleteAccount": "アカウントを削除",
+  "profile.deleteAccountTitle": "アカウントを削除",
+  "profile.deleteAccountWarning": "本当にアカウントを削除しますか？この操作は取り消せません。すべてのデータが完全に削除されます。",
+  "profile.deleteAccountConfirm": "アカウントを削除する",
+  "profile.deleteAccountSuccess": "アカウントが削除されました。",
+  "profile.deleteAccountError": "アカウントの削除に失敗しました。もう一度お試しください。"
 }

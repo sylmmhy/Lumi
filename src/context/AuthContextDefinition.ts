@@ -53,6 +53,8 @@ export interface AuthContextValue extends AuthState {
     markOnboardingCompleted: (taskDescription: string, timeSpent: number, status: 'success' | 'failure') => void;
     /** 标记习惯引导已完成（更新数据库） */
     markHabitOnboardingCompleted: () => Promise<{ error: string | null }>;
+    /** 删除用户账户 */
+    deleteAccount: () => Promise<{ error: string | null }>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

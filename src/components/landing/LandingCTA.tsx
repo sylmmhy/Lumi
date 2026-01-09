@@ -1,10 +1,6 @@
 import React from 'react';
 import LumiMain from '../../assets/new-lumi/lumi-main.png';
 import Zigzag from '../../assets/new-lumi/zigzag.png';
-import ShapeRect from '../../assets/new-lumi/shape-rect.png';
-import DotBlue1 from '../../assets/new-lumi/dot-blue-1.png';
-import DotBlue2 from '../../assets/new-lumi/dot-blue-2.png';
-import RingBlue from '../../assets/new-lumi/ring-blue.png';
 
 interface LandingCTAProps {
     onGetStarted?: () => void;
@@ -21,23 +17,15 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
                         boxShadow: '0 40px 80px -15px rgba(37, 69, 189, 0.4)'
                     }}
                 >
-                    {/* Abstract Decorative Shapes (Reference Inspired) */}
-                    <div className="absolute top-[-50px] left-[-50px] w-64 h-64 rounded-full bg-blue-400/20 blur-3xl" />
-                    <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 rounded-full bg-blue-800/40 blur-3xl opacity-50" />
+                    {/* Abstract Decorative Shapes (Cleaner) */}
+                    <div className="absolute top-[-50px] left-[-50px] w-80 h-80 rounded-full bg-blue-400/10 blur-3xl" />
+                    <div className="absolute bottom-[-50px] right-[-50px] w-[500px] h-[500px] rounded-full bg-blue-600/20 blur-3xl" />
 
-                    {/* New Decorative Shapes from Assets */}
-                    <div className="absolute top-8 right-16 w-32 h-auto opacity-30 rotate-[-15deg] hidden lg:block z-0">
+                    {/* Refined Decorative Shapes */}
+                    <div className="absolute top-12 right-12 w-40 h-auto opacity-20 rotate-[-10deg] hidden lg:block z-0">
                         <img src={Zigzag} alt="" className="w-full h-auto" />
                     </div>
-                    <div className="absolute bottom-12 right-1/3 w-24 h-auto opacity-20 rotate-12 hidden lg:block z-0">
-                        <img src={ShapeRect} alt="" className="w-full h-auto" />
-                    </div>
-                    <div className="absolute top-1/4 left-1/4 w-8 h-8 opacity-40 hidden lg:block z-0">
-                        <img src={DotBlue1} alt="" className="w-full h-auto" />
-                    </div>
-                    <div className="absolute bottom-1/4 right-1/4 w-6 h-6 opacity-30 hidden lg:block z-0">
-                        <img src={DotBlue2} alt="" className="w-full h-auto" />
-                    </div>
+                    {/* Removed small random dots and shapes for a cleaner look */}
 
                     <div className="flex flex-col lg:flex-row items-center p-10 lg:p-20 relative z-10 text-center lg:text-left">
                         {/* Left: Content */}
@@ -68,36 +56,82 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onGetStarted }) => {
                                     100% { transform: translateY(0px) scale(1); }
                                 }
                                 @keyframes glow-pulse {
-                                    0% { opacity: 0.4; transform: scale(1); }
-                                    50% { opacity: 0.7; transform: scale(1.2); }
-                                    100% { opacity: 0.4; transform: scale(1); }
+                                    0% { opacity: 0.3; transform: scale(1); }
+                                    50% { opacity: 0.6; transform: scale(1.1); }
+                                    100% { opacity: 0.3; transform: scale(1); }
+                                }
+                                @keyframes gentle-float {
+                                    0% { transform: translate(0, 0); }
+                                    50% { transform: translate(-5px, -10px); }
+                                    100% { transform: translate(0, 0); }
                                 }
                                 .animate-lumi { animation: lumi-float 8s ease-in-out infinite; }
-                                .animate-glow { animation: glow-pulse 10s ease-in-out infinite; }
+                                .animate-glow { animation: glow-pulse 8s ease-in-out infinite; }
+                                .animate-float { animation: gentle-float 12s ease-in-out infinite; }
                             `}</style>
 
                             <div className="relative">
-                                {/* Multi-layered Glow Base */}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-orange-500 rounded-full blur-[100px] opacity-20 animate-glow" />
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[180px] bg-orange-400 rounded-full blur-[60px] opacity-30 animate-glow" style={{ animationDelay: '-5s' }} />
+                                {/* Background Decorative Elements - Soft Blue Circles */}
+                                <div
+                                    className="absolute -top-16 -left-20 w-40 h-40 rounded-full opacity-[0.08] hidden lg:block animate-float"
+                                    style={{
+                                        backgroundColor: '#6B9BFF',
+                                        zIndex: 0
+                                    }}
+                                />
+                                <div
+                                    className="absolute -bottom-12 right-[-60px] w-32 h-32 rounded-full opacity-[0.12] hidden lg:block"
+                                    style={{
+                                        backgroundColor: '#8AB4FF',
+                                        zIndex: 0,
+                                        animationDelay: '-6s'
+                                    }}
+                                />
 
-                                {/* The High-Res Mascot */}
+                                {/* Geometric Shapes - Subtle Gray-Purple Tones */}
+                                <div
+                                    className="absolute top-[-40px] right-[-40px] w-32 h-32 opacity-[0.15] hidden lg:block animate-float"
+                                    style={{
+                                        zIndex: 0,
+                                        animationDelay: '-3s'
+                                    }}
+                                >
+                                    <img src={Zigzag} alt="" className="w-full h-auto" style={{ filter: 'brightness(0.7) saturate(0.5)' }} />
+                                </div>
+
+                                <div
+                                    className="absolute bottom-[-20px] left-[-40px] w-24 h-24 opacity-[0.12] hidden lg:block"
+                                    style={{
+                                        backgroundColor: '#9FA8C3',
+                                        transform: 'rotate(25deg)',
+                                        borderRadius: '8px',
+                                        zIndex: 0
+                                    }}
+                                />
+
+                                {/* Single, Crisp Glow - Much Cleaner */}
+                                <div
+                                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] h-[280px] rounded-full opacity-15"
+                                    style={{
+                                        background: 'radial-gradient(circle, rgba(255, 200, 100, 0.6) 0%, rgba(255, 160, 80, 0.3) 40%, transparent 70%)',
+                                        filter: 'blur(40px)',
+                                        zIndex: 1
+                                    }}
+                                />
+
+                                {/* The High-Res Mascot with Minimal, Clean Shadow */}
                                 <img
                                     src={LumiMain}
                                     alt="Lumi Mascot"
                                     className="w-72 md:w-[400px] z-20 relative animate-lumi"
                                     style={{
-                                        filter: 'drop-shadow(0 20px 60px rgba(254, 141, 0, 0.4))',
+                                        // Subtle shadow only - no heavy blur
+                                        filter: 'drop-shadow(0 10px 30px rgba(255, 200, 100, 0.25))',
+                                        zIndex: 20
                                     }}
                                 />
 
-                                {/* Orbiting Elements */}
-                                <div className="absolute -top-10 -right-10 w-20 h-20 opacity-40 animate-pulse">
-                                    <img src={RingBlue} alt="" className="w-full h-auto" />
-                                </div>
-                                <div className="absolute -bottom-4 left-4 w-4 h-4 opacity-60">
-                                    <img src={DotBlue1} alt="" className="w-full h-auto" />
-                                </div>
+                                {/* Removed small orbiting elements to reduce "messiness" */}
                             </div>
                         </div>
                     </div>

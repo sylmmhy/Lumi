@@ -51,9 +51,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     const isDraggingRef = useRef(false);
     const hasMovedRef = useRef(false);
     const startYRef = useRef(0);
-    const startXRef = useRef(0);
     const startScrollTopRef = useRef(0);
     const isRepositioningRef = useRef(false);
+    const animationRef = useRef<number | null>(null);
+    const velocityRef = useRef(0);
+    const lastYRef = useRef(0);
+    const lastTimeRef = useRef(0);
     const [isDragging, setIsDragging] = useState(false);
     const ITEM_HEIGHT = 40; // matches h-[40px] in tailwind
 
@@ -112,8 +115,86 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         }
     }, [itemCount, loop, middleOffset]);
 
+    /**
+     * 平滑滚动动画到目标位置
+     */
+    const smoothScrollTo = useCallback((targetScrollTop: number, duration: number = 300) => {
+        if (!containerRef.current) return;
+
+        if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+        }
+
+        const startScrollTop = containerRef.current.scrollTop;
+        const distance = targetScrollTop - startScrollTop;
+        const startTime = performance.now();
+
+        // Easing function: easeOutCubic for smooth deceleration
+        const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+        const animate = (currentTime: number) => {
+            if (!containerRef.current) return;
+
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeOutCubic(progress);
+
+            containerRef.current.scrollTop = startScrollTop + distance * easedProgress;
+
+            if (progress < 1) {
+                animationRef.current = requestAnimationFrame(animate);
+            } else {
+                animationRef.current = null;
+                isScrollingRef.current = false;
+                checkAndReposition();
+            }
+        };
+
+        isScrollingRef.current = true;
+        animationRef.current = requestAnimationFrame(animate);
+    }, [checkAndReposition]);
+
+    /**
+     * 精确对齐到最近的项目
+     */
+    const snapToNearest = useCallback((withMomentum: boolean = false) => {
+        if (!containerRef.current) return;
+
+        let targetScrollTop: number;
+        const currentScrollTop = containerRef.current.scrollTop;
+
+        if (withMomentum && Math.abs(velocityRef.current) > 0.5) {
+            // Apply momentum: project where we'll end up based on velocity
+            const momentumDistance = velocityRef.current * 8; // Momentum multiplier
+            const projectedScrollTop = currentScrollTop + momentumDistance;
+            const targetIdx = Math.round(projectedScrollTop / ITEM_HEIGHT);
+            targetScrollTop = targetIdx * ITEM_HEIGHT;
+        } else {
+            // Simple snap to nearest
+            const targetIdx = Math.round(currentScrollTop / ITEM_HEIGHT);
+            targetScrollTop = targetIdx * ITEM_HEIGHT;
+        }
+
+        // Calculate duration based on distance
+        const distance = Math.abs(targetScrollTop - currentScrollTop);
+        const duration = Math.min(Math.max(distance * 2, 150), 400);
+
+        smoothScrollTo(targetScrollTop, duration);
+
+        // Update value
+        let idx = Math.round(targetScrollTop / ITEM_HEIGHT);
+        if (loop) {
+            idx = idx % items.length;
+            if (idx < 0) idx += items.length;
+        }
+
+        if (items[idx] && items[idx] !== value) {
+            onChange(items[idx]);
+        }
+    }, [items, loop, onChange, smoothScrollTo, value]);
+
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (isDraggingRef.current || isRepositioningRef.current) return;
+        if (isDraggingRef.current || isRepositioningRef.current || animationRef.current) return;
 
         isScrollingRef.current = true;
         const target = e.currentTarget as HTMLDivElement & { scrollTimeout?: NodeJS.Timeout };
@@ -134,96 +215,77 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
             onChange(items[idx]);
         }
 
-        // Reset scrolling flag and check reposition
+        // Reset scrolling flag and snap after scroll ends
         target.scrollTimeout = setTimeout(() => {
             isScrollingRef.current = false;
-            checkAndReposition();
-        }, 150);
+            snapToNearest(false);
+        }, 100);
     };
 
     // Unified Drag Logic
-    /**
-     * 启动拖拽：记录起点与初始滚动位置。
-     * @param {number} clientY - 鼠标/触点的 Y 坐标
-     * @param {number} clientX - 鼠标/触点的 X 坐标
-     */
-    const handleDragStart = useCallback((clientY: number, clientX: number) => {
+    const handleDragStart = useCallback((clientY: number) => {
         if (!containerRef.current) return;
+
+        // Cancel any ongoing animation
+        if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
+        }
+
         isDraggingRef.current = true;
         hasMovedRef.current = false;
         setIsDragging(true);
         startYRef.current = clientY;
-        startXRef.current = clientX;
+        lastYRef.current = clientY;
+        lastTimeRef.current = performance.now();
+        velocityRef.current = 0;
         startScrollTopRef.current = containerRef.current.scrollTop;
     }, []);
 
-    /**
-     * 拖拽过程中同步滚动位置。
-     * @param {number} clientY - 鼠标/触点的 Y 坐标
-     * @param {number} clientX - 鼠标/触点的 X 坐标
-     */
-    const handleDragMove = useCallback((clientY: number, clientX: number) => {
+    const handleDragMove = useCallback((clientY: number) => {
         if (!isDraggingRef.current || !containerRef.current) return;
 
-        const deltaY = startYRef.current - clientY;
-        const deltaX = startXRef.current - clientX;
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastTimeRef.current;
+        const deltaY = lastYRef.current - clientY;
+
+        // Calculate velocity (pixels per millisecond)
+        if (deltaTime > 0) {
+            velocityRef.current = deltaY / deltaTime * 16; // Normalize to ~60fps
+        }
+
+        lastYRef.current = clientY;
+        lastTimeRef.current = currentTime;
 
         // Mark as moved if delta is significant
-        if (Math.abs(deltaY) > 2 || Math.abs(deltaX) > 2) {
+        const totalDelta = startYRef.current - clientY;
+        if (Math.abs(totalDelta) > 3) {
             hasMovedRef.current = true;
         }
 
-        // Combine vertical and horizontal deltas
-        const totalDelta = deltaY + (deltaX * 0.8);
         containerRef.current.scrollTop = startScrollTopRef.current + totalDelta;
     }, []);
 
-    /**
-     * 结束拖拽并对齐到最近的项。
-     */
     const handleDragEnd = useCallback(() => {
         isDraggingRef.current = false;
         setIsDragging(false);
 
-        // Snap to nearest item after drag
-        if (containerRef.current) {
-            let idx = Math.round(containerRef.current.scrollTop / ITEM_HEIGHT);
-            containerRef.current.scrollTo({ top: idx * ITEM_HEIGHT, behavior: 'smooth' });
-
-            // For loop mode, map back to original items
-            if (loop) {
-                idx = idx % items.length;
-                if (idx < 0) idx += items.length;
-            }
-
-            if (items[idx]) {
-                onChange(items[idx]);
-            }
-
-            // Delayed reposition check
-            setTimeout(checkAndReposition, 200);
-        }
-    }, [checkAndReposition, items, loop, onChange]);
+        // Snap to nearest item with momentum
+        snapToNearest(true);
+    }, [snapToNearest]);
 
     // Mouse Handlers
-    /**
-     * 鼠标移动时同步拖拽滚动。
-     * @param {MouseEvent} e - 鼠标事件
-     */
     const handleMouseMove = useCallback((e: MouseEvent) => {
-        handleDragMove(e.clientY, e.clientX);
+        handleDragMove(e.clientY);
     }, [handleDragMove]);
 
-    /**
-     * 鼠标释放时结束拖拽并清理监听。
-     */
     const handleMouseUp = useCallback(() => {
         handleDragEnd();
         document.removeEventListener('mousemove', handleMouseMove);
     }, [handleDragEnd, handleMouseMove]);
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        handleDragStart(e.clientY, e.clientX);
+        handleDragStart(e.clientY);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp, { once: true });
         e.preventDefault();
@@ -232,12 +294,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     // Touch Handlers
     const handleTouchStart = (e: React.TouchEvent) => {
         const touch = e.touches[0];
-        handleDragStart(touch.clientY, touch.clientX);
+        handleDragStart(touch.clientY);
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
         const touch = e.touches[0];
-        handleDragMove(touch.clientY, touch.clientX);
+        handleDragMove(touch.clientY);
     };
 
     const handleTouchEnd = () => {
@@ -249,13 +311,16 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         return () => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
         };
     }, [handleMouseMove, handleMouseUp]);
 
     return (
         <div
             ref={containerRef}
-            className={`h-[160px] overflow-y-auto overflow-x-hidden no-scrollbar relative w-20 text-center z-10 touch-none ${isDragging ? 'cursor-grabbing snap-none' : 'cursor-grab snap-y snap-mandatory'}`}
+            className={`h-[160px] overflow-y-auto overflow-x-hidden no-scrollbar relative w-20 text-center z-10 touch-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
             onScroll={handleScroll}
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
@@ -268,14 +333,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 return (
                     <div
                         key={`${item}-${index}`}
-                        className={`h-[40px] flex items-center justify-center snap-center text-lg transition-all select-none ${isSelected ? 'text-black font-bold scale-110' : 'text-gray-300 scale-90'}`}
+                        className={`h-[40px] flex items-center justify-center text-lg transition-all duration-150 select-none ${isSelected ? 'text-black font-bold scale-110' : 'text-gray-300 scale-90'}`}
                         onClick={() => {
                             if (isDraggingRef.current || hasMovedRef.current) return;
                             onChange(item);
-                            // Scroll to this item
-                            containerRef.current?.scrollTo({ top: index * ITEM_HEIGHT, behavior: 'smooth' });
-                            // Delayed reposition
-                            setTimeout(checkAndReposition, 300);
+                            // Smooth scroll to this item
+                            smoothScrollTo(index * ITEM_HEIGHT, 250);
                         }}
                     >
                         {item}

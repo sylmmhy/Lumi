@@ -21,7 +21,7 @@ const features: Feature[] = [
         title: 'Meet Lumi, Your Body Double',
         description: "An AI coach who's as persistent as your mom, but way less judgmental. Lumi stays with you through tasks, providing the accountability you need without the guilt trips.",
         image: Feature1,
-        bgColor: '#2545BD'
+        bgColor: '#E6EFFF' // Lightest Blue to match Blue mockup
     },
     {
         id: 'awareness',
@@ -29,7 +29,7 @@ const features: Feature[] = [
         title: 'I Know What You\'re Avoiding',
         description: "Lumi learns your patterns and gently calls out procrastination before it spirals. No more hiding from that task you've been putting off for weeks.",
         image: Feature2,
-        bgColor: '#FF6B35'
+        bgColor: '#FFF2E6' // Lightest Orange to match Orange mockup
     },
     {
         id: 'habits',
@@ -37,7 +37,7 @@ const features: Feature[] = [
         title: 'Set A Habit. AI Will Call You.',
         description: "Habit tracking that actually works. Set your goals, and Lumi will check in with you at the right moments. Finally, a system that won't become a graveyard of good intentions.",
         image: Feature3,
-        bgColor: '#2563EB'
+        bgColor: '#EBF5FF' // Lightest Sky Blue
     },
     {
         id: 'checkin',
@@ -45,7 +45,7 @@ const features: Feature[] = [
         title: 'Quick Video Check-In. Get Started.',
         description: "Like having a supportive friend who never gets tired of you. Quick video sessions to build momentum and get you moving on your tasks.",
         image: Feature4,
-        bgColor: '#DC2626'
+        bgColor: '#FEEBED' // Lightest Soft Red
     },
     {
         id: 'streak',
@@ -53,7 +53,7 @@ const features: Feature[] = [
         title: 'Ready? Let\'s Get Moving.',
         description: "Watch your streaks grow and celebrate your wins. Track your progress with beautiful visualizations that make consistency feel rewarding.",
         image: Feature5,
-        bgColor: '#059669'
+        bgColor: '#ECFDF5' // Lightest Mint Green
     }
 ];
 
@@ -77,11 +77,10 @@ export const LandingFeatures: React.FC = () => {
                         <button
                             key={feature.id}
                             onClick={() => setActiveFeature(feature)}
-                            className={`px-6 py-3 rounded-full text-base font-semibold transition-all ${
-                                activeFeature.id === feature.id
-                                    ? 'bg-gray-900 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
+                            className={`px-6 py-3 rounded-full text-base font-semibold transition-all ${activeFeature.id === feature.id
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
                         >
                             {activeFeature.id === feature.id && (
                                 <span className="inline-block w-2 h-2 bg-white rounded-full mr-2"></span>
@@ -102,21 +101,19 @@ export const LandingFeatures: React.FC = () => {
                             <img
                                 src={activeFeature.image}
                                 alt={activeFeature.title}
-                                className="max-h-[500px] w-auto object-contain rounded-2xl shadow-2xl transition-all duration-500"
+                                className="max-h-[500px] w-auto object-contain transition-all duration-500"
+                                style={{ borderRadius: '24px' }}
                             />
                         </div>
 
                         {/* Right: Content */}
-                        <div className="w-full lg:w-1/2 p-8 lg:p-12 text-white">
+                        <div className="w-full lg:w-1/2 p-8 lg:p-12 text-gray-900">
                             <h3 className="text-3xl md:text-4xl font-bold mb-6">
                                 {activeFeature.title}
                             </h3>
-                            <p className="text-xl opacity-90 mb-8 leading-relaxed">
+                            <p className="text-xl text-gray-700 mb-8 leading-relaxed">
                                 {activeFeature.description}
                             </p>
-                            <button className="px-8 py-4 bg-white text-gray-900 font-bold rounded-full hover:bg-gray-100 transition-all">
-                                Learn More
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -127,11 +124,10 @@ export const LandingFeatures: React.FC = () => {
                         <button
                             key={feature.id}
                             onClick={() => setActiveFeature(feature)}
-                            className={`w-3 h-3 rounded-full transition-all ${
-                                activeFeature.id === feature.id
-                                    ? 'bg-gray-900 w-6'
-                                    : 'bg-gray-300 hover:bg-gray-400'
-                            }`}
+                            className={`w-3 h-3 rounded-full transition-all ${activeFeature.id === feature.id
+                                ? 'bg-gray-900 w-6'
+                                : 'bg-gray-300 hover:bg-gray-400'
+                                }`}
                             aria-label={`Go to feature ${index + 1}`}
                         />
                     ))}

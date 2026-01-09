@@ -660,6 +660,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         });
       }
 
+      // 判断任务是否完成（倒计时结束）
+      const wasTaskCompleted = state.timeRemaining === 0;
+      // 计算实际完成时长（分钟）
+      const actualDurationMinutes = Math.round((initialTime - state.timeRemaining) / 60);
+
+      if (import.meta.env.DEV) {
+        console.log('📊 任务完成状态:', {
+          wasTaskCompleted,
+          actualDurationMinutes,
+          timeRemaining: state.timeRemaining,
+          initialTime,
+        });
+      }
+
       const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
         body: {
           action: 'extract',
@@ -670,6 +684,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             source: 'ai_coach_session',
             sessionDuration: initialTime - state.timeRemaining,
             timestamp: new Date().toISOString(),
+            // 新增：任务完成状态，用于 SUCCESS 记忆提取
+            task_completed: wasTaskCompleted,
+            actual_duration_minutes: actualDurationMinutes,
           },
         },
       });

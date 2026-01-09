@@ -16,14 +16,13 @@ const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embeddin
 const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
 
 // 记忆提取的系统提示词
-const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS and PREFERENCES from user conversations, not facts.
+const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS, PREFERENCES, and SUCCESS RECORDS from user conversations.
 
 ## STRICT RULES - MUST FOLLOW
 
 ### NEVER EXTRACT (Auto-reject these):
 - Time/date mentions ("it's 4pm", "today", "morning")
 - Basic intentions ("wants to workout", "going to read")
-- Task completion status ("finished task", "started working")
 - Greetings or small talk
 - Single events without pattern significance
 - What AI said (only extract USER patterns)
@@ -61,12 +60,26 @@ Examples:
 - "User checks phone immediately before important tasks"
 - "User makes excuses about time when avoiding exercise"
 
+**6. SUCCESS RECORDS** [Tag: SUCCESS]
+Completed tasks - ALWAYS extract when the conversation indicates task completion or the metadata shows task_completed=true.
+Examples:
+- "User completed 5-minute workout session successfully"
+- "User finished brushing teeth task"
+- "User overcame initial resistance and completed the full task"
+
+IMPORTANT for SUCCESS:
+- Extract when user completed the task (timer ended, user said "done", "finished", etc.)
+- Note if user overcame difficulty during the task
+- Note emotional state at completion if mentioned ("felt proud", "relieved")
+- For SUCCESS tag, also include "metadata" field with: duration_minutes (if known), overcame_resistance (boolean)
+
 ## OUTPUT FORMAT
 
 Return a JSON array of extracted memories. Each memory should have:
 - "content": The memory text (be specific, include TASK and PATTERN)
-- "tag": One of PREF, PROC, SOMA, EMO, SAB
+- "tag": One of PREF, PROC, SOMA, EMO, SAB, SUCCESS
 - "confidence": 0.0-1.0 how confident you are this is a real pattern
+- "metadata": (optional, mainly for SUCCESS) { "duration_minutes": number, "overcame_resistance": boolean }
 
 If there are NO meaningful patterns to extract, return an empty array: []
 
@@ -83,6 +96,30 @@ Output:
   }
 ]
 
+Input conversation where user completed a 5-minute workout task and said "I did it! That wasn't so bad"
+
+Output:
+[
+  {
+    "content": "User successfully completed workout task and expressed positive surprise at the experience",
+    "tag": "SUCCESS",
+    "confidence": 0.95,
+    "metadata": { "overcame_resistance": false }
+  }
+]
+
+Input conversation where user struggled but finished, saying "I wanted to quit at minute 2 but I pushed through"
+
+Output:
+[
+  {
+    "content": "User completed task despite wanting to quit at the 2-minute mark - showed strong persistence",
+    "tag": "SUCCESS",
+    "confidence": 0.95,
+    "metadata": { "overcame_resistance": true }
+  }
+]
+
 Input conversation with user just saying "It's 4pm and I need to work out"
 
 Output:
@@ -92,7 +129,8 @@ Output:
 - Quality over quantity: Only extract MEANINGFUL patterns
 - Be specific: Include the TASK and the PATTERN
 - Note frequency if mentioned: "always", "every time", "usually"
-- Include psychological insight when the pattern suggests it`
+- Include psychological insight when the pattern suggests it
+- For SUCCESS: Always extract when task is completed - this helps with positive reinforcement`
 
 // 记忆合并的系统提示词
 const MERGE_PROMPT = `You are a memory consolidation expert. Your task is to merge multiple similar memories into ONE concise, comprehensive memory.
@@ -160,8 +198,80 @@ type MemoryRequest = ExtractMemoryRequest | SearchMemoryRequest | GetMemoriesReq
 
 interface ExtractedMemory {
   content: string
-  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB'
+  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'SUCCESS'
   confidence: number
+  /** SUCCESS 标签的额外元数据 */
+  metadata?: {
+    duration_minutes?: number
+    overcame_resistance?: boolean
+  }
+}
+
+/**
+ * 从任务描述推断任务类型
+ * 用于 SUCCESS 记忆的分类，方便后续按类型查询
+ */
+function inferTaskType(taskDescription: string): string {
+  if (!taskDescription) return 'general'
+
+  const lower = taskDescription.toLowerCase()
+
+  // 运动健身类
+  if (lower.includes('workout') || lower.includes('exercise') || lower.includes('gym') ||
+      lower.includes('fitness') || lower.includes('运动') || lower.includes('健身') ||
+      lower.includes('锻炼') || lower.includes('push-up') || lower.includes('pushup')) {
+    return 'workout'
+  }
+
+  // 睡眠类
+  if (lower.includes('sleep') || lower.includes('bed') || lower.includes('rest') ||
+      lower.includes('nap') || lower.includes('睡') || lower.includes('觉') ||
+      lower.includes('休息')) {
+    return 'sleep'
+  }
+
+  // 刷牙/个人卫生类
+  if (lower.includes('brush') || lower.includes('teeth') || lower.includes('tooth') ||
+      lower.includes('shower') || lower.includes('wash') || lower.includes('刷牙') ||
+      lower.includes('洗') || lower.includes('牙')) {
+    return 'hygiene'
+  }
+
+  // 做饭类
+  if (lower.includes('cook') || lower.includes('meal') || lower.includes('food') ||
+      lower.includes('dinner') || lower.includes('lunch') || lower.includes('breakfast') ||
+      lower.includes('做饭') || lower.includes('烹饪') || lower.includes('饭')) {
+    return 'cooking'
+  }
+
+  // 清洁类
+  if (lower.includes('clean') || lower.includes('tidy') || lower.includes('organize') ||
+      lower.includes('打扫') || lower.includes('清洁') || lower.includes('整理')) {
+    return 'cleaning'
+  }
+
+  // 学习类
+  if (lower.includes('study') || lower.includes('learn') || lower.includes('read') ||
+      lower.includes('homework') || lower.includes('学习') || lower.includes('读书') ||
+      lower.includes('作业') || lower.includes('看书')) {
+    return 'study'
+  }
+
+  // 工作类
+  if (lower.includes('work') || lower.includes('task') || lower.includes('project') ||
+      lower.includes('email') || lower.includes('工作') || lower.includes('任务') ||
+      lower.includes('项目')) {
+    return 'work'
+  }
+
+  // 冥想/放松类
+  if (lower.includes('meditat') || lower.includes('breath') || lower.includes('relax') ||
+      lower.includes('calm') || lower.includes('冥想') || lower.includes('呼吸') ||
+      lower.includes('放松')) {
+    return 'meditation'
+  }
+
+  return 'general'
 }
 
 interface ExistingMemory {
@@ -414,6 +524,88 @@ async function saveOrMergeMemories(
 
   for (const memory of memories) {
     try {
+      // ============================================================
+      // SUCCESS 类型特殊处理：不合并，每次都创建新记录
+      // ============================================================
+      if (memory.tag === 'SUCCESS') {
+        console.log(`Processing SUCCESS memory for task: ${taskDescription}`)
+
+        // 推断任务类型
+        const taskType = inferTaskType(taskDescription || '')
+
+        // 计算当前连胜（在新记录之前）
+        let currentStreak = 0
+        try {
+          const { data: streakData } = await supabase.rpc('calculate_user_streak', {
+            p_user_id: userId,
+            p_task_type: taskType
+          })
+          currentStreak = streakData || 0
+        } catch (e) {
+          console.warn('Failed to calculate streak, defaulting to 0:', e)
+        }
+
+        // 从请求的 metadata 中获取实际时长
+        const actualDuration = (metadata as Record<string, unknown>)?.actual_duration_minutes as number | undefined
+
+        // 构建 SUCCESS 记忆的完整 metadata
+        const successMetadata = {
+          // 基础元数据
+          task_type: taskType,
+          completion_date: new Date().toISOString().split('T')[0],
+          streak_count: currentStreak + 1, // 新的连胜数
+          // AI 提取的元数据
+          duration_minutes: memory.metadata?.duration_minutes || actualDuration || null,
+          overcame_resistance: memory.metadata?.overcame_resistance || false,
+          // 请求带来的其他元数据
+          source: (metadata as Record<string, unknown>)?.source || 'ai_coach_session',
+          extractedAt: new Date().toISOString(),
+        }
+
+        console.log(`SUCCESS metadata:`, successMetadata)
+
+        // 生成 embedding（可选，SUCCESS 不需要去重但可用于语义检索）
+        let embedding: number[] = []
+        try {
+          embedding = await generateEmbedding(memory.content)
+        } catch (e) {
+          console.warn('Failed to generate embedding for SUCCESS memory:', e)
+        }
+
+        // 直接插入，不做合并
+        const insertData: Record<string, unknown> = {
+          user_id: userId,
+          content: memory.content,
+          tag: 'SUCCESS',
+          confidence: memory.confidence,
+          task_name: taskDescription || null,
+          metadata: successMetadata,
+        }
+        if (embedding.length > 0) {
+          insertData.embedding = JSON.stringify(embedding)
+        }
+
+        const { data, error } = await supabase
+          .from('user_memories')
+          .insert(insertData)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Failed to save SUCCESS memory:', error)
+          continue
+        }
+
+        console.log(`✅ SUCCESS memory saved! Streak: ${successMetadata.streak_count}`)
+        results.push({ action: 'created', memoryId: data.id, content: memory.content })
+        savedCount++
+        continue
+      }
+
+      // ============================================================
+      // 其他类型：正常的去重合并逻辑
+      // ============================================================
+
       // 1. 生成 embedding
       console.log(`Generating embedding for: ${memory.content.substring(0, 50)}...`)
       const embedding = await generateEmbedding(memory.content)
@@ -862,12 +1054,34 @@ serve(async (req) => {
         }
 
         console.log(`Extracting memories for user: ${userId}, messages: ${messages.length}`)
+        console.log(`Task completed: ${(metadata as Record<string, unknown>)?.task_completed}, duration: ${(metadata as Record<string, unknown>)?.actual_duration_minutes} min`)
 
         // 1. 用 AI 提取记忆
         const extractedMemories = await extractMemoriesWithAI(messages, taskDescription)
         console.log(`Extracted ${extractedMemories.length} memories`)
 
-        // 2. 保存或合并到 Supabase (Update Phase)
+        // 2. 如果任务完成了，确保有一条 SUCCESS 记忆
+        const taskCompleted = (metadata as Record<string, unknown>)?.task_completed === true
+        const hasSuccessMemory = extractedMemories.some(m => m.tag === 'SUCCESS')
+
+        if (taskCompleted && !hasSuccessMemory) {
+          console.log('Task completed but no SUCCESS memory extracted, adding one automatically')
+          const actualDuration = (metadata as Record<string, unknown>)?.actual_duration_minutes as number | undefined
+          const taskType = inferTaskType(taskDescription || '')
+
+          extractedMemories.push({
+            content: `User successfully completed ${taskType} task: "${taskDescription}"${actualDuration ? ` (${actualDuration} minutes)` : ''}`,
+            tag: 'SUCCESS',
+            confidence: 0.95,
+            metadata: {
+              duration_minutes: actualDuration,
+              overcame_resistance: false, // 默认，除非 AI 检测到
+            }
+          })
+          console.log('Auto-added SUCCESS memory')
+        }
+
+        // 3. 保存或合并到 Supabase (Update Phase)
         if (extractedMemories.length > 0) {
           const saveResult = await saveOrMergeMemories(supabase, userId, extractedMemories, taskDescription, {
             ...metadata,

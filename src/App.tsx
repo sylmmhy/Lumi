@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { HabitOnboardingPage } from './pages/onboarding/HabitOnboardingPage'
 import { DevTestPage } from './pages/DevTestPage'
+import { LandingPageWrapper } from './pages/LandingPageWrapper'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
@@ -110,6 +111,7 @@ function App() {
           <Route path="/" element={<RootRedirect />} />
           {/* 开发测试页面 - 仅在 DEV 模式下可用 */}
           {import.meta.env.DEV && <Route path="/dev" element={<DevTestPage />} />}
+          <Route path="/landing" element={<LandingPageWrapper />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/mobile" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />

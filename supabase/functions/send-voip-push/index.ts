@@ -41,9 +41,19 @@ interface APNsConfig {
 
 /**
  * 生成 APNs JWT Token
+ * 支持两种私钥格式：
+ * 1. 完整 PEM 格式 (带 -----BEGIN PRIVATE KEY-----)
+ * 2. 纯 base64 格式 (Supabase 环境变量中的格式)
  */
 async function generateAPNsToken(config: APNsConfig): Promise<string> {
-  const privateKeyPEM = config.privateKey.replace(/\\n/g, '\n')
+  let privateKeyPEM = config.privateKey.replace(/\\n/g, '\n')
+
+  // 如果不是 PEM 格式，添加 header/footer
+  if (!privateKeyPEM.includes('-----BEGIN PRIVATE KEY-----')) {
+    // 移除可能的空白字符
+    const cleanBase64 = privateKeyPEM.replace(/\s/g, '')
+    privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${cleanBase64}\n-----END PRIVATE KEY-----`
+  }
 
   const privateKey = await jose.importPKCS8(privateKeyPEM, 'ES256')
 
@@ -124,7 +134,7 @@ serve(async (req) => {
     const apnsConfig: APNsConfig = {
       teamId: Deno.env.get('APNS_TEAM_ID') || '',
       keyId: Deno.env.get('APNS_KEY_ID') || '',
-      privateKey: Deno.env.get('APNS_PRIVATE_KEY') || '',
+      privateKey: Deno.env.get('APNS_AUTH_KEY') || Deno.env.get('APNS_PRIVATE_KEY') || '',
       bundleId: Deno.env.get('APNS_BUNDLE_ID') || '',
       production: Deno.env.get('APNS_PRODUCTION') === 'true',
     }

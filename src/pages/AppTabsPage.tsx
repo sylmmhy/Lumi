@@ -67,23 +67,6 @@ export function AppTabsPage() {
         }
     }, [auth.isSessionValidated, auth.isLoggedIn, auth.hasCompletedHabitOnboarding, navigate]);
 
-    // P0 修复：用户登出时强制清理 AI 教练会话和媒体资源
-    // 防止登出后音视频数据继续发送到 Gemini，造成资源泄漏
-    useEffect(() => {
-        if (!auth.isLoggedIn && (aiCoach.isSessionActive || aiCoach.isConnecting)) {
-            console.log('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
-            // 结束 AI 教练会话（内部会断开 Gemini 连接、释放麦克风/摄像头）
-            aiCoach.endSession();
-            // 确保摄像头关闭
-            if (aiCoach.cameraEnabled) {
-                aiCoach.toggleCamera();
-            }
-            // 重置相关状态
-            setCurrentTaskId(null);
-            setShowCelebration(false);
-        }
-    }, [auth.isLoggedIn, aiCoach.isSessionActive, aiCoach.isConnecting, aiCoach.cameraEnabled, aiCoach]);
-
     // Derive view directly from URL to avoid double-render (rework)
     // If tab is invalid, it defaults to DEFAULT_APP_TAB (and effect below will redirect)
     const currentView: ViewState = isAppTab(tab) ? tab : DEFAULT_APP_TAB;
@@ -234,6 +217,23 @@ export function AppTabsPage() {
             setShowCelebration(true);
         },
     });
+
+    // P0 修复：用户登出时强制清理 AI 教练会话和媒体资源
+    // 防止登出后音视频数据继续发送到 Gemini，造成资源泄漏
+    useEffect(() => {
+        if (!auth.isLoggedIn && (aiCoach.isSessionActive || aiCoach.isConnecting)) {
+            console.log('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
+            // 结束 AI 教练会话（内部会断开 Gemini 连接、释放麦克风/摄像头）
+            aiCoach.endSession();
+            // 确保摄像头关闭
+            if (aiCoach.cameraEnabled) {
+                aiCoach.toggleCamera();
+            }
+            // 重置相关状态
+            setCurrentTaskId(null);
+            setShowCelebration(false);
+        }
+    }, [auth.isLoggedIn, aiCoach.isSessionActive, aiCoach.isConnecting, aiCoach.cameraEnabled, aiCoach]);
 
     // 庆祝动画控制
     const celebrationAnimation = useCelebrationAnimation({

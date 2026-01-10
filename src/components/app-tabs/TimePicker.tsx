@@ -47,24 +47,18 @@ interface ScrollWheelProps {
 
 const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const isScrollingRef = useRef(false);
+    const isAnimatingRef = useRef(false); // 统一的动画/交互状态标记
     const isDraggingRef = useRef(false);
     const hasMovedRef = useRef(false);
     const startYRef = useRef(0);
     const startScrollTopRef = useRef(0);
     const isRepositioningRef = useRef(false);
     const animationRef = useRef<number | null>(null);
-    const velocityRef = useRef(0);
     const lastYRef = useRef(0);
     const lastTimeRef = useRef(0);
-    const velocityHistoryRef = useRef<Array<{ velocity: number; time: number }>>([]);
+    const velocityRef = useRef(0);
     const [isDragging, setIsDragging] = useState(false);
     const ITEM_HEIGHT = 40; // matches h-[40px] in tailwind
-
-    // Physics constants for iOS-like scrolling
-    const FRICTION = 0.95; // Friction coefficient (0.95 = smooth deceleration)
-    const MIN_VELOCITY = 0.5; // Minimum velocity to stop animation
-    const VELOCITY_MULTIPLIER = 15; // How much velocity affects distance
 
     // For loop mode, we create 3 copies of items (before, original, after)
     const LOOP_COPIES = 3;
@@ -82,12 +76,17 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     const itemCount = items.length;
 
     // Initial scroll to selected value (in the middle copy for loop mode)
+    // 只有在非动画状态时才同步外部 value
     useEffect(() => {
-        if (containerRef.current && !isScrollingRef.current && !isDraggingRef.current) {
+        if (containerRef.current && !isAnimatingRef.current && !isDraggingRef.current) {
             const idx = items.indexOf(value);
             if (idx !== -1) {
                 const targetIdx = loop ? middleOffset + idx : idx;
-                containerRef.current.scrollTop = targetIdx * ITEM_HEIGHT;
+                const targetScrollTop = targetIdx * ITEM_HEIGHT;
+                // 只有当位置差异较大时才设置（避免细微差异导致的跳动）
+                if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > ITEM_HEIGHT / 2) {
+                    containerRef.current.scrollTop = targetScrollTop;
+                }
             }
         }
     }, [value, items, loop, middleOffset]);
@@ -122,9 +121,9 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     }, [itemCount, loop, middleOffset]);
 
     /**
-     * 平滑滚动动画到目标位置 - 用于最终的吸附动画
+     * 平滑滚动到目标位置并在结束时调用 onChange
      */
-    const smoothScrollTo = useCallback((targetScrollTop: number, duration: number = 300) => {
+    const smoothScrollTo = useCallback((targetScrollTop: number, duration: number = 200, onComplete?: () => void) => {
         if (!containerRef.current) return;
 
         if (animationRef.current) {
@@ -133,6 +132,15 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
 
         const startScrollTop = containerRef.current.scrollTop;
         const distance = targetScrollTop - startScrollTop;
+
+        // 如果距离很小，直接设置
+        if (Math.abs(distance) < 1) {
+            containerRef.current.scrollTop = targetScrollTop;
+            isAnimatingRef.current = false;
+            onComplete?.();
+            return;
+        }
+
         const startTime = performance.now();
 
         // Easing function: easeOutCubic for smooth deceleration
@@ -151,45 +159,40 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 animationRef.current = requestAnimationFrame(animate);
             } else {
                 animationRef.current = null;
-                isScrollingRef.current = false;
+                isAnimatingRef.current = false;
                 checkAndReposition();
+                onComplete?.();
             }
         };
 
-        isScrollingRef.current = true;
+        isAnimatingRef.current = true;
         animationRef.current = requestAnimationFrame(animate);
     }, [checkAndReposition]);
 
     /**
-     * 更新选中的值
+     * 带惯性滚动并最终吸附到最近的选项
      */
-    const updateSelectedValue = useCallback((scrollTop: number) => {
-        let idx = Math.round(scrollTop / ITEM_HEIGHT);
-        if (loop) {
-            idx = idx % items.length;
-            if (idx < 0) idx += items.length;
-        }
-        if (items[idx] && items[idx] !== value) {
-            onChange(items[idx]);
-        }
-    }, [items, loop, onChange, value]);
-
-    /**
-     * 带惯性的物理滚动动画 - 模拟 iOS 的滚动效果
-     * 使用摩擦力系数来实现自然减速
-     */
-    const animateWithMomentum = useCallback((initialVelocity: number) => {
+    const animateWithMomentumAndSnap = useCallback((initialVelocity: number) => {
         if (!containerRef.current) return;
 
         if (animationRef.current) {
             cancelAnimationFrame(animationRef.current);
         }
 
+        isAnimatingRef.current = true;
+
+        // Physics constants
+        const FRICTION = 0.92; // 摩擦系数
+        const MIN_VELOCITY = 0.8; // 停止动画的速度阈值
+
         let velocity = initialVelocity;
         let lastFrameTime = performance.now();
 
         const animate = () => {
-            if (!containerRef.current) return;
+            if (!containerRef.current) {
+                isAnimatingRef.current = false;
+                return;
+            }
 
             const currentTime = performance.now();
             const deltaTime = (currentTime - lastFrameTime) / 16.67; // Normalize to 60fps
@@ -204,42 +207,42 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
             // Check for loop repositioning
             checkAndReposition();
 
-            // Update selected value during animation
-            updateSelectedValue(containerRef.current.scrollTop);
-
             // Check if velocity is low enough to snap
             if (Math.abs(velocity) < MIN_VELOCITY) {
-                // Snap to nearest item with smooth animation
+                // 计算最终目标位置并吸附
                 const currentScrollTop = containerRef.current.scrollTop;
                 const targetIdx = Math.round(currentScrollTop / ITEM_HEIGHT);
                 const targetScrollTop = targetIdx * ITEM_HEIGHT;
-                const distance = Math.abs(targetScrollTop - currentScrollTop);
 
-                // Short duration for final snap
-                const snapDuration = Math.min(Math.max(distance * 3, 100), 200);
-                smoothScrollTo(targetScrollTop, snapDuration);
-
-                // Update final value
+                // 计算最终的值并调用 onChange
                 let finalIdx = targetIdx;
                 if (loop) {
                     finalIdx = finalIdx % items.length;
                     if (finalIdx < 0) finalIdx += items.length;
                 }
-                if (items[finalIdx] && items[finalIdx] !== value) {
-                    onChange(items[finalIdx]);
-                }
+                finalIdx = Math.max(0, Math.min(finalIdx, items.length - 1));
+
+                // 平滑吸附到目标位置
+                const distance = Math.abs(targetScrollTop - currentScrollTop);
+                const snapDuration = Math.min(Math.max(distance * 2, 80), 150);
+
+                smoothScrollTo(targetScrollTop, snapDuration, () => {
+                    // 动画完成后才调用 onChange
+                    if (items[finalIdx] && items[finalIdx] !== value) {
+                        onChange(items[finalIdx]);
+                    }
+                });
                 return;
             }
 
             animationRef.current = requestAnimationFrame(animate);
         };
 
-        isScrollingRef.current = true;
         animationRef.current = requestAnimationFrame(animate);
-    }, [checkAndReposition, items, loop, onChange, smoothScrollTo, updateSelectedValue, value]);
+    }, [checkAndReposition, items, loop, onChange, smoothScrollTo, value]);
 
     /**
-     * 精确对齐到最近的项目（无动量时使用）
+     * 直接吸附到最近的项目（无动量时使用）
      */
     const snapToNearest = useCallback(() => {
         if (!containerRef.current) return;
@@ -248,41 +251,38 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         const targetIdx = Math.round(currentScrollTop / ITEM_HEIGHT);
         const targetScrollTop = targetIdx * ITEM_HEIGHT;
 
-        // Calculate duration based on distance
-        const distance = Math.abs(targetScrollTop - currentScrollTop);
-        const duration = Math.min(Math.max(distance * 3, 100), 250);
-
-        smoothScrollTo(targetScrollTop, duration);
-
-        // Update value
+        // 计算最终的值
         let idx = targetIdx;
         if (loop) {
             idx = idx % items.length;
             if (idx < 0) idx += items.length;
         }
+        idx = Math.max(0, Math.min(idx, items.length - 1));
 
-        if (items[idx] && items[idx] !== value) {
-            onChange(items[idx]);
-        }
+        // Calculate duration based on distance
+        const distance = Math.abs(targetScrollTop - currentScrollTop);
+        const duration = Math.min(Math.max(distance * 2, 80), 180);
+
+        smoothScrollTo(targetScrollTop, duration, () => {
+            // 动画完成后才调用 onChange
+            if (items[idx] && items[idx] !== value) {
+                onChange(items[idx]);
+            }
+        });
     }, [items, loop, onChange, smoothScrollTo, value]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (isDraggingRef.current || isRepositioningRef.current || animationRef.current) return;
+        if (isDraggingRef.current || isRepositioningRef.current || isAnimatingRef.current) return;
 
-        isScrollingRef.current = true;
         const target = e.currentTarget as HTMLDivElement & { scrollTimeout?: NodeJS.Timeout };
         if (target.scrollTimeout) {
             clearTimeout(target.scrollTimeout);
         }
 
-        const scrollTop = target.scrollTop;
-        updateSelectedValue(scrollTop);
-
         // Reset scrolling flag and snap after scroll ends
         target.scrollTimeout = setTimeout(() => {
-            isScrollingRef.current = false;
             snapToNearest();
-        }, 80);
+        }, 100);
     };
 
     // Unified Drag Logic
@@ -294,6 +294,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
             cancelAnimationFrame(animationRef.current);
             animationRef.current = null;
         }
+        isAnimatingRef.current = false;
 
         isDraggingRef.current = true;
         hasMovedRef.current = false;
@@ -302,7 +303,6 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         lastYRef.current = clientY;
         lastTimeRef.current = performance.now();
         velocityRef.current = 0;
-        velocityHistoryRef.current = [];
         startScrollTopRef.current = containerRef.current.scrollTop;
     }, []);
 
@@ -313,14 +313,11 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         const deltaTime = currentTime - lastTimeRef.current;
         const deltaY = lastYRef.current - clientY;
 
-        // Calculate instantaneous velocity and store in history
+        // Calculate velocity with smoothing
         if (deltaTime > 0) {
             const instantVelocity = deltaY / deltaTime * 16; // Normalize to ~60fps
-            velocityHistoryRef.current.push({ velocity: instantVelocity, time: currentTime });
-
-            // Keep only last 100ms of velocity history for smoothing
-            const cutoffTime = currentTime - 100;
-            velocityHistoryRef.current = velocityHistoryRef.current.filter(v => v.time > cutoffTime);
+            // 平滑速度计算
+            velocityRef.current = velocityRef.current * 0.7 + instantVelocity * 0.3;
         }
 
         lastYRef.current = clientY;
@@ -334,46 +331,26 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
 
         containerRef.current.scrollTop = startScrollTopRef.current + totalDelta;
 
-        // Update selected value during drag
-        updateSelectedValue(containerRef.current.scrollTop);
-    }, [updateSelectedValue]);
+        // Check for loop repositioning during drag
+        checkAndReposition();
+    }, [checkAndReposition]);
 
     const handleDragEnd = useCallback(() => {
+        if (!containerRef.current) return;
+
         isDraggingRef.current = false;
         setIsDragging(false);
 
-        // Calculate average velocity from recent history for smoother momentum
-        const history = velocityHistoryRef.current;
-        let avgVelocity = 0;
-
-        if (history.length > 0) {
-            // Weight recent velocities more heavily
-            let totalWeight = 0;
-            let weightedSum = 0;
-            const now = performance.now();
-
-            for (const entry of history) {
-                const age = now - entry.time;
-                const weight = Math.max(0, 1 - age / 100); // Linear decay over 100ms
-                weightedSum += entry.velocity * weight;
-                totalWeight += weight;
-            }
-
-            if (totalWeight > 0) {
-                avgVelocity = weightedSum / totalWeight;
-            }
-        }
+        const velocity = velocityRef.current;
 
         // Apply momentum if velocity is significant
-        if (Math.abs(avgVelocity) > 2) {
-            // Scale velocity for more natural feel
-            const scaledVelocity = avgVelocity * (VELOCITY_MULTIPLIER / 16);
-            animateWithMomentum(scaledVelocity);
+        if (Math.abs(velocity) > 3) {
+            animateWithMomentumAndSnap(velocity);
         } else {
             // No significant velocity, just snap to nearest
             snapToNearest();
         }
-    }, [animateWithMomentum, snapToNearest]);
+    }, [animateWithMomentumAndSnap, snapToNearest]);
 
     // Mouse Handlers
     const handleMouseMove = useCallback((e: MouseEvent) => {

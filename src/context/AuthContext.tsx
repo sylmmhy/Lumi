@@ -298,24 +298,134 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
     };
   }
 
-  // 3. Supabase 没有会话，但 localStorage 有 token -> 尝试恢复
+  // 3. Supabase 没有会话，但 localStorage 有 token -> 尝试恢复（带重试机制）
   const storedAccessToken = stored['session_token'];
   const storedRefreshToken = stored['refresh_token'];
 
   if (storedAccessToken && storedRefreshToken) {
     console.log('🔄 尝试用 localStorage token 恢复 Supabase session...');
-    try {
-      const { data: restored, error: restoreError } = await supabase.auth.setSession({
-        access_token: storedAccessToken,
-        refresh_token: storedRefreshToken,
-      });
 
-      if (restoreError) {
-        // 区分网络错误和 token 真正失效
-        if (isNetworkError(restoreError)) {
-          // 网络错误：保留本地状态，不强制登出
-          // 用户可能只是暂时断网，等网络恢复后再验证
-          console.warn('⚠️ 网络错误，保留本地登录状态:', restoreError.message);
+    // P0 修复：添加重试机制，避免临时错误导致过早登出
+    const MAX_RETRY_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 1000;
+
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        const { data: restored, error: restoreError } = await supabase.auth.setSession({
+          access_token: storedAccessToken,
+          refresh_token: storedRefreshToken,
+        });
+
+        if (restoreError) {
+          // 区分网络错误和 token 真正失效
+          if (isNetworkError(restoreError)) {
+            // 网络错误：保留本地状态，不强制登出
+            // 用户可能只是暂时断网，等网络恢复后再验证
+            console.warn(`⚠️ 网络错误 (尝试 ${attempt}/${MAX_RETRY_ATTEMPTS})，保留本地登录状态:`, restoreError.message);
+
+            // 如果不是最后一次尝试，等待后重试
+            if (attempt < MAX_RETRY_ATTEMPTS) {
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+              continue;
+            }
+
+            return {
+              isLoggedIn: true,
+              userId: stored['user_id'],
+              userEmail: stored['user_email'],
+              userName: stored['user_name'],
+              userPicture: stored['user_picture'],
+              isNewUser: stored['is_new_user'] === 'true',
+              sessionToken: storedAccessToken,
+              refreshToken: storedRefreshToken,
+              isNativeLogin,
+              isSessionValidated: false, // 标记为未验证，下次有网络时再验证
+              hasCompletedHabitOnboarding: false,
+            };
+          }
+
+          // 检查是否是可重试的临时错误（如服务器暂时不可用）
+          const isRetryableError = restoreError.message?.toLowerCase().includes('temporarily') ||
+            restoreError.message?.toLowerCase().includes('unavailable') ||
+            restoreError.message?.toLowerCase().includes('500') ||
+            restoreError.message?.toLowerCase().includes('502') ||
+            restoreError.message?.toLowerCase().includes('503') ||
+            restoreError.message?.toLowerCase().includes('504');
+
+          if (isRetryableError && attempt < MAX_RETRY_ATTEMPTS) {
+            console.warn(`⚠️ 临时错误 (尝试 ${attempt}/${MAX_RETRY_ATTEMPTS})，将重试:`, restoreError.message);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+            continue;
+          }
+
+          // Token 真正失效（如已被撤销、过期等）
+          console.warn('⚠️ localStorage token 无效:', restoreError.message);
+          // Token 无效，清除 localStorage（以 Supabase 为准）
+          clearAuthStorage();
+          // 在 WebView 环境中通知 Native 端 session 失效
+          if (isInNativeWebView()) {
+            console.log('📱 Session 验证失败，通知 Native 端');
+            notifyNativeLogout();
+          }
+          return {
+            isLoggedIn: false,
+            userId: null,
+            userEmail: null,
+            userName: null,
+            userPicture: null,
+            isNewUser: false,
+            sessionToken: null,
+            refreshToken: null,
+            isNativeLogin: false,
+            isSessionValidated: true,
+            hasCompletedHabitOnboarding: false,
+          };
+        }
+
+        if (restored.session) {
+          console.log('✅ 成功用 localStorage token 恢复 session:', restored.session.user.email);
+          persistSessionToStorage(restored.session);
+
+          // 查询用户的 habit onboarding 状态
+          let hasCompletedHabitOnboarding = false;
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('has_completed_habit_onboarding')
+              .eq('id', restored.session.user.id)
+              .single();
+            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+          } catch (err) {
+            console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
+          }
+
+          return {
+            isLoggedIn: true,
+            userId: restored.session.user.id,
+            userEmail: restored.session.user.email || null,
+            userName: restored.session.user.user_metadata?.full_name || stored['user_name'] || null,
+            userPicture: restored.session.user.user_metadata?.avatar_url || stored['user_picture'] || null,
+            isNewUser: stored['is_new_user'] === 'true',
+            sessionToken: restored.session.access_token,
+            refreshToken: restored.session.refresh_token || null,
+            isNativeLogin: false,
+            isSessionValidated: true,
+            hasCompletedHabitOnboarding,
+          };
+        }
+      } catch (err) {
+        console.error(`❌ 恢复 session 时发生错误 (尝试 ${attempt}/${MAX_RETRY_ATTEMPTS}):`, err);
+        // 检查是否是网络错误
+        const errorObj = err as { message?: string; code?: string };
+        if (isNetworkError(errorObj)) {
+          console.warn('⚠️ 网络错误，保留本地登录状态');
+
+          // 如果不是最后一次尝试，等待后重试
+          if (attempt < MAX_RETRY_ATTEMPTS) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+            continue;
+          }
+
           return {
             isLoggedIn: true,
             userId: stored['user_id'],
@@ -331,85 +441,16 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           };
         }
 
-        // Token 真正失效（如已被撤销、过期等）
-        console.warn('⚠️ localStorage token 无效:', restoreError.message);
-        // Token 无效，清除 localStorage（以 Supabase 为准）
-        clearAuthStorage();
-        // 在 WebView 环境中通知 Native 端 session 失效
-        if (isInNativeWebView()) {
-          console.log('📱 Session 验证失败，通知 Native 端');
-          notifyNativeLogout();
+        // 非网络错误，如果不是最后一次尝试，等待后重试
+        if (attempt < MAX_RETRY_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+          continue;
         }
-        return {
-          isLoggedIn: false,
-          userId: null,
-          userEmail: null,
-          userName: null,
-          userPicture: null,
-          isNewUser: false,
-          sessionToken: null,
-          refreshToken: null,
-          isNativeLogin: false,
-          isSessionValidated: true,
-          hasCompletedHabitOnboarding: false,
-        };
-      }
-
-      if (restored.session) {
-        console.log('✅ 成功用 localStorage token 恢复 session:', restored.session.user.email);
-        persistSessionToStorage(restored.session);
-
-        // 查询用户的 habit onboarding 状态
-        let hasCompletedHabitOnboarding = false;
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('has_completed_habit_onboarding')
-            .eq('id', restored.session.user.id)
-            .single();
-          hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-        } catch (err) {
-          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-        }
-
-        return {
-          isLoggedIn: true,
-          userId: restored.session.user.id,
-          userEmail: restored.session.user.email || null,
-          userName: restored.session.user.user_metadata?.full_name || stored['user_name'] || null,
-          userPicture: restored.session.user.user_metadata?.avatar_url || stored['user_picture'] || null,
-          isNewUser: stored['is_new_user'] === 'true',
-          sessionToken: restored.session.access_token,
-          refreshToken: restored.session.refresh_token || null,
-          isNativeLogin: false,
-          isSessionValidated: true,
-          hasCompletedHabitOnboarding,
-        };
-      }
-    } catch (err) {
-      console.error('❌ 恢复 session 时发生错误:', err);
-      // 检查是否是网络错误
-      const errorObj = err as { message?: string; code?: string };
-      if (isNetworkError(errorObj)) {
-        console.warn('⚠️ 网络错误，保留本地登录状态');
-        return {
-          isLoggedIn: true,
-          userId: stored['user_id'],
-          userEmail: stored['user_email'],
-          userName: stored['user_name'],
-          userPicture: stored['user_picture'],
-          isNewUser: stored['is_new_user'] === 'true',
-          sessionToken: storedAccessToken,
-          refreshToken: storedRefreshToken,
-          isNativeLogin,
-          isSessionValidated: false, // 标记为未验证，下次有网络时再验证
-          hasCompletedHabitOnboarding: false,
-        };
       }
     }
 
-    // 恢复失败且非网络错误，清除 localStorage
-    console.warn('⚠️ 无法恢复 session，清除本地认证状态');
+    // 所有重试都失败且非网络错误，清除 localStorage
+    console.warn('⚠️ 多次尝试后仍无法恢复 session，清除本地认证状态');
     clearAuthStorage();
     // 在 WebView 环境中通知 Native 端
     if (isInNativeWebView()) {

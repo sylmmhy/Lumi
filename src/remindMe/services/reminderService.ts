@@ -23,7 +23,7 @@ interface TaskRecord {
   timezone: string | null; // 创建任务时的时区标识
   status: 'pending' | 'in_progress' | 'completed' | 'archived'; // 任务状态（task_status 枚举）
   task_type: 'todo' | 'routine' | 'routine_instance' | null; // 任务类型
-  time_category: 'morning' | 'afternoon' | 'evening' | null; // 时间分类
+  time_category: 'morning' | 'noon' | 'afternoon' | 'evening' | 'latenight' | null; // 时间分类
   called: boolean; // AI 是否已打电话
   is_recurring: boolean; // 是否重复
   recurrence_pattern: RecurrencePattern | null; // 重复模式

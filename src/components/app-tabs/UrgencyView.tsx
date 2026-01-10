@@ -235,7 +235,8 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
     const { t } = useTranslation();
     const [customTask, setCustomTask] = useState('');
     // 显示今天所有未完成的任务（todo + routine_instance），不显示 routine 模板
-    const filteredTasks = tasks.filter(t => (t.type === 'todo' || t.type === 'routine_instance') && !t.completed);
+    // 排除 displayTime === 'Now' 的任务（这些是即时任务，进行中不显示在列表中）
+    const filteredTasks = tasks.filter(task => (task.type === 'todo' || task.type === 'routine_instance') && !task.completed && task.displayTime !== 'Now');
 
     const handleCustomTaskStart = useCallback(() => {
         const trimmed = customTask.trim();

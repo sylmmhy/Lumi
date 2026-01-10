@@ -236,12 +236,33 @@ export function useVideoInput(
     devLog('📹 Frame capture stopped');
   }, []);
 
-  // Cleanup on unmount
+  // P0 修复：完整清理资源 on unmount
+  // 防止摄像头资源泄漏，确保浏览器释放设备
   useEffect(() => {
     return () => {
+      // 1. 清理帧捕获定时器
       if (captureTimeoutRef.current !== -1) {
         clearTimeout(captureTimeoutRef.current);
+        captureTimeoutRef.current = -1;
       }
+      isCapturingRef.current = false;
+
+      // 2. 停止并清理 stream tracks
+      if (currentStreamRef.current) {
+        currentStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          devLog('📹 Cleanup: stopped track', track.kind);
+        });
+        currentStreamRef.current = null;
+      }
+
+      // 3. 清空 video 元素的 srcObject（关键：防止浏览器继续占用摄像头）
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        devLog('📹 Cleanup: cleared videoRef.srcObject');
+      }
+
+      devLog('📹 useVideoInput unmounted, all resources cleaned up');
     };
   }, []);
 

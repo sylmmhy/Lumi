@@ -10,6 +10,135 @@ import { detectWebView } from '../../utils/webviewDetection';
 
 import { supabase } from '../../lib/supabase';
 
+// Quick tags with translation keys for home page
+const QUICK_TAG_KEYS = [
+    { emoji: '🛏️', key: 'urgency.getOutOfBed' },
+    { emoji: '💪', key: 'urgency.workout' },
+    { emoji: '😴', key: 'urgency.goToSleep' },
+    { emoji: '📚', key: 'urgency.startReading' },
+    { emoji: '🛁', key: 'urgency.needShower' },
+    { emoji: '📝', key: 'urgency.startStudying' },
+    { emoji: '✉️', key: 'urgency.replyEmails' },
+    { emoji: '📞', key: 'urgency.makeCall' },
+    { emoji: '🍳', key: 'urgency.cookDinner' },
+    { emoji: '🧹', key: 'urgency.cleanUp' },
+];
+
+const QuickTag = ({ emoji, text, onClick, variant = 'gray' }: { emoji: string; text: string; onClick: () => void; variant?: 'gray' | 'blue' }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-150 active:scale-[0.97] ${
+            variant === 'blue'
+                ? 'bg-brand-darkBlue/80 text-white hover:bg-brand-darkBlue'
+                : 'border border-gray-200 bg-gray-100 text-gray-800 hover:bg-gray-200'
+        }`}
+    >
+        <span className="text-[15px] leading-none">{emoji}</span>
+        <span className="text-[15px] leading-none whitespace-nowrap">{text}</span>
+    </button>
+);
+
+const QuickTagsRow: React.FC<{ onSelect: (text: string) => void; variant?: 'gray' | 'blue' }> = ({ onSelect, variant = 'gray' }) => {
+    const { t } = useTranslation();
+    const quickTagsScrollRef = useRef<HTMLDivElement | null>(null);
+    const quickTagsAnimationRef = useRef<number | null>(null);
+    const quickTagsVirtualScrollRef = useRef(0);
+    const quickTagsPauseRef = useRef(false);
+
+    // Translate quick tags
+    const QUICK_TAGS = QUICK_TAG_KEYS.map(tag => ({
+        emoji: tag.emoji,
+        text: t(tag.key),
+    }));
+
+    const pauseQuickTagsAutoScroll = () => {
+        quickTagsPauseRef.current = true;
+    };
+
+    const resumeQuickTagsAutoScroll = () => {
+        quickTagsPauseRef.current = false;
+    };
+
+    useEffect(() => {
+        quickTagsVirtualScrollRef.current = quickTagsScrollRef.current?.scrollLeft || 0;
+
+        const applyScrollPosition = (element: HTMLDivElement, value: number) => {
+            element.scrollLeft = value;
+            if (typeof element.scrollTo === 'function') {
+                element.scrollTo({ left: value, behavior: 'auto' });
+            }
+        };
+
+        const step = () => {
+            const container = quickTagsScrollRef.current;
+            if (container && !quickTagsPauseRef.current) {
+                const maxScrollable = container.scrollWidth - container.clientWidth;
+                if (maxScrollable > 2) {
+                    const resetPoint = container.scrollWidth / 2;
+                    let newScroll = quickTagsVirtualScrollRef.current + 0.8;
+                    if (newScroll >= resetPoint) {
+                        newScroll = 0;
+                    }
+                    quickTagsVirtualScrollRef.current = newScroll;
+                    applyScrollPosition(container, newScroll);
+                }
+            }
+            quickTagsAnimationRef.current = requestAnimationFrame(step);
+        };
+
+        quickTagsAnimationRef.current = requestAnimationFrame(step);
+        return () => {
+            if (quickTagsAnimationRef.current) {
+                cancelAnimationFrame(quickTagsAnimationRef.current);
+            }
+        };
+    }, []);
+
+    return (
+        <div className="w-full flex flex-col items-center gap-1 mb-4">
+            <div className="relative w-full">
+                <div className={`absolute left-0 top-0 bottom-0 w-8 z-10 pointer-events-none ${variant === 'blue' ? 'bg-gradient-to-r from-brand-blue to-transparent' : 'bg-gradient-to-r from-white to-transparent'}`} />
+                <div className={`absolute right-0 top-0 bottom-0 w-8 z-10 pointer-events-none ${variant === 'blue' ? 'bg-gradient-to-l from-brand-blue to-transparent' : 'bg-gradient-to-l from-white to-transparent'}`} />
+                <div
+                    ref={quickTagsScrollRef}
+                    className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar"
+                    role="list"
+                    style={{
+                        scrollBehavior: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        touchAction: 'pan-x'
+                    }}
+                    onMouseEnter={pauseQuickTagsAutoScroll}
+                    onMouseLeave={resumeQuickTagsAutoScroll}
+                    onTouchStart={pauseQuickTagsAutoScroll}
+                    onTouchEnd={() => {
+                        setTimeout(resumeQuickTagsAutoScroll, 300);
+                    }}
+                    onScroll={() => {
+                        if (quickTagsPauseRef.current && quickTagsScrollRef.current) {
+                            quickTagsVirtualScrollRef.current = quickTagsScrollRef.current.scrollLeft;
+                        }
+                    }}
+                >
+                    {[0, 1].map(loopIndex => (
+                        QUICK_TAGS.map((tag) => (
+                            <div key={`${loopIndex}-${tag.text}`} className="flex-shrink-0" role="listitem">
+                                <QuickTag
+                                    emoji={tag.emoji}
+                                    text={tag.text}
+                                    onClick={() => onSelect(tag.text)}
+                                    variant={variant}
+                                />
+                            </div>
+                        ))
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface HomeViewProps {
     tasks: Task[];
     onAddTask: (task: Task) => void;
@@ -358,77 +487,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex-1 overflow-y-auto no-scrollbar relative" onScroll={handleScroll}>
 
                 {/* Header Section (Scrolls away) - Increased z-index to 45 to be above sticky tabs (z-40) so TimePicker shows on top */}
-                <div className="bg-brand-blue px-6 pt-16 pb-1 relative z-[45] transition-colors duration-500 overflow-visible">
+                <div className="bg-brand-blue px-6 pt-16 pb-20 relative z-[45] transition-colors duration-500 overflow-visible">
                     <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
                     <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
 
-                    <div ref={inputContainerRef} className="bg-white rounded-2xl p-4 shadow-sm mb-6 transition-all focus-within:ring-2 focus-within:ring-blue-300">
-                        <textarea
+                    <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-2 focus-within:ring-blue-300">
+                        <input
+                            type="text"
                             value={taskInput}
                             onChange={(e) => setTaskInput(e.target.value)}
                             placeholder={t('home.placeholder')}
-                            className="w-full resize-none outline-none text-brand-text placeholder-gray-400 text-lg leading-relaxed h-16 bg-transparent"
+                            className="w-full outline-none text-brand-text placeholder-gray-400 text-lg bg-transparent"
                             style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                         />
                     </div>
 
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="relative z-[150]" ref={timePickerContainerRef}>
-                            <button
-                                onClick={() => setShowTimePicker(!showTimePicker)}
-                                className="bg-brand-darkBlue text-white italic text-4xl px-5 py-3 rounded-xl shadow-inner flex items-center gap-2 hover:bg-opacity-90 transition-all"
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}
-                            >
-                                {selectedTime ? parseTimeToString(selectedTime) : t('home.setTime')}
-                            </button>
+                    {/* Quick Tags Row */}
+                    <QuickTagsRow onSelect={setTaskInput} variant="blue" />
 
-                            {showTimePicker && (
-                                <TimePicker
-                                    timeValue={selectedTime}
-                                    onTimeChange={setSelectedTime}
-                                    dateValue={selectedDate}
-                                    onDateChange={setSelectedDate}
-                                    onClose={() => setShowTimePicker(false)}
-                                />
-                            )}
-                        </div>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-white/90 cursor-pointer select-none group mb-4">
-                        <div className={`w-5 h-5 border-[1.5px] border-white rounded-[4px] flex items-center justify-center transition-colors ${isRoutine ? 'bg-brand-lime border-brand-lime' : ''}`}>
-                            {isRoutine && <i className="fa-solid fa-check text-brand-blue text-[10px]"></i>}
-                        </div>
-                        <input
-                            type="checkbox"
-                            className="hidden"
-                            checked={isRoutine}
-                            onChange={() => {
-                                const newValue = !isRoutine;
-                                setIsRoutine(newValue);
-                                localStorage.setItem('isRoutinePreference', String(newValue));
-                            }}
-                        />
-                        <span className="italic text-lg group-hover:text-white transition-colors" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>{t('home.routineTask')}</span>
-                    </label>
-
-                    {/* SVG Arc Bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 translate-y-[99%] z-0">
-                        <svg viewBox="0 0 1440 200" className="w-full h-auto block text-brand-blue fill-current transition-colors duration-500" preserveAspectRatio="none">
-                            <path d="M0,0 L1440,0 L1440,50 Q720,200 0,50 Z" />
-                        </svg>
-                    </div>
 
                     {/* "Set" Button */}
-                    <div className="absolute bottom-[-100px] right-1 z-30">
+                    <div className="absolute bottom-[-80px] right-4 z-30" ref={timePickerContainerRef}>
                         <div className="relative w-40 h-40">
                             <button
-                                onClick={() => {
-                                    if (!taskInput.trim()) {
-                                        alert(t('home.pleaseEnterTask'));
-                                        return;
-                                    }
-                                    handleSetTask();
-                                }}
+                                onClick={() => setShowTimePicker(!showTimePicker)}
                                 className="w-full h-full bg-transparent flex items-center justify-center transform transition-transform hover:scale-105 active:scale-95"
                             >
                                 <img
@@ -438,11 +520,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 />
                             </button>
                         </div>
+
+                        {showTimePicker && (
+                            <TimePicker
+                                timeValue={selectedTime}
+                                onTimeChange={setSelectedTime}
+                                dateValue={selectedDate}
+                                onDateChange={setSelectedDate}
+                                onClose={() => setShowTimePicker(false)}
+                                onConfirm={handleSetTask}
+                                isRoutine={isRoutine}
+                                onRoutineChange={(val) => {
+                                    setIsRoutine(val);
+                                    localStorage.setItem('isRoutinePreference', String(val));
+                                }}
+                                routineLabel={t('home.routineTask')}
+                                confirmRoutineLabel={t('home.setRecurringReminder')}
+                                confirmOnceLabel={t('home.setOnceReminder')}
+                            />
+                        )}
                     </div>
                 </div>
 
-                {/* Spacer for Arc overlap */}
-                <div className="h-12 bg-transparent"></div>
 
                 {/* Content Body */}
                 <div className="bg-white px-6 pb-28 min-h-screen">
@@ -709,8 +808,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
-                        <div className="mb-4">
+                        <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
+                            <button
+                                onClick={() => {
+                                    if (editingTask && window.confirm(t('home.confirmDelete'))) {
+                                        onDeleteTask(editingTask.id);
+                                        setEditingTask(null);
+                                    }
+                                }}
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
                         </div>
 
                         {/* Task Name Input */}

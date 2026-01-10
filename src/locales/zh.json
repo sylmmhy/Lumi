@@ -39,6 +39,9 @@
   "home.taskName": "任务名称",
   "home.taskTime": "时间",
   "home.exampleClickHint": "这是示例，请在上方创建你自己的任务！",
+  "home.confirmDelete": "确定要删除这个任务吗？",
+  "home.setRecurringReminder": "设定重复提醒",
+  "home.setOnceReminder": "设定单次提醒",
 
   "stats.loadingHistory": "加载历史中...",
   "stats.noCompletedTasks": "还没有完成的任务。",

@@ -39,6 +39,9 @@
   "home.taskName": "Nome attività",
   "home.taskTime": "Orario",
   "home.exampleClickHint": "Questo è un esempio. Crea la tua attività sopra!",
+  "home.confirmDelete": "Sei sicuro di voler eliminare questa attività?",
+  "home.setRecurringReminder": "Imposta promemoria ricorrente",
+  "home.setOnceReminder": "Imposta promemoria singolo",
 
   "stats.loadingHistory": "Caricamento...",
   "stats.noCompletedTasks": "Niente completato ancora",

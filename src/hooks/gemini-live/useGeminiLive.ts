@@ -307,12 +307,19 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
   /**
    * 发送文本消息
+   * 注意：使用 session.isConnected 和 session.sendRealtimeInput 作为依赖
+   * 而不是整个 session 对象，避免因对象引用变化导致函数频繁重建
    */
   const sendTextMessage = useCallback((text: string) => {
     if (session.isConnected) {
       session.sendRealtimeInput({ text });
+      if (import.meta.env.DEV) {
+        console.log('📤 [GeminiLive] 发送文本:', text.substring(0, 60) + (text.length > 60 ? '...' : ''));
+      }
+    } else if (import.meta.env.DEV) {
+      console.warn('⚠️ [GeminiLive] 发送失败: 连接已断开');
     }
-  }, [session]);
+  }, [session.isConnected, session.sendRealtimeInput]);
 
   /**
    * 设置 onTurnComplete 回调

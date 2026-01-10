@@ -39,6 +39,9 @@
   "home.taskName": "Task Name",
   "home.taskTime": "Time",
   "home.exampleClickHint": "This is an example. Create your own task above!",
+  "home.confirmDelete": "Are you sure you want to delete this task?",
+  "home.setRecurringReminder": "Set Recurring Reminder",
+  "home.setOnceReminder": "Set One-time Reminder",
 
   "stats.loadingHistory": "Loading history...",
   "stats.noCompletedTasks": "No completed tasks yet.",

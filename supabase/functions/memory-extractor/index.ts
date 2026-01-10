@@ -239,6 +239,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
     body: JSON.stringify({
       model: EMBEDDING_MODEL,
       input: text,
+      dimensions: 1536,  // 降维到 1536，兼容 HNSW 索引（最大 2000 维）
     }),
   })
 

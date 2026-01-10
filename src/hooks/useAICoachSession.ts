@@ -246,19 +246,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             currentTurnHasResistRef.current = true;
 
             // 记录抗拒（AI 检测到用户在抗拒）
-            const newTone = toneManager.recordResistance('ai_detected');
+            // 返回值是触发词字符串（如果发生了语气切换），避免闭包过期问题
+            const triggerString = toneManager.recordResistance('ai_detected');
 
             if (import.meta.env.DEV) {
               console.log('🚫 [ToneManager] AI 检测到用户抗拒');
             }
 
             // 如果触发了语气切换，稍后发送触发词
-            if (newTone) {
+            if (triggerString) {
               setTimeout(() => {
-                const trigger = toneManager.generateToneTrigger();
-                if (trigger) {
-                  sendToneTriggerRef.current(trigger.trigger);
-                }
+                sendToneTriggerRef.current(triggerString);
               }, TONE_TRIGGER_DELAY_MS);
             }
           }

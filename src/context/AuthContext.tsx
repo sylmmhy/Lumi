@@ -134,6 +134,35 @@ function batchGetLocalStorage<T extends readonly string[]>(keys: T): Record<T[nu
 }
 
 /**
+ * 判断错误是否是网络相关错误（而非 token 真正失效）
+ * 网络错误时不应强制登出，应保留本地状态等待重试
+ */
+function isNetworkError(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const msg = (error.message || '').toLowerCase();
+  const code = (error.code || '').toLowerCase();
+
+  // 网络相关错误关键词
+  const networkErrorPatterns = [
+    'network',
+    'fetch',
+    'timeout',
+    'econnrefused',
+    'enotfound',
+    'connection',
+    'offline',
+    'internet',
+    'dns',
+    'socket',
+    'abort',
+    'etimedout',
+    'econnreset',
+  ];
+
+  return networkErrorPatterns.some(pattern => msg.includes(pattern) || code.includes(pattern));
+}
+
+/**
  * 从 localStorage 读取认证状态（仅作为缓存，需通过 Supabase 验证）
  * 注意：isSessionValidated 初始为 false，需通过 validateSessionWithSupabase 验证后才为 true
  */
@@ -282,6 +311,27 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       });
 
       if (restoreError) {
+        // 区分网络错误和 token 真正失效
+        if (isNetworkError(restoreError)) {
+          // 网络错误：保留本地状态，不强制登出
+          // 用户可能只是暂时断网，等网络恢复后再验证
+          console.warn('⚠️ 网络错误，保留本地登录状态:', restoreError.message);
+          return {
+            isLoggedIn: true,
+            userId: stored['user_id'],
+            userEmail: stored['user_email'],
+            userName: stored['user_name'],
+            userPicture: stored['user_picture'],
+            isNewUser: stored['is_new_user'] === 'true',
+            sessionToken: storedAccessToken,
+            refreshToken: storedRefreshToken,
+            isNativeLogin,
+            isSessionValidated: false, // 标记为未验证，下次有网络时再验证
+            hasCompletedHabitOnboarding: false,
+          };
+        }
+
+        // Token 真正失效（如已被撤销、过期等）
         console.warn('⚠️ localStorage token 无效:', restoreError.message);
         // Token 无效，清除 localStorage（以 Supabase 为准）
         clearAuthStorage();
@@ -338,9 +388,27 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       }
     } catch (err) {
       console.error('❌ 恢复 session 时发生错误:', err);
+      // 检查是否是网络错误
+      const errorObj = err as { message?: string; code?: string };
+      if (isNetworkError(errorObj)) {
+        console.warn('⚠️ 网络错误，保留本地登录状态');
+        return {
+          isLoggedIn: true,
+          userId: stored['user_id'],
+          userEmail: stored['user_email'],
+          userName: stored['user_name'],
+          userPicture: stored['user_picture'],
+          isNewUser: stored['is_new_user'] === 'true',
+          sessionToken: storedAccessToken,
+          refreshToken: storedRefreshToken,
+          isNativeLogin,
+          isSessionValidated: false, // 标记为未验证，下次有网络时再验证
+          hasCompletedHabitOnboarding: false,
+        };
+      }
     }
 
-    // 恢复失败，清除 localStorage
+    // 恢复失败且非网络错误，清除 localStorage
     console.warn('⚠️ 无法恢复 session，清除本地认证状态');
     clearAuthStorage();
     // 在 WebView 环境中通知 Native 端

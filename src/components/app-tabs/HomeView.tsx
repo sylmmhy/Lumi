@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TaskType } from '../../remindMe/types';
 import type { Task } from '../../remindMe/types';
 import { parseTimeToString, getLocalDateString, formatDateForSeparator } from '../../utils/timeUtils';
 import { TimePicker } from './TimePicker';
@@ -172,7 +171,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         const saved = localStorage.getItem('isRoutinePreference');
         return saved !== null ? saved === 'true' : true;
     });
-    const [activeTab, setActiveTab] = useState<TaskType>(TaskType.ROUTINE);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
     // Edit Task State
@@ -200,24 +198,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
     // Refs
     const timePickerContainerRef = useRef<HTMLDivElement>(null);
     const inputContainerRef = useRef<HTMLDivElement>(null);
-    const routineTabRef = useRef<HTMLButtonElement>(null);
-    const todoTabRef = useRef<HTMLButtonElement>(null);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (timePickerContainerRef.current && !timePickerContainerRef.current.contains(event.target as Node)) {
-                setShowTimePicker(false);
-            }
-        };
-
-        if (showTimePicker) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [showTimePicker]);
+    // Note: handleClickOutside logic removed because TimePicker is now a modal
+    // with its own backdrop click-to-close behavior (onClick={onClose} on the outer div)
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         setScrollTop(e.currentTarget.scrollTop);
@@ -234,12 +217,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
             return;
         }
 
-        // Trigger Animation
-        const targetRef = isRoutine ? routineTabRef : todoTabRef;
-
-        if (inputContainerRef.current && targetRef.current) {
+        // Trigger Animation - simple fade effect from input
+        if (inputContainerRef.current) {
             const startRect = inputContainerRef.current.getBoundingClientRect();
-            const endRect = targetRef.current.getBoundingClientRect();
+            // Animate to center-bottom of input
+            const endRect = new DOMRect(
+                startRect.left + startRect.width / 2,
+                startRect.top + startRect.height,
+                0,
+                0
+            );
             setAnimatingTask({
                 text: taskInput,
                 startRect,
@@ -415,17 +402,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setEditingTask(null);
     };
 
-    // Now tab: 只显示 todo 任务，排除已完成的
-    // Routine tab: 显示 routine 模板（用于管理 routine）
+    // 显示所有未完成任务（routine + todo），不区分 tab
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
-    const filteredTasks = activeTab === TaskType.TODO
-        ? tasks.filter(task => task.type === 'todo' && !task.completed)
-        : tasks.filter(task => task.type === 'routine');
+    const filteredTasks = tasks.filter(task =>
+        (task.type === 'todo' || task.type === 'routine') && !task.completed
+    );
 
-    // Group tasks by date for Now tab, sorted with most recent first
+    // Group tasks by date, sorted with most recent first
+    // For routine tasks without date, use today's date
     const tasksByDate = useMemo(() => {
-        if (activeTab !== TaskType.TODO) return null;
-
         const today = getLocalDateString(new Date());
         const grouped: { [date: string]: Task[] } = {};
 
@@ -450,19 +435,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             eveningTasks: grouped[date].filter(task => task.category === 'evening'),
             latenightTasks: grouped[date].filter(task => task.category === 'latenight'),
         }));
-    }, [filteredTasks, activeTab]);
+    }, [filteredTasks]);
 
-    // For Routine tab, use flat category grouping (no date separation)
-    const morningTasks = filteredTasks.filter(task => task.category === 'morning');
-    const noonTasks = filteredTasks.filter(task => task.category === 'noon');
-    const afternoonTasks = filteredTasks.filter(task => task.category === 'afternoon');
-    const eveningTasks = filteredTasks.filter(task => task.category === 'evening');
-    const latenightTasks = filteredTasks.filter(task => task.category === 'latenight');
-
-    const exampleNowTasks = [
-        { title: t('home.exampleVehicle'), time: '6:00 pm' },
-        { title: t('home.examplePackage'), time: '6:00 pm' },
-    ];
 
     const exampleRoutineTasks = [
         { title: t('stats.goToBed'), time: '10:30 pm' },
@@ -486,8 +460,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* Unified Scroll Container */}
             <div className="flex-1 overflow-y-auto no-scrollbar relative" onScroll={handleScroll}>
 
-                {/* Header Section (Scrolls away) - Increased z-index to 45 to be above sticky tabs (z-40) so TimePicker shows on top */}
-                <div className="bg-brand-blue px-6 pt-16 pb-20 relative z-[45] transition-colors duration-500 overflow-visible">
+                {/* Header Section (Scrolls away) */}
+                <div className="bg-brand-blue px-6 pt-16 pb-12 relative z-[45] transition-colors duration-500 overflow-visible">
                     <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
                     <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
 
@@ -506,39 +480,38 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <QuickTagsRow onSelect={setTaskInput} variant="blue" />
 
 
-                    {/* "Set" Button */}
-                    <div className="absolute bottom-[-80px] right-4 z-30" ref={timePickerContainerRef}>
-                        <div className="relative w-40 h-40">
-                            <button
-                                onClick={() => setShowTimePicker(!showTimePicker)}
-                                className="w-full h-full bg-transparent flex items-center justify-center transform transition-transform hover:scale-105 active:scale-95"
-                            >
-                                <img
-                                    src="/setbutton.png"
-                                    alt="Set"
-                                    className="w-full h-full object-contain select-none pointer-events-none"
-                                />
-                            </button>
-                        </div>
-
-                        {showTimePicker && (
-                            <TimePicker
-                                timeValue={selectedTime}
-                                onTimeChange={setSelectedTime}
-                                dateValue={selectedDate}
-                                onDateChange={setSelectedDate}
-                                onClose={() => setShowTimePicker(false)}
-                                onConfirm={handleSetTask}
-                                isRoutine={isRoutine}
-                                onRoutineChange={(val) => {
-                                    setIsRoutine(val);
-                                    localStorage.setItem('isRoutinePreference', String(val));
+                    {/* "Set a time" Button - positioned to span across blue/white boundary */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-50" ref={timePickerContainerRef}>
+                        {/* White outer container */}
+                        <button
+                            onClick={() => setShowTimePicker(!showTimePicker)}
+                            className="bg-white rounded-full p-[10px] transition-transform hover:scale-105 active:scale-95"
+                            style={{
+                                boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.25)',
+                            }}
+                        >
+                            {/* Yellow-green inner button - 204x51 */}
+                            <div
+                                className="flex items-center justify-center rounded-full"
+                                style={{
+                                    backgroundColor: '#E6FB47',
+                                    width: '204px',
+                                    height: '51px',
                                 }}
-                                routineLabel={t('home.routineTask')}
-                                confirmRoutineLabel={t('home.setRecurringReminder')}
-                                confirmOnceLabel={t('home.setOnceReminder')}
-                            />
-                        )}
+                            >
+                                <span
+                                    style={{
+                                        fontFamily: "'Sansita', sans-serif",
+                                        fontStyle: 'italic',
+                                        fontWeight: 700,
+                                        fontSize: '32px',
+                                        color: '#3A64E7',
+                                    }}
+                                >
+                                    Set a time
+                                </span>
+                            </div>
+                        </button>
                     </div>
                 </div>
 
@@ -546,33 +519,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {/* Content Body */}
                 <div className="bg-white px-6 pb-28 min-h-screen">
 
-                    {/* Sticky Tabs */}
-                    <div className="sticky top-12 z-40 bg-white pt-6 pb-6">
-                        <div className="flex gap-4">
-                            <button
-                                ref={routineTabRef}
-                                onClick={() => setActiveTab(TaskType.ROUTINE)}
-                                className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.ROUTINE ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
-                            >
-                                {t('home.routine')}
-                            </button>
-                            <button
-                                ref={todoTabRef}
-                                onClick={() => setActiveTab(TaskType.TODO)}
-                                className={`px-8 py-2 rounded-3xl font-bold italic text-lg transition-all ${activeTab === TaskType.TODO ? 'bg-brand-blue text-white shadow-button transform scale-105' : 'bg-brand-gray text-gray-400 hover:bg-gray-200'}`}
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
-                            >
-                                {t('home.now')}
-                            </button>
-                        </div>
-                    </div>
 
-                    <div className="space-y-6 mt-2">
-                        {/* Now tab: render tasks grouped by date with separators */}
-                        {activeTab === TaskType.TODO && tasksByDate && tasksByDate.map((dateGroup) => (
+                    <div className="space-y-6 pt-14">
+                        {/* Render all tasks grouped by date with separators */}
+                        {tasksByDate && tasksByDate.map((dateGroup) => (
                             <div key={dateGroup.date}>
-                                {/* Show date separator for non-today dates (skip first group if it's today) */}
+                                {/* Show date separator for non-today dates */}
                                 {!dateGroup.isToday && (
                                     <DateSeparator date={formatDateForSeparator(dateGroup.date)} />
                                 )}
@@ -638,67 +590,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             </div>
                         ))}
 
-                        {/* Routine tab: render tasks without date grouping */}
-                        {activeTab === TaskType.ROUTINE && (
-                            <>
-                                {morningTasks.length > 0 && (
-                                    <TaskGroup
-                                        title={t('home.morning')}
-                                        icon="☀️"
-                                        tasks={morningTasks}
-                                        onToggle={onToggleComplete}
-                                        onDelete={onDeleteTask}
-                                        onEdit={handleEditTask}
-                                    />
-                                )}
-                                {noonTasks.length > 0 && (
-                                    <TaskGroup
-                                        title={t('home.noon')}
-                                        icon="🌞"
-                                        tasks={noonTasks}
-                                        onToggle={onToggleComplete}
-                                        onDelete={onDeleteTask}
-                                        onEdit={handleEditTask}
-                                    />
-                                )}
-                                {afternoonTasks.length > 0 && (
-                                    <TaskGroup
-                                        title={t('home.afternoon')}
-                                        icon="🌤️"
-                                        tasks={afternoonTasks}
-                                        onToggle={onToggleComplete}
-                                        onDelete={onDeleteTask}
-                                        onEdit={handleEditTask}
-                                    />
-                                )}
-                                {eveningTasks.length > 0 && (
-                                    <TaskGroup
-                                        title={t('home.evening')}
-                                        icon="🌙"
-                                        tasks={eveningTasks}
-                                        onToggle={onToggleComplete}
-                                        onDelete={onDeleteTask}
-                                        onEdit={handleEditTask}
-                                    />
-                                )}
-                                {latenightTasks.length > 0 && (
-                                    <TaskGroup
-                                        title={t('home.latenight')}
-                                        icon="🌃"
-                                        tasks={latenightTasks}
-                                        onToggle={onToggleComplete}
-                                        onDelete={onDeleteTask}
-                                        onEdit={handleEditTask}
-                                    />
-                                )}
-                            </>
-                        )}
-
                         {filteredTasks.length === 0 && (
                             <div className="py-0 space-y-4">
                                 <p className="text-center font-serif italic text-lg text-gray-400">{t('home.noTasks')}</p>
                                 <div className="space-y-3">
-                                    {(activeTab === TaskType.TODO ? exampleNowTasks : exampleRoutineTasks).map((item, idx) => (
+                                    {exampleRoutineTasks.map((item, idx) => (
                                         <div
                                             key={`${item.title}-${idx}`}
                                             className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
@@ -788,6 +684,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     startRect={animatingTask.startRect}
                     endRect={animatingTask.endRect}
                     onComplete={() => setAnimatingTask(null)}
+                />
+            )}
+
+            {/* Time Picker Modal */}
+            {showTimePicker && (
+                <TimePicker
+                    timeValue={selectedTime}
+                    onTimeChange={setSelectedTime}
+                    dateValue={selectedDate}
+                    onDateChange={setSelectedDate}
+                    onClose={() => setShowTimePicker(false)}
+                    onConfirm={handleSetTask}
+                    isRoutine={isRoutine}
+                    onRoutineChange={(val) => {
+                        setIsRoutine(val);
+                        localStorage.setItem('isRoutinePreference', String(val));
+                    }}
+                    routineLabel={t('home.routineTask')}
+                    confirmRoutineLabel={t('home.setRecurringReminder')}
+                    confirmOnceLabel={t('home.setOnceReminder')}
                 />
             )}
 

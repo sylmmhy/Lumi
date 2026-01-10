@@ -562,21 +562,18 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
 
                 {/* Routine Toggle Switch */}
                 {onRoutineChange && (
-                    <label className="flex items-center justify-between mt-4 cursor-pointer select-none active:opacity-70 transition-opacity">
+                    <div
+                        className="flex items-center justify-between mt-4 cursor-pointer select-none active:opacity-70 transition-opacity"
+                        onClick={() => onRoutineChange(!isRoutine)}
+                    >
                         <span className="text-gray-700 text-sm font-medium">{routineLabel || 'Routine task'}</span>
                         <div className="relative">
-                            <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={isRoutine}
-                                onChange={() => onRoutineChange(!isRoutine)}
-                            />
                             {/* Toggle track */}
                             <div className={`w-[52px] h-[32px] rounded-full transition-colors duration-200 ${isRoutine ? 'bg-brand-blue' : 'bg-gray-200'}`}></div>
                             {/* Toggle knob */}
                             <div className={`absolute top-[2px] left-[2px] w-[28px] h-[28px] bg-white rounded-full shadow-md transition-transform duration-200 ${isRoutine ? 'translate-x-[20px]' : 'translate-x-0'}`}></div>
                         </div>
-                    </label>
+                    </div>
                 )}
 
                 <div className="mt-4">

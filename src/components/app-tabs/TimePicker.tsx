@@ -369,6 +369,18 @@ export interface TimePickerProps {
     onClose: () => void;
     embedded?: boolean;
     use24Hour?: boolean;
+    /** 点击 OK 按钮时的确认回调（可选），如果提供则在点击 OK 时调用 */
+    onConfirm?: () => void;
+    /** 是否为重复提醒（routine）任务 */
+    isRoutine?: boolean;
+    /** 切换重复提醒选项的回调 */
+    onRoutineChange?: (val: boolean) => void;
+    /** 重复提醒复选框的标签文字 */
+    routineLabel?: string;
+    /** 设定重复提醒按钮文字 */
+    confirmRoutineLabel?: string;
+    /** 设定单次提醒按钮文字 */
+    confirmOnceLabel?: string;
 }
 
 /**
@@ -378,7 +390,7 @@ export interface TimePickerProps {
  *
  * @param {TimePickerProps} props - 组件的受控参数与关闭行为
  */
-export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false, use24Hour = true }: TimePickerProps) => {
+export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false, use24Hour = true, onConfirm, isRoutine, onRoutineChange, routineLabel, confirmRoutineLabel, confirmOnceLabel }: TimePickerProps) => {
     const [mode, setMode] = useState<'time' | 'date'>('time');
 
     // --- Time Logic ---
@@ -548,12 +560,36 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
             >
                 {pickerContent}
 
-                <div className="mt-6">
+                {/* Routine Toggle Switch */}
+                {onRoutineChange && (
+                    <label className="flex items-center justify-between mt-4 cursor-pointer select-none active:opacity-70 transition-opacity">
+                        <span className="text-gray-700 text-sm font-medium">{routineLabel || 'Routine task'}</span>
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={isRoutine}
+                                onChange={() => onRoutineChange(!isRoutine)}
+                            />
+                            {/* Toggle track */}
+                            <div className={`w-[52px] h-[32px] rounded-full transition-colors duration-200 ${isRoutine ? 'bg-brand-blue' : 'bg-gray-200'}`}></div>
+                            {/* Toggle knob */}
+                            <div className={`absolute top-[2px] left-[2px] w-[28px] h-[28px] bg-white rounded-full shadow-md transition-transform duration-200 ${isRoutine ? 'translate-x-[20px]' : 'translate-x-0'}`}></div>
+                        </div>
+                    </label>
+                )}
+
+                <div className="mt-4">
                     <button
-                        onClick={onClose}
+                        onClick={() => {
+                            if (onConfirm) {
+                                onConfirm();
+                            }
+                            onClose();
+                        }}
                         className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
                     >
-                        OK
+                        {isRoutine ? (confirmRoutineLabel || 'Set Recurring Reminder') : (confirmOnceLabel || 'Set One-time Reminder')}
                     </button>
                 </div>
             </div>

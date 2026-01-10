@@ -39,6 +39,9 @@
   "home.taskName": "タスク名",
   "home.taskTime": "時間",
   "home.exampleClickHint": "これは例だよ。上で自分のタスクを作ってね！",
+  "home.confirmDelete": "このタスクを削除してもいい？",
+  "home.setRecurringReminder": "繰り返しリマインダーを設定",
+  "home.setOnceReminder": "1回限りのリマインダーを設定",
 
   "stats.loadingHistory": "読み込み中...",
   "stats.noCompletedTasks": "まだ完了したタスクないよ",

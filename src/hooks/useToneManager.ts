@@ -190,8 +190,12 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
   }, [enableDebugLog]);
 
   // ====== 记录抗拒信号 ======
-  const recordResistance = useCallback((signal: ResistanceSignal): ToneStyle | null => {
-    let newTone: ToneStyle | null = null;
+  /**
+   * 返回触发词字符串（如果语气切换发生），否则返回 null
+   * 注意：直接返回触发词字符串，避免 React 闭包过期问题
+   */
+  const recordResistance = useCallback((signal: ResistanceSignal): string | null => {
+    let triggerString: string | null = null;
 
     setToneState(prev => {
       const newRejectionCount = prev.consecutiveRejections + 1;
@@ -212,9 +216,12 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
 
         // 选择下一个语气
         const nextTone = selectNextTone(prev.currentTone, prev.usedTones);
-        newTone = nextTone;
 
         log('🔄', `语气切换: ${TONE_DESCRIPTIONS[prev.currentTone]} → ${TONE_DESCRIPTIONS[nextTone]}`);
+
+        // 直接生成触发词字符串（避免闭包过期）
+        triggerString = `[TONE_SHIFT] style=${nextTone} current_time=${getCurrentTimeString()}`;
+        log('📤', `生成触发词: ${triggerString}`);
 
         return {
           currentTone: nextTone,
@@ -228,7 +235,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
       return { ...prev, consecutiveRejections: newRejectionCount };
     });
 
-    return newTone;
+    return triggerString;
   }, [rejectionThreshold, minToneChangeInterval, log]);
 
   // ====== 记录用户配合 ======

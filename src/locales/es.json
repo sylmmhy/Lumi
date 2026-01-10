@@ -39,6 +39,9 @@
   "home.taskName": "Nombre de la tarea",
   "home.taskTime": "Hora",
   "home.exampleClickHint": "Esto es un ejemplo. ¡Crea tu propia tarea arriba!",
+  "home.confirmDelete": "¿Seguro que quieres eliminar esta tarea?",
+  "home.setRecurringReminder": "Establecer recordatorio recurrente",
+  "home.setOnceReminder": "Establecer recordatorio único",
 
   "stats.loadingHistory": "Cargando...",
   "stats.noCompletedTasks": "Nada completado aún",

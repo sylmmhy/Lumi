@@ -125,20 +125,26 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                     }
                 }}
             >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             handleComplete();
                         }}
                         disabled={localCompleted}
-                        className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all ${localCompleted ? 'bg-brand-goldBorder border-brand-goldBorder' : 'border-brand-goldBorder bg-transparent'}`}
+                        className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all flex-shrink-0 ${localCompleted ? 'bg-brand-goldBorder border-brand-goldBorder' : 'border-brand-goldBorder bg-transparent'}`}
                     >
                         {localCompleted && <i className="fa-solid fa-check text-white text-xs"></i>}
                     </button>
-                    <span className={`text-lg text-gray-700 font-medium transition-all duration-300 ${localCompleted ? 'line-through decoration-brand-blue/50' : ''}`}>
+                    <span className={`text-lg text-gray-700 font-medium transition-all duration-300 truncate ${localCompleted ? 'line-through decoration-brand-blue/50' : ''}`}>
                         {task.text}
                     </span>
+                    {/* Habit label for recurring tasks */}
+                    {(task.isRecurring || task.type === 'routine') && (
+                        <span className="flex-shrink-0 px-2 py-0.5 bg-gray-200 text-gray-500 text-xs font-medium rounded-md">
+                            Habit
+                        </span>
+                    )}
                 </div>
                 {mode === 'home' ? (
                     <div className="bg-brand-cream px-3 py-1 rounded-md min-w-[80px] text-right">

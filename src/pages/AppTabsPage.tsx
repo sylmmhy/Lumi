@@ -98,6 +98,10 @@ export function AppTabsPage() {
      */
     const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
+    // 防止 addTask 重复执行的标志：记录正在处理的任务签名（text + time + date）
+    const addTaskInProgressRef = useRef<string | null>(null);
+    // 防止 startAICoachForTask 重复创建任务的标志：记录已创建的任务签名（避免临时 ID 任务被重复保存）
+    const aiCoachTaskCreatedRef = useRef<Set<string>>(new Set());
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
     const [showTestVersionModal, setShowTestVersionModal] = useState(false);
@@ -236,6 +240,17 @@ export function AppTabsPage() {
      * @param {Task} newTask - 待创建的任务对象
      */
     const addTask = useCallback(async (newTask: Task) => {
+        // 生成任务签名用于防重入检查（text + time + date 组合）
+        const taskSignature = `${newTask.text}|${newTask.time}|${newTask.date || ''}`;
+
+        // 防重入检查：如果正在处理相同签名的任务，跳过
+        if (addTaskInProgressRef.current === taskSignature) {
+            console.warn('⚠️ addTask: 检测到重复调用，跳过', { taskSignature, displayTime: newTask.displayTime });
+            return;
+        }
+
+        console.log('📝 addTask: 开始处理', { taskSignature, displayTime: newTask.displayTime, id: newTask.id });
+
         // 如果会话还未验证完成，先挂起操作，等待验证完成后再处理
         if (!auth.isSessionValidated) {
             console.log('⏳ 会话验证中，挂起 addTask 操作');
@@ -268,10 +283,16 @@ export function AppTabsPage() {
             return;
         }
 
+        // 设置防重入标志
+        addTaskInProgressRef.current = taskSignature;
+
         try {
             // Create reminder in Supabase，使用会话 userId 确保满足 FK 约束
             const created = await createReminder(newTask, sessionData.user.id);
             if (created) {
+                // 记录已创建的任务签名，防止 startAICoachForTask 重复创建
+                aiCoachTaskCreatedRef.current.add(taskSignature);
+
                 setTasks(prev => [...prev, created]);
 
                 // 如果是 routine 任务，立即为今天生成实例
@@ -291,9 +312,13 @@ export function AppTabsPage() {
                 } catch (e) {
                     console.error('Failed to check/set test version modal flag', e);
                 }
+                console.log('✅ addTask: 任务创建成功', { id: created.id, displayTime: created.displayTime });
             }
         } catch (error) {
             console.error('Failed to create reminder:', error);
+        } finally {
+            // 清除防重入标志
+            addTaskInProgressRef.current = null;
         }
     }, [auth.isSessionValidated, auth.userId]);
 
@@ -439,32 +464,47 @@ export function AppTabsPage() {
         const isTemporaryId = /^\d+$/.test(task.id) || task.id.startsWith('temp-');
 
         if (isTemporaryId && auth.userId) {
-            console.log('📝 检测到临时任务 ID，先保存到数据库...');
-            try {
-                const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
-                if (sessionData?.session?.user?.id) {
-                    const savedTask = await createReminder(task, sessionData.session.user.id);
-                    if (savedTask) {
-                        console.log('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
-                        taskToUse = savedTask;
-                        taskId = savedTask.id;
-                        // 更新前端任务列表中的任务（用真实 ID 替换临时 ID）
-                        setTasks(prev => {
-                            // 如果临时任务已在列表中，替换它
-                            const existingIndex = prev.findIndex(t => t.id === task.id);
-                            if (existingIndex >= 0) {
-                                const newTasks = [...prev];
-                                newTasks[existingIndex] = savedTask;
-                                return newTasks;
-                            }
-                            // 否则添加新任务
-                            return [...prev, savedTask];
-                        });
+            // 生成任务签名用于防重复创建检查
+            const taskSignature = `${task.text}|${task.time}|${task.date || ''}`;
+
+            // 检查是否已经为相同签名的任务创建过记录
+            if (aiCoachTaskCreatedRef.current.has(taskSignature)) {
+                console.warn('⚠️ startAICoachForTask: 检测到重复任务创建请求，跳过数据库保存', {
+                    taskSignature,
+                    displayTime: task.displayTime,
+                    tempId: task.id
+                });
+                // 不创建新记录，但继续启动 AI Coach（使用临时 ID）
+            } else {
+                console.log('📝 检测到临时任务 ID，先保存到数据库...', { taskSignature, displayTime: task.displayTime });
+                try {
+                    const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
+                    if (sessionData?.session?.user?.id) {
+                        const savedTask = await createReminder(task, sessionData.session.user.id);
+                        if (savedTask) {
+                            console.log('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
+                            // 记录已创建的任务签名，防止重复创建
+                            aiCoachTaskCreatedRef.current.add(taskSignature);
+                            taskToUse = savedTask;
+                            taskId = savedTask.id;
+                            // 更新前端任务列表中的任务（用真实 ID 替换临时 ID）
+                            setTasks(prev => {
+                                // 如果临时任务已在列表中，替换它
+                                const existingIndex = prev.findIndex(t => t.id === task.id);
+                                if (existingIndex >= 0) {
+                                    const newTasks = [...prev];
+                                    newTasks[existingIndex] = savedTask;
+                                    return newTasks;
+                                }
+                                // 否则添加新任务
+                                return [...prev, savedTask];
+                            });
+                        }
                     }
+                } catch (saveError) {
+                    console.error('⚠️ 保存临时任务失败，继续使用临时 ID:', saveError);
+                    // 继续使用临时 ID，但 actual_duration_minutes 将无法保存
                 }
-            } catch (saveError) {
-                console.error('⚠️ 保存临时任务失败，继续使用临时 ID:', saveError);
-                // 继续使用临时 ID，但 actual_duration_minutes 将无法保存
             }
         }
 

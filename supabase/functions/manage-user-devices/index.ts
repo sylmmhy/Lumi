@@ -152,7 +152,7 @@ serve(async (req) => {
       }
 
       case 'remove_voip_device': {
-        // Remove the user's VoIP device record
+        // Remove the user's VoIP device record from user_devices table
         const { error } = await supabase
           .from('user_devices')
           .delete()
@@ -165,6 +165,20 @@ serve(async (req) => {
             JSON.stringify({ error: error.message }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
+        }
+
+        // Also clear the legacy voip_token field in users table
+        // This prevents the fallback logic from sending pushes to old devices
+        const { error: clearLegacyError } = await supabase
+          .from('users')
+          .update({ voip_token: null })
+          .eq('id', user.id)
+
+        if (clearLegacyError) {
+          console.warn('Failed to clear legacy voip_token (non-critical):', clearLegacyError)
+          // Don't fail the request - the main user_devices cleanup succeeded
+        } else {
+          console.log(`✅ Cleared legacy voip_token for user: ${user.id}`)
         }
 
         console.log(`✅ Removed VoIP device for user: ${user.id}`)

@@ -35,11 +35,21 @@ export function getLocalDateString(date: Date = new Date()): string {
 /**
  * Format a date string (YYYY-MM-DD) to display format like "Aug 11/2025"
  * Used for date separators in task lists
+ * Returns "Tomorrow" if the date is tomorrow
  *
  * @param dateStr - ISO date string (YYYY-MM-DD)
- * @returns Formatted date string like "Aug 11/2025"
+ * @returns Formatted date string like "Tomorrow" or "Aug 11/2025"
  */
 export function formatDateForSeparator(dateStr: string): string {
+    // Check if the date is tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = getLocalDateString(tomorrow);
+
+    if (dateStr === tomorrowStr) {
+        return 'Tomorrow';
+    }
+
     const date = new Date(dateStr + 'T00:00:00'); // Ensure local timezone parsing
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = months[date.getMonth()];

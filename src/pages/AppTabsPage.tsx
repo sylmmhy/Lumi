@@ -663,6 +663,17 @@ export function AppTabsPage() {
 
         if (!shouldAutoStart) return;
 
+        // 如果带 taskId，必须等待会话验证完成且已登录，避免在未恢复会话时误创建临时任务
+        if (taskIdParam && (!auth.isSessionValidated || !auth.isLoggedIn)) {
+            return;
+        }
+
+        // 在原生 App 内，如果 autostart 没有 taskId，直接阻止启动，避免创建重复任务
+        if (isNativeApp() && !taskIdParam) {
+            console.warn('⚠️ Autostart blocked in native app: missing taskId');
+            return;
+        }
+
         // 如果带 taskId，等待任务列表加载完成，避免误创建临时任务
         if (taskIdParam && !tasksLoaded) {
             return;
@@ -678,6 +689,10 @@ export function AppTabsPage() {
             let taskToStart: Task | undefined;
 
             if (taskIdParam) {
+                if (!auth.userId) {
+                    console.warn('⚠️ Autostart blocked: missing auth user for taskId', taskIdParam);
+                    return;
+                }
                 // 如果有 taskId 参数，优先从任务列表中查找
                 taskToStart = tasks.find(t => t.id === taskIdParam);
                 if (taskToStart) {

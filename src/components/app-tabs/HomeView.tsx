@@ -423,8 +423,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             grouped[taskDate].push(task);
         });
 
-        // Sort dates in descending order (most recent first)
-        const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+        // Sort dates in ascending order (today first, then tomorrow, etc.)
+        const sortedDates = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
         return sortedDates.map(date => ({
             date,

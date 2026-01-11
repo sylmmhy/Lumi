@@ -1322,23 +1322,60 @@ export function AuthProvider({
       if (!isValidJwt(accessToken) || !isValidJwt(refreshToken)) {
         console.warn('⚠️ 原生登录提供的 token 不是有效的 JWT，已跳过 Supabase 会话设置');
       } else {
-        try {
-          console.log('🔐 applyNativeLogin: 调用 setSession...');
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (error) {
-            console.warn('⚠️ 原生登录无法建立 Supabase 会话', error);
-          } else if (data.session) {
-            setSessionSucceeded = true;
-            localStorage.setItem('session_token', data.session.access_token);
-            if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
-            localStorage.setItem('user_email', data.session.user.email || email || '');
-            console.log('🔐 applyNativeLogin: setSession 成功');
+        // 添加重试机制：确保 Supabase 会话成功建立，否则 autoRefreshToken 不会工作
+        const MAX_SET_SESSION_RETRIES = 3;
+        const SET_SESSION_RETRY_DELAY_MS = 1000;
+
+        for (let attempt = 1; attempt <= MAX_SET_SESSION_RETRIES; attempt++) {
+          try {
+            console.log(`🔐 applyNativeLogin: 调用 setSession (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES})...`);
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (error) {
+              // 检查是否是可重试的错误（网络错误、临时服务器错误）
+              const isRetryable = isNetworkError(error) ||
+                error.message?.toLowerCase().includes('temporarily') ||
+                error.message?.toLowerCase().includes('500') ||
+                error.message?.toLowerCase().includes('502') ||
+                error.message?.toLowerCase().includes('503') ||
+                error.message?.toLowerCase().includes('504');
+
+              if (isRetryable && attempt < MAX_SET_SESSION_RETRIES) {
+                console.warn(`⚠️ setSession 临时失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
+                await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
+                continue;
+              }
+
+              console.error(`❌ setSession 最终失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
+              console.error('❌ Supabase 会话未建立，token 自动刷新将不可用！用户可能在 1 小时后被登出。');
+              break;
+            }
+
+            if (data.session) {
+              setSessionSucceeded = true;
+              localStorage.setItem('session_token', data.session.access_token);
+              if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
+              localStorage.setItem('user_email', data.session.user.email || email || '');
+              console.log('✅ applyNativeLogin: setSession 成功，Supabase 会话已建立，autoRefreshToken 已激活');
+              break;
+            }
+          } catch (err) {
+            const errorObj = err as { message?: string; code?: string };
+            if (attempt < MAX_SET_SESSION_RETRIES) {
+              console.warn(`⚠️ setSession 异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
+              await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
+              continue;
+            }
+            console.error(`❌ setSession 最终异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
           }
-        } catch (err) {
-          console.warn('⚠️ 设置 Supabase 会话失败', err);
+        }
+
+        if (!setSessionSucceeded) {
+          console.error('❌ 警告：经过多次重试后仍无法建立 Supabase 会话');
+          console.error('❌ 这意味着 token 自动刷新不可用，用户将在 access_token 过期后被登出');
         }
       }
     } else if (accessToken && !refreshToken) {
@@ -1640,6 +1677,92 @@ export function AuthProvider({
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // ==========================================
+  // 定期会话状态检查（兜底保护）
+  // 防止 setSession 失败后 token 过期导致用户被登出
+  // ==========================================
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+
+    // 每 5 分钟检查一次会话状态
+    const SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+    const checkAndRecoverSession = async () => {
+      // 只在用户已登录时检查
+      const storedAccessToken = localStorage.getItem('session_token');
+      const storedRefreshToken = localStorage.getItem('refresh_token');
+      const storedUserId = localStorage.getItem('user_id');
+
+      if (!storedUserId || !storedAccessToken) {
+        // 用户未登录，不需要检查
+        return;
+      }
+
+      try {
+        // 检查 Supabase SDK 是否有活跃会话
+        const { data: { session } } = await client.auth.getSession();
+
+        if (!session && storedRefreshToken) {
+          // 发现问题：localStorage 有 token 但 Supabase SDK 没有会话
+          // 这意味着 autoRefreshToken 不会工作，需要手动恢复
+          console.warn('🔄 定期检查：检测到 Supabase 会话丢失，尝试恢复...');
+          console.log('🔄 localStorage 有 token，但 Supabase SDK 没有会话');
+
+          try {
+            const { data, error } = await client.auth.setSession({
+              access_token: storedAccessToken,
+              refresh_token: storedRefreshToken,
+            });
+
+            if (error) {
+              console.error('❌ 定期检查：会话恢复失败:', error.message);
+              // 如果是 token 真正失效（不是网络问题），可能需要登出
+              if (!isNetworkError(error) &&
+                  (error.message?.includes('invalid') ||
+                   error.message?.includes('expired') ||
+                   error.message?.includes('Token'))) {
+                console.error('❌ token 已失效，需要重新登录');
+                // 不自动登出，让用户下次操作时发现并处理
+              }
+            } else if (data.session) {
+              console.log('✅ 定期检查：会话恢复成功，autoRefreshToken 已重新激活');
+              // 更新 localStorage 中的 token
+              localStorage.setItem('session_token', data.session.access_token);
+              if (data.session.refresh_token) {
+                localStorage.setItem('refresh_token', data.session.refresh_token);
+              }
+            }
+          } catch (err) {
+            console.error('❌ 定期检查：会话恢复异常:', err);
+          }
+        } else if (session) {
+          // 会话正常，确保 localStorage 与 Supabase 同步
+          if (session.access_token !== storedAccessToken) {
+            console.log('🔄 定期检查：同步 Supabase session 到 localStorage');
+            localStorage.setItem('session_token', session.access_token);
+            if (session.refresh_token) {
+              localStorage.setItem('refresh_token', session.refresh_token);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ 定期检查：获取会话状态失败:', err);
+      }
+    };
+
+    // 启动定期检查
+    const intervalId = setInterval(checkAndRecoverSession, SESSION_CHECK_INTERVAL_MS);
+
+    // 首次延迟 30 秒后检查（给登录流程足够时间完成）
+    const initialCheckTimeoutId = setTimeout(checkAndRecoverSession, 30 * 1000);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(initialCheckTimeoutId);
+    };
   }, []);
 
   // ==========================================

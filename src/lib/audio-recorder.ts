@@ -1,4 +1,5 @@
 import EventEmitter from "eventemitter3";
+import { ensureAudioSessionReady } from "./native-audio-session";
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
@@ -76,6 +77,10 @@ export class AudioRecorder extends EventEmitter {
   }
 
   async start() {
+    // 在 iOS Native WebView 中，先等待音频会话就绪
+    // 这是为了解决 CallKit 来电接听后音频会话冲突的问题
+    await ensureAudioSessionReady();
+
     // Check if getUserMedia is available
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       const protocol = window.location.protocol;

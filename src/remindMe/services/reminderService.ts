@@ -418,8 +418,26 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   const updatedTask = dbToTask(data as TaskRecord);
 
   // 🆕 如果修改了时间，重新设置原生提醒（仅当提醒时间在未来时）
+  // 同时重置 called 状态，让系统将其视为新的提醒请求
   if (updatedTask && (updates.date !== undefined || updates.time !== undefined)) {
-    if (shouldTriggerNativeReminder(updatedTask)) {
+    // 🔧 关键修复：当用户修改了提醒时间时，重置 called 为 false
+    // 这样即使任务之前已触发过电话提醒并被挂断，系统也会根据新时间再次触发
+    if (shouldTriggerNativeReminder(updatedTask) && updates.called === undefined) {
+      // 只有在未来时间且用户没有显式设置 called 时才重置
+      const { error: resetCalledError } = await supabase
+        .from('tasks')
+        .update({ called: false })
+        .eq('id', id)
+        .eq('user_id', sessionUser.id);
+
+      if (resetCalledError) {
+        console.warn('⚠️ Failed to reset called status:', resetCalledError);
+      } else {
+        console.log('✅ Reset called=false for task after time change:', id);
+        // 更新本地对象以反映数据库变化
+        updatedTask.called = false;
+      }
+
       // 从数据库记录中获取 user_id
       const userId = (data as TaskRecord).user_id;
       notifyNativeTaskCreated(taskToNativeReminder(updatedTask, userId));

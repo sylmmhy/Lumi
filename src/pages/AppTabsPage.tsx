@@ -641,10 +641,12 @@ export function AppTabsPage() {
      * 示例:
      * - /app/urgency?task=Get%20out%20of%20bed&autostart=true
      * - /app/urgency?task=Get%20out%20of%20bed&autostart=true&skipPrompt=true (跳过权限提示)
+     * - /app/urgency?task=Get%20out%20of%20bed&taskId=uuid&autostart=true (复用已有任务，避免重复创建)
      */
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const taskParam = urlParams.get('task');
+        const taskIdParam = urlParams.get('taskId');
         const autostartParam = urlParams.get('autostart');
         const skipPromptParam = urlParams.get('skipPrompt');
 
@@ -656,7 +658,7 @@ export function AppTabsPage() {
         // 标记已自动启动，防止重复触发
         setHasAutoStarted(true);
 
-        console.log('✅ Auto-starting task:', taskParam);
+        console.log('✅ Auto-starting task:', taskParam, 'taskId:', taskIdParam);
 
         // 如果设置了 skipPrompt，自动标记为已看过权限提示
         if (skipPromptParam === 'true' && !hasSeenVoicePrompt) {
@@ -664,18 +666,35 @@ export function AppTabsPage() {
             markVoicePromptSeen();
         }
 
-        // 创建临时任务对象
-        const tempTask: Task = {
-            id: `temp-${Date.now()}`,
-            text: taskParam,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            displayTime: 'Now',
-            date: getLocalDateString(),
-            completed: false,
-            type: 'todo',
-            category: 'morning',
-            called: false,
-        };
+        // 尝试从现有任务列表中查找对应任务
+        let taskToStart: Task | undefined;
+
+        if (taskIdParam) {
+            // 如果有 taskId 参数，优先从任务列表中查找
+            taskToStart = tasks.find(t => t.id === taskIdParam);
+            if (taskToStart) {
+                console.log('📋 Found existing task by ID:', taskIdParam);
+            } else {
+                console.log('⚠️ Task not found by ID, will create temp task');
+            }
+        }
+
+        // 如果没有找到已有任务，创建临时任务对象
+        if (!taskToStart) {
+            taskToStart = {
+                id: `temp-${Date.now()}`,
+                text: taskParam,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                displayTime: 'Now',
+                date: getLocalDateString(),
+                completed: false,
+                type: 'todo',
+                category: 'morning',
+                called: false,
+            };
+        }
+
+        const finalTask = taskToStart;
 
         // 确保在 urgency 页面，并等待组件挂载
         if (currentView !== 'urgency') {
@@ -683,7 +702,7 @@ export function AppTabsPage() {
             // 等待页面切换完成后再启动任务
             setTimeout(() => {
                 console.log('🚀 Launching AI Coach after navigation');
-                ensureVoicePromptThenStart(tempTask);
+                ensureVoicePromptThenStart(finalTask);
                 // 启动后清理 URL 参数
                 const newUrl = window.location.pathname + window.location.hash;
                 window.history.replaceState({}, document.title, newUrl);
@@ -692,13 +711,13 @@ export function AppTabsPage() {
             // 延迟一小段时间确保所有组件已挂载
             setTimeout(() => {
                 console.log('🚀 Launching AI Coach directly');
-                ensureVoicePromptThenStart(tempTask);
+                ensureVoicePromptThenStart(finalTask);
                 // 启动后清理 URL 参数
                 const newUrl = window.location.pathname + window.location.hash;
                 window.history.replaceState({}, document.title, newUrl);
             }, 100);
         }
-    }, [currentView, hasAutoStarted, handleChangeView, ensureVoicePromptThenStart, hasSeenVoicePrompt, markVoicePromptSeen]);
+    }, [currentView, hasAutoStarted, handleChangeView, ensureVoicePromptThenStart, hasSeenVoicePrompt, markVoicePromptSeen, tasks]);
 
     /**
      * 语音/摄像头提示点击「OK」后继续任务启动。

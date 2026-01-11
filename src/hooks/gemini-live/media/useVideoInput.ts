@@ -15,6 +15,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { DEFAULT_CAMERA_FRAME_RATE, DEFAULT_CAMERA_RESOLUTION } from '../../../constants/media';
 import { devLog, devWarn } from '../utils';
+import { ensureAudioSessionReady } from '../../../lib/native-audio-session';
 
 interface UseVideoInputOptions {
   frameRate?: number;
@@ -86,6 +87,10 @@ export function useVideoInput(
     isStartingRef.current = true;
 
     try {
+      // 在 iOS Native WebView 中，先等待音频会话就绪
+      // 这是为了解决 CallKit 来电接听后音频会话冲突的问题
+      await ensureAudioSessionReady();
+
       // 如果有旧的 stream，先停止它（防止资源泄漏）
       if (currentStreamRef.current) {
         currentStreamRef.current.getTracks().forEach((track) => track.stop());

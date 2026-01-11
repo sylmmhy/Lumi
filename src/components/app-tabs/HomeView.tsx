@@ -409,14 +409,32 @@ export const HomeView: React.FC<HomeViewProps> = ({
         (task.type === 'todo' || task.type === 'routine') && !task.completed && task.displayTime !== 'Now'
     );
 
-    // Group tasks by date, sorted with most recent first
-    // For routine tasks without date, use today's date
+    // Group tasks by date, sorted with today first
+    // For routine tasks without date: if today's reminder time has passed, show in tomorrow
     const tasksByDate = useMemo(() => {
-        const today = getLocalDateString(new Date());
+        const now = new Date();
+        const today = getLocalDateString(now);
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = getLocalDateString(tomorrow);
+
         const grouped: { [date: string]: Task[] } = {};
 
         filteredTasks.forEach(task => {
-            const taskDate = task.date || today;
+            let taskDate = task.date || today;
+
+            // For routine tasks without a specific date, check if today's time has passed
+            if (task.type === 'routine' && !task.date && task.time) {
+                const [hours, minutes] = task.time.split(':').map(Number);
+                const taskTimeToday = new Date(now);
+                taskTimeToday.setHours(hours, minutes, 0, 0);
+
+                // If the task time has already passed today, show it as tomorrow's task
+                if (now > taskTimeToday) {
+                    taskDate = tomorrowStr;
+                }
+            }
+
             if (!grouped[taskDate]) {
                 grouped[taskDate] = [];
             }

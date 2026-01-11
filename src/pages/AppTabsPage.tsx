@@ -14,6 +14,7 @@ import { TestVersionModal } from '../components/modals/TestVersionModal';
 import {
     fetchReminders,
     createReminder,
+    fetchReminderById,
     toggleReminderCompletion,
     deleteReminder,
     updateReminder,
@@ -81,6 +82,7 @@ export function AppTabsPage() {
     const [showConfetti, setShowConfetti] = useState(() => checkoutSuccess);
 
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [tasksLoaded, setTasksLoaded] = useState(false);
     // 用于触发 StatsView 重新加载数据
     const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
@@ -165,7 +167,11 @@ export function AppTabsPage() {
     // Load tasks from Supabase when user is logged in
     useEffect(() => {
         const loadTasks = async () => {
-            if (!auth.userId) return;
+            setTasksLoaded(false);
+            if (!auth.userId) {
+                setTasksLoaded(true);
+                return;
+            }
 
             try {
                 // 并行执行所有查询，而不是串行等待
@@ -193,6 +199,8 @@ export function AppTabsPage() {
                 }
             } catch (error) {
                 console.error('Failed to load reminders:', error);
+            } finally {
+                setTasksLoaded(true);
             }
         };
 
@@ -655,69 +663,92 @@ export function AppTabsPage() {
 
         if (!shouldAutoStart) return;
 
-        // 标记已自动启动，防止重复触发
-        setHasAutoStarted(true);
-
-        console.log('✅ Auto-starting task:', taskParam, 'taskId:', taskIdParam);
-
-        // 如果设置了 skipPrompt，自动标记为已看过权限提示
-        if (skipPromptParam === 'true' && !hasSeenVoicePrompt) {
-            console.log('⏭️ Skipping voice prompt as requested');
-            markVoicePromptSeen();
+        // 如果带 taskId，等待任务列表加载完成，避免误创建临时任务
+        if (taskIdParam && !tasksLoaded) {
+            return;
         }
 
-        // 尝试从现有任务列表中查找对应任务
-        let taskToStart: Task | undefined;
+        const startFromUrl = async () => {
+            // 标记已自动启动，防止重复触发
+            setHasAutoStarted(true);
 
-        if (taskIdParam) {
-            // 如果有 taskId 参数，优先从任务列表中查找
-            taskToStart = tasks.find(t => t.id === taskIdParam);
-            if (taskToStart) {
-                console.log('📋 Found existing task by ID:', taskIdParam);
-            } else {
-                console.log('⚠️ Task not found by ID, will create temp task');
+            console.log('✅ Auto-starting task:', taskParam, 'taskId:', taskIdParam);
+
+            // 尝试从现有任务列表中查找对应任务
+            let taskToStart: Task | undefined;
+
+            if (taskIdParam) {
+                // 如果有 taskId 参数，优先从任务列表中查找
+                taskToStart = tasks.find(t => t.id === taskIdParam);
+                if (taskToStart) {
+                    console.log('📋 Found existing task by ID:', taskIdParam);
+                } else if (auth.userId) {
+                    console.log('🔎 Task not found in list, fetching by ID:', taskIdParam);
+                    const fetchedTask = await fetchReminderById(taskIdParam, auth.userId);
+                    if (fetchedTask) {
+                        taskToStart = fetchedTask;
+                        setTasks(prev => {
+                            if (prev.some(t => t.id === fetchedTask.id)) {
+                                return prev;
+                            }
+                            return [...prev, fetchedTask];
+                        });
+                        console.log('✅ Found task from database:', taskIdParam);
+                    } else {
+                        console.warn('⚠️ Task not found by ID, aborting autostart to avoid duplicate task');
+                        return;
+                    }
+                }
             }
-        }
 
-        // 如果没有找到已有任务，创建临时任务对象
-        if (!taskToStart) {
-            taskToStart = {
-                id: `temp-${Date.now()}`,
-                text: taskParam,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                displayTime: 'Now',
-                date: getLocalDateString(),
-                completed: false,
-                type: 'todo',
-                category: 'morning',
-                called: false,
-            };
-        }
+            // 如果没有 taskId，才创建临时任务对象
+            if (!taskToStart) {
+                taskToStart = {
+                    id: `temp-${Date.now()}`,
+                    text: taskParam,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    displayTime: 'Now',
+                    date: getLocalDateString(),
+                    completed: false,
+                    type: 'todo',
+                    category: 'morning',
+                    called: false,
+                };
+            }
 
-        const finalTask = taskToStart;
+            const finalTask = taskToStart;
 
-        // 确保在 urgency 页面，并等待组件挂载
-        if (currentView !== 'urgency') {
-            handleChangeView('urgency', true);
-            // 等待页面切换完成后再启动任务
-            setTimeout(() => {
-                console.log('🚀 Launching AI Coach after navigation');
-                ensureVoicePromptThenStart(finalTask);
-                // 启动后清理 URL 参数
-                const newUrl = window.location.pathname + window.location.hash;
-                window.history.replaceState({}, document.title, newUrl);
-            }, 500);
-        } else {
-            // 延迟一小段时间确保所有组件已挂载
-            setTimeout(() => {
-                console.log('🚀 Launching AI Coach directly');
-                ensureVoicePromptThenStart(finalTask);
-                // 启动后清理 URL 参数
-                const newUrl = window.location.pathname + window.location.hash;
-                window.history.replaceState({}, document.title, newUrl);
-            }, 100);
-        }
-    }, [currentView, hasAutoStarted, handleChangeView, ensureVoicePromptThenStart, hasSeenVoicePrompt, markVoicePromptSeen, tasks]);
+            // 如果设置了 skipPrompt，自动标记为已看过权限提示
+            if (skipPromptParam === 'true' && !hasSeenVoicePrompt) {
+                console.log('⏭️ Skipping voice prompt as requested');
+                markVoicePromptSeen();
+            }
+
+            // 确保在 urgency 页面，并等待组件挂载
+            if (currentView !== 'urgency') {
+                handleChangeView('urgency', true);
+                // 等待页面切换完成后再启动任务
+                setTimeout(() => {
+                    console.log('🚀 Launching AI Coach after navigation');
+                    ensureVoicePromptThenStart(finalTask);
+                    // 启动后清理 URL 参数
+                    const newUrl = window.location.pathname + window.location.hash;
+                    window.history.replaceState({}, document.title, newUrl);
+                }, 500);
+            } else {
+                // 延迟一小段时间确保所有组件已挂载
+                setTimeout(() => {
+                    console.log('🚀 Launching AI Coach directly');
+                    ensureVoicePromptThenStart(finalTask);
+                    // 启动后清理 URL 参数
+                    const newUrl = window.location.pathname + window.location.hash;
+                    window.history.replaceState({}, document.title, newUrl);
+                }, 100);
+            }
+        };
+
+        void startFromUrl();
+    }, [auth.userId, currentView, fetchReminderById, handleChangeView, ensureVoicePromptThenStart, hasAutoStarted, hasSeenVoicePrompt, markVoicePromptSeen, tasks, tasksLoaded]);
 
     /**
      * 语音/摄像头提示点击「OK」后继续任务启动。

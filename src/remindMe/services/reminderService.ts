@@ -288,6 +288,39 @@ export async function fetchRecurringReminders(userId: string): Promise<Task[]> {
 }
 
 /**
+ * 根据任务 ID 获取单条任务
+ * 用于在 URL 仅携带 taskId 时，确保能复用已有任务，避免创建临时任务
+ *
+ * @param {string} taskId - 任务 ID（UUID）
+ * @param {string} userId - 当前登录用户 ID，用于额外的安全过滤
+ * @returns {Promise<Task | null>} 找到返回任务，否则返回 null
+ */
+export async function fetchReminderById(taskId: string, userId: string): Promise<Task | null> {
+  if (!supabase) {
+    console.error('Supabase client not initialized');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching reminder by id:', error);
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return dbToTask(data as TaskRecord);
+}
+
+/**
  * Create a new reminder
  * 创建新的提醒任务
  *

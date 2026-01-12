@@ -668,12 +668,6 @@ export function AppTabsPage() {
             return;
         }
 
-        // 在原生 App 内，如果 autostart 没有 taskId，直接阻止启动，避免创建重复任务
-        if (isNativeApp() && !taskIdParam) {
-            console.warn('⚠️ Autostart blocked in native app: missing taskId');
-            return;
-        }
-
         // 如果带 taskId，等待任务列表加载完成，避免误创建临时任务
         if (taskIdParam && !tasksLoaded) {
             return;

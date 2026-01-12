@@ -14,10 +14,14 @@ import { HabitSelectStep } from './habit-steps/HabitSelectStep';
 import { TimeSelectStep } from './habit-steps/TimeSelectStep';
 import { HowItWorksStep } from './habit-steps/HowItWorksStep';
 import { PermissionsStep } from './habit-steps/PermissionsStep';
+import { PermissionsStepReview } from './habit-steps/PermissionsStepReview';
 import { NameInputStep } from './habit-steps/NameInputStep';
 import { LanguageSelectStep } from './habit-steps/LanguageSelectStep';
 import { TryNowStep } from './habit-steps/TryNowStep';
 import { DoneStep } from './habit-steps/DoneStep';
+
+// Apple Review Mode - set to true when submitting for App Store review
+import { APPLE_REVIEW_MODE } from '../../constants/reviewMode';
 
 /**
  * Habit Onboarding 主页面
@@ -196,7 +200,10 @@ export function HabitOnboardingPage() {
         return <HowItWorksStep onNext={onboarding.goNext} />;
 
       case 5:
-        return <PermissionsStep onNext={onboarding.goNext} />;
+        // Use review version for Apple App Store submission (complies with Guideline 5.1.1)
+        return APPLE_REVIEW_MODE
+          ? <PermissionsStepReview onNext={onboarding.goNext} />
+          : <PermissionsStep onNext={onboarding.goNext} />;
 
       case 6:
         return <NameInputStep onNext={onboarding.goNext} />;

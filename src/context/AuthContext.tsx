@@ -536,6 +536,11 @@ export function AuthProvider({
   // 用于防止 applyNativeLogin 被多次调用（Android 注入两次的问题）
   const isApplyingNativeLoginRef = useRef(false);
   /**
+   * 标记是否已处理过原生登录事件或原生登录态。
+   * 原理：用于补偿检查，避免事件丢失时重复触发 applyNativeLogin。
+   */
+  const hasHandledNativeLoginRef = useRef(false);
+  /**
    * 记录最近一次原生登录开始时间（时间戳）。
    * 原理：restoreSession 可能在 Supabase 会话尚未同步时返回空登录态，
    * 通过短时间窗口保护避免覆盖原生登录刚写入的状态。
@@ -1278,6 +1283,9 @@ export function AuthProvider({
       return;
     }
 
+    // 标记已收到并处理原生登录
+    hasHandledNativeLoginRef.current = true;
+
     // 防重入检查：防止 Android 多次注入导致的并发问题
     if (isApplyingNativeLoginRef.current) {
       console.log('🔐 applyNativeLogin: 已在处理中，跳过重复调用');
@@ -1488,6 +1496,22 @@ export function AuthProvider({
 
     const handleNativeLogout = () => void applyNativeLogout();
 
+    /**
+     * 补偿检查：事件丢失时，若已注入 MindBoatNativeAuth 则主动处理。
+     * 原理：iOS 注入脚本一定会设置 window.MindBoatNativeAuth，可用作兜底。
+     */
+    const scheduleNativeAuthFallback = (): number => {
+      return window.setTimeout(() => {
+        if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) {
+          return;
+        }
+        if (window.MindBoatNativeAuth) {
+          console.log('🔐 Web: 补偿处理已注入的登录态');
+          void applyNativeLogin(window.MindBoatNativeAuth);
+        }
+      }, 100);
+    };
+
     const initNativeAuthBridge = () => {
       window.__MindBoatAuthReady = true;
       console.log('🔐 Web: Native Auth Bridge 已初始化');
@@ -1501,19 +1525,33 @@ export function AuthProvider({
       }
     };
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      initNativeAuthBridge();
-    } else {
-      document.addEventListener('DOMContentLoaded', initNativeAuthBridge);
-    }
-
     window.addEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
     window.addEventListener('mindboat:nativeLogout', handleNativeLogout);
+
+    /** 补偿检查的定时器 ID，用于清理 */
+    let nativeAuthFallbackTimeoutId: number | undefined;
+    /**
+     * DOMContentLoaded 处理器：初始化 bridge 并触发一次补偿检查。
+     * 原理：确保监听器已注册后再初始化，避免事件丢失。
+     */
+    const handleDomContentLoaded = () => {
+      initNativeAuthBridge();
+      nativeAuthFallbackTimeoutId = scheduleNativeAuthFallback();
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      handleDomContentLoaded();
+    } else {
+      document.addEventListener('DOMContentLoaded', handleDomContentLoaded);
+    }
 
     return () => {
       window.removeEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
       window.removeEventListener('mindboat:nativeLogout', handleNativeLogout);
-      document.removeEventListener('DOMContentLoaded', initNativeAuthBridge);
+      document.removeEventListener('DOMContentLoaded', handleDomContentLoaded);
+      if (nativeAuthFallbackTimeoutId !== undefined) {
+        window.clearTimeout(nativeAuthFallbackTimeoutId);
+      }
     };
   }, [applyNativeLogin, applyNativeLogout]);
 
@@ -1539,6 +1577,41 @@ export function AuthProvider({
         console.log('🔄 restoreSession: 正在处理原生登录，跳过');
         return;
       }
+
+      /**
+       * 启动阶段立即尝试恢复 Supabase session，避免依赖定期检查。
+       * 原理：localStorage 已有 token，但 SDK 尚未建立 session 时主动 setSession。
+       */
+      const tryImmediateSessionRestore = async (): Promise<void> => {
+        const storedAccessToken = localStorage.getItem('session_token');
+        const storedRefreshToken = localStorage.getItem('refresh_token');
+        if (!storedAccessToken || !storedRefreshToken) return;
+
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          if (session) return;
+
+          console.log('🔐 restoreSession: 启动阶段检测到会话缺失，尝试立即恢复...');
+          const { data, error } = await client.auth.setSession({
+            access_token: storedAccessToken,
+            refresh_token: storedRefreshToken,
+          });
+
+          if (error) {
+            console.warn('⚠️ restoreSession: 立即恢复会话失败:', error.message);
+            return;
+          }
+
+          if (data.session) {
+            persistSessionToStorage(data.session);
+            console.log('✅ restoreSession: 启动阶段会话恢复成功');
+          }
+        } catch (err) {
+          console.warn('⚠️ restoreSession: 立即恢复会话异常:', err);
+        }
+      };
+
+      await tryImmediateSessionRestore();
 
       // 1. 以 Supabase 为权威来源验证会话
       const validatedState = await validateSessionWithSupabase();

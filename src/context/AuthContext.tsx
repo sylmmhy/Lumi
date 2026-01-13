@@ -1875,8 +1875,8 @@ export function AuthProvider({
     // 启动定期检查
     const intervalId = setInterval(checkAndRecoverSession, SESSION_CHECK_INTERVAL_MS);
 
-    // 首次延迟 30 秒后检查（给登录流程足够时间完成）
-    const initialCheckTimeoutId = setTimeout(checkAndRecoverSession, 30 * 1000);
+    // 首次延迟 3 秒后检查（进一步缩短首轮空窗期，仍保留登录流程缓冲）
+    const initialCheckTimeoutId = setTimeout(checkAndRecoverSession, 3 * 1000);
 
     return () => {
       clearInterval(intervalId);

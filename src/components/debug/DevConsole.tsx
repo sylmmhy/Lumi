@@ -248,12 +248,12 @@ export function DevConsole() {
         <div
           className="fixed inset-0 z-[9998] bg-black/90 flex flex-col"
           style={{
-            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 20px)',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
         >
           {/* 头部工具栏 */}
-          <div className="flex items-center justify-between px-3 py-2 bg-gray-900 border-b border-gray-700">
+          <div className="flex items-center justify-between px-3 py-3 bg-gray-900 border-b border-gray-700">
             <div className="flex items-center gap-2">
               <span className="text-white font-mono text-sm">DevConsole</span>
               <span className="text-gray-400 text-xs">({logs.length} logs)</span>

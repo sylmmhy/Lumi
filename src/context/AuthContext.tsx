@@ -1430,12 +1430,13 @@ export function AuthProvider({
     // 使用函数式更新，确保不覆盖 onAuthStateChange 可能设置的更新值
     setAuthState(prev => {
       // 如果 userId 变了（极端竞态），不更新
-      if (prev.userId !== userId) {
+      // 但如果 prev.userId 为 null，强制设置（修复极端竞态场景）
+      if (prev.userId && prev.userId !== userId) {
         console.log('🔐 applyNativeLogin: userId 已变化，跳过状态更新');
         return prev;
       }
-      // 如果 onAuthStateChange 已经完成验证，优先使用它的结果
-      if (prev.isSessionValidated && setSessionSucceeded) {
+      // 如果 onAuthStateChange 已经完成验证且 userId 匹配，优先使用它的结果
+      if (prev.isSessionValidated && setSessionSucceeded && prev.userId === userId) {
         console.log('🔐 applyNativeLogin: onAuthStateChange 已完成验证，保留其结果');
         return prev;
       }
@@ -1524,12 +1525,24 @@ export function AuthProvider({
      * 重要：使用函数式更新避免覆盖 onAuthStateChange 正在处理的状态
      */
     const restoreSession = async () => {
+      // 0. 如果正在处理原生登录，跳过 restoreSession（防止覆盖 applyNativeLogin 的状态）
+      if (isApplyingNativeLoginRef.current) {
+        console.log('🔄 restoreSession: 正在处理原生登录，跳过');
+        return;
+      }
+
       // 1. 以 Supabase 为权威来源验证会话
       const validatedState = await validateSessionWithSupabase();
 
       // 2. 使用函数式更新，避免覆盖 onAuthStateChange 正在处理的状态
       let shouldSyncProfile = false;
       setAuthState(prev => {
+        // 情况0: 正在处理原生登录，不覆盖（双重检查，防止异步竞态）
+        if (isApplyingNativeLoginRef.current) {
+          console.log('🔄 restoreSession: 正在处理原生登录，跳过覆盖');
+          return prev;
+        }
+
         // 情况1: onAuthStateChange 已经完成验证同一用户，不覆盖
         if (prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
           console.log('🔄 restoreSession: onAuthStateChange 已完成验证，跳过覆盖');
@@ -1549,7 +1562,21 @@ export function AuthProvider({
           return prev;
         }
 
-        // 情况4: 正常更新（初始加载、用户不同等）
+        // 情况4: prev 有有效登录状态，但 validatedState 没有（Supabase 会话未同步）
+        // 保护原生登录场景：iOS/Android 注入的登录态可能还没同步到 Supabase
+        if (prev.isLoggedIn && prev.userId && !validatedState.isLoggedIn) {
+          console.log('🔄 restoreSession: prev 有登录状态但 validatedState 没有，可能是会话未同步，跳过覆盖');
+          return prev;
+        }
+
+        // 情况5: prev 有有效登录状态，validatedState 也有，但 userId 不同
+        // 如果 prev 正在验证中（isSessionValidated: false），说明正在进行登录流程，不覆盖
+        if (!prev.isSessionValidated && prev.isLoggedIn && prev.userId && validatedState.userId !== prev.userId) {
+          console.log('🔄 restoreSession: prev 正在验证中且 userId 不同，可能是登录流程竞态，跳过覆盖');
+          return prev;
+        }
+
+        // 情况6: 正常更新（初始加载、用户不同等）
         shouldSyncProfile = validatedState.isLoggedIn && !!validatedState.userId;
         return validatedState;
       });
@@ -1618,9 +1645,15 @@ export function AuthProvider({
           // 查询完成后，同时设置 isSessionValidated 和 hasCompletedHabitOnboarding
           setAuthState(prev => {
             // 确保 userId 没有变化（防止竞态条件）
-            if (prev.userId !== session.user.id) return prev;
+            // 但如果 prev.userId 为 null 而 session 有效，强制设置（修复极端竞态场景）
+            if (prev.userId && prev.userId !== session.user.id) {
+              console.log('🔄 onAuthStateChange: userId 已变化，跳过此次更新');
+              return prev;
+            }
             return {
               ...prev,
+              isLoggedIn: true,
+              userId: session.user.id, // 确保 userId 被设置
               hasCompletedHabitOnboarding,
               isSessionValidated: true,
             };

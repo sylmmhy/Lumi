@@ -624,7 +624,7 @@ export function AuthProvider({
     if (!client) return;
 
     if (reason) {
-      console.log(`🔄 手动触发会话检查: ${reason}`);
+      console.log(`🔄 会话检查触发来源: ${reason}`);
     }
 
     // 只在用户已登录时检查
@@ -634,6 +634,9 @@ export function AuthProvider({
 
     if (!storedUserId || !storedAccessToken) {
       // 用户未登录，不需要检查
+      if (reason) {
+        console.log(`🔄 会话检查跳过: 未发现登录态 (${reason})`);
+      }
       return;
     }
 
@@ -1793,6 +1796,9 @@ export function AuthProvider({
         isOnAuthStateChangeProcessingRef.current = true;
         // 标记 setSession 已触发 onAuthStateChange（用于与 applyNativeLogin 协调）
         setSessionTriggeredAuthChangeRef.current = true;
+
+        // 登录确认后立即触发一次会话检查，作为最终保险
+        triggerSessionCheckNowRef.current?.('auth_state_change');
 
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);

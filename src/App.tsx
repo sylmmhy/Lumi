@@ -13,6 +13,7 @@ import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { useAuth } from './hooks/useAuth'
+import { DevConsole } from './components/debug/DevConsole'
 
 /**
  * 延迟初始化分析工具，不阻塞首屏渲染
@@ -122,6 +123,8 @@ function App() {
           <Route path="/app/:tab" element={<AppTabsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {/* WebView 调试控制台 - 仅在原生 App 或开发模式下显示 */}
+        <DevConsole />
       </AuthProvider>
     </LanguageProvider>
   )

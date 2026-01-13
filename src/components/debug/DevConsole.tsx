@@ -86,6 +86,13 @@ export function DevConsole() {
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState(false)
 
+  // 复制成功提示状态
+  const [showCopyToast, setShowCopyToast] = useState(false)
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 用于在密码验证后延迟复制日志（解决闭包陷阱）
+  const [pendingCopyOnOpen, setPendingCopyOnOpen] = useState(false)
+
   // 双击检测
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -113,6 +120,52 @@ export function DevConsole() {
       return newLogs
     })
   }, [])
+
+  /**
+   * 格式化日志条目为可读文本
+   * @param logsToFormat - 要格式化的日志条目数组
+   * @returns 格式化后的文本字符串
+   */
+  const formatLogsForClipboard = useCallback((logsToFormat: LogEntry[]): string => {
+    return logsToFormat.map(log => {
+      const timestamp = log.timestamp.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + '.' + String(log.timestamp.getMilliseconds()).padStart(3, '0')
+      const content = log.args.map(arg => formatArg(arg)).join(' ')
+      return `[${timestamp}] [${log.type.toUpperCase()}] ${content}`
+    }).join('\n')
+  }, [])
+
+  /**
+   * 复制指定日志到剪贴板并显示提示
+   * @param logsToCopy - 要复制的日志条目数组
+   */
+  const copyLogsToClipboard = useCallback(async (logsToCopy: LogEntry[]) => {
+    if (logsToCopy.length === 0) return
+
+    const formattedText = formatLogsForClipboard(logsToCopy)
+    try {
+      await navigator.clipboard.writeText(formattedText)
+
+      // 清除之前的定时器
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current)
+      }
+
+      // 显示复制成功提示
+      setShowCopyToast(true)
+
+      // 2秒后自动隐藏
+      copyToastTimerRef.current = setTimeout(() => {
+        setShowCopyToast(false)
+      }, 2000)
+    } catch (err) {
+      console.error('[DevConsole] 复制到剪贴板失败:', err)
+    }
+  }, [formatLogsForClipboard])
 
   // 拦截 console 方法
   useEffect(() => {
@@ -194,6 +247,23 @@ export function DevConsole() {
     }
   }, [logs, isOpen])
 
+  // 密码验证成功后延迟复制日志（等待初始化日志加载）
+  useEffect(() => {
+    if (pendingCopyOnOpen && logs.length > 0) {
+      copyLogsToClipboard(logs)
+      setPendingCopyOnOpen(false)
+    }
+  }, [pendingCopyOnOpen, logs, copyLogsToClipboard])
+
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current)
+      }
+    }
+  }, [])
+
   // 清除日志
   const clearLogs = () => {
     setLogs([])
@@ -224,6 +294,9 @@ export function DevConsole() {
         toggleEnabled()
       }
       setIsOpen(true)
+
+      // 标记需要复制日志（useEffect 会在日志加载后执行复制）
+      setPendingCopyOnOpen(true)
     } else {
       setPasswordError(true)
       setPassword('')
@@ -292,6 +365,16 @@ export function DevConsole() {
       >
         {/* 透明按钮，不显示图标 */}
       </button>
+
+      {/* 复制成功提示 Toast */}
+      {showCopyToast && (
+        <div
+          className="fixed z-[10001] top-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg shadow-lg flex items-center gap-2 animate-fade-in"
+        >
+          <span>✓</span>
+          <span>Logs copied to clipboard</span>
+        </div>
+      )}
 
       {/* 密码输入弹窗 */}
       {showPasswordInput && (
@@ -362,7 +445,15 @@ export function DevConsole() {
               {/* 过滤器 */}
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as LogEntry['type'] | 'all')}
+                onChange={(e) => {
+                  const newFilter = e.target.value as LogEntry['type'] | 'all'
+                  setFilter(newFilter)
+                  // 更改日志级别时自动复制该类型的日志
+                  const logsToC​opy = newFilter === 'all'
+                    ? logs
+                    : logs.filter(log => log.type === newFilter)
+                  copyLogsToClipboard(logsToC​opy)
+                }}
                 className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600"
               >
                 <option value="all">全部</option>

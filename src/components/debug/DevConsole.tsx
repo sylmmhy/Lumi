@@ -217,8 +217,8 @@ export function DevConsole() {
             : 'bg-gray-500 hover:bg-gray-600'
         }`}
         style={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 8px)',
-          right: '8px'
+          top: 'calc(env(safe-area-inset-top, 0px) + 50px)',
+          right: '12px'
         }}
         title={isEnabled ? '打开调试控制台' : '启用调试控制台'}
       >

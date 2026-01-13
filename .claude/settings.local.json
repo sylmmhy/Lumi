@@ -78,7 +78,9 @@
       "WebFetch(domain:openreview.net)",
       "WebFetch(domain:dig.watch)",
       "Bash(tree:*)",
-      "Bash(git -C /Users/jasmine/Firego/firego-app log --oneline)"
+      "Bash(git -C /Users/jasmine/Firego/firego-app log --oneline)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

@@ -6,6 +6,7 @@ import { TaskGroup } from './TaskGroup';
 import { DateSeparator } from './DateSeparator';
 import { useTranslation } from '../../hooks/useTranslation';
 import { detectWebView } from '../../utils/webviewDetection';
+import { PullToRefresh } from '../common/PullToRefresh';
 
 import { supabase } from '../../lib/supabase';
 
@@ -149,6 +150,8 @@ interface HomeViewProps {
     onRequestLogin?: () => void;
     /** 是否已登录，用于控制优先级：先提示登录，再提示输入 */
     isLoggedIn?: boolean;
+    /** 下拉刷新回调 */
+    onRefresh?: () => Promise<void>;
 }
 
 /**
@@ -162,6 +165,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onUpdateTask,
     onRequestLogin,
     isLoggedIn = false,
+    onRefresh,
 }) => {
     const { t } = useTranslation();
     const [taskInput, setTaskInput] = useState('');
@@ -201,10 +205,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
     // Note: handleClickOutside logic removed because TimePicker is now a modal
     // with its own backdrop click-to-close behavior (onClick={onClose} on the outer div)
-
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        setScrollTop(e.currentTarget.scrollTop);
-    };
 
     const handleSetTask = () => {
         if (!isLoggedIn) {
@@ -476,8 +476,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <span className="italic text-brand-darkBlue text-xl" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.settingReminder')}</span>
             </div>
 
-            {/* Unified Scroll Container */}
-            <div className="flex-1 overflow-y-auto no-scrollbar relative" onScroll={handleScroll}>
+            {/* Unified Scroll Container with Pull to Refresh */}
+            <PullToRefresh
+                onRefresh={onRefresh || (async () => { window.location.reload(); })}
+                disabled={!webViewInfo.isNativeApp}
+                pullText="Pull to refresh"
+                releaseText="Release to refresh"
+                refreshingText="Refreshing..."
+                className="flex-1 no-scrollbar relative"
+                onScrollChange={setScrollTop}
+            >
 
                 {/* Header Section (Scrolls away) */}
                 <div className="bg-brand-blue px-6 pt-16 pb-12 relative z-[45] transition-colors duration-500 overflow-visible">
@@ -694,7 +702,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         )}
                     </div>
                 </div>
-            </div>
+            </PullToRefresh>
 
             {/* Ghost Task Animation */}
             {animatingTask && (

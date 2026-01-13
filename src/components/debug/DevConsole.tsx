@@ -57,7 +57,7 @@ const STORAGE_KEY = 'dev_console_enabled'
 const AUTH_SESSION_KEY = 'dev_console_auth'
 
 // 控制台密码
-const CONSOLE_PASSWORD = '0308'
+const CONSOLE_PASSWORD = '0211'
 
 export function DevConsole() {
   const [isOpen, setIsOpen] = useState(false)
@@ -85,6 +85,10 @@ export function DevConsole() {
   const [showPasswordInput, setShowPasswordInput] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState(false)
+
+  // 双击检测
+  const clickCountRef = useRef(0)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 检测是否在原生 App 中
   const webViewInfo = detectWebView()
@@ -247,52 +251,46 @@ export function DevConsole() {
 
   return (
     <>
-      {/* 右上角开关按钮 */}
+      {/* 右上角开关按钮 - 透明的，需要双击才能打开 */}
       <button
         onClick={() => {
-          // 如果未验证密码，显示密码输入框
-          if (!isAuthenticated) {
-            setShowPasswordInput(true)
+          // 如果已验证，正常操作（单击即可）
+          if (isAuthenticated) {
+            if (!isEnabled) {
+              toggleEnabled()
+              setIsOpen(true)
+            } else {
+              setIsOpen(!isOpen)
+            }
             return
           }
-          // 已验证，正常操作
-          if (!isEnabled) {
-            toggleEnabled()
-            setIsOpen(true)
+
+          // 未验证时，需要双击才能打开密码输入框
+          clickCountRef.current += 1
+
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current)
+          }
+
+          if (clickCountRef.current >= 2) {
+            // 双击成功，显示密码输入框
+            clickCountRef.current = 0
+            setShowPasswordInput(true)
           } else {
-            setIsOpen(!isOpen)
+            // 等待第二次点击
+            clickTimerRef.current = setTimeout(() => {
+              clickCountRef.current = 0
+            }, 500) // 500ms 内需要完成双击
           }
         }}
-        className={`fixed z-[9999] w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
-          isEnabled
-            ? 'bg-green-500 hover:bg-green-600'
-            : 'bg-gray-500 hover:bg-gray-600'
-        }`}
+        className="fixed z-[9999] w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 bg-transparent"
         style={{
           top: 'calc(env(safe-area-inset-top, 0px) + 50px)',
           right: '12px'
         }}
-        title={isEnabled ? '打开调试控制台' : '启用调试控制台'}
+        title="Debug Console"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <polyline points="4 17 10 11 4 5"></polyline>
-          <line x1="12" y1="19" x2="20" y2="19"></line>
-        </svg>
-        {logs.filter(l => l.type === 'error').length > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
-            {Math.min(logs.filter(l => l.type === 'error').length, 9)}
-            {logs.filter(l => l.type === 'error').length > 9 && '+'}
-          </span>
-        )}
+        {/* 透明按钮，不显示图标 */}
       </button>
 
       {/* 密码输入弹窗 */}
@@ -300,7 +298,7 @@ export function DevConsole() {
         <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
           <div className="bg-gray-900 rounded-lg p-6 w-full max-w-xs border border-gray-700">
             <h3 className="text-white text-lg font-semibold mb-4 text-center">
-              输入密码
+              Debug Entry
             </h3>
             <input
               type="password"
@@ -316,7 +314,7 @@ export function DevConsole() {
                   handlePasswordSubmit()
                 }
               }}
-              placeholder="请输入密码"
+              placeholder="Enter password"
               autoFocus
               className={`w-full px-4 py-3 bg-gray-800 border rounded-lg text-white text-center text-lg tracking-widest ${
                 passwordError ? 'border-red-500' : 'border-gray-600'
@@ -324,7 +322,7 @@ export function DevConsole() {
             />
             {passwordError && (
               <p className="text-red-400 text-sm text-center mt-2">
-                密码错误，请重试
+                Wrong password
               </p>
             )}
             <div className="flex gap-3 mt-4">
@@ -332,13 +330,13 @@ export function DevConsole() {
                 onClick={handlePasswordCancel}
                 className="flex-1 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600"
               >
-                取消
+                Cancel
               </button>
               <button
                 onClick={handlePasswordSubmit}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
               >
-                确认
+                Confirm
               </button>
             </div>
           </div>

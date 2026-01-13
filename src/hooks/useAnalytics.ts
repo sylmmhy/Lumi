@@ -1,15 +1,13 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { trackEvent as trackAmplitudeEvent, setUserId as setAmplitudeUserId, setUserProperties as setAmplitudeUserProperties } from '../lib/amplitude';
-import { trackMixpanelEvent, setMixpanelUserId, setMixpanelUserProperties } from '../lib/mixpanel';
 import { trackPostHogEvent, setPostHogUserId, setPostHogUserProperties } from '../lib/posthog';
 
 /**
  * 统一的事件追踪函数
- * 同时向 Amplitude、Mixpanel 和 PostHog 发送事件
+ * 同时向 Amplitude 和 PostHog 发送事件
  */
 const trackEvent = (eventName: string, properties?: Record<string, unknown>) => {
   trackAmplitudeEvent(eventName, properties);
-  trackMixpanelEvent(eventName, properties);
   trackPostHogEvent(eventName, properties);
 }
 
@@ -60,14 +58,6 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
         is_new_user: isNewUser,
       });
 
-      // Mixpanel Setup
-      setMixpanelUserId(userId);
-      setMixpanelUserProperties({
-        $email: userEmail,
-        $name: userName || undefined,
-        is_new_user: isNewUser,
-      });
-
       // PostHog Setup
       setPostHogUserId(userId);
       setPostHogUserProperties({
@@ -77,7 +67,7 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
       });
 
       if (import.meta.env.DEV) {
-        console.log('✅ Analytics (Amplitude, Mixpanel & PostHog) 用户已标识:', { userId, userEmail, userName });
+        console.log('✅ Analytics (Amplitude & PostHog) 用户已标识:', { userId, userEmail, userName });
       }
     }
   }, []);

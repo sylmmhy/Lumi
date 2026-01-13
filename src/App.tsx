@@ -38,15 +38,9 @@ function initAnalyticsDeferred() {
     await initAmplitude()
 
     scheduleIdle(async () => {
-      // 2. Mixpanel
-      const { initMixpanel } = await import('./lib/mixpanel')
-      initMixpanel()
-
-      scheduleIdle(async () => {
-        // 3. PostHog（最后初始化）
-        const { initPostHog } = await import('./lib/posthog')
-        initPostHog()
-      })
+      // 2. PostHog
+      const { initPostHog } = await import('./lib/posthog')
+      initPostHog()
     })
   })
 }

@@ -1,12 +1,11 @@
 /**
  * Analytics Sync Module
  *
- * 负责同步用户身份到各个分析工具（Amplitude、Mixpanel、PostHog）
+ * 负责同步用户身份到各个分析工具（Amplitude、PostHog）
  * 从 AuthContext 中拆分出来，保持单一职责
  */
 
 import { setUserId, resetUser, setUserProperties } from '../../lib/amplitude';
-import { resetMixpanelUser } from '../../lib/mixpanel';
 import { resetPostHogUser } from '../../lib/posthog';
 
 /**
@@ -44,6 +43,5 @@ export async function bindAnalyticsUserSync(userId: string, email?: string | nul
  */
 export function resetAnalyticsUser(): void {
   resetUser(); // Amplitude
-  resetMixpanelUser(); // Mixpanel
   resetPostHogUser(); // PostHog
 }

@@ -80,13 +80,16 @@
       "Bash(tree:*)",
       "Bash(git -C /Users/jasmine/Firego/firego-app log --oneline)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(apt list:*)"
     ],
     "deny": [],
     "ask": []
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "supabase"
+    "figma",
+    "supabase",
+    "mem0"
   ]
 }

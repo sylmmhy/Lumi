@@ -16,7 +16,6 @@
     "eventemitter3": "^5.0.1",
     "lucide-react": "^0.554.0",
     "mem0ai": "^2.1.38",
-    "mixpanel-browser": "^2.72.0",
     "posthog-js": "^1.299.0",
     "react": "^19.2.0",
     "react-confetti": "^6.4.0",
@@ -25,7 +24,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@types/mixpanel-browser": "^2.60.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

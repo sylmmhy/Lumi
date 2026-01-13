@@ -535,6 +535,12 @@ export function AuthProvider({
   const isOnAuthStateChangeProcessingRef = useRef(false);
   // 用于防止 applyNativeLogin 被多次调用（Android 注入两次的问题）
   const isApplyingNativeLoginRef = useRef(false);
+  /**
+   * 记录最近一次原生登录开始时间（时间戳）。
+   * 原理：restoreSession 可能在 Supabase 会话尚未同步时返回空登录态，
+   * 通过短时间窗口保护避免覆盖原生登录刚写入的状态。
+   */
+  const lastNativeLoginStartedAtRef = useRef<number | null>(null);
   // 追踪 setSession 是否成功触发了 onAuthStateChange
   const setSessionTriggeredAuthChangeRef = useRef(false);
 
@@ -1278,6 +1284,7 @@ export function AuthProvider({
       return;
     }
     isApplyingNativeLoginRef.current = true;
+    lastNativeLoginStartedAtRef.current = Date.now();
     console.log('🔐 applyNativeLogin: 开始处理, userId:', userId);
 
     if (!isValidSupabaseUuid(userId)) {
@@ -1525,6 +1532,8 @@ export function AuthProvider({
      * 重要：使用函数式更新避免覆盖 onAuthStateChange 正在处理的状态
      */
     const restoreSession = async () => {
+      const NATIVE_LOGIN_GRACE_MS = 3000;
+
       // 0. 如果正在处理原生登录，跳过 restoreSession（防止覆盖 applyNativeLogin 的状态）
       if (isApplyingNativeLoginRef.current) {
         console.log('🔄 restoreSession: 正在处理原生登录，跳过');
@@ -1537,46 +1546,50 @@ export function AuthProvider({
       // 2. 使用函数式更新，避免覆盖 onAuthStateChange 正在处理的状态
       let shouldSyncProfile = false;
       setAuthState(prev => {
-        // 情况0: 正在处理原生登录，不覆盖（双重检查，防止异步竞态）
+        // 分支0: 原生登录仍在处理，避免在异步窗口内覆盖状态
         if (isApplyingNativeLoginRef.current) {
           console.log('🔄 restoreSession: 正在处理原生登录，跳过覆盖');
           return prev;
         }
 
-        // 情况1: onAuthStateChange 已经完成验证同一用户，不覆盖
+        // 分支1: onAuthStateChange 已完成同一用户验证，保留其结果
         if (prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
           console.log('🔄 restoreSession: onAuthStateChange 已完成验证，跳过覆盖');
           return prev;
         }
 
-        // 情况2: onAuthStateChange 正在处理同一用户（ref 为 true 或 isSessionValidated 为 false）
+        // 分支2: onAuthStateChange 正在处理同一用户，避免并发写入
         if (isOnAuthStateChangeProcessingRef.current && prev.isLoggedIn && prev.userId === validatedState.userId) {
           console.log('🔄 restoreSession: onAuthStateChange 正在处理，跳过覆盖');
           return prev;
         }
 
-        // 情况3: onAuthStateChange 设置了 isSessionValidated: false 但 ref 已被清除（极端竞态）
-        // 检查：如果 prev.isLoggedIn 为 true 且 prev.isSessionValidated 为 false，说明正在等待异步查询
+        // 分支3: onAuthStateChange 已进入验证流程但 ref 已被清除（极端竞态）
         if (!prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
           console.log('🔄 restoreSession: 检测到会话正在验证中，跳过覆盖');
           return prev;
         }
 
-        // 情况4: prev 有有效登录状态，但 validatedState 没有（Supabase 会话未同步）
-        // 保护原生登录场景：iOS/Android 注入的登录态可能还没同步到 Supabase
+        // 分支4: 原生登录刚发生但 Supabase 还未同步（短窗口保护）
         if (prev.isLoggedIn && prev.userId && !validatedState.isLoggedIn) {
-          console.log('🔄 restoreSession: prev 有登录状态但 validatedState 没有，可能是会话未同步，跳过覆盖');
-          return prev;
+          const lastNativeLoginStartedAt = lastNativeLoginStartedAtRef.current;
+          const isWithinNativeLoginGrace = Boolean(
+            lastNativeLoginStartedAt
+            && Date.now() - lastNativeLoginStartedAt < NATIVE_LOGIN_GRACE_MS
+          );
+          if (isWithinNativeLoginGrace) {
+            console.log('🔄 restoreSession: 原生登录短窗口内，保留本地登录态');
+            return prev;
+          }
         }
 
-        // 情况5: prev 有有效登录状态，validatedState 也有，但 userId 不同
-        // 如果 prev 正在验证中（isSessionValidated: false），说明正在进行登录流程，不覆盖
+        // 分支5: prev 正在验证中且 userId 不同，避免覆盖正在进行的登录流程
         if (!prev.isSessionValidated && prev.isLoggedIn && prev.userId && validatedState.userId !== prev.userId) {
           console.log('🔄 restoreSession: prev 正在验证中且 userId 不同，可能是登录流程竞态，跳过覆盖');
           return prev;
         }
 
-        // 情况6: 正常更新（初始加载、用户不同等）
+        // 分支6: 正常同步（初次加载、用户不同等）
         shouldSyncProfile = validatedState.isLoggedIn && !!validatedState.userId;
         return validatedState;
       });

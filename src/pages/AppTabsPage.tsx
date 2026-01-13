@@ -164,48 +164,57 @@ export function AppTabsPage() {
         handleChangeView('urgency');
     }, [currentView, handleChangeView]);
 
+    // 加载任务的函数（可用于初始加载和下拉刷新）
+    const loadTasks = useCallback(async () => {
+        setTasksLoaded(false);
+        if (!auth.userId) {
+            setTasksLoaded(true);
+            return;
+        }
+
+        try {
+            // 并行执行所有查询，而不是串行等待
+            // 这样三个网络请求同时发出，总耗时 = max(三个请求) 而不是 sum(三个请求)
+            // 注意：fetchReminders 默认使用本地日期，避免 UTC 时区问题
+            const [, todayTasks, routineTemplates] = await Promise.all([
+                // 1. 生成今天的 routine 实例（幂等操作）
+                generateTodayRoutineInstances(auth.userId),
+                // 2. 加载今天的任务（todo + routine_instance），使用本地日期
+                fetchReminders(auth.userId),
+                // 3. 加载 routine 模板（用于 Routine tab 显示和管理）
+                fetchRecurringReminders(auth.userId),
+            ]);
+
+            // 合并所有任务
+            const allTasks = [...todayTasks, ...routineTemplates];
+            setTasks(allTasks);
+
+            // P0 修复：同步所有任务到原生端（解决 App 重启后丢失提醒的问题）
+            if (isNativeApp()) {
+                const tasksForNative = allTasks
+                    .filter(t => t.date && t.time && !t.completed)
+                    .map(t => taskToNativeReminder(t, auth.userId!));
+                syncAllTasksToNative(tasksForNative);
+            }
+        } catch (error) {
+            console.error('Failed to load reminders:', error);
+        } finally {
+            setTasksLoaded(true);
+        }
+    }, [auth.userId]);
+
     // Load tasks from Supabase when user is logged in
     useEffect(() => {
-        const loadTasks = async () => {
-            setTasksLoaded(false);
-            if (!auth.userId) {
-                setTasksLoaded(true);
-                return;
-            }
-
-            try {
-                // 并行执行所有查询，而不是串行等待
-                // 这样三个网络请求同时发出，总耗时 = max(三个请求) 而不是 sum(三个请求)
-                // 注意：fetchReminders 默认使用本地日期，避免 UTC 时区问题
-                const [, todayTasks, routineTemplates] = await Promise.all([
-                    // 1. 生成今天的 routine 实例（幂等操作）
-                    generateTodayRoutineInstances(auth.userId),
-                    // 2. 加载今天的任务（todo + routine_instance），使用本地日期
-                    fetchReminders(auth.userId),
-                    // 3. 加载 routine 模板（用于 Routine tab 显示和管理）
-                    fetchRecurringReminders(auth.userId),
-                ]);
-
-                // 合并所有任务
-                const allTasks = [...todayTasks, ...routineTemplates];
-                setTasks(allTasks);
-
-                // P0 修复：同步所有任务到原生端（解决 App 重启后丢失提醒的问题）
-                if (isNativeApp()) {
-                    const tasksForNative = allTasks
-                        .filter(t => t.date && t.time && !t.completed)
-                        .map(t => taskToNativeReminder(t, auth.userId!));
-                    syncAllTasksToNative(tasksForNative);
-                }
-            } catch (error) {
-                console.error('Failed to load reminders:', error);
-            } finally {
-                setTasksLoaded(true);
-            }
-        };
-
         void loadTasks();
-    }, [auth.userId]);
+    }, [loadTasks]);
+
+    // 下拉刷新处理函数
+    const handleRefresh = useCallback(async () => {
+        console.log('🔄 Pull to refresh triggered');
+        await loadTasks();
+        // 同时刷新统计数据
+        setStatsRefreshTrigger(prev => prev + 1);
+    }, [loadTasks]);
 
     useEffect(() => {
         // Only handle redirection for invalid tabs
@@ -989,6 +998,7 @@ export function AppTabsPage() {
                         onUpdateTask={handleUpdateTask}
                         onRequestLogin={() => setShowAuthModal(true)}
                         isLoggedIn={auth.isLoggedIn}
+                        onRefresh={handleRefresh}
                     />
                 )}
 

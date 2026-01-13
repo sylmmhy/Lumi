@@ -54,6 +54,10 @@ const MAX_LOGS = 200
 
 // 本地存储键名
 const STORAGE_KEY = 'dev_console_enabled'
+const AUTH_SESSION_KEY = 'dev_console_auth'
+
+// 控制台密码
+const CONSOLE_PASSWORD = '0308'
 
 export function DevConsole() {
   const [isOpen, setIsOpen] = useState(false)
@@ -69,6 +73,18 @@ export function DevConsole() {
   const [filter, setFilter] = useState<LogEntry['type'] | 'all'>('all')
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logIdRef = useRef(0)
+
+  // 密码验证状态
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      return sessionStorage.getItem(AUTH_SESSION_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [showPasswordInput, setShowPasswordInput] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState(false)
 
   // 检测是否在原生 App 中
   const webViewInfo = detectWebView()
@@ -187,6 +203,36 @@ export function DevConsole() {
     }
   }
 
+  // 验证密码
+  const handlePasswordSubmit = () => {
+    if (password === CONSOLE_PASSWORD) {
+      setIsAuthenticated(true)
+      setShowPasswordInput(false)
+      setPassword('')
+      setPasswordError(false)
+      try {
+        sessionStorage.setItem(AUTH_SESSION_KEY, 'true')
+      } catch {
+        // ignore
+      }
+      // 验证成功后直接打开控制台
+      if (!isEnabled) {
+        toggleEnabled()
+      }
+      setIsOpen(true)
+    } else {
+      setPasswordError(true)
+      setPassword('')
+    }
+  }
+
+  // 取消密码输入
+  const handlePasswordCancel = () => {
+    setShowPasswordInput(false)
+    setPassword('')
+    setPasswordError(false)
+  }
+
   // 过滤日志
   const filteredLogs = filter === 'all'
     ? logs
@@ -204,6 +250,12 @@ export function DevConsole() {
       {/* 右上角开关按钮 */}
       <button
         onClick={() => {
+          // 如果未验证密码，显示密码输入框
+          if (!isAuthenticated) {
+            setShowPasswordInput(true)
+            return
+          }
+          // 已验证，正常操作
           if (!isEnabled) {
             toggleEnabled()
             setIsOpen(true)
@@ -243,12 +295,62 @@ export function DevConsole() {
         )}
       </button>
 
+      {/* 密码输入弹窗 */}
+      {showPasswordInput && (
+        <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-xs border border-gray-700">
+            <h3 className="text-white text-lg font-semibold mb-4 text-center">
+              输入密码
+            </h3>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setPasswordError(false)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handlePasswordSubmit()
+                }
+              }}
+              placeholder="请输入密码"
+              autoFocus
+              className={`w-full px-4 py-3 bg-gray-800 border rounded-lg text-white text-center text-lg tracking-widest ${
+                passwordError ? 'border-red-500' : 'border-gray-600'
+              } focus:outline-none focus:border-blue-500`}
+            />
+            {passwordError && (
+              <p className="text-red-400 text-sm text-center mt-2">
+                密码错误，请重试
+              </p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={handlePasswordCancel}
+                className="flex-1 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600"
+              >
+                取消
+              </button>
+              <button
+                onClick={handlePasswordSubmit}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+              >
+                确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 日志面板 */}
       {isOpen && isEnabled && (
         <div
           className="fixed inset-0 z-[9998] bg-black/90 flex flex-col"
           style={{
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 20px)',
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 50px)',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
         >

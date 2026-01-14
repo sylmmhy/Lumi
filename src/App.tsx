@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { DEFAULT_APP_PATH } from './constants/routes'
 import { AppTabsPage } from './pages/AppTabsPage'
@@ -12,7 +12,6 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
-import { useAuth } from './hooks/useAuth'
 import { DevConsole } from './components/debug/DevConsole'
 
 /**
@@ -46,39 +45,16 @@ function initAnalyticsDeferred() {
 }
 
 /**
- * 根路径重定向组件：等待会话验证完成后跳转到默认页面。
+ * 根路径重定向组件：直接重定向到 Landing Page
  *
- * 【已移除】onboarding 跳转判断
- * - 网页端完全不判断 hasCompletedHabitOnboarding
- * - 由端侧（iOS/Android）决定加载哪个 URL
- * - 纯浏览器访问时也不强制跳转，用户可自由访问任何页面
+ * 【变更说明】
+ * - 访问 meetlumi.org/ 时自动跳转到 /landing
+ * - 不再等待会话验证，直接重定向
  *
- * @returns {null} 不渲染任何 UI，仅负责路由跳转。
+ * @returns {JSX.Element} 重定向组件
  */
 function RootRedirect() {
-  const navigate = useNavigate()
-  const { isOAuthProcessing, isSessionValidated } = useAuth()
-  const hasHandledRef = useRef(false)
-
-  useEffect(() => {
-    // 等待 OAuth 处理完成和会话验证完成
-    if (hasHandledRef.current || isOAuthProcessing || !isSessionValidated) return
-    hasHandledRef.current = true
-
-    // 直接跳转到默认页面，不判断 onboarding 状态
-    navigate(DEFAULT_APP_PATH, { replace: true })
-  }, [isOAuthProcessing, isSessionValidated, navigate])
-
-  // 如果正在处理 OAuth 或会话未验证完成，显示加载状态
-  if (isOAuthProcessing || !isSessionValidated) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    )
-  }
-
-  return null
+  return <Navigate to="/landing" replace />
 }
 
 /**

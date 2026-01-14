@@ -80,18 +80,12 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({ onGetStarted }) =>
                     </div>
 
                     {/* CTA Button */}
-                    <div className="flex items-center gap-4">
-                        <a
-                            href="/login"
-                            className="hidden md:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            Log in
-                        </a>
+                    <div className="flex items-center">
                         <button
                             onClick={onGetStarted}
                             className="px-5 py-2.5 text-sm font-semibold rounded-full bg-yellow-400 text-gray-900 hover:bg-yellow-300 transition-all"
                         >
-                            Try for free
+                            Request Beta Access
                         </button>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
 import { getPreferredLanguages } from '../../lib/language';
 import { DEFAULT_APP_PATH } from '../../constants/routes';
+import { detectWebView } from '../../utils/webviewDetection';
 
 // Step components
 import { WelcomeStep } from './habit-steps/WelcomeStep';
@@ -37,6 +38,10 @@ export function HabitOnboardingPage() {
   const [isInCall, setIsInCall] = useState(false);
   // 防止重复重定向
   const hasRedirectedRef = useRef(false);
+
+  // 检测是否在自家原生 App 中（iOS/Android WebView）
+  // 使用 useMemo 缓存结果，避免每次渲染都重新检测
+  const isNativeApp = useMemo(() => detectWebView().isNativeApp, []);
 
   // 使用 ref 来存储 handleEndCall，解决循环依赖问题
   const handleEndCallRef = useRef<() => void>(() => {});
@@ -80,17 +85,21 @@ export function HabitOnboardingPage() {
   }, [isSessionValidated, isLoggedIn, navigateToLogin]);
 
   // 已完成 onboarding 检查：如果用户已完成 habit onboarding，重定向到主页面
-  // 这可以防止用户被错误重定向到 onboarding 页面后卡住
+  // 仅在纯网页浏览器环境生效，用于防止用户被错误重定向到 onboarding 页面后卡住
+  // 在原生 App 中，端侧已经决定了加载哪个 URL，不需要网页端再做判断
   useEffect(() => {
     if (hasRedirectedRef.current) return;
 
-    // 等待会话验证完成且用户已登录
+    // 【原生 App 环境】跳过此检查，端侧已决定 URL
+    if (isNativeApp) return;
+
+    // 【纯网页浏览器环境】等待会话验证完成且用户已登录
     if (isSessionValidated && isLoggedIn && hasCompletedHabitOnboarding) {
-      console.log('🔄 HabitOnboardingPage: 用户已完成 onboarding，重定向到主页面');
+      console.log('🔄 HabitOnboardingPage: 用户已完成 onboarding，重定向到主页面（纯网页环境）');
       hasRedirectedRef.current = true;
       navigate(DEFAULT_APP_PATH, { replace: true });
     }
-  }, [isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate]);
+  }, [isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate, isNativeApp]);
 
   /**
    * 开始试用通话

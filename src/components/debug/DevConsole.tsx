@@ -449,10 +449,10 @@ export function DevConsole() {
                   const newFilter = e.target.value as LogEntry['type'] | 'all'
                   setFilter(newFilter)
                   // 更改日志级别时自动复制该类型的日志
-                  const logsToC​opy = newFilter === 'all'
+                  const logsToCopy = newFilter === 'all'
                     ? logs
                     : logs.filter(log => log.type === newFilter)
-                  copyLogsToClipboard(logsToC​opy)
+                  copyLogsToClipboard(logsToCopy)
                 }}
                 className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600"
               >

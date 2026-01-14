@@ -224,10 +224,17 @@ function isTimeInFuture(time: string | null | undefined, dateStr: string): boole
  * 判断任务是否应该触发原生提醒
  * 只有当任务有日期+时间，且时间在未来时才触发
  *
+ * 注意：displayTime === 'Now' 的即时任务不触发原生提醒
+ * 这类任务是用户在 UrgencyView 手动输入后立即开始的一次性任务，
+ * 不需要系统在之后再次打电话提醒。
+ *
  * @param task - 任务对象
  * @returns 是否应该触发原生提醒
  */
 function shouldTriggerNativeReminder(task: Task): boolean {
+  // 即时任务不触发原生提醒（避免 1 分钟后 AI 重复打电话）
+  if (task.displayTime === 'Now') return false;
+
   if (!task.date || !task.time) return false;
 
   const [hours, minutes] = task.time.split(':').map(Number);

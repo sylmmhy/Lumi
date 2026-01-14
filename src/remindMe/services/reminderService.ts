@@ -331,11 +331,11 @@ export async function fetchReminderById(taskId: string, userId: string): Promise
  * Create a new reminder
  * 创建新的提醒任务
  *
- * @param {Omit<Task, 'id' | 'displayTime'>} task - 待创建的任务数据，会自动补全时区信息。
+ * @param {Omit<Task, 'id'>} task - 待创建的任务数据，可包含 displayTime（12小时制），会自动补全时区信息。
  * @param {string} userId - 当前登录用户的 Supabase ID；若与会话中的 userId 不一致，将优先使用会话 userId 以满足外键。
  * @returns {Promise<Task | null>} 创建成功返回任务对象，失败返回 null。
  */
-export async function createReminder(task: Omit<Task, 'id' | 'displayTime'>, userId: string): Promise<Task | null> {
+export async function createReminder(task: Omit<Task, 'id'>, userId: string): Promise<Task | null> {
   if (!supabase) {
     console.error('Supabase client not initialized');
     return null;

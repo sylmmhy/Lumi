@@ -228,3 +228,56 @@ export function notifyNativeTaskCalled(taskId: string, called: boolean): void {
     console.error('❌ 通知任务呼叫状态失败:', error);
   }
 }
+
+/**
+ * 通知原生端：新手引导已完成
+ *
+ * 调用此函数后：
+ * 1. iOS 端会更新本地缓存 hasCompletedHabitOnboarding = true
+ * 2. iOS 端会将 WebView 跳转到主页 (/app/home)
+ *
+ * 触发时机：
+ * - 用户完成 habit onboarding 后（在 markHabitOnboardingCompleted 之后调用）
+ *
+ * 注意：
+ * - 如果在原生 App 中运行，会由原生端处理跳转，不需要 Web 端再 navigate
+ * - 如果在纯浏览器中运行，此函数不做任何事情，需要 Web 端自己 navigate
+ *
+ * @returns boolean - 是否成功发送消息给原生端
+ *
+ * @example
+ * ```typescript
+ * await markHabitOnboardingCompleted();
+ * const handledByNative = notifyNativeOnboardingCompleted();
+ * if (!handledByNative) {
+ *   // 纯浏览器环境，需要 Web 端处理跳转
+ *   navigate('/app/home');
+ * }
+ * ```
+ */
+export function notifyNativeOnboardingCompleted(): boolean {
+  try {
+    // iOS: 发送消息给 WKWebView 的 messageHandler
+    if (window.webkit?.messageHandlers?.onboardingCompleted) {
+      window.webkit.messageHandlers.onboardingCompleted.postMessage({});
+      console.log('📱 [iOS] 已发送 onboardingCompleted 消息，等待原生端处理跳转');
+      return true;
+    }
+
+    // Android: 调用 AndroidBridge 方法（未来实现）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).AndroidBridge?.onOnboardingCompleted) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).AndroidBridge.onOnboardingCompleted();
+      console.log('📱 [Android] 已调用 onOnboardingCompleted，等待原生端处理跳转');
+      return true;
+    }
+
+    // 纯浏览器环境，没有原生端处理
+    console.log('🌐 纯浏览器环境，无原生端处理 onboardingCompleted');
+    return false;
+  } catch (error) {
+    console.error('❌ 通知原生端 onboarding 完成失败:', error);
+    return false;
+  }
+}

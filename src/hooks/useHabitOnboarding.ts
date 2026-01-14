@@ -5,6 +5,7 @@ import { useTranslation } from './useTranslation';
 import { createReminder, generateTodayRoutineInstances } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 import { DEFAULT_APP_PATH } from '../constants/routes';
+import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -213,14 +214,21 @@ export function useHabitOnboarding() {
       // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
       await generateTodayRoutineInstances(userId);
 
-      // 标记习惯引导已完成
+      // 标记习惯引导已完成（更新数据库）
       await markHabitOnboardingCompleted();
 
       // 清除 sessionStorage 中的临时状态
       clearStateFromStorage();
 
-      // 成功，导航到主页
-      navigate(DEFAULT_APP_PATH);
+      // 通知原生端 onboarding 已完成
+      // 如果在原生 App 中，原生端会处理跳转；否则由 Web 端处理
+      const handledByNative = notifyNativeOnboardingCompleted();
+      if (!handledByNative) {
+        // 纯浏览器环境，由 Web 端导航到主页
+        navigate(DEFAULT_APP_PATH);
+      }
+      // 如果由原生端处理，Web 端不需要做任何事情
+      // 原生端会加载新的 URL，当前页面会被替换
     } catch (err) {
       console.error('Error saving habit:', err);
       setState(prev => ({

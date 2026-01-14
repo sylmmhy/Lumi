@@ -105,6 +105,8 @@ declare global {
         hasMicrophonePermission?: { postMessage: (message: unknown) => void };
         hasCameraPermission?: { postMessage: (message: unknown) => void };
         openAppSettings?: { postMessage: (message: unknown) => void };
+        // Onboarding-related handlers (iOS WebView)
+        onboardingCompleted?: { postMessage: (message: Record<string, never>) => void };
       };
     };
   }

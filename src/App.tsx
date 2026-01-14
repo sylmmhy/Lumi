@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import { DEFAULT_APP_PATH } from './constants/routes'
@@ -14,7 +14,6 @@ import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { useAuth } from './hooks/useAuth'
 import { DevConsole } from './components/debug/DevConsole'
-import { detectWebView } from './utils/webviewDetection'
 
 /**
  * 延迟初始化分析工具，不阻塞首屏渲染
@@ -47,53 +46,28 @@ function initAnalyticsDeferred() {
 }
 
 /**
- * 根路径重定向组件：根据用户登录状态和 onboarding 完成情况决定跳转目标。
+ * 根路径重定向组件：等待会话验证完成后跳转到默认页面。
  *
- * 跳转逻辑（仅在纯网页浏览器中生效）：
- * 1. 未登录 → /app/home（允许体验，后续操作会触发登录）
- * 2. 已登录但未完成 habit onboarding → /habit-onboarding
- * 3. 已登录且已完成 habit onboarding → /app/home
- *
- * 在原生 App (iOS/Android WebView) 中：
- * - 直接跳转到默认页面，不做 onboarding 判断
- * - 因为端侧已经根据 hasCompletedHabitOnboarding 决定加载哪个 URL
- * - 这样可以避免页面闪烁（端侧决定 URL → 网页端又重定向 → 闪烁）
+ * 【已移除】onboarding 跳转判断
+ * - 网页端完全不判断 hasCompletedHabitOnboarding
+ * - 由端侧（iOS/Android）决定加载哪个 URL
+ * - 纯浏览器访问时也不强制跳转，用户可自由访问任何页面
  *
  * @returns {null} 不渲染任何 UI，仅负责路由跳转。
  */
 function RootRedirect() {
   const navigate = useNavigate()
-  const { isOAuthProcessing, isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding } = useAuth()
+  const { isOAuthProcessing, isSessionValidated } = useAuth()
   const hasHandledRef = useRef(false)
-
-  // 检测是否在自家原生 App 中（iOS/Android WebView）
-  // 使用 useMemo 缓存结果，避免每次渲染都重新检测
-  const isNativeApp = useMemo(() => detectWebView().isNativeApp, [])
 
   useEffect(() => {
     // 等待 OAuth 处理完成和会话验证完成
     if (hasHandledRef.current || isOAuthProcessing || !isSessionValidated) return
     hasHandledRef.current = true
 
-    // 【原生 App 环境】直接跳转到默认页面，不做 onboarding 判断
-    // 端侧（iOS/Android）已经根据 hasCompletedHabitOnboarding 决定了加载哪个 URL
-    // 网页端不需要再做判断和跳转，避免页面闪烁
-    if (isNativeApp) {
-      console.log('🏠 RootRedirect: 在原生 App 中，跳转到默认页面（端侧已决定 URL）')
-      navigate(DEFAULT_APP_PATH, { replace: true })
-      return
-    }
-
-    // 【纯网页浏览器环境】保留原有跳转逻辑
-    // 已登录但未完成 habit onboarding → 跳转到引导页
-    if (isLoggedIn && !hasCompletedHabitOnboarding) {
-      navigate('/habit-onboarding', { replace: true })
-      return
-    }
-
-    // 其他情况（未登录或已完成引导）→ 进入核心功能页
+    // 直接跳转到默认页面，不判断 onboarding 状态
     navigate(DEFAULT_APP_PATH, { replace: true })
-  }, [isOAuthProcessing, isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate, isNativeApp])
+  }, [isOAuthProcessing, isSessionValidated, navigate])
 
   // 如果正在处理 OAuth 或会话未验证完成，显示加载状态
   if (isOAuthProcessing || !isSessionValidated) {

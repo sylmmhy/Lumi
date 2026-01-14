@@ -57,20 +57,16 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
   const canShowGoogleLogin = hasGoogleClientId && isGoogleLoginAvailable();
 
   // 登录成功后的处理
+  // 【已移除】onboarding 跳转判断，网页端不再判断，由端侧决定
   const handleSuccess = useCallback(() => {
     if (embedded) {
-      // 检查是否需要完成习惯引导
-      // 新用户或未完成习惯引导的用户跳转到引导页
-      if (auth?.isNewUser || !auth?.hasCompletedHabitOnboarding) {
-        navigate('/habit-onboarding', { replace: true });
-      } else {
-        navigate(redirectPath || DEFAULT_APP_PATH, { replace: true });
-      }
+      // 直接跳转到目标页面，不判断 onboarding 状态
+      navigate(redirectPath || DEFAULT_APP_PATH, { replace: true });
     } else {
       onSuccess?.();
       onClose();
     }
-  }, [embedded, redirectPath, navigate, onSuccess, onClose, auth?.isNewUser, auth?.hasCompletedHabitOnboarding]);
+  }, [embedded, redirectPath, navigate, onSuccess, onClose]);
 
   // 重置状态当弹窗关闭时
   useEffect(() => {

@@ -60,13 +60,9 @@ export function AppTabsPage() {
     const { tab } = useParams<{ tab?: string }>();
     const auth = useAuth();
 
-    // 已登录但未完成 habit onboarding 时，重定向到引导页
-    // 此逻辑确保 Native 登录态注入完成后（isSessionValidated=true）再判断跳转
-    useEffect(() => {
-        if (auth.isSessionValidated && auth.isLoggedIn && !auth.hasCompletedHabitOnboarding) {
-            navigate('/habit-onboarding', { replace: true });
-        }
-    }, [auth.isSessionValidated, auth.isLoggedIn, auth.hasCompletedHabitOnboarding, navigate]);
+    // 【已移除】onboarding 跳转逻辑
+    // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
+    // 纯浏览器访问时也不强制跳转，用户可自由访问任何页面
 
     // Derive view directly from URL to avoid double-render (rework)
     // If tab is invalid, it defaults to DEFAULT_APP_TAB (and effect below will redirect)

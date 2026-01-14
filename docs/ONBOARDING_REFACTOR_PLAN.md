@@ -161,12 +161,18 @@
 | `app/.../web/WebTabFragment.kt` | 修改 URL 决策逻辑 + 添加 JS Bridge |
 
 ### 网页端 ✅ (已修改)
+
+**重要变更**：网页端现在**完全不做** onboarding 跳转判断，不管是原生 App 还是纯浏览器。由端侧决定加载哪个 URL。
+
 | 文件 | 修改内容 | 状态 |
 |------|----------|------|
 | `src/utils/nativeTaskEvents.ts` | 添加 `notifyNativeOnboardingCompleted()` 函数 | ✅ |
 | `src/hooks/useHabitOnboarding.ts` | 在 `saveAndFinish()` 中调用原生端通知 | ✅ |
-| `src/App.tsx` | RootRedirect 在原生 App 中跳过 onboarding 判断 | ✅ |
-| `src/pages/onboarding/HabitOnboardingPage.tsx` | 在原生 App 中跳过已完成重定向检查 | ✅ |
+| `src/App.tsx` | **完全移除** RootRedirect 的 onboarding 跳转判断 | ✅ |
+| `src/pages/onboarding/HabitOnboardingPage.tsx` | **完全移除** 已完成重定向检查 | ✅ |
+| `src/pages/AppTabsPage.tsx` | **完全移除** onboarding 重定向检查 | ✅ |
+| `src/pages/OnboardingPage.tsx` | **完全移除** onboarding 状态跳转，已登录直接跳主页 | ✅ |
+| `src/components/modals/AuthModal.tsx` | **完全移除** 嵌入模式登录成功后的 onboarding 判断 | ✅ |
 
 ---
 
@@ -216,12 +222,13 @@ function notifyOnboardingCompleted() {
 | 2026-01-14 | **iOS 端开发完成** | 修改 6 个 iOS 文件 + 2 个网页文件 |
 | 2026-01-14 | **网页端优化完成** | 修改 App.tsx 和 HabitOnboardingPage.tsx，在原生 App 中跳过自动跳转逻辑 |
 | 2026-01-14 | **Bug 修复** | 修复老用户本地缓存未设置导致重复进入 onboarding 的问题（见第十三节）|
+| 2026-01-14 | **网页端完全移除跳转** | 网页端完全不做 onboarding 跳转判断（包括纯浏览器），由端侧决定 URL |
 
 ---
 
 ## 七、注意事项
 
-1. **向后兼容**：网页端需要保留纯浏览器访问的逻辑（非 WebView 环境）
+1. **~~向后兼容~~**：~~网页端需要保留纯浏览器访问的逻辑~~ → **已变更**：网页端完全不做 onboarding 跳转判断，用户可自由访问任何页面
 2. **iOS 和安卓共享网页**：修改网页端时要同时考虑两个平台
 3. **数据同步**：端侧本地存储要和数据库保持一致
 4. **首次安装**：新安装用户没有本地存储，需要登录后从数据库获取

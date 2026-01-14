@@ -9,26 +9,21 @@ import { DEFAULT_APP_PATH } from '../constants/routes';
  *
  * 流程：
  * 1. 未登录用户 → 显示欢迎页面，引导登录
- * 2. 已登录但未完成 habit onboarding → 跳转到 /habit-onboarding
- * 3. 已登录且已完成 habit onboarding → 跳转到主应用
+ * 2. 已登录用户 → 跳转到主应用（不判断 onboarding 状态，由端侧决定）
  */
 function OnboardingPage() {
-  const { isLoggedIn, isSessionValidated, hasCompletedHabitOnboarding } = useAuth({ requireLoginAfterOnboarding: false });
+  const { isLoggedIn, isSessionValidated } = useAuth({ requireLoginAfterOnboarding: false });
   const [showAuthSheet, setShowAuthSheet] = useState(false);
   const navigate = useNavigate();
 
-  // 已登录用户根据 habit onboarding 完成状态跳转
+  // 【已移除】onboarding 状态判断
+  // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
+  // 已登录用户直接跳转到主应用
   useEffect(() => {
     if (isSessionValidated && isLoggedIn) {
-      if (!hasCompletedHabitOnboarding) {
-        // 未完成 habit onboarding → 跳转到引导页
-        navigate('/habit-onboarding', { replace: true });
-      } else {
-        // 已完成 → 跳转到主应用
-        navigate(DEFAULT_APP_PATH, { replace: true });
-      }
+      navigate(DEFAULT_APP_PATH, { replace: true });
     }
-  }, [isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate]);
+  }, [isSessionValidated, isLoggedIn, navigate]);
 
   // 等待 auth 状态验证完成
   if (!isSessionValidated) {

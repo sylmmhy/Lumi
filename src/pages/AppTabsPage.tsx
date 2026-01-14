@@ -672,6 +672,15 @@ export function AppTabsPage() {
 
         if (!shouldAutoStart) return;
 
+        // 🛡️ 关键保护：在原生 App 内，如果 autostart 没有 taskId，直接阻止启动
+        // 这是防止重复创建任务的核心检查
+        // 场景：用户接听电话后返回 WebView，URL 参数仍存在但没有 taskId
+        // 如果允许启动，会创建一个 time=now 的临时任务，导致重复拨打电话
+        if (isNativeApp() && !taskIdParam) {
+            console.warn('⚠️ Autostart blocked in native app: missing taskId (防止重复任务)');
+            return;
+        }
+
         // 如果带 taskId，必须等待会话验证完成且已登录，避免在未恢复会话时误创建临时任务
         if (taskIdParam && (!auth.isSessionValidated || !auth.isLoggedIn)) {
             return;

@@ -1,9 +1,9 @@
 # Onboarding 跳转逻辑重构计划
 
-> **状态**: iOS 端开发完成，待测试
+> **状态**: iOS 端开发完成，网页端优化完成，待测试
 > **创建时间**: 2026-01-14
 > **最后更新**: 2026-01-14
-> **当前进度**: Phase 1 ✅ + Phase 2 ✅ 完成，待 iOS 测试后开始 Phase 3
+> **当前进度**: Phase 1 ✅ + Phase 2 ✅ + Phase 4 ✅ 完成，待 iOS 测试后开始 Phase 3 (安卓端)
 
 ---
 
@@ -34,13 +34,14 @@
 
 ### 当前进度
 - ✅ Phase 1: 后端准备（数据库有 `has_completed_habit_onboarding` 字段）
-- ⏳ Phase 2-5: 等待用户确认后开始
+- ✅ Phase 2: iOS 端改造（已完成，待测试）
+- ⏳ Phase 3: 安卓端改造
+- ✅ Phase 4: 网页端优化（已完成）
+- ⏳ Phase 5: 测试验证
 
-### 待用户确认的问题
-1. **先做哪个平台？** iOS 还是安卓？
-2. **如何查询数据库？**
-   - 方式 A：端侧直接用 Supabase SDK 查询
-   - 方式 B：调用后端 API 返回用户信息
+### 已确认的技术决策
+- **平台顺序**：先 iOS，后安卓
+- **查询方式**：端侧直接用 Supabase REST API 查询 users 表
 
 ### 项目路径
 - 网页端: `/Users/miko_mac_mini/projects/firego--original-web`
@@ -110,12 +111,13 @@
 ### Phase 1: 后端准备 ✅ (已完成)
 - [x] 确认 `users` 表有 `has_completed_habit_onboarding` 字段
 
-### Phase 2: iOS 端改造
-- [ ] **2.1** 在 SessionManager 中添加 `hasCompletedHabitOnboarding` 字段
-- [ ] **2.2** 登录成功后，从数据库查询该字段并保存
-- [ ] **2.3** 修改 AppCoordinator，根据该字段决定加载哪个 URL
-- [ ] **2.4** 添加 JS Bridge，让网页端可以通知引导完成
-- [ ] **2.5** 收到通知后更新本地存储并跳转
+### Phase 2: iOS 端改造 ✅ (已完成 2026-01-14)
+- [x] **2.1** 在 SessionManager 中添加 `hasCompletedHabitOnboarding` 字段
+- [x] **2.2** 登录成功后，从数据库查询该字段并保存（SupabaseClient.fetchHabitOnboardingStatus）
+- [x] **2.3** 修改 AppCoordinator，根据该字段决定加载哪个 URL
+- [x] **2.4** 添加 JS Bridge，让网页端可以通知引导完成（WebViewController.handleOnboardingCompleted）
+- [x] **2.5** 收到通知后更新本地存储并跳转到主页
+- [x] **2.6** 网页端添加调用 onboardingCompleted 的代码（notifyNativeOnboardingCompleted）
 
 ### Phase 3: 安卓端改造
 - [ ] **3.1** 在 UserPreferences 中添加 `hasCompletedHabitOnboarding` 字段
@@ -124,11 +126,11 @@
 - [ ] **3.4** 添加 JS Bridge，让网页端可以通知引导完成
 - [ ] **3.5** 收到通知后更新本地存储并跳转
 
-### Phase 4: 网页端改造
-- [ ] **4.1** 移除 App.tsx 中 RootRedirect 的自动跳转逻辑
-- [ ] **4.2** 移除 HabitOnboardingPage 的登录检查跳转
-- [ ] **4.3** 引导完成后调用端侧 JS Bridge
-- [ ] **4.4** 保留纯网页访问时的兼容逻辑（非 WebView 环境）
+### Phase 4: 网页端改造 ✅ (已完成 2026-01-14)
+- [x] **4.1** 移除 App.tsx 中 RootRedirect 的自动跳转逻辑（在原生 App 中跳过 onboarding 判断）
+- [x] **4.2** 移除 HabitOnboardingPage 的已完成重定向检查（在原生 App 中跳过）
+- [x] **4.3** 引导完成后调用端侧 JS Bridge（notifyNativeOnboardingCompleted）
+- [x] **4.4** 保留纯网页访问时的兼容逻辑（非 WebView 环境自动 navigate）
 
 ### Phase 5: 测试验证
 - [ ] **5.1** iOS 新用户登录流程
@@ -141,13 +143,15 @@
 
 ## 四、关键文件清单
 
-### iOS 端
-| 文件 | 修改内容 |
-|------|----------|
-| `MindBoat/Services/SessionManager.swift` | 添加 hasCompletedHabitOnboarding 字段和查询方法 |
-| `MindBoat/Coordinator/AppCoordinator.swift` | 修改 URL 决策逻辑 |
-| `MindBoat/Auth/WebAuthBridge.swift` | 添加 onboardingCompleted 消息处理 |
-| `MindBoat/Configuration/AppConfiguration.swift` | 添加 onboarding URL 常量 |
+### iOS 端 ✅ (已修改)
+| 文件 | 修改内容 | 状态 |
+|------|----------|------|
+| `MindBoat/Configuration/AppConfiguration.swift` | 添加 `habitOnboarding` URL 常量和 `hasCompletedHabitOnboarding` key | ✅ |
+| `MindBoat/Services/SessionManager.swift` | 添加 `hasCompletedHabitOnboarding` 属性 | ✅ |
+| `MindBoat/Services/SupabaseClient.swift` | 添加 `fetchHabitOnboardingStatus()` 方法 | ✅ |
+| `MindBoat/Coordinator/AppCoordinator.swift` | 修改 `handleLoginSuccess()` 和 `presentMainInterface()` | ✅ |
+| `MindBoat/ViewControllers/WebViewConfigurationFactory.swift` | 注册 `onboardingCompleted` 消息处理器 | ✅ |
+| `MindBoat/ViewControllers/WebViewController.swift` | 添加 `handleOnboardingCompleted()` 方法 | ✅ |
 
 ### 安卓端
 | 文件 | 修改内容 |
@@ -156,12 +160,13 @@
 | `app/.../auth/LoginActivity.kt` | 登录成功后查询并保存状态 |
 | `app/.../web/WebTabFragment.kt` | 修改 URL 决策逻辑 + 添加 JS Bridge |
 
-### 网页端
-| 文件 | 修改内容 |
-|------|----------|
-| `src/App.tsx` | 移除 RootRedirect 的自动跳转 |
-| `src/pages/onboarding/HabitOnboardingPage.tsx` | 移除登录检查跳转 |
-| `src/hooks/useHabitOnboarding.ts` | 完成后调用端侧 Bridge |
+### 网页端 ✅ (已修改)
+| 文件 | 修改内容 | 状态 |
+|------|----------|------|
+| `src/utils/nativeTaskEvents.ts` | 添加 `notifyNativeOnboardingCompleted()` 函数 | ✅ |
+| `src/hooks/useHabitOnboarding.ts` | 在 `saveAndFinish()` 中调用原生端通知 | ✅ |
+| `src/App.tsx` | RootRedirect 在原生 App 中跳过 onboarding 判断 | ✅ |
+| `src/pages/onboarding/HabitOnboardingPage.tsx` | 在原生 App 中跳过已完成重定向检查 | ✅ |
 
 ---
 
@@ -208,6 +213,8 @@ function notifyOnboardingCompleted() {
 |------|------|------|
 | 2026-01-14 | 完成调研 | 确认了各端现状和问题根源 |
 | 2026-01-14 | 完成方案设计 | 确定"端侧做门卫"的架构 |
+| 2026-01-14 | **iOS 端开发完成** | 修改 6 个 iOS 文件 + 2 个网页文件 |
+| 2026-01-14 | **网页端优化完成** | 修改 App.tsx 和 HabitOnboardingPage.tsx，在原生 App 中跳过自动跳转逻辑 |
 | | | |
 
 ---
@@ -313,4 +320,169 @@ webViewController.loadURL(url)
 ### 如果先做安卓端
 
 类似的修改，在 UserPreferences.kt 添加字段，LoginActivity.kt 查询数据库，WebTabFragment.kt 决定 URL。
+
+---
+
+## 十、Phase 2 (iOS) 实现详情
+
+### 10.1 登录成功后的流程
+
+```
+用户登录成功
+    │
+    ▼
+AppCoordinator.handleLoginSuccess()
+    │
+    ├── 1. 调用 SessionManager.handleLoginSuccess() 保存用户信息
+    │
+    ├── 2. 异步调用 SupabaseClient.fetchHabitOnboardingStatus()
+    │       查询数据库 users 表的 has_completed_habit_onboarding 字段
+    │
+    ├── 3. 更新本地缓存 SessionManager.hasCompletedHabitOnboarding
+    │
+    └── 4. 调用 presentMainInterface(showOnboarding: !hasCompleted)
+            │
+            ├── showOnboarding = true  → 加载 /habit-onboarding
+            └── showOnboarding = false → 加载 /app/urgency
+```
+
+### 10.2 引导完成后的流程
+
+```
+用户完成 habit onboarding
+    │
+    ▼
+useHabitOnboarding.saveAndFinish()
+    │
+    ├── 1. 创建 habit reminder (数据库)
+    │
+    ├── 2. 调用 markHabitOnboardingCompleted() (更新数据库)
+    │
+    ├── 3. 调用 notifyNativeOnboardingCompleted()
+    │       │
+    │       ├── iOS: window.webkit.messageHandlers.onboardingCompleted.postMessage({})
+    │       └── Android: window.AndroidBridge.onOnboardingCompleted() (未实现)
+    │
+    └── 4. 如果不在原生 App 中，则 navigate('/app/home')
+
+iOS 端收到 onboardingCompleted 消息
+    │
+    ▼
+WebViewController.handleOnboardingCompleted()
+    │
+    ├── 1. 更新本地缓存: SessionManager.hasCompletedHabitOnboarding = true
+    │
+    └── 2. 加载主页: loadURL(AppConfiguration.URLs.home)
+```
+
+### 10.3 关键代码位置
+
+| 功能 | 文件 | 方法/属性 |
+|------|------|-----------|
+| 本地缓存 onboarding 状态 | SessionManager.swift | `hasCompletedHabitOnboarding` |
+| 查询数据库 onboarding 状态 | SupabaseClient.swift | `fetchHabitOnboardingStatus()` |
+| 登录后决定加载哪个 URL | AppCoordinator.swift | `handleLoginSuccess()` |
+| 根据状态加载不同 URL | AppCoordinator.swift | `presentMainInterface(showOnboarding:)` |
+| 注册 JS Bridge 消息 | WebViewConfigurationFactory.swift | `onboardingCompleted` handler |
+| 处理 onboarding 完成消息 | WebViewController.swift | `handleOnboardingCompleted()` |
+| 网页端通知原生 | nativeTaskEvents.ts | `notifyNativeOnboardingCompleted()` |
+| onboarding 完成时调用 | useHabitOnboarding.ts | `saveAndFinish()` |
+
+---
+
+## 十一、下一步工作
+
+### 立即可做
+1. **测试 iOS 端**：在 Xcode 中编译运行
+   - 测试新用户登录流程（应该加载 /habit-onboarding）
+   - 测试老用户登录流程（应该加载 /app/urgency）
+   - 测试完成引导后跳转（应该跳转到 /app/home）
+
+### iOS 测试通过后
+2. **Phase 3: 安卓端改造**
+   - 在 UserPreferences.kt 添加 hasCompletedHabitOnboarding 字段
+   - 在 LoginActivity.kt 添加查询数据库逻辑
+   - 在 WebTabFragment.kt 添加 URL 决策逻辑
+   - 添加 onOnboardingCompleted JS Bridge
+
+### ~~可选优化~~ ✅ 已完成
+3. **Phase 4: 网页端优化** ✅
+   - 已修改 App.tsx 中 RootRedirect，在原生 App 中跳过 onboarding 判断
+   - 已修改 HabitOnboardingPage，在原生 App 中跳过已完成重定向检查
+   - 使用 `detectWebView().isNativeApp` 判断是否在自家原生 App 中
+   - 纯网页浏览器环境保留原有跳转逻辑（兼容性）
+
+---
+
+## 十二、Phase 4 (网页端) 实现详情
+
+### 12.1 核心原理
+
+**问题**：即使端侧已经决定了加载哪个 URL，网页端仍然会在 `isSessionValidated` 后进行二次判断和跳转，导致页面闪烁。
+
+**解决方案**：使用 `detectWebView().isNativeApp` 判断是否在自家原生 App 中：
+- **原生 App 中**：跳过 onboarding 相关的自动跳转逻辑，因为端侧已经决定了 URL
+- **纯网页浏览器中**：保留原有跳转逻辑，确保兼容性
+
+### 12.2 修改的文件
+
+#### App.tsx - RootRedirect 组件
+
+```typescript
+// 检测是否在自家原生 App 中
+const isNativeApp = useMemo(() => detectWebView().isNativeApp, []);
+
+useEffect(() => {
+  // ...
+
+  // 【原生 App 环境】直接跳转到默认页面，不做 onboarding 判断
+  if (isNativeApp) {
+    console.log('🏠 RootRedirect: 在原生 App 中，跳转到默认页面（端侧已决定 URL）');
+    navigate(DEFAULT_APP_PATH, { replace: true });
+    return;
+  }
+
+  // 【纯网页浏览器环境】保留原有跳转逻辑
+  if (isLoggedIn && !hasCompletedHabitOnboarding) {
+    navigate('/habit-onboarding', { replace: true });
+    return;
+  }
+
+  navigate(DEFAULT_APP_PATH, { replace: true });
+}, [...]);
+```
+
+#### HabitOnboardingPage.tsx - 已完成重定向检查
+
+```typescript
+// 检测是否在自家原生 App 中
+const isNativeApp = useMemo(() => detectWebView().isNativeApp, []);
+
+useEffect(() => {
+  // 【原生 App 环境】跳过此检查，端侧已决定 URL
+  if (isNativeApp) return;
+
+  // 【纯网页浏览器环境】等待会话验证完成且用户已登录
+  if (isSessionValidated && isLoggedIn && hasCompletedHabitOnboarding) {
+    navigate(DEFAULT_APP_PATH, { replace: true });
+  }
+}, [...]);
+```
+
+### 12.3 detectWebView 工具函数
+
+位置：`src/utils/webviewDetection.ts`
+
+```typescript
+// 检测是否在自家原生 App 中
+function detectNativeApp(): boolean {
+  // Android: 检测 AndroidBridge
+  if ('AndroidBridge' in window) return true;
+
+  // iOS: 检测 WKWebView messageHandler
+  if (window.webkit?.messageHandlers?.nativeApp) return true;
+
+  return false;
+}
+```
 

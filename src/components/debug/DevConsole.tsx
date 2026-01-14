@@ -73,6 +73,7 @@ export function DevConsole() {
   const [filter, setFilter] = useState<LogEntry['type'] | 'all'>('all')
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logIdRef = useRef(0)
+  const logsRef = useRef<LogEntry[]>([]) // 用于在异步操作中访问最新的 logs
 
   // 密码验证状态
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -292,6 +293,11 @@ export function DevConsole() {
     }
   }, [isEnabled])
 
+  // 同步 logs 到 ref，用于在异步操作中访问最新值
+  useEffect(() => {
+    logsRef.current = logs
+  }, [logs])
+
   // 自动滚动到底部
   useEffect(() => {
     if (isOpen && logsEndRef.current) {
@@ -338,6 +344,14 @@ export function DevConsole() {
         toggleEnabled()
       }
       setIsOpen(true)
+
+      // 使用短延迟等待日志加载后自动复制
+      // 延迟 200ms 足够让 useEffect 执行并添加初始化日志
+      // 同时仍然在浏览器认为的"用户交互窗口"内
+      setTimeout(() => {
+        // 使用 ref 获取最新的日志（避免闭包陷阱）
+        copyLogsToClipboard(logsRef.current)
+      }, 200)
     } else {
       setPasswordError(true)
       setPassword('')
@@ -489,6 +503,11 @@ export function DevConsole() {
                 onChange={(e) => {
                   const newFilter = e.target.value as LogEntry['type'] | 'all'
                   setFilter(newFilter)
+                  // 过滤器更改是用户交互，在此上下文中自动复制是安全的
+                  const logsToCopy = newFilter === 'all'
+                    ? logs
+                    : logs.filter(log => log.type === newFilter)
+                  copyLogsToClipboard(logsToCopy)
                 }}
                 className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600"
               >

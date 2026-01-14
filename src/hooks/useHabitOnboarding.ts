@@ -197,6 +197,7 @@ export function useHabitOnboarding() {
       const result = await createReminder({
         text: habitName,
         time: state.reminderTime,
+        displayTime: formatTo12Hour(state.reminderTime), // 🔧 修复：添加 12 小时制显示时间
         // date 不设置，让 routine 作为纯模板
         type: 'routine',
         isRecurring: true,

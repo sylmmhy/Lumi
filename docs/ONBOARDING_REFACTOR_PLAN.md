@@ -215,7 +215,7 @@ function notifyOnboardingCompleted() {
 | 2026-01-14 | 完成方案设计 | 确定"端侧做门卫"的架构 |
 | 2026-01-14 | **iOS 端开发完成** | 修改 6 个 iOS 文件 + 2 个网页文件 |
 | 2026-01-14 | **网页端优化完成** | 修改 App.tsx 和 HabitOnboardingPage.tsx，在原生 App 中跳过自动跳转逻辑 |
-| | | |
+| 2026-01-14 | **Bug 修复** | 修复老用户本地缓存未设置导致重复进入 onboarding 的问题（见第十三节）|
 
 ---
 
@@ -485,4 +485,103 @@ function detectNativeApp(): boolean {
   return false;
 }
 ```
+
+---
+
+## 十三、Bug 修复：老用户本地缓存未设置问题
+
+### 13.1 问题描述
+
+**现象**：已完成 onboarding 的用户重新打开 App 时，会再次进入 onboarding 页面。
+
+**日志表现**：
+```
+App 启动: 使用本地缓存的 onboarding 状态, showOnboarding = true
+```
+
+但数据库中用户的 `has_completed_habit_onboarding = true`。
+
+### 13.2 问题根源
+
+**场景复现**：
+1. 用户在**新版 iOS 代码部署之前**就完成了 onboarding
+2. 当时没有 `onboardingCompleted` JS Bridge，所以数据库被更新了
+3. 但 iOS 本地的 `UserDefaults` 从未被设置过
+4. 当用户重新打开 App 时，`handlePostInitialization()` 使用本地缓存
+5. `UserDefaults.standard.bool()` 对于未设置的 key 默认返回 `false`
+6. 所以 `showOnboarding = !false = true`，导致跳转到 onboarding 页面
+
+**核心问题**：`handlePostInitialization()` 完全信任本地缓存，但对于老用户，本地缓存可能从未被正确设置过。
+
+### 13.3 解决方案
+
+修改 `AppCoordinator.handlePostInitialization()`：
+1. **先使用本地缓存快速显示 UI**（避免白屏）
+2. **异步查询数据库验证本地缓存**
+3. **如果发现不一致，更新本地缓存并跳转到正确的页面**
+
+### 13.4 代码修改
+
+文件：`MindBoat/Coordinator/AppCoordinator.swift`
+
+**新增方法** `verifyOnboardingStatusFromDatabase()`：
+```swift
+/// 从数据库验证 onboarding 状态，修复本地缓存与数据库不一致的问题
+private func verifyOnboardingStatusFromDatabase(
+    userId: String,
+    localStatus: Bool,
+    accessToken: String?,
+    refreshToken: String?
+) async {
+    do {
+        let databaseStatus = try await SupabaseClient.shared.fetchHabitOnboardingStatus(userId: userId)
+
+        // 如果数据库状态和本地缓存不一致，更新本地缓存
+        if databaseStatus != localStatus {
+            Logger.warning("发现 onboarding 状态不一致 - 本地: \(localStatus), 数据库: \(databaseStatus)")
+
+            await MainActor.run {
+                // 更新本地缓存
+                SessionManager.shared.hasCompletedHabitOnboarding = databaseStatus
+
+                // 如果数据库显示已完成，但当前页面是 onboarding，跳转到主页
+                if databaseStatus && !localStatus {
+                    self.presentMainInterface(
+                        animated: false,
+                        propagateLoginToWeb: true,
+                        accessToken: accessToken,
+                        refreshToken: refreshToken,
+                        showOnboarding: false
+                    )
+                }
+            }
+        }
+    } catch {
+        // 查询失败时不做任何处理，保持当前状态
+        Logger.warning("验证 onboarding 状态失败: \(error.localizedDescription)")
+    }
+}
+```
+
+**修改流程**：
+```
+用户打开 App（已登录）
+    │
+    ▼
+handlePostInitialization()
+    │
+    ├── 1. 使用本地缓存快速显示 UI（避免白屏）
+    │
+    └── 2. 异步调用 verifyOnboardingStatusFromDatabase()
+            │
+            ├── 本地缓存 = 数据库 → 无需处理
+            │
+            └── 本地缓存 ≠ 数据库 → 更新本地缓存，跳转到正确页面
+```
+
+### 13.5 测试验证
+
+测试用例：用户 ID `6a9f933d-b85d-4ffe-96b2-e0ab0a36bc2e`
+- 数据库状态：`has_completed_habit_onboarding = true`
+- 预期行为：App 启动后，先显示 onboarding 页面，然后检测到不一致，自动跳转到主页
 

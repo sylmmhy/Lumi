@@ -289,8 +289,10 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       isLoggedIn: true,
       userId: session.user.id,
       userEmail: session.user.email || null,
-      userName: session.user.user_metadata?.full_name || stored['user_name'] || null,
-      userPicture: session.user.user_metadata?.avatar_url || stored['user_picture'] || null,
+      // 优先使用用户自己设置的名字（localStorage），再用 OAuth 的名字
+      userName: stored['user_name'] || session.user.user_metadata?.full_name || null,
+      // 优先使用用户自己设置的头像（localStorage），再用 OAuth 的头像
+      userPicture: stored['user_picture'] || session.user.user_metadata?.avatar_url || null,
       isNewUser: stored['is_new_user'] === 'true',
       sessionToken: session.access_token,
       refreshToken: session.refresh_token || null,
@@ -405,8 +407,10 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
             isLoggedIn: true,
             userId: restored.session.user.id,
             userEmail: restored.session.user.email || null,
-            userName: restored.session.user.user_metadata?.full_name || stored['user_name'] || null,
-            userPicture: restored.session.user.user_metadata?.avatar_url || stored['user_picture'] || null,
+            // 优先使用用户自己设置的名字（localStorage），再用 OAuth 的名字
+            userName: stored['user_name'] || restored.session.user.user_metadata?.full_name || null,
+            // 优先使用用户自己设置的头像（localStorage），再用 OAuth 的头像
+            userPicture: stored['user_picture'] || restored.session.user.user_metadata?.avatar_url || null,
             isNewUser: stored['is_new_user'] === 'true',
             sessionToken: restored.session.access_token,
             refreshToken: restored.session.refresh_token || null,
@@ -816,18 +820,16 @@ export function AuthProvider({
       localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
       triggerSessionCheckNowRef.current?.('password_login');
 
-      // 获取用户资料
-      let userName = data.user.user_metadata?.full_name || '';
-      let userPicture = data.user.user_metadata?.avatar_url || '';
+      // 获取用户资料：优先使用用户自己设置的名字，再用 OAuth 的名字
+      // 先尝试从数据库同步用户资料到 localStorage
+      await syncUserProfileToStorage(supabase, data.user.id);
+      // 优先使用 localStorage（用户设置的），再用 OAuth 的
+      const userName = localStorage.getItem('user_name') || data.user.user_metadata?.full_name || '';
+      const userPicture = localStorage.getItem('user_picture') || data.user.user_metadata?.avatar_url || '';
 
-      if (!userName || !userPicture) {
-        await syncUserProfileToStorage(supabase, data.user.id);
-        userName = localStorage.getItem('user_name') || userName;
-        userPicture = localStorage.getItem('user_picture') || userPicture;
-      }
-
-      if (userName) localStorage.setItem('user_name', userName);
-      if (userPicture) localStorage.setItem('user_picture', userPicture);
+      // 只有在 localStorage 为空时才保存（避免覆盖用户设置的名字）
+      if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
+      if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
 
       console.log('✅ Login successful:', data.user.email);
       await bindAnalyticsUserSync(data.user.id, data.user.email);
@@ -1095,18 +1097,16 @@ export function AuthProvider({
         const isNewUser = (now.getTime() - createdAt.getTime()) < 60000; // 1分钟内创建的视为新用户
         localStorage.setItem('is_new_user', isNewUser ? 'true' : 'false');
 
-        // 获取用户资料
-        let userName = user.user_metadata?.full_name || '';
-        let userPicture = user.user_metadata?.avatar_url || '';
+        // 获取用户资料：优先使用用户自己设置的名字，再用 OAuth 的名字
+        // 先尝试从数据库同步用户资料到 localStorage
+        await syncUserProfileToStorage(supabase, user.id);
+        // 优先使用 localStorage（用户设置的），再用 OAuth 的
+        const userName = localStorage.getItem('user_name') || user.user_metadata?.full_name || '';
+        const userPicture = localStorage.getItem('user_picture') || user.user_metadata?.avatar_url || '';
 
-        if (!userName || !userPicture) {
-          await syncUserProfileToStorage(supabase, user.id);
-          userName = localStorage.getItem('user_name') || userName;
-          userPicture = localStorage.getItem('user_picture') || userPicture;
-        }
-
-        if (userName) localStorage.setItem('user_name', userName);
-        if (userPicture) localStorage.setItem('user_picture', userPicture);
+        // 只有在 localStorage 为空时才保存（避免覆盖用户设置的名字）
+        if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
+        if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
 
         console.log('✅ OTP 登录成功:', user.email);
         await bindAnalyticsUserSync(user.id, user.email);
@@ -1502,14 +1502,14 @@ export function AuthProvider({
       console.warn('⚠️ 原生登录未提供 refresh_token，Supabase 会话无法自动刷新');
     }
 
-    // 补全用户资料
-    let finalUserName = userName;
-    let finalPictureUrl = pictureUrl;
-    if (supabase && (!userName || !pictureUrl)) {
+    // 补全用户资料：优先使用用户自己设置的名字（数据库/localStorage），再用原生端传来的（OAuth）
+    // 总是先尝试从数据库同步，确保获取用户设置的名字
+    if (supabase) {
       await syncUserProfileToStorage(supabase, userId);
-      finalUserName = localStorage.getItem('user_name') || userName;
-      finalPictureUrl = localStorage.getItem('user_picture') || pictureUrl;
     }
+    // 优先使用 localStorage（用户设置的），再用原生端传来的（OAuth）
+    const finalUserName = localStorage.getItem('user_name') || userName;
+    const finalPictureUrl = localStorage.getItem('user_picture') || pictureUrl;
 
     // 如果 setSession 成功，onAuthStateChange 会触发并处理 hasCompletedHabitOnboarding 查询
     // 我们给它一点时间（短暂等待），如果 onAuthStateChange 已经在处理，就让它来设置最终状态

@@ -90,9 +90,6 @@ export function DevConsole() {
   const [showCopyToast, setShowCopyToast] = useState(false)
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 用于在密码验证后延迟复制日志（解决闭包陷阱）
-  const [pendingCopyOnOpen, setPendingCopyOnOpen] = useState(false)
-
   // 双击检测
   const clickCountRef = useRef(0)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -141,29 +138,84 @@ export function DevConsole() {
 
   /**
    * 复制指定日志到剪贴板并显示提示
+   * 使用多层 fallback 策略确保跨平台兼容性：
+   * 1. 优先使用 navigator.clipboard.writeText()（现代浏览器）
+   * 2. 失败时使用 document.execCommand('copy')（iOS WebView 更可靠）
+   *
    * @param logsToCopy - 要复制的日志条目数组
    */
   const copyLogsToClipboard = useCallback(async (logsToCopy: LogEntry[]) => {
-    if (logsToCopy.length === 0) return
+    if (logsToCopy.length === 0) {
+      console.warn('[DevConsole] 没有日志可复制')
+      return
+    }
 
     const formattedText = formatLogsForClipboard(logsToCopy)
-    try {
-      await navigator.clipboard.writeText(formattedText)
 
-      // 清除之前的定时器
-      if (copyToastTimerRef.current) {
-        clearTimeout(copyToastTimerRef.current)
+    // 清除之前的定时器
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current)
+    }
+
+    let success = false
+    let errorMessage = ''
+
+    // 策略 1: 尝试使用 Clipboard API（现代浏览器）
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(formattedText)
+        success = true
+        console.log('[DevConsole] 使用 Clipboard API 复制成功')
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : String(err)
+        console.warn('[DevConsole] Clipboard API 失败，尝试 fallback 方法:', errorMessage)
       }
+    }
 
+    // 策略 2: 使用 document.execCommand (iOS WebView 更可靠)
+    if (!success) {
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = formattedText
+        textarea.style.position = 'fixed'
+        textarea.style.top = '0'
+        textarea.style.left = '0'
+        textarea.style.width = '2em'
+        textarea.style.height = '2em'
+        textarea.style.padding = '0'
+        textarea.style.border = 'none'
+        textarea.style.outline = 'none'
+        textarea.style.boxShadow = 'none'
+        textarea.style.background = 'transparent'
+        textarea.style.opacity = '0'
+
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+
+        success = document.execCommand('copy')
+        document.body.removeChild(textarea)
+
+        if (success) {
+          console.log('[DevConsole] 使用 execCommand 复制成功')
+        } else {
+          console.error('[DevConsole] execCommand 返回 false')
+        }
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : String(err)
+        console.error('[DevConsole] execCommand 也失败了:', errorMessage)
+      }
+    }
+
+    if (success) {
       // 显示复制成功提示
       setShowCopyToast(true)
-
-      // 2秒后自动隐藏
       copyToastTimerRef.current = setTimeout(() => {
         setShowCopyToast(false)
       }, 2000)
-    } catch (err) {
-      console.error('[DevConsole] 复制到剪贴板失败:', err)
+    } else {
+      // 显示失败提示
+      console.error('[DevConsole] 所有复制策略都失败了')
     }
   }, [formatLogsForClipboard])
 
@@ -247,14 +299,6 @@ export function DevConsole() {
     }
   }, [logs, isOpen])
 
-  // 密码验证成功后延迟复制日志（等待初始化日志加载）
-  useEffect(() => {
-    if (pendingCopyOnOpen && logs.length > 0) {
-      copyLogsToClipboard(logs)
-      setPendingCopyOnOpen(false)
-    }
-  }, [pendingCopyOnOpen, logs, copyLogsToClipboard])
-
   // 组件卸载时清理定时器
   useEffect(() => {
     return () => {
@@ -294,9 +338,6 @@ export function DevConsole() {
         toggleEnabled()
       }
       setIsOpen(true)
-
-      // 标记需要复制日志（useEffect 会在日志加载后执行复制）
-      setPendingCopyOnOpen(true)
     } else {
       setPasswordError(true)
       setPassword('')
@@ -448,11 +489,6 @@ export function DevConsole() {
                 onChange={(e) => {
                   const newFilter = e.target.value as LogEntry['type'] | 'all'
                   setFilter(newFilter)
-                  // 更改日志级别时自动复制该类型的日志
-                  const logsToCopy = newFilter === 'all'
-                    ? logs
-                    : logs.filter(log => log.type === newFilter)
-                  copyLogsToClipboard(logsToCopy)
                 }}
                 className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600"
               >
@@ -463,6 +499,21 @@ export function DevConsole() {
                 <option value="error">Error</option>
                 <option value="debug">Debug</option>
               </select>
+              {/* 复制按钮 */}
+              <button
+                onClick={() => {
+                  // 在用户点击事件的直接上下文中调用复制
+                  const logsToCopy = filter === 'all'
+                    ? logs
+                    : logs.filter(log => log.type === filter)
+                  copyLogsToClipboard(logsToCopy)
+                }}
+                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 bg-gray-800 rounded border border-gray-600 flex items-center gap-1"
+                title="复制当前显示的日志"
+              >
+                <span>📋</span>
+                <span>复制</span>
+              </button>
               {/* 清除按钮 */}
               <button
                 onClick={clearLogs}

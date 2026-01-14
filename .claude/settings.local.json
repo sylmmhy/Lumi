@@ -81,7 +81,9 @@
       "Bash(git -C /Users/jasmine/Firego/firego-app log --oneline)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run:*)",
-      "Bash(apt list:*)"
+      "Bash(apt list:*)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs -I {} git show {} --stat)"
     ],
     "deny": [],
     "ask": []

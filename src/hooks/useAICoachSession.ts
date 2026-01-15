@@ -7,7 +7,9 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
-import { userStateTools, type UserState } from './gemini-live/tools/userStateTools';
+// 🔧 DEBUG: 暂时注释掉工具导入
+// import { userStateTools, type UserState } from './gemini-live/tools/userStateTools';
+import type { UserState } from './gemini-live/tools/userStateTools';
 import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================

@@ -54,6 +54,21 @@ serve(async (req) => {
           )
         }
 
+        // 🔴 关键修复：先删除其他用户拥有相同 device_token 的旧记录
+        // 这样可以防止用户退出后，设备仍然收到其他账户的提醒
+        const { data: deletedRecords, error: deleteError } = await supabase
+          .from('user_devices')
+          .delete()
+          .eq('device_token', device_token)
+          .neq('user_id', user.id)
+          .select()
+
+        if (deleteError) {
+          console.warn('Failed to delete old device records (non-critical):', deleteError)
+        } else if (deletedRecords && deletedRecords.length > 0) {
+          console.log(`🧹 Cleaned up ${deletedRecords.length} old device record(s) with same token for other users`)
+        }
+
         // Upsert the VoIP device - matching the actual table structure
         const { data, error } = await supabase
           .from('user_devices')
@@ -93,6 +108,21 @@ serve(async (req) => {
             JSON.stringify({ error: 'Missing device_token' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
+        }
+
+        // 🔴 关键修复：先删除其他用户拥有相同 device_token 的旧记录
+        // 这样可以防止用户退出后，设备仍然收到其他账户的提醒
+        const { data: deletedRecords, error: deleteError } = await supabase
+          .from('user_devices')
+          .delete()
+          .eq('device_token', device_token)
+          .neq('user_id', user.id)
+          .select()
+
+        if (deleteError) {
+          console.warn('Failed to delete old FCM device records (non-critical):', deleteError)
+        } else if (deletedRecords && deletedRecords.length > 0) {
+          console.log(`🧹 Cleaned up ${deletedRecords.length} old FCM device record(s) with same token for other users`)
         }
 
         // Upsert the FCM device for Android

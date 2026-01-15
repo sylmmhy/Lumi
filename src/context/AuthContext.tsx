@@ -1158,10 +1158,11 @@ export function AuthProvider({
     const currentToken = localStorage.getItem('session_token');
 
     if (supabase) {
-      // 清理 VoIP 设备（忽略失败，不阻塞登出流程）
+      // 🔴 修复：同时清理 VoIP 和 FCM 设备，防止退出后仍收到提醒
       if (currentToken) {
-        try {
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-user-devices`, {
+        const deviceCleanupPromises = [
+          // 清理 VoIP 设备 (iOS)
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-user-devices`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1169,12 +1170,30 @@ export function AuthProvider({
               'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
             body: JSON.stringify({ action: 'remove_voip_device' }),
-          });
-          if (response.ok) console.log('✅ VoIP 设备记录已清理');
-          else console.warn('⚠️ 清理 VoIP 设备记录失败（已忽略）');
-        } catch (error) {
-          console.warn('⚠️ 清理 VoIP 设备记录时出错（已忽略）:', error);
-        }
+          }).then(res => {
+            if (res.ok) console.log('✅ VoIP 设备记录已清理');
+            else console.warn('⚠️ 清理 VoIP 设备记录失败（已忽略）');
+          }).catch(err => {
+            console.warn('⚠️ 清理 VoIP 设备记录时出错（已忽略）:', err);
+          }),
+          // 清理 FCM 设备 (Android)
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-user-devices`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${currentToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ action: 'remove_fcm_device' }),
+          }).then(res => {
+            if (res.ok) console.log('✅ FCM 设备记录已清理');
+            else console.warn('⚠️ 清理 FCM 设备记录失败（已忽略）');
+          }).catch(err => {
+            console.warn('⚠️ 清理 FCM 设备记录时出错（已忽略）:', err);
+          }),
+        ];
+        // 并行执行，不阻塞登出流程
+        await Promise.allSettled(deviceCleanupPromises);
       }
 
       // 尝试调用 Supabase signOut，但不管成功与否都继续清理

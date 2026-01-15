@@ -190,11 +190,22 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         const triggerString = toneManager.recordResistance('ai_detected');
 
         if (import.meta.env.DEV) {
-          console.log('🚫 [ToneManager] AI 通过工具调用报告用户抗拒');
+          console.log('🚫 [ToneManager] AI 通过工具调用报告用户抗拒', {
+            consecutiveRejections: toneManager.toneState.consecutiveRejections + 1,
+            currentTone: toneManager.toneState.currentTone,
+            willTriggerChange: !!triggerString,
+          });
         }
 
         // 如果触发了语气切换，稍后发送触发词
         if (triggerString) {
+          if (import.meta.env.DEV) {
+            console.log('🎭 [ToneManager] 语气切换触发！', {
+              previousTone: toneManager.toneState.currentTone,
+              triggerString,
+              totalChanges: toneManager.toneState.totalToneChanges + 1,
+            });
+          }
           setTimeout(() => {
             sendToneTriggerRef.current(triggerString);
           }, TONE_TRIGGER_DELAY_MS);
@@ -296,8 +307,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       if (geminiLive.isConnected && isSessionActive) {
         geminiLive.sendTextMessage(trigger);
         if (import.meta.env.DEV) {
-          console.log('📤 发送语气切换触发词:', trigger);
+          // 解析触发词获取新语气
+          const styleMatch = trigger.match(/style=(\w+)/);
+          const newStyle = styleMatch ? styleMatch[1] : 'unknown';
+          console.log('📤 [ToneManager] 语气切换触发词已发送给 Gemini', {
+            newTone: newStyle,
+            trigger,
+            timestamp: new Date().toISOString(),
+          });
         }
+      } else if (import.meta.env.DEV) {
+        console.warn('⚠️ [ToneManager] 无法发送语气切换触发词 - 会话未连接', {
+          isConnected: geminiLive.isConnected,
+          isSessionActive,
+        });
       }
     };
   }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);

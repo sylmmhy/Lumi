@@ -142,6 +142,11 @@ function dbToTask(record: TaskRecord): Task {
 function taskToDb(task: Partial<Task>, userId: string): Partial<TaskRecord> {
   const timezone = task.timezone ?? getBrowserTimezone() ?? DEFAULT_TIMEZONE;
 
+  // 🆕 即时任务（displayTime='Now'）直接标记为已调用
+  // 因为即时任务是用户在 UrgencyView 手动输入后立即开始的，不需要后台 VoIP 推送提醒
+  // 如果不标记为 called=true，这些任务会在 iOS 端每次启动时被加载但永远不会被清理
+  const isInstantTask = task.displayTime === 'Now';
+
   return {
     user_id: userId,
     title: task.text, // Task.text 存储到数据库的 title 字段
@@ -155,7 +160,8 @@ function taskToDb(task: Partial<Task>, userId: string): Partial<TaskRecord> {
       : {}),
     task_type: task.type || null,
     time_category: task.category || null,
-    called: task.called ?? false,
+    // 即时任务默认 called=true，其他任务默认 called=false
+    called: task.called ?? (isInstantTask ? true : false),
     is_recurring: task.isRecurring ?? false,
     recurrence_pattern: task.recurrencePattern || null,
     recurrence_days: task.recurrenceDays || null,

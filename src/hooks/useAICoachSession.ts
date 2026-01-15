@@ -7,6 +7,8 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
+import { userStateTools, type UserState } from './gemini-live/tools/userStateTools';
+import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================
 // 配置常量
@@ -144,13 +146,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
-  // 🔧 修复流式响应问题：跟踪当前 AI 回复是否已检测到 [RESIST]
-  // 因为 AI 回复是分 chunks 发送的，[RESIST] 只在第一个 chunk
-  // 后续 chunks 不应该触发 recordAcceptance()
-  const currentTurnHasResistRef = useRef<boolean>(false);
-  // 跟踪上一条消息的角色，用于检测"新一轮"的开始
-  const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
-
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
@@ -165,6 +160,56 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
   const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
+
+  /**
+   * 处理 AI 工具调用的回调
+   *
+   * 主要用于处理 reportUserState 工具，更新语气管理器状态
+   * 这比依赖 [RESIST] 文本标记更可靠，因为 Function Calling
+   * 是 Gemini Live 原生支持的机制，会在语音回复之前触发
+   */
+  const handleToolCall = useCallback((event: ToolCallEvent) => {
+    if (event.functionName === 'reportUserState') {
+      const state = event.args?.state as UserState | undefined;
+      const reason = event.args?.reason as string | undefined;
+
+      if (import.meta.env.DEV) {
+        console.log('🔧 [ToolCall] reportUserState:', { state, reason });
+      }
+
+      // 参数验证
+      if (!state || !['resisting', 'cooperating', 'neutral'].includes(state)) {
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ [ToolCall] Invalid state value:', state);
+        }
+        return;
+      }
+
+      if (state === 'resisting') {
+        // 记录抗拒（AI 检测到用户在抗拒）
+        const triggerString = toneManager.recordResistance('ai_detected');
+
+        if (import.meta.env.DEV) {
+          console.log('🚫 [ToneManager] AI 通过工具调用报告用户抗拒');
+        }
+
+        // 如果触发了语气切换，稍后发送触发词
+        if (triggerString) {
+          setTimeout(() => {
+            sendToneTriggerRef.current(triggerString);
+          }, TONE_TRIGGER_DELAY_MS);
+        }
+      } else if (state === 'cooperating') {
+        // 记录配合
+        toneManager.recordAcceptance();
+
+        if (import.meta.env.DEV) {
+          console.log('✅ [ToneManager] AI 通过工具调用报告用户配合');
+        }
+      }
+      // neutral 状态不做处理，保持当前状态
+    }
+  }, [toneManager]);
 
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
@@ -199,6 +244,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
+    // 传入用户状态报告工具（如果启用了语气管理）
+    // AI 会在每次回复前通过工具调用报告用户状态
+    tools: enableToneManager ? userStateTools : undefined,
+
+    // 工具调用回调：处理 AI 的 reportUserState 调用
+    onToolCall: handleToolCall,
+
     onTranscriptUpdate: (newTranscript) => {
       const lastMessage = newTranscript[newTranscript.length - 1];
       if (!lastMessage) return;
@@ -220,56 +272,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userSpeechBufferRef.current = '';
         }
 
-        // 🔧 检测新一轮 AI 回复的开始（上一条是用户消息）
-        const isNewAITurn = lastProcessedRoleRef.current === 'user';
-
-        // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
-        let displayText = lastMessage.text;
-        if (enableToneManager) {
-          // 🔧 新一轮开始时，判断上一轮是否有抗拒
-          if (isNewAITurn) {
-            if (!currentTurnHasResistRef.current) {
-              // 上一轮没有 [RESIST]，说明用户在配合
-              toneManager.recordAcceptance();
-            }
-            // 重置 flag，准备新一轮的检测
-            currentTurnHasResistRef.current = false;
-          }
-
-          const hasResistTag = lastMessage.text.startsWith('[RESIST]');
-
-          if (hasResistTag) {
-            // 移除 [RESIST] 标记
-            displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
-
-            // 🔧 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
-            currentTurnHasResistRef.current = true;
-
-            // 记录抗拒（AI 检测到用户在抗拒）
-            // 返回值是触发词字符串（如果发生了语气切换），避免闭包过期问题
-            const triggerString = toneManager.recordResistance('ai_detected');
-
-            if (import.meta.env.DEV) {
-              console.log('🚫 [ToneManager] AI 检测到用户抗拒');
-            }
-
-            // 如果触发了语气切换，稍后发送触发词
-            if (triggerString) {
-              setTimeout(() => {
-                sendToneTriggerRef.current(triggerString);
-              }, TONE_TRIGGER_DELAY_MS);
-            }
-          }
-        }
-
-        // 存储 AI 消息（使用处理后的文本）
-        addMessageRef.current('ai', displayText);
+        // 存储 AI 消息
+        // 注意：抗拒检测现在通过 onToolCall 回调处理（reportUserState 工具）
+        // 不再需要检测 [RESIST] 标记
+        addMessageRef.current('ai', lastMessage.text);
         if (import.meta.env.DEV) {
-          console.log('🤖 AI 说:', displayText);
+          console.log('🤖 AI 说:', lastMessage.text);
         }
-
-        // 更新角色跟踪
-        lastProcessedRoleRef.current = 'assistant';
       }
 
       if (lastMessage.role === 'user') {
@@ -277,9 +286,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
         }
-
-        // 更新角色跟踪
-        lastProcessedRoleRef.current = 'user';
       }
     },
   });
@@ -473,9 +479,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
-    // 🔧 重置流式响应相关的 refs
-    currentTurnHasResistRef.current = false;
-    lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
@@ -754,29 +757,29 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         return false;
       }
 
-      const mem0Messages = realMessages.map(msg => ({
+      const extractorMessages = realMessages.map(msg => ({
         role: msg.role === 'ai' ? 'assistant' : 'user',
         content: msg.content,
       }));
 
       // 添加任务上下文作为第一条消息
       if (taskDescription) {
-        mem0Messages.unshift({
+        extractorMessages.unshift({
           role: 'system',
           content: `User was working on task: "${taskDescription}"${additionalContext ? `. ${additionalContext}` : ''}`,
         });
       }
 
-      // 日志：查看传给 Mem0 的内容
+      // 日志：查看传给 memory-extractor 的内容
       if (import.meta.env.DEV) {
-        console.log('📤 [Mem0] 发送到 Mem0 的内容:', {
+        console.log('📤 [Memory] 发送到 memory-extractor 的内容:', {
           userId,
           taskDescription,
           totalMessages: messages.length,
           virtualMessagesFiltered: messages.length - realMessages.length,
           realMessagesCount: realMessages.length,
-          mem0MessagesCount: mem0Messages.length,
-          messages: mem0Messages,
+          extractorMessagesCount: extractorMessages.length,
+          messages: extractorMessages,
         });
       }
 
@@ -801,7 +804,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         body: {
           action: 'extract',
           userId,
-          messages: mem0Messages,
+          messages: extractorMessages,
           taskDescription,
           metadata: {
             source: 'ai_coach_session',
@@ -861,9 +864,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession();
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
-    // 🔧 重置流式响应相关的 refs
-    currentTurnHasResistRef.current = false;
-    lastProcessedRoleRef.current = null;
     setConnectionError(null); // 清除错误状态
     setState({
       taskDescription: '',

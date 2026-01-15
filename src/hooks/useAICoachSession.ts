@@ -660,7 +660,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       // 使用预获取的 token 连接（带超时保护）
       await withTimeout(
-        geminiLive.connect(systemInstruction, undefined, token),
+        geminiLive.connect(systemInstruction, enableToneManager ? userStateTools : undefined, token),
         CONNECTION_TIMEOUT_MS,
         '连接 AI 服务超时，请检查网络连接后重试'
       );

@@ -835,14 +835,15 @@ export function AppTabsPage() {
      * - 结束当前 AI 会话
      * - 返回主界面
      */
-    const handleEndCall = useCallback(async () => {
-        // 保存会话记忆（不标记为成功完成）
-        await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
+    const handleEndCall = useCallback(() => {
+        // 🚀 优化：不等待 saveSessionMemory 完成，让它在后台运行
+        // saveSessionMemory 内部已经复制了所有需要的状态（messages, timeRemaining 等）
+        // 所以可以安全地在后台保存，不阻塞用户操作
+        void aiCoach.saveSessionMemory({ forceTaskCompleted: false });
         aiCoach.endSession();
 
         // 重置状态，返回主界面
         setCurrentTaskId(null);
-        console.log('📞 通话已结束，返回主界面');
     }, [aiCoach]);
 
     /**
@@ -852,7 +853,7 @@ export function AppTabsPage() {
      * - 直接显示庆祝页面（跳过确认页面）
      * - 标记任务为已完成
      */
-    const handleEndAICoachSession = useCallback(async () => {
+    const handleEndAICoachSession = useCallback(() => {
         // 计算完成时间（已用时间 = 初始时间 - 剩余时间）
         const usedTime = 300 - aiCoach.state.timeRemaining;
         const actualDurationMinutes = Math.round(usedTime / 60);
@@ -860,12 +861,13 @@ export function AppTabsPage() {
         setCompletionTime(usedTime);
         setCurrentTaskDescription(aiCoach.state.taskDescription);
 
+        // 🚀 优化：不等待网络请求完成，让它们在后台运行
         // 用户主动点击完成，强制标记为成功会话（用于提取 EFFECTIVE 激励方式）
-        await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
+        void aiCoach.saveSessionMemory({ forceTaskCompleted: true });
         aiCoach.endSession();
 
-        // 标记任务为已完成
-        await markTaskAsCompleted(currentTaskId, actualDurationMinutes);
+        // 标记任务为已完成（后台运行，不阻塞 UI）
+        void markTaskAsCompleted(currentTaskId, actualDurationMinutes);
 
         // 直接显示庆祝页面（跳过确认页面）
         setCelebrationFlow('success');

@@ -83,7 +83,8 @@
       "Bash(npm run:*)",
       "Bash(apt list:*)",
       "Bash(xargs ls:*)",
-      "Bash(xargs -I {} git show {} --stat)"
+      "Bash(xargs -I {} git show {} --stat)",
+      "WebFetch(domain:supabase.com)"
     ],
     "deny": [],
     "ask": []

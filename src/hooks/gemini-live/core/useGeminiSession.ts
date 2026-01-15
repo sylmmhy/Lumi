@@ -143,8 +143,6 @@ export function useGeminiSession(
         ? ([{ functionDeclarations: config.tools }] satisfies GeminiTool[])
         : undefined;
 
-      console.log('🔧 Tools being registered:', toolList && config?.tools ? config.tools.map(t => t.name) : 'none');
-
       const session = await ai.live.connect({
         model,
         config: {
@@ -178,28 +176,19 @@ export function useGeminiSession(
           onopen: () => {
             setIsConnected(true);
             setError(null);
-            console.log('🟢 [GeminiSession] WebSocket connected');
+            devLog('Gemini Live connected');
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
-            const messageAny = message as unknown as Record<string, unknown>;
-
-            // 检查 goAway 消息（服务器即将断开连接的通知）
-            if ('goAway' in messageAny) {
-              console.warn('⚠️ [GeminiSession] GoAway received - server will disconnect soon:', messageAny.goAway);
-            }
-
             onMessage?.(message);
           },
           onerror: (errorEvent: ErrorEvent) => {
             const errorMessage = errorEvent?.message || 'Connection error';
-            console.error('🔴 [GeminiSession] WebSocket error:', errorMessage, errorEvent);
             setError(errorMessage);
             setIsConnected(false);
             onError?.(errorMessage);
           },
           onclose: () => {
-            console.log('🟠 [GeminiSession] WebSocket closed');
             setIsConnected(false);
             devLog('Gemini Live disconnected');
             onDisconnected?.();
@@ -255,11 +244,7 @@ export function useGeminiSession(
     }>;
   }) => {
     if (sessionRef.current) {
-      try {
-        sessionRef.current.sendToolResponse(response);
-      } catch (err) {
-        console.error('❌ sendToolResponse error:', err);
-      }
+      sessionRef.current.sendToolResponse(response);
     }
   }, []);
 

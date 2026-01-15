@@ -102,42 +102,6 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       // 调用外部消息处理器
       onMessage?.(message);
 
-      // 定义工具调用处理函数
-      const processToolCall = (toolCall: ToolCall) => {
-        if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
-          const functionCall = toolCall.functionCalls[0];
-          const functionName = functionCall.name;
-          const args = functionCall.args;
-
-          console.log('🔧 Tool:', functionName, args);
-
-          if (onToolCallRef.current) {
-            onToolCallRef.current({ functionName, args });
-          }
-
-          // Send function response back to AI
-          try {
-            session.sendToolResponse({
-              functionResponses: [
-                {
-                  id: functionCall.id,
-                  name: functionName,
-                  response: { success: true },
-                },
-              ],
-            });
-          } catch (err) {
-            console.error('❌ Tool response failed:', err);
-          }
-        }
-      };
-
-      // 处理顶级 toolCall 消息（根据 Gemini Live API，toolCall 是顶级字段）
-      const messageAny = message as unknown as Record<string, unknown>;
-      if ('toolCall' in messageAny && messageAny.toolCall) {
-        processToolCall(messageAny.toolCall as ToolCall);
-      }
-
       // 使用消息处理器处理服务器内容
       if (message.serverContent) {
         handleServerContent(message, {
@@ -154,7 +118,32 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           onOutputTranscription: (text: string) => {
             transcriptManager.addAssistantEntry(text);
           },
-          onToolCall: processToolCall,  // 保留以防 serverContent 中也有 toolCall
+          onToolCall: (toolCall: ToolCall) => {
+            devLog('🔧 Tool call received:', toolCall);
+
+            if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
+              const functionCall = toolCall.functionCalls[0];
+              const functionName = functionCall.name;
+              const args = functionCall.args;
+
+              devLog('📞 Function called:', functionName, args);
+
+              if (onToolCallRef.current) {
+                onToolCallRef.current({ functionName, args });
+              }
+
+              // Send function response back to AI
+              session.sendToolResponse({
+                functionResponses: [
+                  {
+                    id: functionCall.id,
+                    name: functionName,
+                    response: { success: true },
+                  },
+                ],
+              });
+            }
+          },
           onAudioData: async (data: string) => {
             try {
               await audioOutput.ensureReady();

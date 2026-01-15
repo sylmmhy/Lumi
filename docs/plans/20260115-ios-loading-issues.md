@@ -1,7 +1,7 @@
 # iOS 端启动延迟问题排查
 
 创建时间：2026-01-15
-状态：🚧 待排查
+状态：🚧 进行中（401 已修复，优化方案 1/2/3 已实施，待测试验证）
 
 ## 背景
 
@@ -133,11 +133,209 @@ showOnboarding = true
 
 ---
 
+## 修复进度
+
+### ✅ 问题 1：401 认证错误 - 已修复
+
+**根本原因**：`fetchHabitOnboardingStatus` 方法缺少 401 重试逻辑。当 accessToken 过期时，请求返回 401，代码回退到本地缓存（值为 false），导致老用户被错误导航到 onboarding。
+
+**对比**：
+- `uploadVoIPToken`（有 401 处理）→ 会刷新 token 并重试 ✅
+- `fetchHabitOnboardingStatus`（没有 401 处理）→ 直接抛出错误 ❌
+
+**修复内容** (`MindBoat/Services/SupabaseClient.swift`)：
+1. 将原方法拆分为三个方法：
+   - `fetchHabitOnboardingStatus` - 主入口，处理 401 重试逻辑
+   - `performFetchOnboardingRequest` - 执行 HTTP 请求
+   - `parseOnboardingResponse` - 解析响应数据
+2. 添加 401 检测和 token 刷新重试机制（与 `uploadVoIPToken` 保持一致）
+
+### 🔍 问题 2：90 秒启动延迟 - 已完成诊断，待优化
+
+**诊断日志已收集（2026-01-15 22:00）**
+
+#### 延迟时间线分解
+
+| 时间 | 阶段 | 耗时 | 问题级别 |
+|------|------|------|----------|
+| 21:59:45.914 | App 启动 | 0ms | - |
+| 21:59:46.762 | 开始查询 onboarding 状态 | 833ms | ✅ 正常 |
+| 21:59:57.782 | 数据库查询完成 | **11 秒** | 🔴 严重 |
+| 22:00:04.469 | MainActor.run 开始 | **6.7 秒** | 🔴 严重 |
+| 22:00:15.727 | loadViewIfNeeded 完成 | **11 秒** | 🔴 严重 |
+| 22:00:35.874 | applyNativeLogin 完成 | **16 秒** | 🔴 严重 |
+| 22:00:52.649 | viewDidLoad 开始 | **17 秒** | 🔴 严重 |
+| 22:00:55.821 | configureAudioSession 完成 | **3.2 秒** | 🟡 中等 |
+| 22:01:05.389 | WebView 页面加载完成 | - | ✅ 正常 |
+
+**总耗时**：约 80 秒（从 App 启动到页面可用）
+
+#### 根本原因分析
+
+1. **API 请求阻塞主流程**（11 秒）
+   - `fetchHabitOnboardingStatus` 查询数据库花了 11 秒
+   - 同时 `uploadVoIPToken` 也在执行，花了 9 秒
+   - 这两个请求串行阻塞了后续 UI 显示
+
+2. **MainActor 排队延迟**（6.7 秒）
+   - `await MainActor.run` 等待了 6.7 秒才开始执行
+   - 说明主线程被其他操作阻塞
+
+3. **TabController/WebView 创建慢**（11 + 17 秒）
+   - `MainTabController` 创建到 `loadViewIfNeeded` 完成花了 11 秒
+   - `loadURL` 调用到 `viewDidLoad` 执行花了 17 秒
+   - WKWebView 初始化本身就慢，加上主线程阻塞更慢
+
+4. **音频配置阻塞**（3.2 秒）
+   - `configureAudioSession()` 在主线程执行，花了 3.2 秒
+
+---
+
+## 优化方案（待实施）
+
+### 方案 1：不阻塞主流程等待 onboarding 查询 ⭐ 优先级最高
+
+**问题**：当前流程是串行的：
+```
+查询 onboarding 状态 (11秒) → 等待结果 → 显示页面
+```
+
+**优化后**：
+```
+立即显示页面（使用本地缓存） → 后台查询 → 如果不一致再更新
+```
+
+**修改文件**：`MindBoat/Coordinator/AppCoordinator.swift`
+
+**修改内容**：
+```swift
+// handlePostInitialization() 中
+// 改为：先用本地缓存显示页面，后台异步查询
+let localOnboardingStatus = SessionManager.shared.hasCompletedHabitOnboarding
+
+// 立即显示页面，不等待数据库查询
+await MainActor.run {
+    self.presentMainInterface(
+        animated: true,
+        propagateLoginToWeb: true,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        showOnboarding: !localOnboardingStatus  // 使用本地缓存
+    )
+}
+
+// 后台异步查询，如果不一致再处理
+Task {
+    do {
+        let databaseStatus = try await SupabaseClient.shared.fetchHabitOnboardingStatus(...)
+        if databaseStatus != localOnboardingStatus {
+            // 状态不一致，需要跳转
+            await MainActor.run {
+                // 重新加载正确的页面
+            }
+        }
+    } catch {
+        // 查询失败，保持当前页面
+    }
+}
+```
+
+### 方案 2：预热 WebView ⭐ 优先级高
+
+**问题**：WebView 在需要时才创建，初始化很慢
+
+**优化后**：App 启动时就开始预热 WebView
+
+**修改文件**：
+- `MindBoat/Coordinator/AppCoordinator.swift`
+- 可能需要新建 `MindBoat/Services/WebViewPreloader.swift`
+
+**修改内容**：
+```swift
+// AppCoordinator.start() 中
+// 在显示登录页的同时，后台预热 WebView
+presentOnboardingScreen(animated: false)
+
+// 后台预热
+Task.detached(priority: .userInitiated) {
+    await WebViewPreloader.shared.warmUp()
+}
+```
+
+### 方案 3：优化音频配置 ⭐ 优先级中
+
+**问题**：`configureAudioSession()` 在主线程执行，花了 3.2 秒
+
+**优化后**：移到后台线程
+
+**修改文件**：`MindBoat/ViewControllers/WebViewController.swift`
+
+**修改内容**：
+```swift
+// viewDidLoad() 中
+// 改为后台执行
+Task.detached(priority: .userInitiated) {
+    AudioSessionConfigurator.shared.configure()
+}
+```
+
+### 方案 4：减少 MainActor 切换 ⭐ 优先级中
+
+**问题**：过多的 `await MainActor.run` 导致排队延迟
+
+**优化后**：合并 MainActor 调用，减少切换次数
+
+**修改文件**：`MindBoat/Coordinator/AppCoordinator.swift`
+
+---
+
+## 实施顺序与进度
+
+1. ✅ **方案 1**：并行执行数据库查询和 UI 预热 → 预计减少 10-15 秒
+2. ✅ **方案 2**：预热 WebView（已合并到方案 1 中）
+3. ✅ **方案 3**：优化音频配置移到后台线程 → 预计减少 3 秒
+4. ⏸️ **方案 4**：减少 MainActor 切换 → 暂缓，观察前三个方案效果
+
+**预期优化后总耗时**：从 80 秒降到 15-25 秒
+
+---
+
+## 已完成的修改
+
+### 2026-01-15 优化实施
+
+**修改文件 1**：`MindBoat/Coordinator/AppCoordinator.swift`
+- 新增 `fetchOnboardingStatusFromDatabase()` 方法：独立的数据库查询任务
+- 新增 `warmupMainInterface()` 方法：预热 TabController 和 WebView
+- 修改 `handlePostInitialization()`：使用 `async let` 并行执行数据库查询和 UI 预热
+
+**修改文件 2**：`MindBoat/ViewControllers/WebViewController.swift`
+- 修改 `viewDidLoad()`：音频配置改为 `Task.detached` 后台执行，不阻塞主线程
+
+---
+
 ## 下一步行动
 
-1. **优先修复 401 错误**：这导致老用户体验极差
-2. **排查 90 秒延迟**：在 iOS 关键节点添加日志定位延迟来源
-3. **测试验证**：修复后在 iOS 真机上测试
+1. ~~**优先修复 401 错误**~~：✅ 已完成
+2. ~~**排查 90 秒延迟**~~：✅ 已完成诊断，找到 4 个瓶颈
+3. ~~**实施优化方案 1、2、3**~~：✅ 已完成
+4. **测试验证**：在 iOS 真机上测试，确认启动时间降到 15-25 秒
+5. **观察效果**：如果仍然较慢，再实施方案 4
+
+---
+
+## 给下一个 AI 的提示
+
+优化方案 1、2、3 已实施完成。
+
+**测试验证步骤**：
+1. 在 Xcode 中编译运行 iOS App
+2. 观察启动日志中的时间戳
+3. 预期效果：App 启动到页面可用应在 15-25 秒内
+
+如果效果不理想，可以考虑实施方案 4（减少 MainActor 切换）。
+
+iOS 项目路径：`/Users/miko_mac_mini/projects/mindboat-ios-web-warpper`
 
 ---
 

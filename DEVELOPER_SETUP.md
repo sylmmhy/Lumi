@@ -352,7 +352,7 @@ git remote -v
 ## 📚 相关文档
 
 - [项目架构文档](./docs/architecture/README.md)
-- [记忆系统文档](./docs/memory-architecture.md)
+- [记忆系统文档](./docs/architecture/memory-system.md)
 - [部署指南](./DEPLOY_GUIDE.md)
 - [原生 App 集成](./NATIVE_AUTH_VERIFICATION.md)
 - [Claude 开发指南](./CLAUDE.md)

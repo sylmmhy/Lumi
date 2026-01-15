@@ -7,8 +7,7 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
-import { type UserState } from './gemini-live/tools/userStateTools';
-// import { userStateTools } from './gemini-live/tools/userStateTools';
+import { type UserState, userStateTools } from './gemini-live/tools/userStateTools';
 import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================
@@ -262,8 +261,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const geminiLive = useGeminiLive({
     // 传入用户状态报告工具（如果启用了语气管理）
     // AI 会在每次回复前通过工具调用报告用户状态
-    // tools: enableToneManager ? userStateTools : undefined,
-    tools: undefined,
+    tools: enableToneManager ? userStateTools : undefined,
 
     // 工具调用回调：处理 AI 的 reportUserState 调用
     onToolCall: handleToolCall,

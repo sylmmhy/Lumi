@@ -220,7 +220,8 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
         log('🔄', `语气切换: ${TONE_DESCRIPTIONS[prev.currentTone]} → ${TONE_DESCRIPTIONS[nextTone]}`);
 
         // 直接生成触发词字符串（避免闭包过期）
-        triggerString = `[TONE_SHIFT] style=${nextTone} current_time=${getCurrentTimeString()}`;
+        // 注意：明确告诉 AI 这是系统指令，不需要再次调用 reportUserState
+        triggerString = `[TONE_SHIFT] style=${nextTone} current_time=${getCurrentTimeString()}. This is a system directive - do NOT call reportUserState, just respond with the new ${nextTone} tone.`;
         log('📤', `生成触发词: ${triggerString}`);
 
         return {
@@ -257,7 +258,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
     const timeSinceChange = Date.now() - lastToneChangeTime;
     if (timeSinceChange < 5000 && lastToneChangeTime > 0) {
       const trigger: ToneTrigger = {
-        trigger: `[TONE_SHIFT] style=${currentTone} current_time=${getCurrentTimeString()}`,
+        trigger: `[TONE_SHIFT] style=${currentTone} current_time=${getCurrentTimeString()}. This is a system directive - do NOT call reportUserState, just respond with the new ${currentTone} tone.`,
         targetTone: currentTone,
         currentTime: getCurrentTimeString(),
       };
@@ -283,7 +284,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
     }));
 
     return {
-      trigger: `[TONE_SHIFT] style=${targetTone} current_time=${getCurrentTimeString()}`,
+      trigger: `[TONE_SHIFT] style=${targetTone} current_time=${getCurrentTimeString()}. This is a system directive - do NOT call reportUserState, just respond with the new ${targetTone} tone.`,
       targetTone,
       currentTime: getCurrentTimeString(),
     };

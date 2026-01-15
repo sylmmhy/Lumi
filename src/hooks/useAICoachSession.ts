@@ -24,7 +24,8 @@ const MAX_CAMERA_RETRIES = 2;
 const CAMERA_RETRY_DELAY_MS = 1000;
 
 /** Tone 切换触发词发送延迟（毫秒） */
-const TONE_TRIGGER_DELAY_MS = 500;
+// 语气切换现在延迟到 turnComplete 时发送，不再使用固定延迟
+// const TONE_TRIGGER_DELAY_MS = 500;
 
 // ==========================================
 // 工具函数
@@ -161,6 +162,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
   const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
 
+  // 🔑 延迟发送语气切换：存储待发送的触发词，等 turnComplete 时再发送
+  // 这样避免在用户说话过程中打断/干扰，让语气切换更自然
+  const pendingToneTriggerRef = useRef<string | null>(null);
+
   /**
    * 处理 AI 工具调用的回调
    *
@@ -197,18 +202,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           });
         }
 
-        // 如果触发了语气切换，稍后发送触发词
+        // 如果触发了语气切换，存储触发词，等 turnComplete 时再发送
+        // 🔑 这样避免在 AI 回复过程中打断，让语气切换更自然
         if (triggerString) {
           if (import.meta.env.DEV) {
-            console.log('🎭 [ToneManager] 语气切换触发！', {
+            console.log('🎭 [ToneManager] 语气切换已排队（等待 turnComplete）', {
               previousTone: toneManager.toneState.currentTone,
               triggerString,
               totalChanges: toneManager.toneState.totalToneChanges + 1,
             });
           }
-          setTimeout(() => {
-            sendToneTriggerRef.current(triggerString);
-          }, TONE_TRIGGER_DELAY_MS);
+          pendingToneTriggerRef.current = triggerString;
         }
       } else if (state === 'cooperating') {
         // 记录配合
@@ -363,7 +367,26 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const { recordTurnComplete } = virtualMessages;
 
   useEffect(() => {
-    setOnTurnComplete(() => recordTurnComplete(false));
+    setOnTurnComplete(() => {
+      // 记录 turn complete 到虚拟消息系统
+      recordTurnComplete(false);
+
+      // 🔑 检查是否有待发送的语气切换
+      // 只有在 AI 说完话后才发送，避免打断
+      if (pendingToneTriggerRef.current) {
+        const triggerString = pendingToneTriggerRef.current;
+        pendingToneTriggerRef.current = null; // 清空，防止重复发送
+
+        if (import.meta.env.DEV) {
+          console.log('🎭 [ToneManager] turnComplete - 发送语气切换:', triggerString);
+        }
+
+        // 稍微延迟发送，让 AI 有时间处理 turn complete
+        setTimeout(() => {
+          sendToneTriggerRef.current(triggerString);
+        }, 300);
+      }
+    });
     return () => setOnTurnComplete(null);
   }, [recordTurnComplete, setOnTurnComplete]);
 

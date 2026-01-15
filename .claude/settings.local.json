@@ -87,7 +87,9 @@
       "WebFetch(domain:supabase.com)",
       "Bash(sort:*)",
       "Bash(git cat-file:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(git checkout:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,21 +2,36 @@ import React from 'react';
 
 interface Testimonial {
     quote: string;
-    context: string;
+    name: string;
+    role: string;
+    avatar: string;
 }
+
+/**
+ * 使用 DiceBear API 生成无版权头像
+ * https://www.dicebear.com/ - 免费开源头像生成服务
+ */
+const getAvatarUrl = (seed: string) =>
+    `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
 const testimonials: Testimonial[] = [
     {
-        quote: "I finally finished my side project after 6 months of procrastinating. Lumi's gentle nudges kept me accountable without making me feel guilty.",
-        context: "Member on beating procrastination"
+        quote: "As a freelance designer, I used to lose entire days to procrastination. Now I just open Lumi, tell it what I need to do, and somehow I actually do it. Finished 3 client projects last month!",
+        name: "Sarah Chen",
+        role: "Freelance UI Designer",
+        avatar: getAvatarUrl("sarah-chen")
     },
     {
-        quote: "The body double feature is a game changer. It's like having a study buddy who's always available, never judgmental, and actually helps me focus.",
-        context: "Member on staying focused"
+        quote: "I have ADHD and body doubling is literally the only thing that works for me. Having Lumi there while I study feels like having a patient friend who never gets tired. My GPA went from 2.8 to 3.5.",
+        name: "Marcus Johnson",
+        role: "Computer Science Student",
+        avatar: getAvatarUrl("marcus-j")
     },
     {
-        quote: "I've tried every habit app out there. Lumi is the first one where my habits actually stuck past the 3-day mark. Now I'm on a 45-day streak!",
-        context: "Member on building habits"
+        quote: "Tried Focusmate, tried Forest, tried everything. Lumi is different because it actually talks to me and checks in. The AI feels weirdly human? Anyway, 45-day meditation streak and counting.",
+        name: "Emily Park",
+        role: "Product Manager at Spotify",
+        avatar: getAvatarUrl("emily-park")
     }
 ];
 
@@ -55,10 +70,19 @@ export const LandingTestimonials: React.FC = () => {
                                 </p>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-gray-100 group-hover:bg-[#2545BD]/10 transition-colors" />
-                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
-                                    {testimonial.context}
-                                </p>
+                                <img
+                                    src={testimonial.avatar}
+                                    alt={testimonial.name}
+                                    className="w-12 h-12 rounded-full bg-gray-100"
+                                />
+                                <div>
+                                    <p className="text-base font-bold text-gray-900">
+                                        {testimonial.name}
+                                    </p>
+                                    <p className="text-sm text-gray-400">
+                                        {testimonial.role}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     ))}

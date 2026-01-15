@@ -182,22 +182,13 @@ export function useGeminiSession(
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
-            // 🔍 DEBUG: 检查顶级 toolCall 和 serverContent 中的关键事件
             const messageAny = message as unknown as Record<string, unknown>;
 
-            // 检查顶级 toolCall（工具调用是单独的消息类型）
-            if ('toolCall' in messageAny) {
-              console.log('📩 [GeminiSession] Top-level toolCall message received!', messageAny.toolCall);
+            // 检查 goAway 消息（服务器即将断开连接的通知）
+            if ('goAway' in messageAny) {
+              console.warn('⚠️ [GeminiSession] GoAway received - server will disconnect soon:', messageAny.goAway);
             }
 
-            // 检查 serverContent 中的关键事件
-            if (message.serverContent) {
-              const contentKeys = Object.keys(message.serverContent);
-              const isImportant = contentKeys.some(k => ['turnComplete', 'interrupted'].includes(k));
-              if (isImportant) {
-                console.log('📩 [GeminiSession] Important serverContent:', contentKeys);
-              }
-            }
             onMessage?.(message);
           },
           onerror: (errorEvent: ErrorEvent) => {
@@ -263,16 +254,12 @@ export function useGeminiSession(
       response: Record<string, unknown>;
     }>;
   }) => {
-    console.log('📤 [GeminiSession] sendToolResponse called:', JSON.stringify(response));
     if (sessionRef.current) {
       try {
         sessionRef.current.sendToolResponse(response);
-        console.log('✅ [GeminiSession] sendToolResponse success');
       } catch (err) {
-        console.error('❌ [GeminiSession] sendToolResponse error:', err);
+        console.error('❌ sendToolResponse error:', err);
       }
-    } else {
-      console.warn('⚠️ [GeminiSession] sendToolResponse called but session is null');
     }
   }, []);
 

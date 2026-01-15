@@ -1,4 +1,18 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "推送前快速审查：检查本次改动的文件中是否有临时 console.log、缺少注释的新函数、或其他代码问题。如有问题请列出，没有则说'审查通过'。",
+            "statusMessage": "推送前代码审查中..."
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(supabase functions download:*)",

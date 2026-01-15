@@ -102,6 +102,48 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       // 调用外部消息处理器
       onMessage?.(message);
 
+      // 定义工具调用处理函数（供 serverContent 和顶级 toolCall 共用）
+      const processToolCall = (toolCall: ToolCall) => {
+        console.log('🔧 [GeminiLive] Tool call received:', toolCall);
+
+        if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
+          const functionCall = toolCall.functionCalls[0];
+          const functionName = functionCall.name;
+          const args = functionCall.args;
+
+          console.log('📞 [GeminiLive] Function called:', functionName, args);
+
+          if (onToolCallRef.current) {
+            onToolCallRef.current({ functionName, args });
+          }
+
+          // Send function response back to AI
+          console.log('📤 [GeminiLive] Sending tool response for:', functionName, 'id:', functionCall.id);
+          try {
+            session.sendToolResponse({
+              functionResponses: [
+                {
+                  id: functionCall.id,
+                  name: functionName,
+                  response: { success: true },
+                },
+              ],
+            });
+            console.log('✅ [GeminiLive] Tool response sent successfully');
+          } catch (err) {
+            console.error('❌ [GeminiLive] Failed to send tool response:', err);
+          }
+        }
+      };
+
+      // 🔧 FIX: 处理顶级 toolCall 消息（根据 Gemini Live API，toolCall 是顶级字段）
+      const messageAny = message as unknown as Record<string, unknown>;
+      if ('toolCall' in messageAny && messageAny.toolCall) {
+        const toolCall = messageAny.toolCall as ToolCall;
+        console.log('🔧 [GeminiLive] Top-level toolCall detected!');
+        processToolCall(toolCall);
+      }
+
       // 使用消息处理器处理服务器内容
       if (message.serverContent) {
         handleServerContent(message, {
@@ -119,38 +161,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           onOutputTranscription: (text: string) => {
             transcriptManager.addAssistantEntry(text);
           },
-          onToolCall: (toolCall: ToolCall) => {
-            console.log('🔧 [GeminiLive] Tool call received:', toolCall);
-
-            if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
-              const functionCall = toolCall.functionCalls[0];
-              const functionName = functionCall.name;
-              const args = functionCall.args;
-
-              console.log('📞 [GeminiLive] Function called:', functionName, args);
-
-              if (onToolCallRef.current) {
-                onToolCallRef.current({ functionName, args });
-              }
-
-              // Send function response back to AI
-              console.log('📤 [GeminiLive] Sending tool response for:', functionName, 'id:', functionCall.id);
-              try {
-                session.sendToolResponse({
-                  functionResponses: [
-                    {
-                      id: functionCall.id,
-                      name: functionName,
-                      response: { success: true },
-                    },
-                  ],
-                });
-                console.log('✅ [GeminiLive] Tool response sent successfully');
-              } catch (err) {
-                console.error('❌ [GeminiLive] Failed to send tool response:', err);
-              }
-            }
-          },
+          onToolCall: processToolCall,  // 保留以防 serverContent 中也有 toolCall
           onAudioData: async (data: string) => {
             try {
               await audioOutput.ensureReady();

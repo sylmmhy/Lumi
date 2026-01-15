@@ -9,6 +9,10 @@ const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
 
 const parseTime12 = (str: string) => {
     const now = new Date();
+    // 当没有传入时间时，默认使用当前时间 +1 分钟（便于调试）
+    if (!str) {
+        now.setMinutes(now.getMinutes() + 1);
+    }
     const [rawH, rawM] = str ? str.split(':').map(Number) : [now.getHours(), now.getMinutes()];
     const h = Number.isFinite(rawH) ? rawH : now.getHours();
     const m = Number.isFinite(rawM) ? rawM : now.getMinutes();
@@ -24,6 +28,10 @@ const parseTime12 = (str: string) => {
 
 const parseTime24 = (str: string) => {
     const now = new Date();
+    // 当没有传入时间时，默认使用当前时间 +1 分钟（便于调试）
+    if (!str) {
+        now.setMinutes(now.getMinutes() + 1);
+    }
     const [rawH, rawM] = str ? str.split(':').map(Number) : [now.getHours(), now.getMinutes()];
     const h = Number.isFinite(rawH) ? rawH : now.getHours();
     const m = Number.isFinite(rawM) ? rawM : now.getMinutes();

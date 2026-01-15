@@ -234,14 +234,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             });
         }
 
-        let finalTime = selectedTime;
-        if (!finalTime) {
-            const now = new Date();
-            now.setMinutes(now.getMinutes() + 5);
-            finalTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        }
-
-        const [h, m] = finalTime.split(':').map(Number);
+        // selectedTime 由 TimePicker 自动设置，不可能为空
+        const [h, m] = selectedTime.split(':').map(Number);
         let category: Task['category'] = 'morning';
         if (h >= 0 && h < 5) category = 'latenight';
         else if (h >= 5 && h < 12) category = 'morning';
@@ -275,8 +269,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         const newTask: Task = {
             id: Date.now().toString(),
             text: taskInput,
-            time: finalTime,
-            displayTime: parseTimeToString(finalTime),
+            time: selectedTime,
+            displayTime: parseTimeToString(selectedTime),
             date: dateStr,
             completed: false,
             type: isRoutine ? 'routine' : 'todo',
@@ -511,7 +505,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-50" ref={timePickerContainerRef}>
                         {/* White outer container */}
                         <button
-                            onClick={() => setShowTimePicker(!showTimePicker)}
+                            onClick={() => {
+                                // 验证任务名称：如果用户未输入任务名，先提示再打开时间选择器
+                                if (!taskInput.trim()) {
+                                    alert(t('home.pleaseEnterTask'));
+                                    return;
+                                }
+                                setShowTimePicker(!showTimePicker);
+                            }}
                             className="bg-white rounded-full p-[10px] transition-transform hover:scale-105 active:scale-95"
                             style={{
                                 boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.25)',

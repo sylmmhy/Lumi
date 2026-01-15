@@ -73,6 +73,7 @@ export function DevConsole() {
   const [filter, setFilter] = useState<LogEntry['type'] | 'all'>('all')
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logIdRef = useRef(0)
+  const logsRef = useRef<LogEntry[]>([]) // 用于在异步操作中访问最新的 logs
 
   // 密码验证状态
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -188,6 +189,9 @@ export function DevConsole() {
         textarea.style.boxShadow = 'none'
         textarea.style.background = 'transparent'
         textarea.style.opacity = '0'
+        // 显式允许文本选择，覆盖全局的 user-select: none
+        textarea.style.userSelect = 'text'
+        textarea.style.webkitUserSelect = 'text'
 
         document.body.appendChild(textarea)
         textarea.focus()
@@ -292,6 +296,11 @@ export function DevConsole() {
     }
   }, [isEnabled])
 
+  // 同步 logs 到 ref，用于在异步操作中访问最新值
+  useEffect(() => {
+    logsRef.current = logs
+  }, [logs])
+
   // 自动滚动到底部
   useEffect(() => {
     if (isOpen && logsEndRef.current) {
@@ -338,6 +347,14 @@ export function DevConsole() {
         toggleEnabled()
       }
       setIsOpen(true)
+
+      // 使用短延迟等待日志加载后自动复制
+      // 延迟 200ms 足够让 useEffect 执行并添加初始化日志
+      // 同时仍然在浏览器认为的"用户交互窗口"内
+      setTimeout(() => {
+        // 使用 ref 获取最新的日志（避免闭包陷阱）
+        copyLogsToClipboard(logsRef.current)
+      }, 200)
     } else {
       setPasswordError(true)
       setPassword('')
@@ -486,7 +503,15 @@ export function DevConsole() {
               {/* 过滤器 */}
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as LogEntry['type'] | 'all')}
+                onChange={(e) => {
+                  const newFilter = e.target.value as LogEntry['type'] | 'all'
+                  setFilter(newFilter)
+                  // 过滤器更改是用户交互，在此上下文中自动复制是安全的
+                  const logsToCopy = newFilter === 'all'
+                    ? logs
+                    : logs.filter(log => log.type === newFilter)
+                  copyLogsToClipboard(logsToCopy)
+                }}
                 className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600"
               >
                 <option value="all">全部</option>
@@ -542,7 +567,13 @@ export function DevConsole() {
           </div>
 
           {/* 日志列表 */}
-          <div className="flex-1 overflow-auto p-2 font-mono text-xs">
+          <div
+            className="flex-1 overflow-auto p-2 font-mono text-xs"
+            style={{
+              userSelect: 'text',
+              WebkitUserSelect: 'text'
+            }}
+          >
             {filteredLogs.length === 0 ? (
               <div className="text-gray-500 text-center py-8">
                 暂无日志

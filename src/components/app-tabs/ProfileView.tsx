@@ -458,17 +458,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
                 </button>
 
-                {/* Delete Account Button - Only show for logged in users */}
-                {!isGuest && (
-                    <button
-                        onClick={() => setShowDeleteAccountModal(true)}
-                        className="w-full py-3 text-gray-400 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-6"
-                    >
-                        <i className="fa-solid fa-trash-can"></i>
-                        <span>{t('profile.deleteAccount')}</span>
-                    </button>
-                )}
-
                 {/* Biography Section */}
                 <div className="mb-8 mt-4">
                     <div className="bg-white rounded-3xl p-6 shadow-sm relative">
@@ -583,7 +572,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     <div className="flex-1 overflow-y-auto p-4">
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                             {/* Email Row */}
-                            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                            <div className="flex items-center justify-between p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
                                         <i className="fa-solid fa-envelope text-brand-blue"></i>
@@ -595,6 +584,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 </div>
                             </div>
                         </div>
+
+                        {/* Delete Account Button */}
+                        <button
+                            onClick={() => setShowDeleteAccountModal(true)}
+                            className="w-full mt-4 py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <i className="fa-solid fa-trash-can"></i>
+                            <span>{t('profile.deleteAccount')}</span>
+                        </button>
                     </div>
                 </div>
             )}

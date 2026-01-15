@@ -7,7 +7,7 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
-import { type UserState, userStateTools } from './gemini-live/tools/userStateTools';
+import type { UserState } from './gemini-live/tools/userStateTools';
 import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================
@@ -147,6 +147,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
+  // 🔧 [RESIST] 文本标记检测：跟踪流式响应状态
+  // 因为 AI 回复是分 chunks 发送的，[RESIST] 只在第一个 chunk
+  // 后续 chunks 不应该触发 recordAcceptance()
+  const currentTurnHasResistRef = useRef<boolean>(false);
+  // 跟踪上一条消息的角色，用于检测"新一轮"的开始
+  const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
+
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
@@ -259,13 +266,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
-    // 传入用户状态报告工具（如果启用了语气管理）
-    // AI 会在每次回复前通过工具调用报告用户状态
-    tools: enableToneManager ? userStateTools : undefined,
-
-    // 工具调用回调：处理 AI 的 reportUserState 调用
-    onToolCall: handleToolCall,
-
     onTranscriptUpdate: (newTranscript) => {
       const lastMessage = newTranscript[newTranscript.length - 1];
       if (!lastMessage) return;
@@ -287,13 +287,54 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userSpeechBufferRef.current = '';
         }
 
-        // 存储 AI 消息
-        // 注意：抗拒检测现在通过 onToolCall 回调处理（reportUserState 工具）
-        // 不再需要检测 [RESIST] 标记
-        addMessageRef.current('ai', lastMessage.text);
-        if (import.meta.env.DEV) {
-          console.log('🤖 AI 说:', lastMessage.text);
+        // 🔧 检测新一轮 AI 回复的开始（上一条是用户消息）
+        const isNewAITurn = lastProcessedRoleRef.current === 'user';
+
+        // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
+        let displayText = lastMessage.text;
+        if (enableToneManager) {
+          // 新一轮开始时，判断上一轮是否有抗拒
+          if (isNewAITurn) {
+            if (!currentTurnHasResistRef.current) {
+              // 上一轮没有 [RESIST]，说明用户在配合
+              toneManager.recordAcceptance();
+            }
+            // 重置 flag，准备新一轮的检测
+            currentTurnHasResistRef.current = false;
+          }
+
+          const hasResistTag = lastMessage.text.startsWith('[RESIST]');
+
+          if (hasResistTag) {
+            // 移除 [RESIST] 标记，不显示给用户
+            displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
+
+            // 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
+            currentTurnHasResistRef.current = true;
+
+            // 记录抗拒（AI 检测到用户在抗拒）
+            // 返回值是触发词字符串（如果发生了语气切换），避免闭包过期问题
+            const triggerString = toneManager.recordResistance('ai_detected');
+
+            if (import.meta.env.DEV) {
+              console.log('🚫 [ToneManager] AI 检测到用户抗拒 [RESIST]');
+            }
+
+            // 如果触发了语气切换，存储触发词，等 turnComplete 时再发送
+            if (triggerString) {
+              pendingToneTriggerRef.current = triggerString;
+            }
+          }
         }
+
+        // 存储 AI 消息（使用处理后的文本，移除了 [RESIST] 标记）
+        addMessageRef.current('ai', displayText);
+        if (import.meta.env.DEV) {
+          console.log('🤖 AI 说:', displayText);
+        }
+
+        // 更新角色跟踪
+        lastProcessedRoleRef.current = 'assistant';
       }
 
       if (lastMessage.role === 'user') {
@@ -301,6 +342,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
         }
+
+        // 更新角色跟踪
+        lastProcessedRoleRef.current = 'user';
       }
     },
   });
@@ -526,6 +570,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
     currentTaskIdRef.current = taskId || null;
+    // 🔧 重置 [RESIST] 检测相关的 refs
+    currentTurnHasResistRef.current = false;
+    lastProcessedRoleRef.current = null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 

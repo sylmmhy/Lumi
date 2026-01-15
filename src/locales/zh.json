@@ -42,6 +42,7 @@
   "home.confirmDelete": "确定要删除这个任务吗？",
   "home.setRecurringReminder": "设定重复提醒",
   "home.setOnceReminder": "设定单次提醒",
+  "home.taskInputHint": "先输入你想做的事，然后再设置时间。",
 
   "stats.loadingHistory": "加载历史中...",
   "stats.noCompletedTasks": "还没有完成的任务。",

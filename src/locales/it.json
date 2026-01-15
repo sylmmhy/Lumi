@@ -42,6 +42,7 @@
   "home.confirmDelete": "Sei sicuro di voler eliminare questa attività?",
   "home.setRecurringReminder": "Imposta promemoria ricorrente",
   "home.setOnceReminder": "Imposta promemoria singolo",
+  "home.taskInputHint": "Prima scrivi cosa vuoi fare, poi imposta l'orario.",
 
   "stats.loadingHistory": "Caricamento...",
   "stats.noCompletedTasks": "Niente completato ancora",

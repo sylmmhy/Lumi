@@ -42,6 +42,7 @@
   "home.confirmDelete": "이 작업을 삭제할까?",
   "home.setRecurringReminder": "반복 알림 설정",
   "home.setOnceReminder": "일회성 알림 설정",
+  "home.taskInputHint": "먼저 할 일을 적고, 그 다음에 시간을 정해.",
 
   "stats.loadingHistory": "불러오는 중...",
   "stats.noCompletedTasks": "아직 완료한 거 없어",

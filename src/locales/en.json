@@ -42,6 +42,7 @@
   "home.confirmDelete": "Are you sure you want to delete this task?",
   "home.setRecurringReminder": "Set Recurring Reminder",
   "home.setOnceReminder": "Set One-time Reminder",
+  "home.taskInputHint": "Enter what you want to do first, then set the time.",
 
   "stats.loadingHistory": "Loading history...",
   "stats.noCompletedTasks": "No completed tasks yet.",

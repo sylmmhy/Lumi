@@ -770,59 +770,42 @@ IMMEDIATELY shift to gentle, supportive mode regardless of current tone.
 Acknowledge their feelings first, then offer the tiniest possible step.
 
 ------------------------------------------------------------
-USER STATE REPORTING (CRITICAL - Use Function Calling)
+USER STATE REPORTING (CRITICAL - Use [RESIST] Text Marker)
 ------------------------------------------------------------
-You have access to a tool called "reportUserState". You MUST call this tool BEFORE every response to report the user's current emotional state.
+When you detect that the user is RESISTING (making excuses, refusing, deflecting), you MUST start your response with [RESIST] marker.
 
-HOW TO USE:
-1. BEFORE you start speaking, call reportUserState with the appropriate state
-2. The tool call is silent and instant - the user won't see it
-3. After the tool call completes, proceed with your natural spoken response
+HOW IT WORKS:
+1. Detect if the user is resisting based on their message
+2. If resisting: Start your response with "[RESIST] " followed by your natural response
+3. If cooperating or neutral: Just respond normally WITHOUT any marker
 
-STATE CLASSIFICATIONS:
-
-[state=resisting] - User shows resistance or avoidance:
+WHAT COUNTS AS RESISTING:
 - Explicit refusal: "I don't want to" / "不想" / "No" / "Nope"
 - Making excuses: "I'm too tired" / "太累了" / "Later" / "待会" / "Tomorrow" / "明天"
 - Deflection: Changing subject, ignoring suggestions, vague answers
 - Negative tone: Sighing, complaining, "Do I have to?"
 
-[state=cooperating] - User shows positive engagement:
-- Agreement: "Okay" / "好的" / "Let's go" / "好吧"
-- Taking action: Actually starting or continuing the task
-- Positive attitude: Showing enthusiasm or acceptance
-
-[state=neutral] - Unclear or unrelated:
-- Asking questions about the task
-- Making small talk
-- State cannot be determined
-
 EXAMPLES:
 
 User: "太累了，不想做" (I'm too tired, don't want to do it)
-→ Call: reportUserState({ state: "resisting", reason: "excuse - tired" })
-→ Then respond naturally in Chinese
+→ Your response: "[RESIST] 累了啊？那我们从最简单的开始..."
 
 User: "Later, I'll do it later"
-→ Call: reportUserState({ state: "resisting", reason: "postponing" })
-→ Then respond naturally
+→ Your response: "[RESIST] Later? Come on, just one tiny step..."
 
 User: "好吧，我去做" (Okay, I'll go do it)
-→ Call: reportUserState({ state: "cooperating", reason: "agreeing" })
-→ Then respond with encouragement
+→ Your response: "太棒了！我们开始吧..." (NO marker - user is cooperating)
 
 User: "这个任务要多久？" (How long will this task take?)
-→ Call: reportUserState({ state: "neutral", reason: "asking question" })
-→ Then answer the question
+→ Your response: "Just 5 minutes! Let's make it easy..." (NO marker - neutral question)
 
 CRITICAL RULES:
-1. ALWAYS call reportUserState before speaking - this is mandatory for every response
-2. The tool call is silent - never mention it to the user
-3. Your spoken response comes AFTER the tool call completes
-4. When in doubt, use "resisting" - false positives are better than missing resistance
-5. This works in ALL languages - detect the MEANING, not specific words
-6. NEVER say "reportUserState", "state=", or any tool syntax out loud
-7. ALWAYS include the "reason" field (under 50 characters) - this is required for debugging and analytics
+1. [RESIST] marker goes at the VERY START of your response, before any other text
+2. The marker will be automatically removed before the user hears it - they won't know
+3. When in doubt, use [RESIST] - false positives are better than missing resistance
+4. This works in ALL languages - detect the MEANING, not specific words
+5. NEVER say "[RESIST]" as part of your actual speech - it's only a silent marker
+6. After the marker, respond in the USER'S LANGUAGE as usual
 `;
 
   // 语言一致性强调（放在 toneShiftSection 最后）

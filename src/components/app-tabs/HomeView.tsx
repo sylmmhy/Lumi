@@ -502,12 +502,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         />
                     </div>
 
-                    {/* 任务名称错误提示 */}
-                    {taskInputError && (
-                        <p className="text-red-300 text-sm mt-1 ml-1 animate-pulse">
-                            {t('home.pleaseEnterTask')}
-                        </p>
-                    )}
 
                     {/* Quick Tags Row */}
                     <QuickTagsRow onSelect={(tag) => {
@@ -820,6 +814,37 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
                         >
                             OK
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Task Input Error Modal - 提示用户需要先输入任务 */}
+            {taskInputError && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in"
+                    onClick={() => setTaskInputError(false)}
+                >
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/40" />
+
+                    {/* Modal Content */}
+                    <div
+                        className="relative bg-white rounded-2xl shadow-xl w-[300px] p-6 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="text-4xl mb-3">✏️</div>
+                        <h3 className="text-gray-800 font-semibold text-lg mb-2">
+                            {t('home.pleaseEnterTask')}
+                        </h3>
+                        <p className="text-gray-500 text-sm mb-4">
+                            {t('home.taskInputHint')}
+                        </p>
+                        <button
+                            onClick={() => setTaskInputError(false)}
+                            className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
+                        >
+                            {t('common.ok')}
                         </button>
                     </div>
                 </div>

@@ -77,9 +77,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const lastVirtualMessageTimeRef = useRef<number>(0);
   const lastTurnCompleteTimeRef = useRef<number>(0);
 
-  // 🔑 防止重复发送开场白（React StrictMode 会双重执行 useEffect）
-  const openingSentRef = useRef<boolean>(false);
-
   // 更新 refs
   useEffect(() => {
     aiSpeakingRef.current = isAISpeaking;
@@ -300,22 +297,8 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
    * 发送虚拟消息（内部使用，直接读取 ref）
    */
   const sendVirtualMessageInternal = useCallback(async (category: VirtualMessageCategory = 'encouragement_focused') => {
-    // 🔑 防止重复发送开场白（React StrictMode 防护）
-    // 注意：必须在 isUserInConversation 检查之前判断，但只在真正发送时才标记
-    if (category === 'opening' && openingSentRef.current) {
-      if (import.meta.env.DEV) {
-        console.log('🚫 跳过开场白 - 已发送过（防止重复）');
-      }
-      return;
-    }
-
     if (isUserInConversation()) {
       return;
-    }
-
-    // 只有真正要发送开场白时才标记
-    if (category === 'opening') {
-      openingSentRef.current = true;
     }
 
     const message = await generateTimeAwareMessage(category);
@@ -354,10 +337,9 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       return;
     }
 
-    // 🔑 关键：重置所有冷却时间和开场白标记，确保新任务不受旧任务影响
+    // 🔑 关键：重置所有冷却时间，确保新任务不受旧任务影响
     lastVirtualMessageTimeRef.current = 0;
     lastTurnCompleteTimeRef.current = 0;
-    openingSentRef.current = false; // 允许发送新的开场白
 
     if (import.meta.env.DEV) {
       console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);

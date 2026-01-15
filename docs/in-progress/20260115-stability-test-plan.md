@@ -1,7 +1,7 @@
 ---
 title: "代码变更稳定性测试"
 created: 2026-01-15
-updated: 2026-01-16 06:30
+updated: 2026-01-16 10:00
 stage: "🧪 测试"
 due: 2026-01-17
 issue: ""
@@ -13,7 +13,7 @@ issue: ""
 - [x] 阶段 1：构建验证（npm run build + lint）
 - [x] 阶段 2：遗漏引用检查
 - [ ] 阶段 3：TimePicker 组件测试
-- [ ] 阶段 4：reportUserState 工具调用测试 🔄 **已恢复，仍有问题**
+- [x] 阶段 4：~~reportUserState 工具调用测试~~ ⏭️ **已跳过（Function Calling 暂时关闭）**
 - [ ] 阶段 5：完整流程测试
 
 ---
@@ -23,11 +23,11 @@ issue: ""
 针对 `53d6b88` 到 `d951cd0` 的变更进行稳定性测试（共 21 个 commit）。
 
 ### 重点验证项
-1. ~~`reportUserState` Function Calling 机制~~ **⚠️ 已暂时禁用**
+1. ~~`reportUserState` Function Calling 机制~~ ⏭️ **已跳过（暂时关闭）**
 2. TimePicker 滚轮修复（选中项错位和时间不刷新问题）
 3. 死代码删除后的依赖完整性
 4. **新增**：双重问候语修复（`openingSentRef`）
-5. **新增**：语气切换时机优化（turnComplete 触发）
+5. ~~语气切换时机优化（turnComplete 触发）~~ ⏭️ **已跳过（依赖 Function Calling）**
 
 **测试环境**：
 - 项目无自动化测试框架
@@ -37,11 +37,14 @@ issue: ""
 
 ## 2. 测试用例
 
-### 2.1 reportUserState 工具调用测试 🔄 **已恢复，仍有问题**
+### 2.1 ~~reportUserState 工具调用测试~~ ⏭️ **已跳过**
 
-> **状态**：Function Calling 已恢复启用
-> **当前问题**：仍在调试中，具体问题待确认
+> **状态**：Function Calling 暂时关闭，此测试跳过
+> **原因**：用户决定暂时不使用 Function Calling 功能
 > **相关文档**：`docs/in-progress/20260116-tone-manager-function-calling.md`
+
+<details>
+<summary>📁 归档：已发现的问题和测试用例（点击展开）</summary>
 
 #### 已发现并修复的问题
 
@@ -53,15 +56,15 @@ issue: ""
    - 现象：启用工具后 `turnComplete` 信号可能异常
    - 曾临时禁用，现已恢复
 
-#### 测试用例
+#### 测试用例（已跳过）
 
 | 用例 | 操作步骤 | 预期结果 |
 |------|---------|---------|
-| **T1-1** 抗拒状态检测 | 对 AI 说"太累了，不想做" | `🔧 Tool: reportUserState { state: 'resisting' }` |
-| **T1-2** 配合状态检测 | 对 AI 说"好的，我去做" | `✅ [ToneManager] AI 通过工具调用报告用户配合` |
-| **T1-3** 语气切换触发 | 连续 2 次抗拒 | `🎭 [ToneManager] turnComplete - 发送语气切换` |
+| ~~**T1-1**~~ | ~~对 AI 说"太累了，不想做"~~ | ⏭️ 已跳过 |
+| ~~**T1-2**~~ | ~~对 AI 说"好的，我去做"~~ | ⏭️ 已跳过 |
+| ~~**T1-3**~~ | ~~连续 2 次抗拒~~ | ⏭️ 已跳过 |
 
-#### 新增：语气切换时机优化
+#### 语气切换时机优化（已跳过）
 
 **变更**：语气切换不再使用固定 500ms 延迟，改为等 `turnComplete` 时发送
 - 使用 `pendingToneTriggerRef` 存储待发送的触发词
@@ -75,6 +78,8 @@ if (pendingToneTriggerRef.current) {
   setTimeout(() => sendToneTriggerRef.current(triggerString), 300);
 }
 ```
+
+</details>
 
 ---
 
@@ -203,11 +208,11 @@ npm run lint         # ESLint 检查
 ## 5. 待办事项
 
 - [ ] 执行 TimePicker 手动测试（T2-1 ~ T2-11）
-- [ ] 执行 reportUserState 工具调用测试（T1-1 ~ T1-3）🔄 已恢复
+- [x] ~~执行 reportUserState 工具调用测试（T1-1 ~ T1-3）~~ ⏭️ 已跳过
 - [ ] 执行完整流程测试（T3-1 ~ T3-3）
 - [ ] 测试双重问候语是否已修复
 - [ ] 记录测试结果
-- [ ] **待解决**：确认 Function Calling 的剩余问题
+- [x] ~~确认 Function Calling 的剩余问题~~ ⏭️ 已跳过（功能暂时关闭）
 
 ---
 
@@ -238,7 +243,7 @@ d951cd0 debug: 暂时禁用 function calling (当前)
 |------|---------|---------|
 | 构建 | `npm run build` 通过 | ✅ 已通过 |
 | TimePicker | 所有 T2-x 用例通过，无视觉闪烁或错位 | ⏳ 待测试 |
-| reportUserState | 每次回复前都能看到工具调用日志 | 🔄 已恢复，待验证 |
+| ~~reportUserState~~ | ~~每次回复前都能看到工具调用日志~~ | ⏭️ 已跳过 |
 | 完整流程 | 能完成一次完整的任务而无 console 错误 | ⏳ 待测试 |
 | 双重问候语 | 开始任务时只有一次问候语 | ⏳ 待测试 |
 
@@ -246,14 +251,14 @@ d951cd0 debug: 暂时禁用 function calling (当前)
 
 ## 8. 风险评估
 
-### 🔴 高风险
-- **Function Calling 剩余问题**：已恢复启用，但仍有未知问题待确认
-
 ### 🟡 中风险
-- **语气切换时机变更**：从固定延迟改为 turnComplete 触发，需验证实际效果
 - **双重问候语**：已有修复但又回滚，需确认最终状态
 
 ### 🟢 低风险
 - **死代码删除**：已验证无遗漏引用
 - **TimePicker 修复**：局部改动，影响范围可控
-- **toolCall 消息位置**：已修复
+
+### ⏭️ 已跳过（Function Calling 暂时关闭）
+- ~~Function Calling 剩余问题~~
+- ~~语气切换时机变更~~
+- ~~toolCall 消息位置~~

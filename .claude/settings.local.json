@@ -86,7 +86,8 @@
       "Bash(xargs -I {} git show {} --stat)",
       "WebFetch(domain:supabase.com)",
       "Bash(sort:*)",
-      "Bash(git cat-file:*)"
+      "Bash(git cat-file:*)",
+      "Bash(git show:*)"
     ],
     "deny": [],
     "ask": []

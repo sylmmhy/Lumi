@@ -42,6 +42,7 @@
   "home.confirmDelete": "¿Seguro que quieres eliminar esta tarea?",
   "home.setRecurringReminder": "Establecer recordatorio recurrente",
   "home.setOnceReminder": "Establecer recordatorio único",
+  "home.taskInputHint": "Primero escribe qué quieres hacer, luego pon la hora.",
 
   "stats.loadingHistory": "Cargando...",
   "stats.noCompletedTasks": "Nada completado aún",

@@ -7,7 +7,7 @@
 
 import type { LiveServerMessage } from '@google/genai';
 import type { ToolCall, MessageHandlerContext } from '../types';
-import { isThinkingContent, devLog } from '../utils';
+import { isThinkingContent } from '../utils';
 
 /**
  * 处理 serverContent 消息

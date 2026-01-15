@@ -205,10 +205,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         // 如果触发了语气切换，存储触发词，等 turnComplete 时再发送
         // 🔑 这样避免在 AI 回复过程中打断，让语气切换更自然
         if (triggerString) {
-          const styleMatch = triggerString.match(/style=(\w+)/);
-          const newStyle = styleMatch ? styleMatch[1] : 'unknown';
-          console.log('🎭 [ToneManager] 语气切换已排队 → 等待 AI 说完话');
-          console.log('   Queue tone:', newStyle);
+          if (import.meta.env.DEV) {
+            console.log('🎭 [ToneManager] 语气切换已排队（等待 turnComplete）', {
+              previousTone: toneManager.toneState.currentTone,
+              triggerString,
+              totalChanges: toneManager.toneState.totalToneChanges + 1,
+            });
+          }
           pendingToneTriggerRef.current = triggerString;
         }
       } else if (state === 'cooperating') {
@@ -307,16 +310,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     sendToneTriggerRef.current = (trigger: string) => {
       if (geminiLive.isConnected && isSessionActive) {
         geminiLive.sendTextMessage(trigger);
-        // 解析触发词获取新语气
-        const styleMatch = trigger.match(/style=(\w+)/);
-        const newStyle = styleMatch ? styleMatch[1] : 'unknown';
-        // 🔑 关键日志：语气切换完成
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🎭 TONE CHANGE SENT TO AI');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('   New tone:', newStyle);
-        console.log('   Time:', new Date().toLocaleTimeString());
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        if (import.meta.env.DEV) {
+          // 解析触发词获取新语气
+          const styleMatch = trigger.match(/style=(\w+)/);
+          const newStyle = styleMatch ? styleMatch[1] : 'unknown';
+          console.log('📤 [ToneManager] 语气切换触发词已发送给 Gemini', {
+            newTone: newStyle,
+            trigger,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } else if (import.meta.env.DEV) {
         console.warn('⚠️ [ToneManager] 无法发送语气切换触发词 - 会话未连接', {
           isConnected: geminiLive.isConnected,
@@ -374,10 +377,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         const triggerString = pendingToneTriggerRef.current;
         pendingToneTriggerRef.current = null; // 清空，防止重复发送
 
-        const styleMatch = triggerString.match(/style=(\w+)/);
-        const newStyle = styleMatch ? styleMatch[1] : 'unknown';
-        console.log('🎭 [ToneManager] AI 说完话 → 准备发送语气切换');
-        console.log('   Pending tone:', newStyle);
+        if (import.meta.env.DEV) {
+          console.log('🎭 [ToneManager] turnComplete - 发送语气切换:', triggerString);
+        }
 
         // 稍微延迟发送，让 AI 有时间处理 turn complete
         setTimeout(() => {

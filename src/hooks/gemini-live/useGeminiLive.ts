@@ -109,6 +109,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             audioOutput.stop();
           },
           onTurnComplete: () => {
+            console.log('🎯 [GeminiLive] onTurnComplete callback triggered, calling markTurnComplete()');
             audioOutput.markTurnComplete();  // 重置 isSpeaking 状态
             onTurnCompleteRef.current?.();
           },
@@ -119,29 +120,35 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             transcriptManager.addAssistantEntry(text);
           },
           onToolCall: (toolCall: ToolCall) => {
-            console.log('🔧 Tool call received:', toolCall);
+            console.log('🔧 [GeminiLive] Tool call received:', toolCall);
 
             if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
               const functionCall = toolCall.functionCalls[0];
               const functionName = functionCall.name;
               const args = functionCall.args;
 
-              console.log('📞 Function called:', functionName, args);
+              console.log('📞 [GeminiLive] Function called:', functionName, args);
 
               if (onToolCallRef.current) {
                 onToolCallRef.current({ functionName, args });
               }
 
               // Send function response back to AI
-              session.sendToolResponse({
-                functionResponses: [
-                  {
-                    id: functionCall.id,
-                    name: functionName,
-                    response: { success: true },
-                  },
-                ],
-              });
+              console.log('📤 [GeminiLive] Sending tool response for:', functionName, 'id:', functionCall.id);
+              try {
+                session.sendToolResponse({
+                  functionResponses: [
+                    {
+                      id: functionCall.id,
+                      name: functionName,
+                      response: { success: true },
+                    },
+                  ],
+                });
+                console.log('✅ [GeminiLive] Tool response sent successfully');
+              } catch (err) {
+                console.error('❌ [GeminiLive] Failed to send tool response:', err);
+              }
             }
           },
           onAudioData: async (data: string) => {

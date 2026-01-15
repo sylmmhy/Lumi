@@ -7,7 +7,7 @@
 
 import type { LiveServerMessage } from '@google/genai';
 import type { ToolCall, MessageHandlerContext } from '../types';
-import { isThinkingContent } from '../utils';
+import { isThinkingContent, devLog } from '../utils';
 
 /**
  * 处理 serverContent 消息
@@ -51,8 +51,15 @@ export function handleServerContent(
     }
   }
 
-  // NOTE: toolCall 不在 serverContent 中，而是顶级消息字段
-  // 在 handleToolCall 函数中单独处理
+  // Handle tool call
+  if ('toolCall' in serverContent && serverContent.toolCall) {
+    const toolCall = serverContent.toolCall as unknown as ToolCall;
+    devLog('🔧 Tool call received:', toolCall);
+
+    if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
+      context.onToolCall(toolCall);
+    }
+  }
 
   // Handle model turn with audio and text
   if ('modelTurn' in serverContent && serverContent.modelTurn) {
@@ -82,35 +89,13 @@ export function handleServerContent(
 }
 
 /**
- * 处理顶级 toolCall 消息
- * 根据 Gemini Live API，toolCall 是顶级消息字段，不在 serverContent 中
- */
-export function handleToolCall(
-  message: LiveServerMessage,
-  context: MessageHandlerContext
-): void {
-  // toolCall 是顶级字段，检查消息中是否有 toolCall
-  const messageAny = message as unknown as Record<string, unknown>;
-  if ('toolCall' in messageAny && messageAny.toolCall) {
-    const toolCall = messageAny.toolCall as ToolCall;
-    if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
-      context.onToolCall(toolCall);
-    }
-  }
-}
-
-/**
  * 创建消息处理器
  * 返回一个可以直接传递给 onMessage 回调的函数
  */
 export function createMessageHandler(context: MessageHandlerContext) {
   return (message: LiveServerMessage) => {
-    // 处理 serverContent（音频、文本、turnComplete 等）
     if (message.serverContent) {
       handleServerContent(message, context);
     }
-
-    // 处理顶级 toolCall（工具调用是单独的消息类型）
-    handleToolCall(message, context);
   };
 }

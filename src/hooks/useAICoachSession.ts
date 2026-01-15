@@ -7,8 +7,6 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
-import type { UserState } from './gemini-live/tools/userStateTools';
-import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================
 // 配置常量
@@ -24,8 +22,7 @@ const MAX_CAMERA_RETRIES = 2;
 const CAMERA_RETRY_DELAY_MS = 1000;
 
 /** Tone 切换触发词发送延迟（毫秒） */
-// 语气切换现在延迟到 turnComplete 时发送，不再使用固定延迟
-// const TONE_TRIGGER_DELAY_MS = 500;
+const TONE_TRIGGER_DELAY_MS = 500;
 
 // ==========================================
 // 工具函数
@@ -147,7 +144,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
-  // 🔧 [RESIST] 文本标记检测：跟踪流式响应状态
+  // 🔧 修复流式响应问题：跟踪当前 AI 回复是否已检测到 [RESIST]
   // 因为 AI 回复是分 chunks 发送的，[RESIST] 只在第一个 chunk
   // 后续 chunks 不应该触发 recordAcceptance()
   const currentTurnHasResistRef = useRef<boolean>(false);
@@ -168,70 +165,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
   const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
-
-  // 🔑 延迟发送语气切换：存储待发送的触发词，等 turnComplete 时再发送
-  // 这样避免在用户说话过程中打断/干扰，让语气切换更自然
-  const pendingToneTriggerRef = useRef<string | null>(null);
-
-  /**
-   * 处理 AI 工具调用的回调
-   *
-   * 主要用于处理 reportUserState 工具，更新语气管理器状态
-   * 这比依赖 [RESIST] 文本标记更可靠，因为 Function Calling
-   * 是 Gemini Live 原生支持的机制，会在语音回复之前触发
-   */
-  const handleToolCall = useCallback((event: ToolCallEvent) => {
-    if (event.functionName === 'reportUserState') {
-      const state = event.args?.state as UserState | undefined;
-      const reason = event.args?.reason as string | undefined;
-
-      if (import.meta.env.DEV) {
-        console.log('🔧 [ToolCall] reportUserState:', { state, reason });
-      }
-
-      // 参数验证
-      if (!state || !['resisting', 'cooperating', 'neutral'].includes(state)) {
-        if (import.meta.env.DEV) {
-          console.warn('⚠️ [ToolCall] Invalid state value:', state);
-        }
-        return;
-      }
-
-      if (state === 'resisting') {
-        // 记录抗拒（AI 检测到用户在抗拒）
-        const triggerString = toneManager.recordResistance('ai_detected');
-
-        if (import.meta.env.DEV) {
-          console.log('🚫 [ToneManager] AI 通过工具调用报告用户抗拒', {
-            consecutiveRejections: toneManager.toneState.consecutiveRejections + 1,
-            currentTone: toneManager.toneState.currentTone,
-            willTriggerChange: !!triggerString,
-          });
-        }
-
-        // 如果触发了语气切换，存储触发词，等 turnComplete 时再发送
-        // 🔑 这样避免在 AI 回复过程中打断，让语气切换更自然
-        if (triggerString) {
-          if (import.meta.env.DEV) {
-            console.log('🎭 [ToneManager] 语气切换已排队（等待 turnComplete）', {
-              previousTone: toneManager.toneState.currentTone,
-              triggerString,
-              totalChanges: toneManager.toneState.totalToneChanges + 1,
-            });
-          }
-          pendingToneTriggerRef.current = triggerString;
-        }
-      } else if (state === 'cooperating') {
-        // 记录配合
-        toneManager.recordAcceptance();
-
-        if (import.meta.env.DEV) {
-          console.log('✅ [ToneManager] AI 通过工具调用报告用户配合');
-        }
-      }
-      // neutral 状态不做处理，保持当前状态
-    }
-  }, [toneManager]);
 
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
@@ -293,7 +226,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
         let displayText = lastMessage.text;
         if (enableToneManager) {
-          // 新一轮开始时，判断上一轮是否有抗拒
+          // 🔧 新一轮开始时，判断上一轮是否有抗拒
           if (isNewAITurn) {
             if (!currentTurnHasResistRef.current) {
               // 上一轮没有 [RESIST]，说明用户在配合
@@ -306,10 +239,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           const hasResistTag = lastMessage.text.startsWith('[RESIST]');
 
           if (hasResistTag) {
-            // 移除 [RESIST] 标记，不显示给用户
+            // 移除 [RESIST] 标记
             displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
 
-            // 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
+            // 🔧 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
             currentTurnHasResistRef.current = true;
 
             // 记录抗拒（AI 检测到用户在抗拒）
@@ -317,17 +250,19 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             const triggerString = toneManager.recordResistance('ai_detected');
 
             if (import.meta.env.DEV) {
-              console.log('🚫 [ToneManager] AI 检测到用户抗拒 [RESIST]');
+              console.log('🚫 [ToneManager] AI 检测到用户抗拒');
             }
 
-            // 如果触发了语气切换，存储触发词，等 turnComplete 时再发送
+            // 如果触发了语气切换，稍后发送触发词
             if (triggerString) {
-              pendingToneTriggerRef.current = triggerString;
+              setTimeout(() => {
+                sendToneTriggerRef.current(triggerString);
+              }, TONE_TRIGGER_DELAY_MS);
             }
           }
         }
 
-        // 存储 AI 消息（使用处理后的文本，移除了 [RESIST] 标记）
+        // 存储 AI 消息（使用处理后的文本）
         addMessageRef.current('ai', displayText);
         if (import.meta.env.DEV) {
           console.log('🤖 AI 说:', displayText);
@@ -355,20 +290,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       if (geminiLive.isConnected && isSessionActive) {
         geminiLive.sendTextMessage(trigger);
         if (import.meta.env.DEV) {
-          // 解析触发词获取新语气
-          const styleMatch = trigger.match(/style=(\w+)/);
-          const newStyle = styleMatch ? styleMatch[1] : 'unknown';
-          console.log('📤 [ToneManager] 语气切换触发词已发送给 Gemini', {
-            newTone: newStyle,
-            trigger,
-            timestamp: new Date().toISOString(),
-          });
+          console.log('📤 发送语气切换触发词:', trigger);
         }
-      } else if (import.meta.env.DEV) {
-        console.warn('⚠️ [ToneManager] 无法发送语气切换触发词 - 会话未连接', {
-          isConnected: geminiLive.isConnected,
-          isSessionActive,
-        });
       }
     };
   }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);
@@ -411,26 +334,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const { recordTurnComplete } = virtualMessages;
 
   useEffect(() => {
-    setOnTurnComplete(() => {
-      // 记录 turn complete 到虚拟消息系统
-      recordTurnComplete(false);
-
-      // 🔑 检查是否有待发送的语气切换
-      // 只有在 AI 说完话后才发送，避免打断
-      if (pendingToneTriggerRef.current) {
-        const triggerString = pendingToneTriggerRef.current;
-        pendingToneTriggerRef.current = null; // 清空，防止重复发送
-
-        if (import.meta.env.DEV) {
-          console.log('🎭 [ToneManager] turnComplete - 发送语气切换:', triggerString);
-        }
-
-        // 稍微延迟发送，让 AI 有时间处理 turn complete
-        setTimeout(() => {
-          sendToneTriggerRef.current(triggerString);
-        }, 300);
-      }
-    });
+    setOnTurnComplete(() => recordTurnComplete(false));
     return () => setOnTurnComplete(null);
   }, [recordTurnComplete, setOnTurnComplete]);
 
@@ -569,10 +473,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
-    currentTaskIdRef.current = taskId || null;
-    // 🔧 重置 [RESIST] 检测相关的 refs
+    // 🔧 重置流式响应相关的 refs
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
+    currentTaskIdRef.current = taskId || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 
@@ -729,8 +633,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       // 使用预获取的 token 连接（带超时保护）
-      // 注意：工具（userStateTools）已在 useGeminiLive 初始化时注册，
-      // 这里不再重复传递，避免配置覆盖导致工具调用和 turnComplete 信号异常
       await withTimeout(
         geminiLive.connect(systemInstruction, undefined, token),
         CONNECTION_TIMEOUT_MS,
@@ -852,29 +754,29 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         return false;
       }
 
-      const extractorMessages = realMessages.map(msg => ({
+      const mem0Messages = realMessages.map(msg => ({
         role: msg.role === 'ai' ? 'assistant' : 'user',
         content: msg.content,
       }));
 
       // 添加任务上下文作为第一条消息
       if (taskDescription) {
-        extractorMessages.unshift({
+        mem0Messages.unshift({
           role: 'system',
           content: `User was working on task: "${taskDescription}"${additionalContext ? `. ${additionalContext}` : ''}`,
         });
       }
 
-      // 日志：查看传给 memory-extractor 的内容
+      // 日志：查看传给 Mem0 的内容
       if (import.meta.env.DEV) {
-        console.log('📤 [Memory] 发送到 memory-extractor 的内容:', {
+        console.log('📤 [Mem0] 发送到 Mem0 的内容:', {
           userId,
           taskDescription,
           totalMessages: messages.length,
           virtualMessagesFiltered: messages.length - realMessages.length,
           realMessagesCount: realMessages.length,
-          extractorMessagesCount: extractorMessages.length,
-          messages: extractorMessages,
+          mem0MessagesCount: mem0Messages.length,
+          messages: mem0Messages,
         });
       }
 
@@ -899,7 +801,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         body: {
           action: 'extract',
           userId,
-          messages: extractorMessages,
+          messages: mem0Messages,
           taskDescription,
           metadata: {
             source: 'ai_coach_session',
@@ -959,6 +861,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession();
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
+    // 🔧 重置流式响应相关的 refs
+    currentTurnHasResistRef.current = false;
+    lastProcessedRoleRef.current = null;
     setConnectionError(null); // 清除错误状态
     setState({
       taskDescription: '',

@@ -169,6 +169,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
     const { t } = useTranslation();
     const [taskInput, setTaskInput] = useState('');
+    const [taskInputError, setTaskInputError] = useState(false); // 任务名称验证错误状态
     const [selectedTime, setSelectedTime] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date()); // New State for Date
     const [isRoutine, setIsRoutine] = useState(() => {
@@ -213,7 +214,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         }
 
         if (!taskInput.trim()) {
-            alert(t('home.pleaseEnterTask'));
+            setTaskInputError(true);
             return;
         }
 
@@ -490,15 +491,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         <input
                             type="text"
                             value={taskInput}
-                            onChange={(e) => setTaskInput(e.target.value)}
+                            onChange={(e) => {
+                                setTaskInput(e.target.value);
+                                // 用户开始输入时清除错误状态
+                                if (taskInputError) setTaskInputError(false);
+                            }}
                             placeholder={t('home.placeholder')}
                             className="w-full outline-none text-brand-text placeholder-gray-400 text-lg bg-transparent"
                             style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
                         />
                     </div>
 
+                    {/* 任务名称错误提示 */}
+                    {taskInputError && (
+                        <p className="text-red-300 text-sm mt-1 ml-1 animate-pulse">
+                            {t('home.pleaseEnterTask')}
+                        </p>
+                    )}
+
                     {/* Quick Tags Row */}
-                    <QuickTagsRow onSelect={setTaskInput} variant="blue" />
+                    <QuickTagsRow onSelect={(tag) => {
+                        setTaskInput(tag);
+                        if (taskInputError) setTaskInputError(false);
+                    }} variant="blue" />
 
 
                     {/* "Set a time" Button - positioned to span across blue/white boundary */}
@@ -506,9 +521,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         {/* White outer container */}
                         <button
                             onClick={() => {
-                                // 验证任务名称：如果用户未输入任务名，先提示再打开时间选择器
+                                // 验证任务名称：如果用户未输入任务名，显示内联错误提示
                                 if (!taskInput.trim()) {
-                                    alert(t('home.pleaseEnterTask'));
+                                    setTaskInputError(true);
                                     return;
                                 }
                                 setShowTimePicker(!showTimePicker);

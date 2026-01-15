@@ -182,12 +182,20 @@ export function useGeminiSession(
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
-            // 🔍 DEBUG: 只在关键事件时打印（跳过频繁的音频数据）
+            // 🔍 DEBUG: 检查顶级 toolCall 和 serverContent 中的关键事件
+            const messageAny = message as unknown as Record<string, unknown>;
+
+            // 检查顶级 toolCall（工具调用是单独的消息类型）
+            if ('toolCall' in messageAny) {
+              console.log('📩 [GeminiSession] Top-level toolCall message received!', messageAny.toolCall);
+            }
+
+            // 检查 serverContent 中的关键事件
             if (message.serverContent) {
               const contentKeys = Object.keys(message.serverContent);
-              const isImportant = contentKeys.some(k => ['turnComplete', 'toolCall', 'interrupted'].includes(k));
+              const isImportant = contentKeys.some(k => ['turnComplete', 'interrupted'].includes(k));
               if (isImportant) {
-                console.log('📩 [GeminiSession] Important message:', contentKeys);
+                console.log('📩 [GeminiSession] Important serverContent:', contentKeys);
               }
             }
             onMessage?.(message);

@@ -7,9 +7,7 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
-// 🔧 DEBUG: 暂时注释掉工具导入
-// import { userStateTools, type UserState } from './gemini-live/tools/userStateTools';
-import type { UserState } from './gemini-live/tools/userStateTools';
+import { userStateTools, type UserState } from './gemini-live/tools/userStateTools';
 import type { ToolCallEvent } from './gemini-live/types';
 
 // ==========================================
@@ -257,9 +255,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
-    // 🔧 DEBUG: 暂时禁用工具注册，测试 turnComplete 是否恢复
-    // 原代码: tools: enableToneManager ? userStateTools : undefined,
-    tools: undefined,  // TODO: 修复后恢复工具注册
+    // 传入用户状态报告工具（如果启用了语气管理）
+    // AI 会在每次回复前通过工具调用报告用户状态
+    tools: enableToneManager ? userStateTools : undefined,
 
     // 工具调用回调：处理 AI 的 reportUserState 调用
     onToolCall: handleToolCall,

@@ -56,7 +56,7 @@ npm run lint
 - [开发者设置指南](./DEVELOPER_SETUP.md) - 新开发者必读
 - [部署指南](./DEPLOY_GUIDE.md) - Deploy Hook 使用说明
 - [项目架构](./docs/architecture/README.md) - 完整架构文档
-- [记忆系统](./docs/memory-architecture.md) - 记忆系统深入解析
+- [记忆系统](./docs/architecture/memory-system.md) - 记忆系统深入解析
 - [Claude 开发指南](./CLAUDE.md) - AI 辅助开发规范
 
 ---

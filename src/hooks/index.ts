@@ -1,21 +1,13 @@
 /**
  * Hooks 统一导出
- * 
+ *
  * 使用方式：
- * import { useAuth, useAnalytics, useVoiceInput } from '../hooks';
+ * import { useAuth, useTaskTimer } from '../hooks';
  */
 
 // 认证相关
 export { useAuth } from './useAuth';
 export type { AuthState, UseAuthOptions } from './useAuth';
-
-// 数据埋点
-export { useAnalytics } from './useAnalytics';
-export type { AnalyticsUserInfo, UseAnalyticsOptions } from './useAnalytics';
-
-// 语音输入
-export { useVoiceInput } from './useVoiceInput';
-export type { UseVoiceInputOptions } from './useVoiceInput';
 
 // 计时器
 export { useTaskTimer } from './useTaskTimer';
@@ -51,9 +43,6 @@ export type {
   AICoachSessionState, 
   AICoachMessage 
 } from './useAICoachSession';
-
-// Onboarding 编排（组合层）
-export { useOnboardingFlow } from './useOnboardingFlow';
 
 // 语气管理（动态Tone切换）
 export { useToneManager } from './useToneManager';

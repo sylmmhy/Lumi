@@ -45,17 +45,24 @@ Keep the code consistent with the existing style & patterns.
 
 **核心产品逻辑 (Product Logic)**：
 
-**1. Onboarding 流程 (新手引导)**：
-文件参考：`src/hooks/useOnboardingFlow.ts`
-Onboarding 必须严格遵守以下状态流转：
-1. **welcome**: 欢迎页，用户输入或语音输入任务。
-2. **running**: AI 连接阶段。初始化 Gemini Live，进行语音交互。
-3. **working**: 专注工作阶段。倒计时开始，AI 保持静默或辅助，记录工作时长。
-4. **completed**: 结算阶段。根据完成情况触发 `success` (成功) 或 `failure` (放弃/超时)。
+**1. Onboarding 流程 (Habit Onboarding)**：
+文件参考：`src/pages/onboarding/HabitOnboardingPage.tsx`, `src/hooks/useHabitOnboarding.ts`
+
+Onboarding 是给**已登录但未完成初始设置的用户**的 9 步引导流程：
+1. **WelcomeStep**: 欢迎页，介绍产品
+2. **HabitSelectStep**: 选择要培养的习惯
+3. **TimeSelectStep**: 设置提醒时间
+4. **HowItWorksStep**: 功能说明
+5. **PermissionsStep**: 请求麦克风/摄像头权限
+6. **NameInputStep**: 输入用户名
+7. **LanguageSelectStep**: 选择语言偏好
+8. **TryNowStep**: 试用 AI 教练 (调用 `useAICoachSession`)
+9. **DoneStep**: 完成引导
 
 **关键规则**：
-- 任何修改都不能破坏这个状态机的顺序。
-- 必须处理 Gemini 的连接 (`isConnecting`) 和错误 (`uiError`) 状态。
+- 必须已登录才能访问 `/habit-onboarding`（未登录会重定向到登录页）
+- 步骤组件位于 `src/pages/onboarding/habit-steps/` 目录
+- AI 试用阶段复用 `useAICoachSession` + `TaskWorkingView`
 
 **2. Gemini AI 集成**：
 文件参考：`src/hooks/useGeminiLive.ts`, `src/hooks/useAICoachSession.ts`, `src/hooks/useVirtualMessages.ts`

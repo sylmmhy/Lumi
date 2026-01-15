@@ -19,9 +19,12 @@ export function handleServerContent(
   const { serverContent } = message;
   if (!serverContent) return;
 
-  // 🔍 DEBUG: 打印所有收到的 serverContent 字段
+  // 🔍 DEBUG: 只打印关键事件（跳过频繁的 modelTurn 音频数据）
   const contentKeys = Object.keys(serverContent);
-  console.log('📨 [MessageHandler] serverContent keys:', contentKeys);
+  const isImportantEvent = contentKeys.some(k => ['turnComplete', 'toolCall', 'interrupted', 'inputTranscription', 'outputTranscription'].includes(k));
+  if (isImportantEvent) {
+    console.log('📨 [MessageHandler] serverContent keys:', contentKeys);
+  }
 
   // Handle interruption - 用户打断 AI 说话
   if ('interrupted' in serverContent) {

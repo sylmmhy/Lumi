@@ -80,13 +80,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   // 🔑 防止重复发送开场白（React StrictMode 会双重执行 useEffect）
   const openingSentRef = useRef<boolean>(false);
 
-  // 🔑 跟踪上一次的 taskStartTime，用于精确判断是否是新任务
-  // 只有当 taskStartTime 真正变化时才重置 openingSentRef，避免 successRecord 变化导致的误重置
-  const prevTaskStartTimeRef = useRef<number>(0);
-
-  // 🔑 存储 successRecord 的 ref，避免将对象放入依赖数组
-  const successRecordRef = useRef(successRecord);
-
   // 更新 refs
   useEffect(() => {
     aiSpeakingRef.current = isAISpeaking;
@@ -303,10 +296,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     taskStartTimeRef.current = taskStartTime;
   }, [taskStartTime]);
 
-  useEffect(() => {
-    successRecordRef.current = successRecord;
-  }, [successRecord]);
-
   /**
    * 发送虚拟消息（内部使用，直接读取 ref）
    */
@@ -359,42 +348,22 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     await sendVirtualMessageInternal(category);
   }, [sendVirtualMessageInternal]);
 
-  // 虚拟消息调度器
-  // 🔑 关键修复：只依赖 enabled 和 taskStartTime，不依赖 successRecord（对象引用）
-  // successRecord 的变化不应该触发重新初始化，通过 successRecordRef 读取最新值
+  // 虚拟消息调度器 - 只依赖 enabled 和 taskStartTime
   useEffect(() => {
     if (!enabled || taskStartTime === 0) {
       return;
     }
 
-    // 🔑 核心修复：只有当 taskStartTime 真正变化时（新任务）才重置 openingSentRef
-    // 这防止了 successRecord 对象引用变化导致的意外重置
-    const isNewTask = prevTaskStartTimeRef.current !== taskStartTime;
+    // 🔑 关键：重置所有冷却时间和开场白标记，确保新任务不受旧任务影响
+    lastVirtualMessageTimeRef.current = 0;
+    lastTurnCompleteTimeRef.current = 0;
+    openingSentRef.current = false; // 允许发送新的开场白
 
-    if (isNewTask) {
-      // 真正的新任务：重置所有状态
-      lastVirtualMessageTimeRef.current = 0;
-      lastTurnCompleteTimeRef.current = 0;
-      openingSentRef.current = false;
-      prevTaskStartTimeRef.current = taskStartTime;
-
-      if (import.meta.env.DEV) {
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🤖 虚拟消息系统已激活 (新任务)');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('📍 taskStartTime:', taskStartTime);
-        console.log('🔄 openingSentRef 已重置为 false');
-        const currentSuccessRecord = successRecordRef.current;
-        if (currentSuccessRecord && currentSuccessRecord.totalCompletions > 0) {
-          console.log(`🏆 记忆增强已启用 - 用户有 ${currentSuccessRecord.totalCompletions} 次成功记录，连胜 ${currentSuccessRecord.currentStreak} 天`);
-        }
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      }
-    } else {
-      // 同一任务的重复执行（可能是 React StrictMode 或其他依赖变化）
-      // 不重置 openingSentRef，保留防重复保护
-      if (import.meta.env.DEV) {
-        console.log('⚠️ useEffect 重新执行但非新任务 - 保持 openingSentRef =', openingSentRef.current);
+    if (import.meta.env.DEV) {
+      console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);
+      console.log('🔄 冷却时间已重置');
+      if (successRecord && successRecord.totalCompletions > 0) {
+        console.log(`🏆 记忆增强已启用 - 用户有 ${successRecord.totalCompletions} 次成功记录，连胜 ${successRecord.currentStreak} 天`);
       }
     }
 
@@ -413,7 +382,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     };
 
     // 初始消息：使用 'opening' 类型触发 AI 开场白
-    // 🔑 sendVirtualMessageInternal 内部会检查 openingSentRef，防止重复
     const initialTimeoutId = setTimeout(async () => {
       if (!isActive) return;
       await sendVirtualMessageInternal('opening');
@@ -422,9 +390,8 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     }, INITIAL_DELAY_MS);
 
     // 🏆 记忆增强检查点 - 在关键时刻注入成功记录
-    // 通过 successRecordRef 读取最新值，避免依赖对象引用
-    const currentSuccessRecord = successRecordRef.current;
-    if (currentSuccessRecord && currentSuccessRecord.totalCompletions > 0) {
+    // 只有当用户有成功记录时才启用
+    if (successRecord && successRecord.totalCompletions > 0) {
       // 检查点时间（毫秒）：1分钟、2.5分钟、4分钟
       const memoryBoostCheckpoints = [
         { time: 60 * 1000, label: '1分钟' },      // 1分钟：提醒过去成功
@@ -463,7 +430,8 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         console.log('🛑 虚拟消息系统已停止');
       }
     };
-  }, [enabled, taskStartTime, sendVirtualMessageInternal, isUserInConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, taskStartTime, successRecord]);
 
   return {
     sendVirtualMessage,

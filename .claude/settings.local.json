@@ -84,7 +84,8 @@
       "Bash(apt list:*)",
       "Bash(xargs ls:*)",
       "Bash(xargs -I {} git show {} --stat)",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "Bash(sort:*)"
     ],
     "deny": [],
     "ask": []

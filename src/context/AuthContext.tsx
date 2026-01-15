@@ -629,6 +629,7 @@ export function AuthProvider({
     const client = supabase;
     if (!client) return;
 
+    const checkStartTime = Date.now();
     if (reason) {
       console.log(`🔄 会话检查触发来源: ${reason}`);
     }
@@ -648,7 +649,12 @@ export function AuthProvider({
 
     try {
       // 检查 Supabase SDK 是否有活跃会话
+      const getSessionStartTime = Date.now();
       const { data: { session } } = await client.auth.getSession();
+      const getSessionDuration = Date.now() - getSessionStartTime;
+      if (getSessionDuration > 3000) {
+        console.warn(`⚠️ 会话检查: getSession 耗时过长 (${getSessionDuration}ms)`);
+      }
 
       if (!session && storedRefreshToken) {
         // 发现问题：localStorage 有 token 但 Supabase SDK 没有会话
@@ -657,13 +663,15 @@ export function AuthProvider({
         console.log('🔄 localStorage 有 token，但 Supabase SDK 没有会话');
 
         try {
+          const setSessionStartTime = Date.now();
           const { data, error } = await client.auth.setSession({
             access_token: storedAccessToken,
             refresh_token: storedRefreshToken,
           });
+          const setSessionDuration = Date.now() - setSessionStartTime;
 
           if (error) {
-            console.error('❌ 定期检查：会话恢复失败:', error.message);
+            console.error(`❌ 定期检查：会话恢复失败 (耗时 ${setSessionDuration}ms):`, error.message);
             // 如果是 token 真正失效（不是网络问题），可能需要登出
             if (!isNetworkError(error) &&
                 (error.message?.includes('invalid') ||
@@ -673,7 +681,7 @@ export function AuthProvider({
               // 不自动登出，让用户下次操作时发现并处理
             }
           } else if (data.session) {
-            console.log('✅ 定期检查：会话恢复成功，autoRefreshToken 已重新激活');
+            console.log(`✅ 定期检查：会话恢复成功 (耗时 ${setSessionDuration}ms)，autoRefreshToken 已重新激活`);
             // 更新 localStorage 中的 token
             localStorage.setItem('session_token', data.session.access_token);
             if (data.session.refresh_token) {
@@ -693,8 +701,14 @@ export function AuthProvider({
           }
         }
       }
+
+      const totalDuration = Date.now() - checkStartTime;
+      if (totalDuration > 5000) {
+        console.warn(`⚠️ 会话检查总耗时过长: ${totalDuration}ms (来源: ${reason})`);
+      }
     } catch (err) {
-      console.warn('⚠️ 定期检查：获取会话状态失败:', err);
+      const totalDuration = Date.now() - checkStartTime;
+      console.warn(`⚠️ 定期检查：获取会话状态失败 (耗时 ${totalDuration}ms):`, err);
     }
   }, [supabase]);
 
@@ -1809,10 +1823,28 @@ export function AuthProvider({
 
     scheduleRestore();
 
+    // 用于防抖：记录上次查询的用户 ID 和时间
+    let lastQueryUserId: string | null = null;
+    let lastQueryTime = 0;
+    const DEBOUNCE_MS = 500; // 500ms 内同一用户的重复查询会被跳过
+
     // 监听 Supabase Auth 状态变化（这是权威来源）
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       console.log('🔄 Auth state changed:', event);
       if (session) {
+        const now = Date.now();
+
+        // 【防抖逻辑】USER_UPDATED 事件可能在短时间内多次触发（如 token 刷新）
+        // 如果是同一用户且在防抖时间内，跳过重复处理
+        if (event === 'USER_UPDATED' && lastQueryUserId === session.user.id && (now - lastQueryTime) < DEBOUNCE_MS) {
+          console.log('🔄 onAuthStateChange: 跳过重复的 USER_UPDATED 事件（防抖）');
+          return;
+        }
+
+        // 更新防抖记录
+        lastQueryUserId = session.user.id;
+        lastQueryTime = now;
+
         // 标记 onAuthStateChange 正在处理，防止 restoreSession 覆盖
         isOnAuthStateChangeProcessingRef.current = true;
         // 标记 setSession 已触发 onAuthStateChange（用于与 applyNativeLogin 协调）
@@ -1824,6 +1856,11 @@ export function AuthProvider({
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);
         bindAnalyticsUser(session.user.id, session.user.email);
+
+        // 【原生 App 优化】检测是否在原生 WebView 中
+        // 如果在原生 App 中，iOS/Android 端已经查询过 onboarding 状态并决定了 URL
+        // 网页端不需要重复查询，直接使用当前 URL 暗示的状态
+        const inNativeApp = isInNativeWebView();
 
         // 先更新基本状态，明确将 isSessionValidated 设置为 false
         // 这样可以防止路由守卫在 hasCompletedHabitOnboarding 查询完成之前就判断跳转
@@ -1842,17 +1879,35 @@ export function AuthProvider({
         // 异步查询 hasCompletedHabitOnboarding，完成后再设置 isSessionValidated
         void (async () => {
           let hasCompletedHabitOnboarding = false;
-          try {
-            console.log('🔄 onAuthStateChange: 查询 hasCompletedHabitOnboarding...');
-            const { data: userData } = await client
-              .from('users')
-              .select('has_completed_habit_onboarding')
-              .eq('id', session.user.id)
-              .single();
-            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-            console.log('✅ onAuthStateChange: hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
-          } catch (err) {
-            console.warn('⚠️ onAuthStateChange: 获取 habit onboarding 状态失败:', err);
+          const queryStartTime = Date.now();
+
+          // 【原生 App 优化】在原生 App 中跳过数据库查询
+          // iOS/Android 端已经在登录时查询过状态并决定加载哪个 URL
+          // 根据当前 URL 推断状态：/habit-onboarding 表示未完成，其他表示已完成
+          if (inNativeApp) {
+            const isOnOnboardingPage = window.location.pathname.includes('habit-onboarding');
+            hasCompletedHabitOnboarding = !isOnOnboardingPage;
+            console.log('📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
+          } else {
+            // 非原生环境：正常查询数据库
+            try {
+              console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
+              const { data: userData } = await client
+                .from('users')
+                .select('has_completed_habit_onboarding')
+                .eq('id', session.user.id)
+                .single();
+              hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+
+              const queryDuration = Date.now() - queryStartTime;
+              if (queryDuration > 5000) {
+                console.warn(`⚠️ onAuthStateChange: 查询耗时过长 (${queryDuration}ms)，可能存在网络问题`);
+              }
+              console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
+            } catch (err) {
+              const queryDuration = Date.now() - queryStartTime;
+              console.warn(`⚠️ onAuthStateChange: 获取 habit onboarding 状态失败 (耗时 ${queryDuration}ms):`, err);
+            }
           }
 
           // 查询完成后，同时设置 isSessionValidated 和 hasCompletedHabitOnboarding

@@ -1,9 +1,9 @@
 # Onboarding 跳转逻辑重构计划
 
-> **状态**: iOS 端开发完成 + Bug 修复完成，待测试
+> **状态**: iOS + Android 端开发完成，待测试
 > **创建时间**: 2026-01-14
-> **最后更新**: 2026-01-14
-> **当前进度**: Phase 1 ✅ + Phase 2 ✅ + Phase 4 ✅ + Bug 修复 #1~#3 ✅，待 iOS 测试后开始 Phase 3 (安卓端)
+> **最后更新**: 2026-01-15
+> **当前进度**: Phase 1~4 全部完成 ✅，待测试
 
 ---
 
@@ -34,8 +34,8 @@
 
 ### 当前进度
 - ✅ Phase 1: 后端准备（数据库有 `has_completed_habit_onboarding` 字段）
-- ✅ Phase 2: iOS 端改造（已完成，待测试）
-- ⏳ Phase 3: 安卓端改造
+- ✅ Phase 2: iOS 端改造（已完成）
+- ✅ Phase 3: 安卓端改造（已完成 2026-01-15）
 - ✅ Phase 4: 网页端优化（已完成）
 - ⏳ Phase 5: 测试验证
 
@@ -124,12 +124,12 @@
 - [x] **2.5** 收到通知后更新本地存储并跳转到主页
 - [x] **2.6** 网页端添加调用 onboardingCompleted 的代码（notifyNativeOnboardingCompleted）
 
-### Phase 3: 安卓端改造
-- [ ] **3.1** 在 UserPreferences 中添加 `hasCompletedHabitOnboarding` 字段
-- [ ] **3.2** 登录成功后，从数据库查询该字段并保存
-- [ ] **3.3** 修改 WebTabFragment，根据该字段决定加载哪个 URL
-- [ ] **3.4** 添加 JS Bridge，让网页端可以通知引导完成
-- [ ] **3.5** 收到通知后更新本地存储并跳转
+### Phase 3: 安卓端改造 ✅ (已完成 2026-01-15)
+- [x] **3.1** 在 UserPreferences 中添加 `hasCompletedHabitOnboarding` 字段
+- [x] **3.2** 登录成功后，从数据库查询该字段并保存
+- [x] **3.3** 修改 WebTabFragment，根据该字段决定加载哪个 URL
+- [x] **3.4** 添加 JS Bridge，让网页端可以通知引导完成（TaskBridge.onOnboardingCompleted）
+- [x] **3.5** 收到通知后更新本地存储并跳转
 
 ### Phase 4: 网页端改造 ✅ (已完成 2026-01-14)
 - [x] **4.1** 移除 App.tsx 中 RootRedirect 的自动跳转逻辑（在原生 App 中跳过 onboarding 判断）
@@ -158,12 +158,14 @@
 | `MindBoat/ViewControllers/WebViewConfigurationFactory.swift` | 注册 `onboardingCompleted` 消息处理器 | ✅ |
 | `MindBoat/ViewControllers/WebViewController.swift` | 添加 `handleOnboardingCompleted()` 方法 | ✅ |
 
-### 安卓端
-| 文件 | 修改内容 |
-|------|----------|
-| `app/.../utils/UserPreferences.kt` | 添加 hasCompletedHabitOnboarding 字段 |
-| `app/.../auth/LoginActivity.kt` | 登录成功后查询并保存状态 |
-| `app/.../web/WebTabFragment.kt` | 修改 URL 决策逻辑 + 添加 JS Bridge |
+### 安卓端 ✅ (已修改)
+| 文件 | 修改内容 | 状态 |
+|------|----------|------|
+| `app/.../utils/UserPreferences.kt` | 添加 `hasCompletedHabitOnboarding` 字段和方法 | ✅ |
+| `app/.../auth/LoginActivity.kt` | 添加 `fetchHabitOnboardingStatus()` 方法，登录成功后查询并保存状态 | ✅ |
+| `app/.../web/WebTabFragment.kt` | 添加 `newInstanceWithOnboarding()` 方法，根据参数决定加载 `/habit-onboarding` 或 `/app/home` | ✅ |
+| `app/.../web/TaskBridge.kt` | 添加 `onOnboardingCompleted()` JS Bridge 方法 | ✅ |
+| `app/.../MainActivity.kt` | 添加 `verifyOnboardingStatusFromDatabase()` 方法，处理老用户本地缓存问题 | ✅ |
 
 ### 网页端 ✅ (已修改)
 
@@ -711,4 +713,100 @@ userName: stored['user_name'] || session.user.user_metadata?.full_name || null,
 | 2026-01-14 | **Bug 修复 #1** | 修复老用户本地缓存问题（第十三节）|
 | 2026-01-14 | **Bug 修复 #2** | 修复 RLS 问题，改用 accessToken 查询（第十三节 13.5）|
 | 2026-01-14 | **Bug 修复 #3** | 修复用户名被重置问题（第十四节）|
+| 2026-01-15 | **安卓端开发完成** | 修改 5 个安卓文件（第十六节）|
+
+---
+
+## 十六、Phase 3 (安卓端) 实现详情
+
+### 16.1 登录成功后的流程
+
+```
+用户登录成功（邮箱 OTP / Google）
+    │
+    ▼
+LoginActivity.verifyOtp() / exchangeGoogleIdTokenWithSupabase()
+    │
+    ├── 1. 保存用户信息到 UserPreferences
+    │
+    ├── 2. 调用 fetchHabitOnboardingStatus(userId, accessToken)
+    │       使用 Supabase REST API 查询 users 表的 has_completed_habit_onboarding 字段
+    │
+    ├── 3. 更新本地缓存 userPreferences.setHasCompletedHabitOnboarding()
+    │
+    └── 4. 调用 navigateToMain(showOnboarding = !hasCompleted)
+            │
+            ├── showOnboarding = true  → WebTabFragment 加载 /habit-onboarding
+            └── showOnboarding = false → WebTabFragment 加载 /app/home
+```
+
+### 16.2 引导完成后的流程
+
+```
+用户完成 habit onboarding
+    │
+    ▼
+useHabitOnboarding.saveAndFinish()
+    │
+    ├── 1. 创建 habit reminder (数据库)
+    │
+    ├── 2. 调用 markHabitOnboardingCompleted() (更新数据库)
+    │
+    ├── 3. 调用 notifyNativeOnboardingCompleted()
+    │       │
+    │       ├── iOS: window.webkit.messageHandlers.onboardingCompleted.postMessage({})
+    │       └── Android: window.AndroidBridge.onOnboardingCompleted()
+    │
+    └── 4. 如果不在原生 App 中，则 navigate('/app/home')
+
+安卓端收到 onOnboardingCompleted 调用
+    │
+    ▼
+TaskBridge.onOnboardingCompleted()
+    │
+    ├── 1. 更新本地缓存: userPreferences.setHasCompletedHabitOnboarding(true)
+    │
+    └── 2. 加载主页: webView.loadUrl("https://meetlumi.org/app/home")
+```
+
+### 16.3 老用户本地缓存修复流程
+
+```
+用户打开 App（已登录）
+    │
+    ▼
+MainActivity.onCreate()
+    │
+    ├── 1. 使用本地缓存快速显示 UI（避免白屏）
+    │       val hasCompleted = userPreferences.hasCompletedHabitOnboarding()
+    │       WebTabFragment.newInstanceWithOnboarding(!hasCompleted)
+    │
+    └── 2. 异步调用 verifyOnboardingStatusFromDatabase()
+            │
+            ├── 本地缓存 = 数据库 → 无需处理
+            │
+            └── 本地缓存 ≠ 数据库 → 更新本地缓存，跳转到正确页面
+```
+
+### 16.4 关键代码位置
+
+| 功能 | 文件 | 方法/属性 |
+|------|------|-----------|
+| 本地缓存 onboarding 状态 | UserPreferences.kt | `hasCompletedHabitOnboarding()` / `setHasCompletedHabitOnboarding()` |
+| 查询数据库 onboarding 状态 | LoginActivity.kt | `fetchHabitOnboardingStatus()` |
+| 查询数据库（验证用） | MainActivity.kt | `fetchHabitOnboardingStatus()` |
+| 登录后决定加载哪个 URL | LoginActivity.kt | `navigateToMain(showOnboarding)` |
+| 根据状态加载不同 URL | WebTabFragment.kt | `newInstanceWithOnboarding()` |
+| 处理 onboarding 完成消息 | TaskBridge.kt | `onOnboardingCompleted()` |
+| 网页端通知原生 | nativeTaskEvents.ts | `notifyNativeOnboardingCompleted()` |
+
+### 16.5 与 iOS 实现的对比
+
+| 功能 | iOS | Android |
+|------|-----|---------|
+| 本地存储 | UserDefaults | SharedPreferences |
+| 数据库查询 | SupabaseClient.fetchHabitOnboardingStatus() | HttpURLConnection REST API |
+| JS Bridge 注册 | WKWebView messageHandler | @JavascriptInterface |
+| JS Bridge 方法名 | onboardingCompleted | onOnboardingCompleted |
+| 调用方式 | window.webkit.messageHandlers.onboardingCompleted.postMessage({}) | window.AndroidBridge.onOnboardingCompleted() |
 

@@ -272,6 +272,16 @@
   "permissions.skipWarning.enable": "Enable Now",
   "permissions.skipWarning.skipAnyway": "Skip Anyway",
 
+  "permissions.review.notification.title": "Stay Connected",
+  "permissions.review.notification.description": "Receive reminders for your scheduled calls with your AI coach.",
+  "permissions.review.notification.denied": "Please enable notifications in Settings to receive call reminders.",
+  "permissions.review.microphone.title": "Voice Conversations",
+  "permissions.review.microphone.description": "Talk with your AI coach using your voice for a more natural experience.",
+  "permissions.review.microphone.denied": "Please enable microphone in Settings to have voice conversations.",
+  "permissions.review.camera.title": "Video Calls",
+  "permissions.review.camera.description": "Enable video to have face-to-face conversations with your AI coach.",
+  "permissions.review.camera.denied": "Please enable camera in Settings to have video calls.",
+
   "profile.permissions.title": "Device Permissions",
   "profile.permissions.subtitle": "Required for AI video calls",
   "profile.permissions.allEnabled": "All enabled",
@@ -294,5 +304,9 @@
   "profile.deleteAccountWarning": "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
   "profile.deleteAccountConfirm": "Delete My Account",
   "profile.deleteAccountSuccess": "Your account has been deleted.",
-  "profile.deleteAccountError": "Failed to delete account. Please try again."
+  "profile.deleteAccountError": "Failed to delete account. Please try again.",
+
+  "profile.accountManagement": "Account",
+  "profile.accountManagementHint": "View and manage account info",
+  "profile.email": "Email"
 }

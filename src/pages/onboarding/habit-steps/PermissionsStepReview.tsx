@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Apple App Store Review Version - Permissions Step
@@ -8,7 +9,7 @@ import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
  * - Button text uses "Continue" instead of "Allow Camera/Microphone"
  * - No "Skip" buttons
  * - System permission dialog appears immediately after tapping "Continue"
- * - English only
+ * - Supports multiple languages via useTranslation hook
  *
  * DO NOT DELETE - This file is required for App Store review submissions.
  * After approval, switch back to the original PermissionsStep.tsx via APPLE_REVIEW_MODE flag.
@@ -67,6 +68,7 @@ const iOSBridge = {
  * No skip option - user must grant or deny each permission via system dialog
  */
 export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
+  const { t } = useTranslation();
   const [subStep, setSubStep] = useState<1 | 2 | 3>(1);
   const [isRequesting, setIsRequesting] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<Record<PermissionType, PermissionStatus>>({
@@ -303,19 +305,19 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Stay Connected
+          {t('permissions.review.notification.title')}
         </h1>
 
         {/* Description */}
         <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
-          Receive reminders for your scheduled calls with your AI coach.
+          {t('permissions.review.notification.description')}
         </p>
 
         {/* Status indicator */}
         {permissionStatus.notification === 'granted' && (
           <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
             <i className="fa-solid fa-circle-check"></i>
-            Already enabled
+            {t('permissions.alreadyEnabled')}
           </p>
         )}
 
@@ -326,7 +328,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
           <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm">
-              Please enable notifications in Settings to receive call reminders.
+              {t('permissions.review.notification.denied')}
             </p>
           </div>
         )}
@@ -340,7 +342,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? 'Requesting...' : 'Continue'}
+            {isRequesting ? t('permissions.requesting') : t('common.continue')}
           </button>
         </div>
       </div>
@@ -358,19 +360,19 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Voice Conversations
+          {t('permissions.review.microphone.title')}
         </h1>
 
         {/* Description */}
         <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
-          Talk with your AI coach using your voice for a more natural experience.
+          {t('permissions.review.microphone.description')}
         </p>
 
         {/* Status indicator */}
         {permissionStatus.microphone === 'granted' && (
           <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
             <i className="fa-solid fa-circle-check"></i>
-            Already enabled
+            {t('permissions.alreadyEnabled')}
           </p>
         )}
 
@@ -381,7 +383,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
           <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm">
-              Please enable microphone in Settings to have voice conversations.
+              {t('permissions.review.microphone.denied')}
             </p>
           </div>
         )}
@@ -395,7 +397,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
                        text-white text-lg font-medium rounded-full
                        transition-colors shadow-md disabled:opacity-50"
           >
-            {isRequesting ? 'Requesting...' : 'Continue'}
+            {isRequesting ? t('permissions.requesting') : t('common.continue')}
           </button>
         </div>
       </div>
@@ -412,19 +414,19 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
 
       {/* Title */}
       <h1 className="text-2xl font-bold text-gray-900 mb-4">
-        Video Calls
+        {t('permissions.review.camera.title')}
       </h1>
 
       {/* Description */}
       <p className="text-gray-600 text-lg leading-relaxed max-w-sm">
-        Enable video to have face-to-face conversations with your AI coach.
+        {t('permissions.review.camera.description')}
       </p>
 
       {/* Status indicator */}
       {permissionStatus.camera === 'granted' && (
         <p className="text-green-500 text-sm font-medium mt-2 flex items-center gap-1">
           <i className="fa-solid fa-circle-check"></i>
-          Already enabled
+          {t('permissions.alreadyEnabled')}
         </p>
       )}
 
@@ -435,7 +437,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
         <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-xl mb-6">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p className="text-sm">
-            Please enable camera in Settings to have video calls.
+            {t('permissions.review.camera.denied')}
           </p>
         </div>
       )}
@@ -449,7 +451,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
                      text-white text-lg font-medium rounded-full
                      transition-colors shadow-md disabled:opacity-50"
         >
-          {isRequesting ? 'Requesting...' : 'Continue'}
+          {isRequesting ? t('permissions.requesting') : t('common.continue')}
         </button>
       </div>
     </div>

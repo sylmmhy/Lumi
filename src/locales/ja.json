@@ -262,6 +262,16 @@
   "permissions.skipWarning.enable": "今すぐ有効にする",
   "permissions.skipWarning.skipAnyway": "スキップする",
 
+  "permissions.review.notification.title": "つながりをキープ",
+  "permissions.review.notification.description": "AIコーチとの通話のリマインダーを受け取れます。",
+  "permissions.review.notification.denied": "通話リマインダーを受け取るには、設定で通知を有効にしてください。",
+  "permissions.review.microphone.title": "音声会話",
+  "permissions.review.microphone.description": "声でAIコーチと話して、より自然な体験を。",
+  "permissions.review.microphone.denied": "音声会話するには、設定でマイクを有効にしてください。",
+  "permissions.review.camera.title": "ビデオ通話",
+  "permissions.review.camera.description": "ビデオを有効にして、AIコーチと顔を見ながら会話。",
+  "permissions.review.camera.denied": "ビデオ通話するには、設定でカメラを有効にしてください。",
+
   "profile.permissions.title": "デバイスの権限",
   "profile.permissions.subtitle": "AIビデオ通話に必要",
   "profile.permissions.allEnabled": "すべて有効",
@@ -284,5 +294,9 @@
   "profile.deleteAccountWarning": "本当にアカウントを削除しますか？この操作は取り消せません。すべてのデータが完全に削除されます。",
   "profile.deleteAccountConfirm": "アカウントを削除する",
   "profile.deleteAccountSuccess": "アカウントが削除されました。",
-  "profile.deleteAccountError": "アカウントの削除に失敗しました。もう一度お試しください。"
+  "profile.deleteAccountError": "アカウントの削除に失敗しました。もう一度お試しください。",
+
+  "profile.accountManagement": "アカウント管理",
+  "profile.accountManagementHint": "アカウント情報の確認と管理",
+  "profile.email": "メールアドレス"
 }

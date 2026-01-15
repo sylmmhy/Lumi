@@ -65,13 +65,13 @@ export const LandingFeatures: React.FC = () => {
         <section className="py-24 px-6 bg-white" style={{ fontFamily: 'Nunito, sans-serif' }}>
             <div className="max-w-6xl mx-auto">
                 {/* Tabs Navigation */}
-                <div className="flex flex-wrap justify-center gap-4 mb-20">
+                <div className="flex flex-wrap justify-center gap-4 mb-8">
                     {features.map((feature) => (
                         <button
                             key={feature.id}
                             onClick={() => setActiveTab(feature.id)}
                             className={`px-8 py-3 rounded-full text-base font-bold transition-all duration-300 ${activeTab === feature.id
-                                    ? 'bg-[#2545BD] text-white shadow-xl transform scale-105'
+                                    ? 'bg-blue-100 text-blue-600 shadow-sm transform scale-105'
                                     : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                                 }`}
                         >

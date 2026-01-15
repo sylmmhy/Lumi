@@ -262,6 +262,16 @@
   "permissions.skipWarning.enable": "Attiva ora",
   "permissions.skipWarning.skipAnyway": "Salta comunque",
 
+  "permissions.review.notification.title": "Resta connesso",
+  "permissions.review.notification.description": "Ricevi promemoria per le chiamate programmate con il tuo coach AI.",
+  "permissions.review.notification.denied": "Abilita le notifiche in Impostazioni per ricevere promemoria delle chiamate.",
+  "permissions.review.microphone.title": "Conversazioni vocali",
+  "permissions.review.microphone.description": "Parla con il tuo coach AI usando la voce per un'esperienza più naturale.",
+  "permissions.review.microphone.denied": "Abilita il microfono in Impostazioni per avere conversazioni vocali.",
+  "permissions.review.camera.title": "Videochiamate",
+  "permissions.review.camera.description": "Attiva il video per conversare faccia a faccia con il tuo coach AI.",
+  "permissions.review.camera.denied": "Abilita la fotocamera in Impostazioni per fare videochiamate.",
+
   "profile.permissions.title": "Permessi dispositivo",
   "profile.permissions.subtitle": "Necessari per le videochiamate AI",
   "profile.permissions.allEnabled": "Tutto attivo",
@@ -284,5 +294,9 @@
   "profile.deleteAccountWarning": "Sei sicuro di voler eliminare il tuo account? Questa azione non può essere annullata. Tutti i tuoi dati saranno eliminati permanentemente.",
   "profile.deleteAccountConfirm": "Elimina il mio account",
   "profile.deleteAccountSuccess": "Il tuo account è stato eliminato.",
-  "profile.deleteAccountError": "Impossibile eliminare l'account. Per favore riprova."
+  "profile.deleteAccountError": "Impossibile eliminare l'account. Per favore riprova.",
+
+  "profile.accountManagement": "Account",
+  "profile.accountManagementHint": "Visualizza e gestisci le info dell'account",
+  "profile.email": "Email"
 }

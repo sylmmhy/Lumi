@@ -51,6 +51,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // Account management state
+    const [showAccountManageModal, setShowAccountManageModal] = useState(false);
+
     // Time format state
     const [currentTimeFormat, setCurrentTimeFormat] = useState<TimeFormat>(getTimeFormat());
 
@@ -333,20 +336,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center">
-                        <button
-                            onClick={handleStartEditName}
-                            className="group flex items-center gap-2 hover:bg-gray-50 rounded-lg px-3 py-1 transition-colors"
-                        >
-                            <h2 className="text-2xl font-serif font-bold text-gray-800">
-                                {auth?.userName || auth?.userEmail?.split('@')[0] || t('profile.setYourName')}
-                            </h2>
-                            <i className="fa-solid fa-pen text-xs text-gray-400 group-hover:text-brand-blue transition-colors"></i>
-                        </button>
-                        <p className="text-xs text-gray-400 mt-0.5">{t('profile.tapToEdit')}</p>
-                    </div>
+                    <button
+                        onClick={handleStartEditName}
+                        className="group flex items-center gap-2 hover:bg-gray-50 rounded-lg px-3 py-1 transition-colors"
+                    >
+                        <h2 className="text-2xl font-serif font-bold text-gray-800">
+                            {auth?.userName || auth?.userEmail?.split('@')[0] || t('profile.setYourName')}
+                        </h2>
+                        <i className="fa-solid fa-pen text-xs text-gray-400 group-hover:text-brand-blue transition-colors"></i>
+                    </button>
                 )}
-                <p className="text-gray-500 text-sm mt-1">{isGuest ? t('profile.notLoggedIn') : (auth?.userEmail || 'user@example.com')}</p>
                 {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">{t('profile.premiumActive')}</p>}
             </div>
 
@@ -422,6 +421,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </div>
                     </button>
                 </div>
+
+                {/* Account Management Section - Only show for logged in users */}
+                {!isGuest && (
+                    <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+                        <button
+                            onClick={() => setShowAccountManageModal(true)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                                    <i className="fa-solid fa-user-gear text-gray-500"></i>
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-medium text-gray-800">{t('profile.accountManagement')}</p>
+                                    <p className="text-sm text-gray-400">{t('profile.accountManagementHint')}</p>
+                                </div>
+                            </div>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </button>
+                    </div>
+                )}
 
                 {/* Device Permissions Section */}
                 <PermissionsSection />
@@ -542,6 +562,42 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     setTimeout(() => setShowInterviewModal(true), 300);
                 }}
             />
+
+            {/* Account Management Modal */}
+            {showAccountManageModal && (
+                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
+                    {/* Header */}
+                    <div className="bg-white shadow-sm px-4 py-4 flex items-center">
+                        <button
+                            onClick={() => setShowAccountManageModal(false)}
+                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                        >
+                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
+                        </button>
+                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
+                            {t('profile.accountManagement')}
+                        </h2>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                            {/* Email Row */}
+                            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                                        <i className="fa-solid fa-envelope text-brand-blue"></i>
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-medium text-gray-800">{t('profile.email')}</p>
+                                        <p className="text-sm text-gray-500">{auth?.userEmail || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Delete Account Confirmation Modal */}
             {showDeleteAccountModal && (

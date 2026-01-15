@@ -97,7 +97,7 @@ export function handleToolCall(
   context: MessageHandlerContext
 ): void {
   // toolCall 是顶级字段，检查消息中是否有 toolCall
-  const messageAny = message as Record<string, unknown>;
+  const messageAny = message as unknown as Record<string, unknown>;
   if ('toolCall' in messageAny && messageAny.toolCall) {
     const toolCall = messageAny.toolCall as ToolCall;
     console.log('🔧 [MessageHandler] Top-level toolCall received:', toolCall);

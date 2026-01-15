@@ -255,9 +255,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
-    // 传入用户状态报告工具（如果启用了语气管理）
-    // AI 会在每次回复前通过工具调用报告用户状态
-    tools: enableToneManager ? userStateTools : undefined,
+    // 🔧 DEBUG: 暂时禁用工具注册，测试 turnComplete 是否恢复
+    // 原代码: tools: enableToneManager ? userStateTools : undefined,
+    tools: undefined,  // TODO: 修复后恢复工具注册
 
     // 工具调用回调：处理 AI 的 reportUserState 调用
     onToolCall: handleToolCall,

@@ -178,19 +178,24 @@ export function useGeminiSession(
           onopen: () => {
             setIsConnected(true);
             setError(null);
-            devLog('Gemini Live connected');
+            console.log('🟢 [GeminiSession] WebSocket connected');
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
+            // 🔍 DEBUG: 打印所有收到的消息类型
+            const msgKeys = Object.keys(message);
+            console.log('📩 [GeminiSession] Message received, keys:', msgKeys);
             onMessage?.(message);
           },
           onerror: (errorEvent: ErrorEvent) => {
             const errorMessage = errorEvent?.message || 'Connection error';
+            console.error('🔴 [GeminiSession] WebSocket error:', errorMessage, errorEvent);
             setError(errorMessage);
             setIsConnected(false);
             onError?.(errorMessage);
           },
           onclose: () => {
+            console.log('🟠 [GeminiSession] WebSocket closed');
             setIsConnected(false);
             devLog('Gemini Live disconnected');
             onDisconnected?.();
@@ -245,8 +250,16 @@ export function useGeminiSession(
       response: Record<string, unknown>;
     }>;
   }) => {
+    console.log('📤 [GeminiSession] sendToolResponse called:', JSON.stringify(response));
     if (sessionRef.current) {
-      sessionRef.current.sendToolResponse(response);
+      try {
+        sessionRef.current.sendToolResponse(response);
+        console.log('✅ [GeminiSession] sendToolResponse success');
+      } catch (err) {
+        console.error('❌ [GeminiSession] sendToolResponse error:', err);
+      }
+    } else {
+      console.warn('⚠️ [GeminiSession] sendToolResponse called but session is null');
     }
   }, []);
 

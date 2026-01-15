@@ -19,14 +19,20 @@ export function handleServerContent(
   const { serverContent } = message;
   if (!serverContent) return;
 
+  // 🔍 DEBUG: 打印所有收到的 serverContent 字段
+  const contentKeys = Object.keys(serverContent);
+  console.log('📨 [MessageHandler] serverContent keys:', contentKeys);
+
   // Handle interruption - 用户打断 AI 说话
   if ('interrupted' in serverContent) {
+    console.log('🛑 [MessageHandler] Interrupted signal received');
     context.onInterrupt();
     return;
   }
 
   // Handle turn complete - AI 说完一轮
   if ('turnComplete' in serverContent) {
+    console.log('✅ [MessageHandler] turnComplete signal received!');
     context.onTurnComplete();
   }
 

@@ -19,21 +19,14 @@ export function handleServerContent(
   const { serverContent } = message;
   if (!serverContent) return;
 
-  // 🔍 DEBUG: 只打印最关键事件（turnComplete 和 interrupted）
-  if ('turnComplete' in serverContent || 'interrupted' in serverContent) {
-    console.log('📨 [MessageHandler] serverContent keys:', Object.keys(serverContent));
-  }
-
   // Handle interruption - 用户打断 AI 说话
   if ('interrupted' in serverContent) {
-    console.log('🛑 [MessageHandler] Interrupted signal received');
     context.onInterrupt();
     return;
   }
 
   // Handle turn complete - AI 说完一轮
   if ('turnComplete' in serverContent) {
-    console.log('✅ [MessageHandler] turnComplete signal received!');
     context.onTurnComplete();
   }
 
@@ -100,8 +93,6 @@ export function handleToolCall(
   const messageAny = message as unknown as Record<string, unknown>;
   if ('toolCall' in messageAny && messageAny.toolCall) {
     const toolCall = messageAny.toolCall as ToolCall;
-    console.log('🔧 [MessageHandler] Top-level toolCall received:', toolCall);
-
     if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
       context.onToolCall(toolCall);
     }

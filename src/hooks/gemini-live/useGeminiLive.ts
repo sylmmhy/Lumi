@@ -102,23 +102,20 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       // 调用外部消息处理器
       onMessage?.(message);
 
-      // 定义工具调用处理函数（供 serverContent 和顶级 toolCall 共用）
+      // 定义工具调用处理函数
       const processToolCall = (toolCall: ToolCall) => {
-        console.log('🔧 [GeminiLive] Tool call received:', toolCall);
-
         if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
           const functionCall = toolCall.functionCalls[0];
           const functionName = functionCall.name;
           const args = functionCall.args;
 
-          console.log('📞 [GeminiLive] Function called:', functionName, args);
+          console.log('🔧 Tool:', functionName, args);
 
           if (onToolCallRef.current) {
             onToolCallRef.current({ functionName, args });
           }
 
           // Send function response back to AI
-          console.log('📤 [GeminiLive] Sending tool response for:', functionName, 'id:', functionCall.id);
           try {
             session.sendToolResponse({
               functionResponses: [
@@ -129,19 +126,16 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
                 },
               ],
             });
-            console.log('✅ [GeminiLive] Tool response sent successfully');
           } catch (err) {
-            console.error('❌ [GeminiLive] Failed to send tool response:', err);
+            console.error('❌ Tool response failed:', err);
           }
         }
       };
 
-      // 🔧 FIX: 处理顶级 toolCall 消息（根据 Gemini Live API，toolCall 是顶级字段）
+      // 处理顶级 toolCall 消息（根据 Gemini Live API，toolCall 是顶级字段）
       const messageAny = message as unknown as Record<string, unknown>;
       if ('toolCall' in messageAny && messageAny.toolCall) {
-        const toolCall = messageAny.toolCall as ToolCall;
-        console.log('🔧 [GeminiLive] Top-level toolCall detected!');
-        processToolCall(toolCall);
+        processToolCall(messageAny.toolCall as ToolCall);
       }
 
       // 使用消息处理器处理服务器内容
@@ -151,7 +145,6 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             audioOutput.stop();
           },
           onTurnComplete: () => {
-            console.log('🎯 [GeminiLive] onTurnComplete callback triggered, calling markTurnComplete()');
             audioOutput.markTurnComplete();  // 重置 isSpeaking 状态
             onTurnCompleteRef.current?.();
           },

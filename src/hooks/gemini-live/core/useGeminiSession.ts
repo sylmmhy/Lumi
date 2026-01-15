@@ -182,9 +182,14 @@ export function useGeminiSession(
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
-            // 🔍 DEBUG: 打印所有收到的消息类型
-            const msgKeys = Object.keys(message);
-            console.log('📩 [GeminiSession] Message received, keys:', msgKeys);
+            // 🔍 DEBUG: 只在关键事件时打印（跳过频繁的音频数据）
+            if (message.serverContent) {
+              const contentKeys = Object.keys(message.serverContent);
+              const isImportant = contentKeys.some(k => ['turnComplete', 'toolCall', 'interrupted'].includes(k));
+              if (isImportant) {
+                console.log('📩 [GeminiSession] Important message:', contentKeys);
+              }
+            }
             onMessage?.(message);
           },
           onerror: (errorEvent: ErrorEvent) => {

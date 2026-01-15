@@ -65,7 +65,8 @@ export async function googleLogin(idToken: string, csrfToken: string): Promise<G
   localStorage.setItem('session_token', data.session_token)
   localStorage.setItem('user_id', data.user_id)
   localStorage.setItem('user_email', data.user_email)
-  localStorage.setItem('user_name', data.user_name)
+  // 【修复】不在这里设置 user_name，让 syncUserProfileToStorage 从数据库读取用户设置的名字
+  // 避免 OAuth 提供的名字覆盖用户自定义的名字
   localStorage.setItem('is_new_user', String(data.is_new))
   if (data.refresh_token) {
     localStorage.setItem('refresh_token', data.refresh_token)
@@ -116,9 +117,7 @@ export async function googleLogin(idToken: string, csrfToken: string): Promise<G
         }
         localStorage.setItem('user_id', session.user.id)
         localStorage.setItem('user_email', user?.email || data.user_email)
-        if (user?.user_metadata?.full_name) {
-          localStorage.setItem('user_name', user.user_metadata.full_name)
-        }
+        // 【修复】不在这里设置 user_name，让 syncUserProfileToStorage 从数据库读取用户设置的名字
         // 回填给返回值，方便调用方获取最新 refresh_token
         data.session_token = session.access_token
         data.refresh_token = session.refresh_token ?? data.refresh_token

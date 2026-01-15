@@ -1876,10 +1876,23 @@ export function AuthProvider({
           isSessionValidated: false, // 明确设为 false，等查询完成后再设为 true
         }));
 
-        // 异步查询 hasCompletedHabitOnboarding，完成后再设置 isSessionValidated
+        // 异步查询 hasCompletedHabitOnboarding 和同步用户资料，完成后再设置 isSessionValidated
         void (async () => {
           let hasCompletedHabitOnboarding = false;
           const queryStartTime = Date.now();
+
+          // 【修复】同步用户资料到 localStorage，确保重新登录后用户名正确显示
+          // 这一步会从数据库读取用户名（如果 localStorage 为空）
+          await syncUserProfileToStorage(client, session.user.id);
+
+          // 获取用户名和头像（优先 localStorage，其次 user_metadata）
+          const userName = localStorage.getItem('user_name')
+            || session.user.user_metadata?.full_name
+            || session.user.user_metadata?.name
+            || null;
+          const userPicture = localStorage.getItem('user_picture')
+            || session.user.user_metadata?.avatar_url
+            || null;
 
           // 【原生 App 优化】在原生 App 中跳过数据库查询
           // iOS/Android 端已经在登录时查询过状态并决定加载哪个 URL
@@ -1910,7 +1923,7 @@ export function AuthProvider({
             }
           }
 
-          // 查询完成后，同时设置 isSessionValidated 和 hasCompletedHabitOnboarding
+          // 查询完成后，同时设置 isSessionValidated、hasCompletedHabitOnboarding 和用户资料
           setAuthState(prev => {
             // 确保 userId 没有变化（防止竞态条件）
             // 但如果 prev.userId 为 null 而 session 有效，强制设置（修复极端竞态场景）
@@ -1922,6 +1935,8 @@ export function AuthProvider({
               ...prev,
               isLoggedIn: true,
               userId: session.user.id, // 确保 userId 被设置
+              userName, // 【修复】设置用户名
+              userPicture, // 【修复】设置用户头像
               hasCompletedHabitOnboarding,
               isSessionValidated: true,
             };

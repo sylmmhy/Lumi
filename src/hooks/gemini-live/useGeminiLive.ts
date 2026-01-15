@@ -119,14 +119,14 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             transcriptManager.addAssistantEntry(text);
           },
           onToolCall: (toolCall: ToolCall) => {
-            devLog('🔧 Tool call received:', toolCall);
+            console.log('🔧 Tool call received:', toolCall);
 
             if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
               const functionCall = toolCall.functionCalls[0];
               const functionName = functionCall.name;
               const args = functionCall.args;
 
-              devLog('📞 Function called:', functionName, args);
+              console.log('📞 Function called:', functionName, args);
 
               if (onToolCallRef.current) {
                 onToolCallRef.current({ functionName, args });

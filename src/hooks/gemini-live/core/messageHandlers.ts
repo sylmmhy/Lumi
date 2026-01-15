@@ -54,7 +54,7 @@ export function handleServerContent(
   // Handle tool call
   if ('toolCall' in serverContent && serverContent.toolCall) {
     const toolCall = serverContent.toolCall as unknown as ToolCall;
-    devLog('🔧 Tool call received:', toolCall);
+    console.log('🔧 Tool call received:', toolCall);
 
     if (toolCall?.functionCalls && toolCall.functionCalls.length > 0) {
       context.onToolCall(toolCall);

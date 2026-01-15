@@ -143,6 +143,8 @@ export function useGeminiSession(
         ? ([{ functionDeclarations: config.tools }] satisfies GeminiTool[])
         : undefined;
 
+      console.log('🔧 Tools being registered:', toolList ? config.tools.map(t => t.name) : 'none');
+
       const session = await ai.live.connect({
         model,
         config: {

@@ -526,6 +526,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     setTaskInputError(true);
                                     return;
                                 }
+                                // 打开时刷新时间和日期为当前值
+                                if (!showTimePicker) {
+                                    setSelectedTime(''); // 空字符串会触发 TimePicker 使用当前时间
+                                    setSelectedDate(new Date());
+                                }
                                 setShowTimePicker(!showTimePicker);
                             }}
                             className="bg-white rounded-full p-[10px] transition-transform hover:scale-105 active:scale-95"

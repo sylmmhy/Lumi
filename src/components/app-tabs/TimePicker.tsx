@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
@@ -66,6 +66,12 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     const lastTimeRef = useRef(0);
     const velocityRef = useRef(0);
     const [isDragging, setIsDragging] = useState(false);
+    const isInitializedRef = useRef(false); // 追踪是否已完成首次初始化
+    // 初始化时直接计算正确的索引，避免首次渲染时的 fallback 逻辑
+    const [currentIndex, setCurrentIndex] = useState(() => {
+        const idx = items.indexOf(value);
+        return idx !== -1 ? idx : 0;
+    });
     const ITEM_HEIGHT = 40; // matches h-[40px] in tailwind
 
     // For loop mode, we create 3 copies of items (before, original, after)
@@ -83,17 +89,71 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     const middleOffset = loop ? items.length : 0;
     const itemCount = items.length;
 
-    // Initial scroll to selected value (in the middle copy for loop mode)
-    // 只有在非动画状态时才同步外部 value
+    /**
+     * 计算给定 scrollTop 对应的原始数组索引
+     * 处理循环模式下的索引映射
+     */
+    const getIndexFromScrollTop = useCallback((scrollTop: number) => {
+        const rawIndex = Math.round(scrollTop / ITEM_HEIGHT);
+        if (!loop) {
+            return Math.max(0, Math.min(rawIndex, items.length - 1));
+        }
+        // 在循环模式下，将索引映射回原始数组范围
+        let idx = rawIndex % items.length;
+        if (idx < 0) idx += items.length;
+        return idx;
+    }, [items.length, loop]);
+
+    /**
+     * 更新当前索引状态（用于视觉高亮）
+     * 内部做去重检查，避免不必要的重渲染
+     */
+    const updateCurrentIndex = useCallback(() => {
+        if (!containerRef.current) return;
+        const newIndex = getIndexFromScrollTop(containerRef.current.scrollTop);
+        // 只有当索引变化时才更新状态，避免不必要的重渲染
+        setCurrentIndex(prev => prev === newIndex ? prev : newIndex);
+    }, [getIndexFromScrollTop]);
+
+    // 首次挂载时使用 useLayoutEffect 确保 DOM 就绪后立即设置滚动位置
+    // 这比 useEffect 更早执行，避免视觉闪烁
+    useLayoutEffect(() => {
+        if (!containerRef.current) return;
+
+        const idx = items.indexOf(value);
+        if (idx !== -1) {
+            const targetIdx = loop ? middleOffset + idx : idx;
+            const targetScrollTop = targetIdx * ITEM_HEIGHT;
+
+            // 首次初始化：强制设置位置，不受任何条件限制
+            if (!isInitializedRef.current) {
+                // 使用 requestAnimationFrame 确保 DOM 完全就绪
+                requestAnimationFrame(() => {
+                    if (containerRef.current) {
+                        containerRef.current.scrollTop = targetScrollTop;
+                        setCurrentIndex(idx);
+                        isInitializedRef.current = true;
+                    }
+                });
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // 只在首次挂载时执行，后续 value 变化由下面的 useEffect 处理
+
+    // 后续 value 变化时同步滚动位置（非首次挂载）
     useEffect(() => {
+        // 跳过首次挂载（由 useLayoutEffect 处理）
+        if (!isInitializedRef.current) return;
+
         if (containerRef.current && !isAnimatingRef.current && !isDraggingRef.current) {
             const idx = items.indexOf(value);
             if (idx !== -1) {
                 const targetIdx = loop ? middleOffset + idx : idx;
                 const targetScrollTop = targetIdx * ITEM_HEIGHT;
-                // 只有当位置差异较大时才设置（避免细微差异导致的跳动）
+                // 只有当位置差异较大时才设置（避免用户滚动时的跳动）
                 if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > ITEM_HEIGHT / 2) {
                     containerRef.current.scrollTop = targetScrollTop;
+                    setCurrentIndex(idx);
                 }
             }
         }
@@ -235,7 +295,8 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 const snapDuration = Math.min(Math.max(distance * 2, 80), 150);
 
                 smoothScrollTo(targetScrollTop, snapDuration, () => {
-                    // 动画完成后才调用 onChange
+                    // 动画完成后更新 currentIndex 并调用 onChange
+                    setCurrentIndex(finalIdx);
                     if (items[finalIdx] && items[finalIdx] !== value) {
                         onChange(items[finalIdx]);
                     }
@@ -243,11 +304,14 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 return;
             }
 
+            // 动画过程中实时更新 currentIndex
+            updateCurrentIndex();
+
             animationRef.current = requestAnimationFrame(animate);
         };
 
         animationRef.current = requestAnimationFrame(animate);
-    }, [checkAndReposition, items, loop, onChange, smoothScrollTo, value]);
+    }, [checkAndReposition, items, loop, onChange, smoothScrollTo, value, updateCurrentIndex]);
 
     /**
      * 直接吸附到最近的项目（无动量时使用）
@@ -272,7 +336,8 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         const duration = Math.min(Math.max(distance * 2, 80), 180);
 
         smoothScrollTo(targetScrollTop, duration, () => {
-            // 动画完成后才调用 onChange
+            // 动画完成后更新 currentIndex 并调用 onChange
+            setCurrentIndex(idx);
             if (items[idx] && items[idx] !== value) {
                 onChange(items[idx]);
             }
@@ -280,6 +345,9 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     }, [items, loop, onChange, smoothScrollTo, value]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        // 实时更新当前索引，确保视觉高亮与滚动位置同步
+        updateCurrentIndex();
+
         if (isDraggingRef.current || isRepositioningRef.current || isAnimatingRef.current) return;
 
         const target = e.currentTarget as HTMLDivElement & { scrollTimeout?: NodeJS.Timeout };
@@ -341,7 +409,10 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
 
         // Check for loop repositioning during drag
         checkAndReposition();
-    }, [checkAndReposition]);
+
+        // 实时更新当前索引，确保拖拽时视觉高亮与滚动位置同步
+        updateCurrentIndex();
+    }, [checkAndReposition, updateCurrentIndex]);
 
     const handleDragEnd = useCallback(() => {
         if (!containerRef.current) return;
@@ -415,7 +486,11 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
         >
             <div className="h-[60px]"></div> {/* Padding to center first item */}
             {displayItems.map((item, index) => {
-                const isSelected = item === value;
+                // 计算当前元素对应的原始数组索引
+                const originalIndex = loop ? index % items.length : index;
+                // 基于滚动位置的 currentIndex 来判断是否选中
+                // currentIndex 在初始化时就已计算好，确保视觉高亮与滚轮位置始终同步
+                const isSelected = originalIndex === currentIndex;
                 return (
                     <div
                         key={`${item}-${index}`}
@@ -423,6 +498,7 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                         onClick={() => {
                             if (isDraggingRef.current || hasMovedRef.current) return;
                             onChange(item);
+                            setCurrentIndex(originalIndex);
                             // Smooth scroll to this item
                             smoothScrollTo(index * ITEM_HEIGHT, 250);
                         }}

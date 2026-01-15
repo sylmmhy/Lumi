@@ -659,8 +659,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       // 使用预获取的 token 连接（带超时保护）
+      // 注意：工具（userStateTools）已在 useGeminiLive 初始化时注册，
+      // 这里不再重复传递，避免配置覆盖导致工具调用和 turnComplete 信号异常
       await withTimeout(
-        geminiLive.connect(systemInstruction, enableToneManager ? userStateTools : undefined, token),
+        geminiLive.connect(systemInstruction, undefined, token),
         CONNECTION_TIMEOUT_MS,
         '连接 AI 服务超时，请检查网络连接后重试'
       );

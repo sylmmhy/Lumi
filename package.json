@@ -18,7 +18,14 @@
     "supabase:status": "supabase status",
     "supabase:push": "supabase db push --linked",
     "supabase:deploy": "supabase functions deploy",
-    "supabase:sync": "echo '🚀 开始同步到远端 Supabase...' && npm run supabase:push && npm run supabase:deploy && echo '✅ 同步完成！'"
+    "supabase:sync": "echo '🚀 开始同步到远端 Supabase...' && npm run supabase:push && npm run supabase:deploy && echo '✅ 同步完成！'",
+    "supabase:pull": "bash scripts/supabase-pull.sh",
+    "supabase:snapshot": "bash scripts/supabase-snapshot.sh",
+    "supabase:snapshots": "bash scripts/supabase-snapshots.sh",
+    "supabase:restore": "bash scripts/supabase-restore.sh",
+    "supabase:reset": "supabase db reset",
+    "supabase:verify": "bash scripts/verify-local-supabase.sh",
+    "supabase:functions": "supabase functions serve --env-file supabase/.env.local"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.31.3",

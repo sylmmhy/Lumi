@@ -62,5 +62,5 @@ $$;
 CREATE INDEX IF NOT EXISTS idx_user_memories_embedding ON user_memories
 USING hnsw (embedding vector_cosine_ops);
 
--- 5. 更新注释
-COMMENT ON FUNCTION search_similar_memories IS '搜索语义相似的记忆（1536维向量），返回相似度高于阈值的记忆';
+-- 5. 更新注释（使用完整函数签名）
+COMMENT ON FUNCTION search_similar_memories(UUID, TEXT, TEXT, FLOAT, INTEGER) IS '搜索语义相似的记忆（1536维向量），返回相似度高于阈值的记忆';

@@ -89,7 +89,14 @@
       "Bash(git cat-file:*)",
       "Bash(git show:*)",
       "Bash(git checkout:*)",
-      "Bash(git ls-tree:*)"
+      "Bash(git ls-tree:*)",
+      "Bash(docker:*)",
+      "Bash(supabase --version:*)",
+      "Bash(supabase start:*)",
+      "Bash(supabase init:*)",
+      "Bash(supabase link:*)",
+      "Bash(supabase db reset:*)",
+      "Bash(supabase stop:*)"
     ],
     "deny": [],
     "ask": []

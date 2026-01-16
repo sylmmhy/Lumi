@@ -1,5 +1,194 @@
-# Supabase Configuration
+# ==============================================================================
+# Supabase 本地开发配置
+# 文档: https://supabase.com/docs/guides/local-development/cli/config
+# ==============================================================================
 
+# 项目 ID（用于本地标识）
+project_id = "firego-local"
+
+# ==============================================================================
+# API 配置
+# ==============================================================================
+[api]
+enabled = true
+# API 端口（PostgREST）
+port = 54321
+# 暴露的 schemas
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+# 最大返回行数
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+# ==============================================================================
+# 数据库配置
+# ==============================================================================
+[db]
+# 数据库端口
+port = 54322
+# shadow 数据库端口（用于 migration diff）
+shadow_port = 54320
+# PostgreSQL 主版本
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+# ==============================================================================
+# Supabase Studio (仪表盘)
+# ==============================================================================
+[studio]
+enabled = true
+# Studio 端口
+port = 54323
+api_url = "http://127.0.0.1"
+
+# ==============================================================================
+# Inbucket (本地邮件测试服务)
+# ==============================================================================
+[inbucket]
+enabled = true
+# Web 界面端口
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+# ==============================================================================
+# 存储服务
+# ==============================================================================
+[storage]
+enabled = true
+# 文件大小限制（50MB）
+file_size_limit = "50MiB"
+
+# ==============================================================================
+# Realtime 配置
+# ==============================================================================
+[realtime]
+enabled = true
+
+# ==============================================================================
+# Auth 配置
+# ==============================================================================
+[auth]
+enabled = true
+# 网站 URL（用于重定向）
+site_url = "http://localhost:5173"
+# 允许的重定向 URL
+additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+# JWT 过期时间（秒）
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# 是否启用注册
+enable_signup = true
+# 是否启用匿名登录
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 6
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = false
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[auth.sms.twilio]
+enabled = false
+account_sid = ""
+message_service_sid = ""
+auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+otp_length = 6
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+# Google OAuth（本地开发）
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = true
+
+# Apple OAuth（本地开发）
+[auth.external.apple]
+enabled = true
+client_id = "env(APPLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
+
+[auth.third_party.firebase]
+enabled = false
+
+[auth.third_party.auth0]
+enabled = false
+
+[auth.third_party.aws_cognito]
+enabled = false
+
+[auth.third_party.clerk]
+enabled = false
+
+# ==============================================================================
+# Edge Runtime 配置
+# ==============================================================================
+[edge_runtime]
+enabled = true
+# 使用 oneshot 支持热重载
+policy = "oneshot"
+inspector_port = 8083
+deno_version = 1
+
+# ==============================================================================
+# Analytics 配置
+# ==============================================================================
+[analytics]
+enabled = false
+port = 54327
+backend = "postgres"
+
+# ==============================================================================
+# Edge Functions 配置
+# ==============================================================================
+
+# Onboarding 流程（允许未登录访问）
 [functions.onboarding-entry-check]
 verify_jwt = false
 
@@ -8,3 +197,27 @@ verify_jwt = false
 
 [functions.onboarding-complete]
 verify_jwt = false
+
+# AI 相关功能（需要登录）
+[functions.get-system-instruction]
+verify_jwt = true
+
+[functions.memory-extractor]
+verify_jwt = true
+
+[functions.suggest-task-time]
+verify_jwt = true
+
+# 推送通知相关
+[functions.send-voip-push]
+verify_jwt = true
+
+[functions.send-fcm-push]
+verify_jwt = true
+
+[functions.check-and-send-voip]
+verify_jwt = true
+
+# 设备管理
+[functions.manage-user-devices]
+verify_jwt = true

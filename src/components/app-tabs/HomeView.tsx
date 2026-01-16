@@ -452,12 +452,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }, [filteredTasks]);
 
 
-    const exampleRoutineTasks = [
-        { title: t('stats.goToBed'), time: '10:30 pm' },
-        { title: t('stats.wakeUp'), time: '7:00 am' },
-        { title: t('stats.workout'), time: '6:30 pm' },
-    ];
-
     const showStickyHeader = scrollTop > 80;
 
     // 检测是否在自家App的WebView中，如果是则隐藏下载提示
@@ -633,26 +627,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         ))}
 
                         {filteredTasks.length === 0 && (
-                            <div className="py-0 space-y-4">
-                                <p className="text-center font-serif italic text-lg text-gray-400">{t('home.noTasks')}</p>
-                                <div className="space-y-3">
-                                    {exampleRoutineTasks.map((item, idx) => (
-                                        <div
-                                            key={`${item.title}-${idx}`}
-                                            className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
-                                            onClick={() => alert(t('home.exampleClickHint'))}
-                                        >
-                                            <div className="flex flex-col text-left">
-                                                <span className="text-gray-800 font-semibold">{item.title}</span>
-                                                <span className="text-xs text-gray-400">{t('home.example')}</span>
-                                            </div>
-                                            <div className="bg-brand-cream px-3 py-1 rounded-lg text-sm font-serif italic font-bold text-gray-800 shadow-inner whitespace-nowrap">
-                                                {item.time}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            <p className="text-center font-serif italic text-lg text-gray-400 py-4">{t('home.noTasks')}</p>
                         )}
 
                         {/* Request Test Version Card - 仅在非自家App中显示 */}

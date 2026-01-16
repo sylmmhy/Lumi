@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { TourStep, TourContext } from '../../constants/appTourSteps';
+import { useTranslation } from '../../hooks/useTranslation';
 
 /**
  * TourOverlay Props
@@ -83,6 +84,9 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   onNext,
   onSkip: _onSkip,
 }) => {
+  // 获取翻译函数
+  const { t } = useTranslation();
+
   // 目标元素位置（单个）
   const [targetRect, setTargetRect] = useState<TargetRect>({
     top: 0,
@@ -102,14 +106,24 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   const scrollTimeoutRef = useRef<number | null>(null);
 
   /**
-   * 获取步骤内容（支持动态函数）
+   * 获取翻译后的步骤标题
+   */
+  const getStepTitle = useCallback(() => {
+    return t(step.titleKey);
+  }, [step.titleKey, t]);
+
+  /**
+   * 获取翻译后的步骤内容（支持变量替换）
+   * 第 3 步需要 {{time}} 变量
    */
   const getStepContent = useCallback(() => {
-    if (typeof step.content === 'function') {
-      return step.content(context);
+    // 构建变量替换参数
+    const params: Record<string, string> = {};
+    if (context.reminderTime) {
+      params.time = context.reminderTime;
     }
-    return step.content;
-  }, [step.content, context]);
+    return t(step.contentKey, Object.keys(params).length > 0 ? params : undefined);
+  }, [step.contentKey, context.reminderTime, t]);
 
   /**
    * 更新目标元素位置
@@ -369,7 +383,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       width: targetRect.width + highlightPadding * 2,
       height: targetRect.height + highlightPadding * 2,
       borderRadius: '16px',
-      boxShadow: 'rgba(0, 0, 0, 0.7) 0 0 0 9999px',
+      boxShadow: 'rgba(0, 0, 0, 0.35) 0 0 0 9999px',
       pointerEvents: 'none',
       zIndex: 9998,
     };
@@ -388,7 +402,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       {/* 蒙层背景（如果是 center 位置或未找到目标） */}
       {(step.position === 'center' || !anyTargetFound) && (
         <div
-          className="fixed inset-0 bg-black/70"
+          className="fixed inset-0 bg-black/35"
           onClick={(e) => e.stopPropagation()}
         />
       )}
@@ -428,7 +442,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
             y="0"
             width="100%"
             height="100%"
-            fill="rgba(0, 0, 0, 0.7)"
+            fill="rgba(0, 0, 0, 0.35)"
             mask="url(#tour-mask)"
           />
         </svg>
@@ -445,7 +459,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
         className="z-[10000] bg-white rounded-2xl shadow-2xl p-5 animate-fade-in"
       >
         {/* 标题 */}
-        <h3 className="text-lg font-bold text-gray-800 mb-2">{step.title}</h3>
+        <h3 className="text-lg font-bold text-gray-800 mb-2">{getStepTitle()}</h3>
 
         {/* 内容 */}
         <p className="text-gray-600 text-sm mb-4 leading-relaxed">
@@ -478,7 +492,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
             onClick={onNext}
             className="px-6 py-2 bg-brand-blue text-white font-medium rounded-full hover:bg-brand-blue/90 transition-colors text-sm"
           >
-            {step.isLast ? '知道了！' : '下一步'}
+            {step.isLast ? t('tour.gotIt') : t('tour.next')}
           </button>
         </div>
       </div>

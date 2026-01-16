@@ -33,12 +33,17 @@ interface TargetRect {
 }
 
 /**
- * 获取目标元素的位置
+ * 获取目标元素的位置，并尝试滚动到可视区域
  */
-function getTargetRect(selector: string): TargetRect {
+function getTargetRect(selector: string, shouldScroll: boolean = false): TargetRect {
   const element = document.querySelector(selector);
   if (!element) {
     return { top: 0, left: 0, width: 0, height: 0, found: false };
+  }
+
+  // 先滚动到目标元素，确保它在可视区域
+  if (shouldScroll) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   const rect = element.getBoundingClientRect();
@@ -77,9 +82,8 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     found: false,
   });
 
-  // 重新计算目标位置的计数器（用于触发重新定位）
-  const [recalcCounter, setRecalcCounter] = useState(0);
   const observerRef = useRef<MutationObserver | null>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
 
   /**
    * 获取步骤内容（支持动态函数）
@@ -94,30 +98,51 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   /**
    * 更新目标元素位置
    */
-  const updateTargetRect = useCallback(() => {
-    const rect = getTargetRect(step.targetSelector);
+  const updateTargetRect = useCallback((shouldScroll: boolean = false) => {
+    const rect = getTargetRect(step.targetSelector, shouldScroll);
     setTargetRect(rect);
+
+    // 如果滚动了，等待滚动完成后再次更新位置
+    if (shouldScroll && rect.found) {
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        const newRect = getTargetRect(step.targetSelector, false);
+        setTargetRect(newRect);
+      }, 500);
+    }
   }, [step.targetSelector]);
 
-  // 初次渲染和步骤变化时更新位置
+  // 初次渲染和步骤变化时更新位置，并滚动到目标
   useEffect(() => {
-    // 延迟一点再计算，确保 DOM 已渲染
+    // 首次延迟滚动到目标元素
     const timer = setTimeout(() => {
-      updateTargetRect();
-    }, 100);
+      updateTargetRect(true);
+    }, 200);
 
-    return () => clearTimeout(timer);
-  }, [step.targetSelector, recalcCounter, updateTargetRect]);
+    return () => {
+      clearTimeout(timer);
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [step.targetSelector, updateTargetRect]);
 
   // 监听 DOM 变化（如元素延迟加载）
   useEffect(() => {
     // 如果未找到目标元素，设置 MutationObserver 监听
     if (!targetRect.found) {
       observerRef.current = new MutationObserver(() => {
-        const rect = getTargetRect(step.targetSelector);
+        const rect = getTargetRect(step.targetSelector, true);
         if (rect.found) {
           setTargetRect(rect);
           observerRef.current?.disconnect();
+          // 滚动后再次更新位置
+          setTimeout(() => {
+            const newRect = getTargetRect(step.targetSelector, false);
+            setTargetRect(newRect);
+          }, 500);
         }
       });
 
@@ -132,27 +157,32 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     };
   }, [step.targetSelector, targetRect.found]);
 
-  // 监听窗口大小变化
+  // 监听窗口大小变化和滚动
   useEffect(() => {
-    const handleResize = () => {
-      setRecalcCounter((c) => c + 1);
+    const handleChange = () => {
+      // 不滚动，只更新位置
+      const rect = getTargetRect(step.targetSelector, false);
+      setTargetRect(rect);
     };
 
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleResize, true);
+    window.addEventListener('resize', handleChange);
+    window.addEventListener('scroll', handleChange, true);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleResize, true);
+      window.removeEventListener('resize', handleChange);
+      window.removeEventListener('scroll', handleChange, true);
     };
-  }, []);
+  }, [step.targetSelector]);
 
   /**
-   * 计算 Tooltip 位置
+   * 计算 Tooltip 的实际显示位置
+   * 会自动调整以确保在可视区域内
    */
   const getTooltipStyle = useCallback((): React.CSSProperties => {
-    const padding = 16; // 与目标元素的间距
     const tooltipWidth = 280;
+    const tooltipHeight = 180; // 估算高度
+    const padding = 16;
+    const safeMargin = 20; // 距离屏幕边缘的安全距离
 
     // 如果是 center 位置，居中显示
     if (step.position === 'center') {
@@ -177,60 +207,72 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     }
 
     const { top, left, width, height } = targetRect;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-    switch (step.position) {
+    // 计算目标元素中心点
+    const targetCenterX = left + width / 2;
+    const targetCenterY = top + height / 2;
+
+    // 计算 Tooltip 的水平位置（居中于目标，但不超出屏幕）
+    let tooltipLeft = Math.max(
+      safeMargin,
+      Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - safeMargin)
+    );
+
+    // 根据 position 计算垂直位置，并自动调整
+    let tooltipTop: number;
+    let actualPosition = step.position;
+
+    // 检查 bottom 位置是否会超出屏幕
+    if (step.position === 'bottom') {
+      const bottomPos = top + height + padding;
+      if (bottomPos + tooltipHeight > viewportHeight - safeMargin) {
+        // 切换到 top
+        actualPosition = 'top';
+      }
+    }
+
+    // 检查 top 位置是否会超出屏幕
+    if (step.position === 'top' || actualPosition === 'top') {
+      const topPos = top - padding - tooltipHeight;
+      if (topPos < safeMargin) {
+        // 切换到 bottom
+        actualPosition = 'bottom';
+      }
+    }
+
+    // 计算最终位置
+    switch (actualPosition) {
       case 'top':
-        return {
-          position: 'fixed',
-          bottom: window.innerHeight - top + padding,
-          left: Math.max(padding, Math.min(left + width / 2 - tooltipWidth / 2, window.innerWidth - tooltipWidth - padding)),
-          width: tooltipWidth,
-        };
+        tooltipTop = top - padding - tooltipHeight;
+        break;
       case 'bottom':
-        return {
-          position: 'fixed',
-          top: top + height + padding,
-          left: Math.max(padding, Math.min(left + width / 2 - tooltipWidth / 2, window.innerWidth - tooltipWidth - padding)),
-          width: tooltipWidth,
-        };
+        tooltipTop = top + height + padding;
+        break;
       case 'left':
-        return {
-          position: 'fixed',
-          top: top + height / 2,
-          right: window.innerWidth - left + padding,
-          transform: 'translateY(-50%)',
-          width: tooltipWidth,
-        };
+        tooltipTop = targetCenterY - tooltipHeight / 2;
+        tooltipLeft = left - padding - tooltipWidth;
+        break;
       case 'right':
-        return {
-          position: 'fixed',
-          top: top + height / 2,
-          left: left + width + padding,
-          transform: 'translateY(-50%)',
-          width: tooltipWidth,
-        };
+        tooltipTop = targetCenterY - tooltipHeight / 2;
+        tooltipLeft = left + width + padding;
+        break;
       default:
-        return {
-          position: 'fixed',
-          top: top + height + padding,
-          left: Math.max(padding, left + width / 2 - tooltipWidth / 2),
-          width: tooltipWidth,
-        };
+        tooltipTop = top + height + padding;
     }
+
+    // 确保不超出屏幕边界
+    tooltipTop = Math.max(safeMargin, Math.min(tooltipTop, viewportHeight - tooltipHeight - safeMargin));
+    tooltipLeft = Math.max(safeMargin, Math.min(tooltipLeft, viewportWidth - tooltipWidth - safeMargin));
+
+    return {
+      position: 'fixed',
+      top: tooltipTop,
+      left: tooltipLeft,
+      width: tooltipWidth,
+    };
   }, [step.position, targetRect]);
-
-  /**
-   * 生成蒙层的 box-shadow 样式（实现挖洞效果）
-   */
-  const getOverlayShadow = useCallback((): string => {
-    // 如果是 center 位置或未找到目标，不需要挖洞
-    if (step.position === 'center' || !targetRect.found) {
-      return 'rgba(0, 0, 0, 0.7) 0 0 0 9999px';
-    }
-
-    // 使用 box-shadow 实现挖洞效果
-    return 'rgba(0, 0, 0, 0.7) 0 0 0 9999px';
-  }, [step.position, targetRect.found]);
 
   /**
    * 获取高亮区域的样式
@@ -249,18 +291,18 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       width: targetRect.width + highlightPadding * 2,
       height: targetRect.height + highlightPadding * 2,
       borderRadius: '16px',
-      boxShadow: getOverlayShadow(),
+      boxShadow: 'rgba(0, 0, 0, 0.7) 0 0 0 9999px',
       pointerEvents: 'none',
       zIndex: 9998,
     };
-  }, [step.position, targetRect, getOverlayShadow]);
+  }, [step.position, targetRect]);
 
   // Portal 容器
   const portalContainer = document.getElementById('root') || document.body;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
-      {/* 蒙层背景（如果是 center 位置） */}
+      {/* 蒙层背景（如果是 center 位置或未找到目标） */}
       {(step.position === 'center' || !targetRect.found) && (
         <div
           className="fixed inset-0 bg-black/70"

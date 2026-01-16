@@ -5,7 +5,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
 import { TimePicker } from './TimePicker';
 import type { Task } from '../../remindMe/types';
-import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks, updateReminder } from '../../remindMe/services/reminderService';
+import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
 
 type HabitTheme = 'gold' | 'blue' | 'pink';
@@ -471,18 +471,18 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col bg-white">
-            {/* Scroll Container */}
-            <div className="flex-1 overflow-y-auto no-scrollbar relative">
-                
+            {/* Scroll Container - 用于 Product Tour 高亮整个统计区域 */}
+            <div className="flex-1 overflow-y-auto no-scrollbar relative" data-tour="stats-area">
+
                 {/* New Stats Header (Matches Figma Design) */}
-                <StatsHeader 
-                    activeTab={activeTab} 
-                    onTabChange={setActiveTab} 
-                    streak={isLoading ? 0 : longestStreak} 
+                <StatsHeader
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    streak={isLoading ? 0 : longestStreak}
                 />
 
                 {/* Content */}
-                <div className="px-4 pb-28 min-h-screen -mt-4 relative z-20" data-tour="stats-content">
+                <div className="px-4 pb-28 min-h-screen -mt-4 relative z-20">
                     {activeTab === 'routine' ? (
                         <div className="space-y-4 mt-2">
                             {isLoading ? (
@@ -490,11 +490,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                     <p className="font-serif italic text-lg">{t('common.loading')}</p>
                                 </div>
                             ) : habits.length === 0 ? (
-                                <div className="py-0 space-y-6 text-gray-700">
-                                    <div className="text-center space-y-2">
-                                        <p className="font-serif italic text-lg text-gray-600">{t('stats.routineStreaksHint')}</p>
-                                        <p className="text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
-                                    </div>
+                                <div className="py-0 space-y-4 text-gray-700">
+                                    <p className="text-center text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
                                     <div className="space-y-4">
                                         {exampleHabitsState.map(habit => (
                                             <StatsCard
@@ -594,6 +591,15 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                             setSelectedHabit(updatedHabit);
                         } catch (error) {
                             console.error('Failed to update habit:', error);
+                        }
+                    }}
+                    onDeleteHabit={selectedHabit.id.startsWith('example-') ? undefined : async () => {
+                        try {
+                            await deleteReminder(selectedHabit.id);
+                            setHabits(prev => prev.filter(h => h.id !== selectedHabit.id));
+                            setSelectedHabit(null);
+                        } catch (error) {
+                            console.error('Failed to delete habit:', error);
                         }
                     }}
                 />
@@ -814,12 +820,14 @@ const HeatmapDetailOverlay = ({
     habit,
     onClose,
     onToggleDate,
-    onUpdateHabit
+    onUpdateHabit,
+    onDeleteHabit
 }: {
     habit: Habit,
     onClose: () => void,
     onToggleDate: (date: Date) => void,
-    onUpdateHabit?: (newName: string, newTime: string) => void
+    onUpdateHabit?: (newName: string, newTime: string) => void,
+    onDeleteHabit?: () => void
 }) => {
     const { t } = useTranslation();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -1061,8 +1069,23 @@ const HeatmapDetailOverlay = ({
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
-                        <div className="mb-4">
+                        <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
+                            {onDeleteHabit && (
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm(t('home.confirmDelete'))) {
+                                            onDeleteHabit();
+                                            setShowEditModal(false);
+                                        }
+                                    }}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
 
                         {/* Task Name Input */}

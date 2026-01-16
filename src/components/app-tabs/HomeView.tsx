@@ -489,27 +489,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
                     <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
 
-                    <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-2 focus-within:ring-blue-300">
-                        <input
-                            type="text"
-                            value={taskInput}
-                            onChange={(e) => {
-                                setTaskInput(e.target.value);
-                                // 用户开始输入时清除错误状态
-                                if (taskInputError) setTaskInputError(false);
-                            }}
-                            placeholder={t('home.placeholder')}
-                            className="w-full outline-none text-brand-text placeholder-gray-400 text-lg bg-transparent"
-                            style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
-                        />
+                    {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
+                    <div data-tour="task-input-area">
+                        <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-2 focus-within:ring-blue-300">
+                            <input
+                                type="text"
+                                value={taskInput}
+                                onChange={(e) => {
+                                    setTaskInput(e.target.value);
+                                    // 用户开始输入时清除错误状态
+                                    if (taskInputError) setTaskInputError(false);
+                                }}
+                                placeholder={t('home.placeholder')}
+                                className="w-full outline-none text-brand-text placeholder-gray-400 text-lg bg-transparent"
+                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
+                            />
+                        </div>
+
+                        {/* Quick Tags Row */}
+                        <QuickTagsRow onSelect={(tag) => {
+                            setTaskInput(tag);
+                            if (taskInputError) setTaskInputError(false);
+                        }} variant="blue" />
                     </div>
-
-
-                    {/* Quick Tags Row */}
-                    <QuickTagsRow onSelect={(tag) => {
-                        setTaskInput(tag);
-                        if (taskInputError) setTaskInputError(false);
-                    }} variant="blue" />
 
 
                     {/* "Set a time" Button - positioned to span across blue/white boundary */}

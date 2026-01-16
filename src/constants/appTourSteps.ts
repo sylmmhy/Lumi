@@ -17,7 +17,7 @@ export interface TourContext {
  * 单个 Tour 步骤的配置
  */
 export interface TourStep {
-  /** 步骤编号 (1-4) */
+  /** 步骤编号 (1-5) */
   step: number;
   /** 当前步骤所在路由 */
   route: string;
@@ -36,22 +36,22 @@ export interface TourStep {
 }
 
 /**
- * 4 步引导配置
+ * 5 步引导配置
  *
  * 流程：
- * 1. 高亮第一个习惯卡片 (/app/home)
- * 2. 高亮添加习惯按钮 (/app/home)
- * 3. 高亮统计内容区 (/app/stats)
- * 4. 高亮 Start 按钮 (/app/urgency)
+ * 1. 高亮任务输入区域（输入框 + 快捷标签）(/app/home)
+ * 2. 高亮第一个习惯卡片 (/app/home)
+ * 3. 高亮添加习惯按钮 (/app/home)
+ * 4. 高亮统计内容区 (/app/stats)
+ * 5. 高亮 Start 按钮 (/app/urgency)
  */
 export const APP_TOUR_STEPS: TourStep[] = [
   {
     step: 1,
     route: '/app/home',
-    targetSelector: '[data-tour="first-habit"]',
-    title: '你的第一个习惯',
-    content: (ctx) =>
-      `这个习惯会每天 ${ctx.reminderTime || '设定时间'} 提醒你。如果不想要，可以点击修改或删除。`,
+    targetSelector: '[data-tour="task-input-area"]',
+    title: '输入你的任务',
+    content: '首先，你可以在这里输入你想设定的任务，或者从下面选择一个快捷标签。',
     position: 'bottom',
     nextRoute: null, // 同页面
   },
@@ -59,22 +59,32 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 2,
     route: '/app/home',
     targetSelector: '[data-tour="add-habit-button"]',
-    title: '添加更多习惯',
-    content: '你可以在这里添加更多的习惯。',
+    title: '设置提醒时间',
+    content: '输入任务后，点击这里设置提醒时间。',
     position: 'bottom',
-    nextRoute: '/app/stats?tour=3',
+    nextRoute: null, // 同页面
   },
   {
     step: 3,
-    route: '/app/stats',
-    targetSelector: '[data-tour="stats-content"]',
-    title: '打卡记录',
-    content: '你的习惯打卡记录会显示在这里。',
-    position: 'center',
-    nextRoute: '/app/urgency?tour=4',
+    route: '/app/home',
+    targetSelector: '[data-tour="first-habit"]',
+    title: '你的第一个习惯',
+    content: (ctx) =>
+      `这个习惯会每天 ${ctx.reminderTime || '设定时间'} 提醒你。如果不想要，可以点击修改或删除。`,
+    position: 'bottom',
+    nextRoute: '/app/stats?tour=4',
   },
   {
     step: 4,
+    route: '/app/stats',
+    targetSelector: '[data-tour="stats-area"]',
+    title: '打卡记录',
+    content: '你的习惯打卡记录会显示在这里。',
+    position: 'center',
+    nextRoute: '/app/urgency?tour=5',
+  },
+  {
+    step: 5,
     route: '/app/urgency',
     targetSelector: '[data-tour="start-button"]',
     title: '立刻开始',

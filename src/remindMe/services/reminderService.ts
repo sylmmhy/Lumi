@@ -152,7 +152,9 @@ function taskToDb(task: Partial<Task>, userId: string): Partial<TaskRecord> {
     title: task.text, // Task.text 存储到数据库的 title 字段
     time: task.time || null,
     display_time: task.displayTime || null,
-    reminder_date: task.date || null,
+    // 🆕 即时任务不设置 reminder_date，防止被 check-and-send-voip edge function 选中
+    // edge function 查询条件为 .not("reminder_date", "is", null)，不设置 reminder_date 可从根本上避免被提醒
+    reminder_date: isInstantTask ? null : (task.date || null),
     timezone,
     // 如果传入了 completed，则根据布尔值设置 status；否则交给数据库默认值（pending）
     ...(task.completed !== undefined

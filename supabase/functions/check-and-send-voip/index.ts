@@ -341,6 +341,7 @@ serve(async (req) => {
     );
 
     // 查询需要触发的任务
+    // 排除 display_time = "now" 的即时任务，它们不需要提醒
     const { data: tasks, error: taskError } = await supabase
       .from("tasks")
       .select(`
@@ -355,7 +356,8 @@ serve(async (req) => {
       `)
       .eq("status", "pending")
       .not("reminder_date", "is", null)
-      .not("time", "is", null);
+      .not("time", "is", null)
+      .neq("display_time", "now");
 
     if (taskError) {
       console.error(`❌ Failed to fetch tasks:`, taskError);

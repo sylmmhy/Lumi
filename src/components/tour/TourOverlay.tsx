@@ -81,7 +81,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   totalSteps,
   context,
   onNext,
-  onSkip,
+  onSkip: _onSkip,
 }) => {
   // 目标元素位置（单个）
   const [targetRect, setTargetRect] = useState<TargetRect>({
@@ -374,28 +374,6 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       zIndex: 9998,
     };
   }, [step.position, targetRect]);
-
-  /**
-   * 获取单个高亮区域的样式（多目标模式，无阴影）
-   */
-  const getMultiHighlightStyle = useCallback((rect: TargetRect): React.CSSProperties => {
-    if (!rect.found) {
-      return { display: 'none' };
-    }
-
-    const highlightPadding = 8;
-
-    return {
-      position: 'fixed',
-      top: rect.top - highlightPadding,
-      left: rect.left - highlightPadding,
-      width: rect.width + highlightPadding * 2,
-      height: rect.height + highlightPadding * 2,
-      borderRadius: '16px',
-      backgroundColor: 'white',
-      pointerEvents: 'none',
-    };
-  }, []);
 
   // Portal 容器
   const portalContainer = document.getElementById('root') || document.body;

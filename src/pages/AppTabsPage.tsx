@@ -35,6 +35,10 @@ import { ProfileView } from '../components/app-tabs/ProfileView';
 import { StatsView } from '../components/app-tabs/StatsView';
 import { BottomNavBar } from '../components/app-tabs/BottomNavBar';
 
+// Product Tour
+import { useProductTour } from '../hooks/useProductTour';
+import { TourOverlay } from '../components/tour/TourOverlay';
+
 type ViewState = AppTab;
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
@@ -59,6 +63,9 @@ export function AppTabsPage() {
     const navigate = useNavigate();
     const { tab } = useParams<{ tab?: string }>();
     const auth = useAuth();
+
+    // Product Tour（新用户引导）
+    const productTour = useProductTour();
 
     // 【已移除】onboarding 跳转逻辑
     // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
@@ -1087,6 +1094,18 @@ export function AppTabsPage() {
             isOpen={showTestVersionModal}
             onClose={() => setShowTestVersionModal(false)}
         />
+
+        {/* Product Tour 新用户引导蒙层 */}
+        {productTour.isActive && productTour.currentStep && (
+            <TourOverlay
+                step={productTour.currentStep}
+                stepNumber={productTour.stepNumber}
+                totalSteps={productTour.totalSteps}
+                context={productTour.context}
+                onNext={productTour.nextStep}
+                onSkip={productTour.skipTour}
+            />
+        )}
     </div>
 );
 }

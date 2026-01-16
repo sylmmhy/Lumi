@@ -482,7 +482,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 />
 
                 {/* Content */}
-                <div className="px-4 pb-28 min-h-screen -mt-4 relative z-20">
+                <div className="px-4 pb-28 min-h-screen -mt-4 relative z-20" data-tour="stats-content">
                     {activeTab === 'routine' ? (
                         <div className="space-y-4 mt-2">
                             {isLoading ? (

@@ -96,7 +96,11 @@
       "Bash(supabase init:*)",
       "Bash(supabase link:*)",
       "Bash(supabase db reset:*)",
-      "Bash(supabase stop:*)"
+      "Bash(supabase stop:*)",
+      "Bash(supabase secrets list:*)",
+      "Bash(psql:*)",
+      "Bash(supabase status:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []

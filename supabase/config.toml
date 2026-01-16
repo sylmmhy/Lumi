@@ -20,7 +20,7 @@ extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [api.tls]
-enabled = false
+enabled = true
 
 # ==============================================================================
 # 数据库配置

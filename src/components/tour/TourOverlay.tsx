@@ -369,7 +369,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       width: targetRect.width + highlightPadding * 2,
       height: targetRect.height + highlightPadding * 2,
       borderRadius: '16px',
-      boxShadow: 'rgba(0, 0, 0, 0.7) 0 0 0 9999px',
+      boxShadow: 'rgba(0, 0, 0, 0.35) 0 0 0 9999px',
       pointerEvents: 'none',
       zIndex: 9998,
     };
@@ -388,7 +388,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       {/* 蒙层背景（如果是 center 位置或未找到目标） */}
       {(step.position === 'center' || !anyTargetFound) && (
         <div
-          className="fixed inset-0 bg-black/70"
+          className="fixed inset-0 bg-black/35"
           onClick={(e) => e.stopPropagation()}
         />
       )}
@@ -428,7 +428,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
             y="0"
             width="100%"
             height="100%"
-            fill="rgba(0, 0, 0, 0.7)"
+            fill="rgba(0, 0, 0, 0.35)"
             mask="url(#tour-mask)"
           />
         </svg>

@@ -100,7 +100,9 @@
       "Bash(supabase secrets list:*)",
       "Bash(psql:*)",
       "Bash(supabase status:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "mcp__ide__getDiagnostics",
+      "mcp__supabase__deploy_edge_function"
     ],
     "deny": [],
     "ask": []

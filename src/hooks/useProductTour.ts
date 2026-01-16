@@ -53,11 +53,17 @@ export function useProductTour(): UseProductTourReturn {
 
   // 从 URL 参数读取步骤号
   const tourParam = searchParams.get('tour');
+  const resetParam = searchParams.get('reset'); // ?reset=1 强制重置
   const stepNumber = tourParam ? parseInt(tourParam, 10) : 0;
 
   // 检查 Tour 是否已完成（localStorage）
+  // 如果有 reset=1 参数，清除已完成标记
   const [hasCompleted, setHasCompleted] = useState(() => {
     try {
+      if (resetParam === '1') {
+        localStorage.removeItem(TOUR_COMPLETED_KEY);
+        return false;
+      }
       return localStorage.getItem(TOUR_COMPLETED_KEY) === 'true';
     } catch {
       return false;

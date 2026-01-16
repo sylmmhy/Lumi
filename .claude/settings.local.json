@@ -107,7 +107,8 @@
       "Bash(do echo \"Downloading $fn...\")",
       "Bash(done)",
       "Bash(brew upgrade:*)",
-      "Bash(supabase db dump:*)"
+      "Bash(supabase db dump:*)",
+      "Bash(PGPASSWORD=postgres psql:*)"
     ],
     "deny": [],
     "ask": []

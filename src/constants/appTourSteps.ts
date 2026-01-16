@@ -98,11 +98,6 @@ export const APP_TOUR_STEPS: TourStep[] = [
 ];
 
 /**
- * localStorage key，用于标记 Tour 已完成
- */
-export const TOUR_COMPLETED_KEY = 'product_tour_completed';
-
-/**
  * 总步骤数
  */
 export const TOUR_TOTAL_STEPS = APP_TOUR_STEPS.length;

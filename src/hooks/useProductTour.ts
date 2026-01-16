@@ -1,12 +1,12 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   APP_TOUR_STEPS,
-  TOUR_COMPLETED_KEY,
   TOUR_TOTAL_STEPS,
   type TourStep,
   type TourContext,
 } from '../constants/appTourSteps';
+import { useAuth } from './useAuth';
 
 /**
  * useProductTour 的返回类型
@@ -42,7 +42,7 @@ export interface UseProductTourReturn {
  * 功能：
  * 1. 从 URL 参数读取当前步骤
  * 2. 管理 Tour 的开始、下一步、跳过、完成操作
- * 3. 完成后标记 localStorage，下次不再显示
+ * 3. 完成后更新数据库 users.has_completed_habit_onboarding 字段
  *
  * @returns {UseProductTourReturn} Tour 状态和操作方法
  */
@@ -51,24 +51,17 @@ export function useProductTour(): UseProductTourReturn {
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
+  // 从 AuthContext 获取 onboarding 完成状态
+  const { hasCompletedHabitOnboarding, markHabitOnboardingCompleted } = useAuth();
+
   // 从 URL 参数读取步骤号
   const tourParam = searchParams.get('tour');
-  const resetParam = searchParams.get('reset'); // ?reset=1 强制重置
   const stepNumber = tourParam ? parseInt(tourParam, 10) : 0;
 
-  // 检查 Tour 是否已完成（localStorage）
-  // 如果有 reset=1 参数，清除已完成标记
-  const [hasCompleted, setHasCompleted] = useState(() => {
-    try {
-      if (resetParam === '1') {
-        localStorage.removeItem(TOUR_COMPLETED_KEY);
-        return false;
-      }
-      return localStorage.getItem(TOUR_COMPLETED_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Tour 完成状态直接使用数据库的 hasCompletedHabitOnboarding 字段
+  // 本地状态用于 UI 立即响应（避免等待数据库更新）
+  const [localCompleted, setLocalCompleted] = useState(false);
+  const hasCompleted = hasCompletedHabitOnboarding || localCompleted;
 
   // 动态上下文（如提醒时间）
   const [context, setContextState] = useState<TourContext>({});
@@ -108,20 +101,20 @@ export function useProductTour(): UseProductTourReturn {
    * - 如果 nextRoute 不为空，跳转到下一个路由
    * - 否则在同页面更新 tour 参数
    */
-  const nextStep = useCallback(() => {
+  const nextStep = useCallback(async () => {
     if (!currentStep) return;
 
     const nextStepNumber = stepNumber + 1;
 
     // 最后一步，完成 Tour
     if (currentStep.isLast) {
-      // 标记完成
-      try {
-        localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
-      } catch {
-        // ignore
-      }
-      setHasCompleted(true);
+      // 立即更新本地状态（UI 响应）
+      setLocalCompleted(true);
+
+      // 异步更新数据库
+      markHabitOnboardingCompleted().catch((err) => {
+        console.error('❌ 更新 habit onboarding 状态失败:', err);
+      });
 
       // 移除 URL 参数，保持在当前页面
       const newUrl = location.pathname;
@@ -137,23 +130,24 @@ export function useProductTour(): UseProductTourReturn {
       const newUrl = `${location.pathname}?tour=${nextStepNumber}`;
       navigate(newUrl, { replace: true });
     }
-  }, [currentStep, stepNumber, navigate, location.pathname]);
+  }, [currentStep, stepNumber, navigate, location.pathname, markHabitOnboardingCompleted]);
 
   /**
-   * 跳过 Tour
+   * 跳过 Tour（已移除跳过按钮，保留函数以兼容接口）
    */
-  const skipTour = useCallback(() => {
-    try {
-      localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
-    } catch {
-      // ignore
-    }
-    setHasCompleted(true);
+  const skipTour = useCallback(async () => {
+    // 立即更新本地状态（UI 响应）
+    setLocalCompleted(true);
+
+    // 异步更新数据库
+    markHabitOnboardingCompleted().catch((err) => {
+      console.error('❌ 更新 habit onboarding 状态失败:', err);
+    });
 
     // 移除 URL 参数，保持在当前页面
     const newUrl = location.pathname;
     navigate(newUrl, { replace: true });
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, markHabitOnboardingCompleted]);
 
   /**
    * 完成 Tour（与 skipTour 相同，但语义不同）

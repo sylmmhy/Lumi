@@ -461,14 +461,6 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
         <div style={getHighlightStyle()} />
       )}
 
-      {/* 跳过按钮（右上角） */}
-      <button
-        onClick={onSkip}
-        className="fixed top-12 right-4 z-[10000] px-4 py-2 text-white/80 hover:text-white text-sm font-medium transition-colors"
-      >
-        跳过
-      </button>
-
       {/* Tooltip 气泡 */}
       <div
         style={getTooltipStyle()}

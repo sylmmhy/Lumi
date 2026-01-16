@@ -304,7 +304,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">
           {t('permissions.review.notification.title')}
         </h1>
 
@@ -359,7 +359,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">
           {t('permissions.review.microphone.title')}
         </h1>
 
@@ -413,7 +413,7 @@ export function PermissionsStepReview({ onNext }: PermissionsStepReviewProps) {
       </div>
 
       {/* Title */}
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">
+      <h1 className="text-3xl font-bold text-gray-900 mb-4">
         {t('permissions.review.camera.title')}
       </h1>
 

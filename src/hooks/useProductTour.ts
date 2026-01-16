@@ -71,8 +71,22 @@ export function useProductTour(): UseProductTourReturn {
    * 条件：有 URL 参数 tour=1~4 且未完成过
    */
   const isActive = useMemo(() => {
-    return stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
-  }, [stepNumber, hasCompleted]);
+    const result = stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
+
+    // 🔍 调试日志：追踪 tour 激活状态
+    console.log('🎯 [useProductTour] isActive 计算:', {
+      tourParam,
+      stepNumber,
+      hasCompletedHabitOnboarding,
+      localCompleted,
+      hasCompleted,
+      TOUR_TOTAL_STEPS,
+      isActive: result,
+      location: location.pathname + location.search,
+    });
+
+    return result;
+  }, [stepNumber, hasCompleted, tourParam, hasCompletedHabitOnboarding, localCompleted, location.pathname, location.search]);
 
   /**
    * 当前步骤配置

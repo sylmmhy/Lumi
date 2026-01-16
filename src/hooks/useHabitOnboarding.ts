@@ -248,8 +248,14 @@ export function useHabitOnboarding() {
       // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
       await generateTodayRoutineInstances(userId);
 
+      // 🔍 调试日志：记录 markHabitOnboardingCompleted 调用前的状态
+      console.log('🔍 [useHabitOnboarding] saveAndFinish: 准备调用 markHabitOnboardingCompleted');
+
       // 标记习惯引导已完成（更新数据库）
       await markHabitOnboardingCompleted();
+
+      // 🔍 调试日志：记录 markHabitOnboardingCompleted 调用后
+      console.log('🔍 [useHabitOnboarding] saveAndFinish: markHabitOnboardingCompleted 完成');
 
       // 清除 sessionStorage 中的临时状态
       clearStateFromStorage();
@@ -257,9 +263,17 @@ export function useHabitOnboarding() {
       // 通知原生端 onboarding 已完成
       // 如果在原生 App 中，原生端会处理跳转；否则由 Web 端处理
       const handledByNative = notifyNativeOnboardingCompleted();
+
+      // 🔍 调试日志：记录导航决策
+      console.log('🔍 [useHabitOnboarding] saveAndFinish: 导航决策', {
+        handledByNative,
+        targetUrl: `${DEFAULT_APP_PATH}?tour=1`,
+      });
+
       if (!handledByNative) {
         // 纯浏览器环境，由 Web 端导航到主页
         // 添加 ?tour=1 参数，触发 Product Tour 新用户引导
+        console.log('🔍 [useHabitOnboarding] saveAndFinish: 执行 navigate 到', `${DEFAULT_APP_PATH}?tour=1`);
         navigate(`${DEFAULT_APP_PATH}?tour=1`);
       }
       // 如果由原生端处理，Web 端不需要做任何事情

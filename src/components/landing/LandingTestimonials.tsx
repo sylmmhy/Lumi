@@ -16,22 +16,22 @@ const getAvatarUrl = (seed: string) =>
 
 const testimonials: Testimonial[] = [
     {
-        quote: "As a freelance designer, I used to lose entire days to procrastination. Now I just open Lumi, tell it what I need to do, and somehow I actually do it. Finished 3 client projects last month!",
-        name: "Sarah Chen",
-        role: "Freelance UI Designer",
-        avatar: getAvatarUrl("sarah-chen")
+        quote: "I struggle a lot with sleeping on time and waking up when I plan to. Lumi doesn't force anything — it just checks in at the right moment. That small nudge has helped me go to bed earlier and start my mornings without overthinking.",
+        name: "Early User",
+        role: "Sleep & Wake Routine",
+        avatar: getAvatarUrl("sleep-user")
     },
     {
-        quote: "I have ADHD and body doubling is literally the only thing that works for me. Having Lumi there while I study feels like having a patient friend who never gets tired. My GPA went from 2.8 to 3.5.",
-        name: "Marcus Johnson",
-        role: "Computer Science Student",
-        avatar: getAvatarUrl("marcus-j")
+        quote: "Most days I know what I should be doing, I just don't start. Lumi helps me break that freeze. When it checks in, I'm more likely to get up, cook on time, and finish basic chores instead of postponing everything.",
+        name: "Beta User",
+        role: "Focus & Meals",
+        avatar: getAvatarUrl("meals-user")
     },
     {
-        quote: "Tried Focusmate, tried Forest, tried everything. Lumi is different because it actually talks to me and checks in. The AI feels weirdly human? Anyway, 45-day meditation streak and counting.",
-        name: "Emily Park",
-        role: "Product Manager at Spotify",
-        avatar: getAvatarUrl("emily-park")
+        quote: "What I like about Lumi is that it doesn't try to manage my whole day. It just helps me begin. That's been enough to make simple routines like waking up early or eating on time feel more doable.",
+        name: "Early Tester",
+        role: "Habit Formation",
+        avatar: getAvatarUrl("habit-user")
     }
 ];
 
@@ -50,9 +50,12 @@ export const LandingTestimonials: React.FC = () => {
             <div className="max-w-6xl mx-auto relative z-10">
                 {/* Section Title */}
                 <div className="text-center mb-20">
-                    <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-6 tracking-tight">
-                        Members are getting more<br />done and feeling great
+                    <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 tracking-tight">
+                        Users are building consistency —<br />and seeing real progress
                     </h2>
+                    <p className="text-lg text-gray-500 font-medium mb-6">
+                        Early user feedback from beta testers
+                    </p>
                     <div className="w-20 h-1.5 bg-[#2545BD] mx-auto rounded-full opacity-20" />
                 </div>
 

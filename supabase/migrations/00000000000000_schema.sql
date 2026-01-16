@@ -11,6 +11,17 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+-- 启用 pgvector 扩展（用于记忆系统的向量搜索）
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
+
+-- 创建 admin_user 角色（如果不存在）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'admin_user') THEN
+    CREATE ROLE "admin_user" NOLOGIN;
+  END IF;
+END
+$$;
 
 CREATE SCHEMA IF NOT EXISTS "public";
 

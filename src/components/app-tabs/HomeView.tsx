@@ -183,6 +183,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [editTaskText, setEditTaskText] = useState('');
     const [editTaskTime, setEditTaskTime] = useState('');
     const [editTaskDate, setEditTaskDate] = useState(new Date());
+    const [editTaskIsRoutine, setEditTaskIsRoutine] = useState(false);
 
     // Test Version Request State
     const [testEmail, setTestEmail] = useState('');
@@ -342,6 +343,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setEditingTask(task);
         setEditTaskText(task.text);
         setEditTaskTime(task.time || '');
+        // 初始化是否为日常任务：根据任务类型判断
+        setEditTaskIsRoutine(task.type === 'routine');
         // Parse task date
         if (task.date) {
             const [year, month, day] = task.date.split('-').map(Number);
@@ -364,10 +367,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
         else if (h >= 18 && h < 23) category = 'evening';
         else category = 'latenight';
 
-        let taskDate = editingTask.type === 'routine' ? undefined : getLocalDateString(editTaskDate);
+        // 根据开关状态决定日期：日常任务不需要具体日期，单次任务需要
+        let taskDate = editTaskIsRoutine ? undefined : getLocalDateString(editTaskDate);
 
-        // 对于一次性任务，检查时间是否已过
-        if (editingTask.type === 'todo' && taskDate) {
+        // 对于单次任务，检查时间是否已过
+        if (!editTaskIsRoutine && taskDate) {
             const [year, month, day] = taskDate.split('-').map(Number);
             const reminderTime = new Date(year, month - 1, day, h, m);
 
@@ -391,6 +395,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             displayTime: parseTimeToString(editTaskTime),
             date: taskDate,
             category,
+            // 根据开关状态更新任务类型和重复字段
+            type: editTaskIsRoutine ? 'routine' : 'todo',
+            isRecurring: editTaskIsRoutine,
+            recurrencePattern: editTaskIsRoutine ? 'daily' : undefined,
         };
 
         onUpdateTask(updatedTask);
@@ -505,7 +513,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
 
                     {/* "Set a time" Button - positioned to span across blue/white boundary */}
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-50" ref={timePickerContainerRef}>
+                    <div
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-50"
+                        ref={timePickerContainerRef}
+                        data-tour="add-habit-button"
+                    >
                         {/* White outer container */}
                         <button
                             onClick={() => {
@@ -558,8 +570,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                     <div className="space-y-6 pt-14">
                         {/* Render all tasks grouped by date with separators */}
-                        {tasksByDate && tasksByDate.map((dateGroup) => (
-                            <div key={dateGroup.date}>
+                        {tasksByDate && tasksByDate.map((dateGroup, index) => (
+                            <div
+                                key={dateGroup.date}
+                                // 为第一个日期组添加 data-tour 属性，用于 Product Tour 高亮
+                                {...(index === 0 ? { 'data-tour': 'first-habit' } : {})}
+                            >
                                 {/* Show date separator for non-today dates */}
                                 {!dateGroup.isToday && (
                                     <DateSeparator date={formatDateForSeparator(dateGroup.date)} />
@@ -771,7 +787,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         </div>
 
                         {/* Time Picker */}
-                        <div className="mb-6">
+                        <div className="mb-4">
                             <label className="text-gray-500 text-sm mb-2 block">{t('home.taskTime')}</label>
                             <TimePicker
                                 timeValue={editTaskTime}
@@ -781,6 +797,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 onClose={() => {}}
                                 embedded
                             />
+                        </div>
+
+                        {/* Routine Toggle Switch - 日常任务开关 */}
+                        <div
+                            className="flex items-center justify-between mb-6 cursor-pointer select-none active:opacity-70 transition-opacity"
+                            onClick={() => setEditTaskIsRoutine(!editTaskIsRoutine)}
+                        >
+                            <span className="text-gray-700 text-base font-medium">{t('home.routineTask')}</span>
+                            <div className="relative">
+                                {/* Toggle track */}
+                                <div className={`w-[52px] h-[32px] rounded-full transition-colors duration-200 ${editTaskIsRoutine ? 'bg-brand-blue' : 'bg-gray-200'}`}></div>
+                                {/* Toggle knob */}
+                                <div className={`absolute top-[2px] left-[2px] w-[28px] h-[28px] bg-white rounded-full shadow-md transition-transform duration-200 ${editTaskIsRoutine ? 'translate-x-[20px]' : 'translate-x-0'}`}></div>
+                            </div>
                         </div>
 
                         {/* Save Button */}

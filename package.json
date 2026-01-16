@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "dev:app": "vite --open /app/home",
+    "dev:local": "npm run use:local && vite",
+    "dev:remote": "npm run use:remote && vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "use:local": "cp .env.supabase-local .env.local && echo '✅ 已切换到本地 Supabase'",
+    "use:remote": "cp .env.supabase-remote .env.local && echo '✅ 已切换到远程 Supabase'"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.31.3",

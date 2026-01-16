@@ -49,6 +49,26 @@ npm run build
 npm run lint
 ```
 
+### 切换 Supabase 环境
+
+开发时可以在本地 Supabase 和远程 Supabase 之间快速切换：
+
+```bash
+# 方式 1：只切换配置（不启动服务）
+npm run use:local   # 切换到本地 Supabase
+npm run use:remote  # 切换到远程 Supabase
+
+# 方式 2：切换并启动开发服务器（一步到位）
+npm run dev:local   # 使用本地 Supabase + 启动 Vite
+npm run dev:remote  # 使用远程 Supabase + 启动 Vite
+```
+
+| 文件 | 作用 |
+|------|------|
+| `.env.supabase-local` | 本地 Supabase 预设配置 |
+| `.env.supabase-remote` | 远程 Supabase 预设配置 |
+| `.env.local` | 当前生效的配置（切换命令会覆盖此文件） |
+
 ---
 
 ## 📚 文档

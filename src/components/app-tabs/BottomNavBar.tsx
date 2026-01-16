@@ -24,7 +24,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
         />
 
         {/* Big Center Button */}
-        <div className="relative -top-5">
+        <div className="relative -top-5" data-tour="start-button">
             <button
                 className="w-20 h-20 transform transition-transform hover:scale-105 active:scale-95"
                 onClick={() => (onStart ? onStart() : onChange('urgency'))}

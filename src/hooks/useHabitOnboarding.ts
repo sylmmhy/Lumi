@@ -259,7 +259,8 @@ export function useHabitOnboarding() {
       const handledByNative = notifyNativeOnboardingCompleted();
       if (!handledByNative) {
         // 纯浏览器环境，由 Web 端导航到主页
-        navigate(DEFAULT_APP_PATH);
+        // 添加 ?tour=1 参数，触发 Product Tour 新用户引导
+        navigate(`${DEFAULT_APP_PATH}?tour=1`);
       }
       // 如果由原生端处理，Web 端不需要做任何事情
       // 原生端会加载新的 URL，当前页面会被替换

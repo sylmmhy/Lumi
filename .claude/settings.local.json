@@ -105,7 +105,8 @@
       "mcp__supabase__deploy_edge_function",
       "Bash(for fn in seagull-chat seagull-drift-init seagull-drift-chat sailing-summary-test sync-dify-conversations initiate-phone-call transcribe-audio planning-chat user-service generate-virtual-message calculate-task-rewards onboarding-session langgraph-sailing-summary test-gemini test-apns-config send-voip-internal mem0-memory send-live-activity-push)",
       "Bash(do echo \"Downloading $fn...\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(brew upgrade:*)"
     ],
     "deny": [],
     "ask": []

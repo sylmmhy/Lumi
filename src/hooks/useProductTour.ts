@@ -130,8 +130,15 @@ export function useProductTour(): UseProductTourReturn {
       console.log('🎯 [useProductTour] nextStep: Tour 完成，准备更新数据库和通知原生端');
 
       // 异步更新数据库
-      markHabitOnboardingCompleted().catch((err) => {
-        console.error('❌ 更新 habit onboarding 状态失败:', err);
+      // 注意：markHabitOnboardingCompleted 返回 { error: string | null }，不会 throw
+      markHabitOnboardingCompleted().then((result) => {
+        if (result.error) {
+          console.error('❌ [useProductTour] nextStep: 更新 habit onboarding 状态失败:', result.error);
+        } else {
+          console.log('✅ [useProductTour] nextStep: 数据库已更新 has_completed_habit_onboarding = true');
+        }
+      }).catch((err) => {
+        console.error('❌ [useProductTour] nextStep: 更新时发生异常:', err);
       });
 
       // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
@@ -166,8 +173,15 @@ export function useProductTour(): UseProductTourReturn {
     console.log('🎯 [useProductTour] skipTour: Tour 跳过，准备更新数据库和通知原生端');
 
     // 异步更新数据库
-    markHabitOnboardingCompleted().catch((err) => {
-      console.error('❌ 更新 habit onboarding 状态失败:', err);
+    // 注意：markHabitOnboardingCompleted 返回 { error: string | null }，不会 throw
+    markHabitOnboardingCompleted().then((result) => {
+      if (result.error) {
+        console.error('❌ [useProductTour] skipTour: 更新 habit onboarding 状态失败:', result.error);
+      } else {
+        console.log('✅ [useProductTour] skipTour: 数据库已更新 has_completed_habit_onboarding = true');
+      }
+    }).catch((err) => {
+      console.error('❌ [useProductTour] skipTour: 更新时发生异常:', err);
     });
 
     // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成

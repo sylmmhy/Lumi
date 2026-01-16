@@ -17,41 +17,41 @@ interface Feature {
 const features: Feature[] = [
     {
         id: 'body-double',
-        tab: 'AI Companion',
-        title: 'Meet Lumi, Your Body Double',
-        description: "An AI coach who's as persistent as your mom, but way less judgmental. Lumi stays with you through tasks, providing the accountability you need without the guilt trips.",
+        tab: 'AI Body Double',
+        title: 'Meet Lumi, Your AI Body Double',
+        description: "Lumi acts as a real-time accountability partner that checks in when it's time to act. Instead of reminders you can ignore, Lumi helps users initiate routines and follow through — without guilt or pressure.",
         image: Feature1,
         bgColor: '#E6EFFF'
     },
     {
         id: 'awareness',
         tab: 'Smart Insights',
-        title: 'I Know What You\'re Avoiding',
-        description: "Lumi learns your patterns and gently calls out procrastination before it spirals. No more hiding from that task you've been putting off for weeks.",
+        title: 'Understand Your Avoidance Patterns',
+        description: "Lumi learns when and where routines break down, and surfaces insights that help users recognize avoidance early. By identifying repeat friction points, Lumi helps users adjust routines before inconsistency turns into abandonment.",
         image: Feature2,
         bgColor: '#FFF2E6'
     },
     {
         id: 'habits',
         tab: 'Habit Tracking',
-        title: 'Set A Habit. AI Will Call You.',
-        description: "Habit tracking that actually works. Set your goals, and Lumi will check in with you at the right moments. Finally, a system that won't become a graveyard of good intentions.",
+        title: 'Set a Habit. Lumi Will Check In.',
+        description: "Lumi turns habit tracking into habit execution. Users set routines, and Lumi checks in at the right moments to create accountability and consistency — turning good intentions into repeat behavior instead of forgotten lists.",
         image: Feature3,
         bgColor: '#EBF5FF'
     },
     {
         id: 'checkin',
         tab: 'Video Check-In',
-        title: 'Quick Video Check-In. Get Started.',
-        description: "Like having a supportive friend who never gets tired of you. Quick video sessions to build momentum and get you moving on your tasks.",
+        title: 'Quick Check-Ins That Trigger Action',
+        description: "Short video check-ins create a sense of presence and accountability — similar to body doubling — helping users start routines when motivation is low. Designed to be fast, lightweight, and frictionless.",
         image: Feature4,
         bgColor: '#FEEBED'
     },
     {
         id: 'streak',
         tab: 'Progress Tracking',
-        title: 'Ready? Let\'s Get Moving.',
-        description: "Watch your streaks grow and celebrate your wins. Track your progress with beautiful visualizations that make consistency feel rewarding.",
+        title: 'Make Consistency Visible',
+        description: "Lumi tracks streaks and progress to reinforce consistency over time. Clear visual feedback helps users stay engaged, recognize momentum, and build habits that last — not just short-term motivation.",
         image: Feature5,
         bgColor: '#ECFDF5'
     }

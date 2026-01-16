@@ -108,7 +108,12 @@
       "Bash(done)",
       "Bash(brew upgrade:*)",
       "Bash(supabase db dump:*)",
-      "Bash(PGPASSWORD=postgres psql:*)"
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(supabase functions list:*)",
+      "Bash(git stash:*)",
+      "Bash(supabase migration list:*)",
+      "Bash(python3:*)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []

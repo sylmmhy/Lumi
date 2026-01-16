@@ -34,11 +34,11 @@ export const LandingCTA: React.FC<LandingCTAProps> = ({ onDownloadiOS, onRequest
                         {/* Left: Content */}
                         <div className="w-full lg:w-3/5 text-white mb-16 lg:mb-0">
                             <h2 className="text-4xl md:text-6xl font-black mb-8 leading-[1.1] tracking-tight">
-                                Join thousands who've<br />
-                                <span style={{ color: '#FE8D00' }}>stopped</span> procrastinating
+                                Build better routines,<br />
+                                <span style={{ color: '#FE8D00' }}>one start</span> at a time.
                             </h2>
                             <p className="text-xl opacity-90 mb-10 max-w-lg mx-auto lg:mx-0 font-medium leading-relaxed">
-                                Start your journey with Lumi today. Get personalized AI coaching, habit tracking, and accountability that actually works.
+                                Start your journey with Lumi today. Lumi helps you begin tasks, show up on time, and build simple daily routines through timely check-ins and real accountability.
                             </p>
                             <div className="flex flex-wrap justify-center lg:justify-start gap-4">
                                 {/* 主按钮：App Store 下载 */}

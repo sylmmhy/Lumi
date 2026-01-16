@@ -288,7 +288,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
                 {/* List */}
                 <div className="space-y-4">
                     {filteredTasks.length === 0 ? (
-                        <div className="flex flex-col items-center text-center pt-0">
+                        <div className="flex flex-col items-center text-center pt-0" data-tour="urgency-input-area">
                             <CustomTaskForm
                                 title={t('urgency.enterTaskHere')}
                                 value={customTask}

@@ -57,6 +57,16 @@ function getTargetRect(selector: string, shouldScroll: boolean = false): TargetR
 }
 
 /**
+ * 获取多个目标元素的位置
+ */
+function getMultipleTargetRects(selectors: string[], shouldScroll: boolean = false): TargetRect[] {
+  return selectors.map((selector, index) => {
+    // 只对第一个元素执行滚动
+    return getTargetRect(selector, shouldScroll && index === 0);
+  });
+}
+
+/**
  * Product Tour 蒙层组件
  *
  * 功能：
@@ -73,7 +83,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   onNext,
   onSkip,
 }) => {
-  // 目标元素位置
+  // 目标元素位置（单个）
   const [targetRect, setTargetRect] = useState<TargetRect>({
     top: 0,
     left: 0,
@@ -81,6 +91,12 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     height: 0,
     found: false,
   });
+
+  // 多个目标元素位置（用于多高亮区域）
+  const [targetRects, setTargetRects] = useState<TargetRect[]>([]);
+
+  // 是否使用多目标模式
+  const useMultipleTargets = step.targetSelectors && step.targetSelectors.length > 0;
 
   const observerRef = useRef<MutationObserver | null>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
@@ -99,20 +115,46 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
    * 更新目标元素位置
    */
   const updateTargetRect = useCallback((shouldScroll: boolean = false) => {
-    const rect = getTargetRect(step.targetSelector, shouldScroll);
-    setTargetRect(rect);
-
-    // 如果滚动了，等待滚动完成后再次更新位置
-    if (shouldScroll && rect.found) {
-      if (scrollTimeoutRef.current) {
-        window.clearTimeout(scrollTimeoutRef.current);
+    // 多目标模式
+    if (useMultipleTargets && step.targetSelectors) {
+      const rects = getMultipleTargetRects(step.targetSelectors, shouldScroll);
+      setTargetRects(rects);
+      // 同时更新单个目标（用于 tooltip 定位，使用第一个目标）
+      if (rects.length > 0) {
+        setTargetRect(rects[0]);
       }
-      scrollTimeoutRef.current = window.setTimeout(() => {
-        const newRect = getTargetRect(step.targetSelector, false);
-        setTargetRect(newRect);
-      }, 500);
+
+      // 如果滚动了，等待滚动完成后再次更新位置
+      const anyFound = rects.some(r => r.found);
+      if (shouldScroll && anyFound) {
+        if (scrollTimeoutRef.current) {
+          window.clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = window.setTimeout(() => {
+          const newRects = getMultipleTargetRects(step.targetSelectors!, false);
+          setTargetRects(newRects);
+          if (newRects.length > 0) {
+            setTargetRect(newRects[0]);
+          }
+        }, 500);
+      }
+    } else {
+      // 单目标模式（原有逻辑）
+      const rect = getTargetRect(step.targetSelector, shouldScroll);
+      setTargetRect(rect);
+
+      // 如果滚动了，等待滚动完成后再次更新位置
+      if (shouldScroll && rect.found) {
+        if (scrollTimeoutRef.current) {
+          window.clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = window.setTimeout(() => {
+          const newRect = getTargetRect(step.targetSelector, false);
+          setTargetRect(newRect);
+        }, 500);
+      }
     }
-  }, [step.targetSelector]);
+  }, [step.targetSelector, step.targetSelectors, useMultipleTargets]);
 
   // 初次渲染和步骤变化时更新位置，并滚动到目标
   useEffect(() => {
@@ -131,18 +173,46 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
 
   // 监听 DOM 变化（如元素延迟加载）
   useEffect(() => {
+    // 检查是否所有目标都已找到
+    const allFound = useMultipleTargets
+      ? targetRects.length > 0 && targetRects.every(r => r.found)
+      : targetRect.found;
+
     // 如果未找到目标元素，设置 MutationObserver 监听
-    if (!targetRect.found) {
+    if (!allFound) {
       observerRef.current = new MutationObserver(() => {
-        const rect = getTargetRect(step.targetSelector, true);
-        if (rect.found) {
-          setTargetRect(rect);
-          observerRef.current?.disconnect();
-          // 滚动后再次更新位置
-          setTimeout(() => {
-            const newRect = getTargetRect(step.targetSelector, false);
-            setTargetRect(newRect);
-          }, 500);
+        if (useMultipleTargets && step.targetSelectors) {
+          const rects = getMultipleTargetRects(step.targetSelectors, true);
+          const anyFound = rects.some(r => r.found);
+          if (anyFound) {
+            setTargetRects(rects);
+            if (rects.length > 0) {
+              setTargetRect(rects[0]);
+            }
+            // 如果全部找到，断开监听
+            if (rects.every(r => r.found)) {
+              observerRef.current?.disconnect();
+            }
+            // 滚动后再次更新位置
+            setTimeout(() => {
+              const newRects = getMultipleTargetRects(step.targetSelectors!, false);
+              setTargetRects(newRects);
+              if (newRects.length > 0) {
+                setTargetRect(newRects[0]);
+              }
+            }, 500);
+          }
+        } else {
+          const rect = getTargetRect(step.targetSelector, true);
+          if (rect.found) {
+            setTargetRect(rect);
+            observerRef.current?.disconnect();
+            // 滚动后再次更新位置
+            setTimeout(() => {
+              const newRect = getTargetRect(step.targetSelector, false);
+              setTargetRect(newRect);
+            }, 500);
+          }
         }
       });
 
@@ -155,14 +225,22 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [step.targetSelector, targetRect.found]);
+  }, [step.targetSelector, step.targetSelectors, targetRect.found, targetRects, useMultipleTargets]);
 
   // 监听窗口大小变化和滚动
   useEffect(() => {
     const handleChange = () => {
       // 不滚动，只更新位置
-      const rect = getTargetRect(step.targetSelector, false);
-      setTargetRect(rect);
+      if (useMultipleTargets && step.targetSelectors) {
+        const rects = getMultipleTargetRects(step.targetSelectors, false);
+        setTargetRects(rects);
+        if (rects.length > 0) {
+          setTargetRect(rects[0]);
+        }
+      } else {
+        const rect = getTargetRect(step.targetSelector, false);
+        setTargetRect(rect);
+      }
     };
 
     window.addEventListener('resize', handleChange);
@@ -172,7 +250,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
       window.removeEventListener('resize', handleChange);
       window.removeEventListener('scroll', handleChange, true);
     };
-  }, [step.targetSelector]);
+  }, [step.targetSelector, step.targetSelectors, useMultipleTargets]);
 
   /**
    * 计算 Tooltip 的实际显示位置
@@ -275,7 +353,7 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
   }, [step.position, targetRect]);
 
   /**
-   * 获取高亮区域的样式
+   * 获取高亮区域的样式（单目标模式）
    */
   const getHighlightStyle = useCallback((): React.CSSProperties => {
     if (step.position === 'center' || !targetRect.found) {
@@ -297,21 +375,89 @@ export const TourOverlay: React.FC<TourOverlayProps> = ({
     };
   }, [step.position, targetRect]);
 
+  /**
+   * 获取单个高亮区域的样式（多目标模式，无阴影）
+   */
+  const getMultiHighlightStyle = useCallback((rect: TargetRect): React.CSSProperties => {
+    if (!rect.found) {
+      return { display: 'none' };
+    }
+
+    const highlightPadding = 8;
+
+    return {
+      position: 'fixed',
+      top: rect.top - highlightPadding,
+      left: rect.left - highlightPadding,
+      width: rect.width + highlightPadding * 2,
+      height: rect.height + highlightPadding * 2,
+      borderRadius: '16px',
+      backgroundColor: 'white',
+      pointerEvents: 'none',
+    };
+  }, []);
+
   // Portal 容器
   const portalContainer = document.getElementById('root') || document.body;
+
+  // 检查是否有任何高亮区域找到
+  const anyTargetFound = useMultipleTargets
+    ? targetRects.some(r => r.found)
+    : targetRect.found;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
       {/* 蒙层背景（如果是 center 位置或未找到目标） */}
-      {(step.position === 'center' || !targetRect.found) && (
+      {(step.position === 'center' || !anyTargetFound) && (
         <div
           className="fixed inset-0 bg-black/70"
           onClick={(e) => e.stopPropagation()}
         />
       )}
 
-      {/* 高亮区域（挖洞效果） */}
-      {step.position !== 'center' && targetRect.found && (
+      {/* 多目标高亮区域（使用 SVG mask 实现多个挖洞） */}
+      {useMultipleTargets && step.position !== 'center' && anyTargetFound && (
+        <svg
+          className="fixed inset-0 w-full h-full pointer-events-none"
+          style={{ zIndex: 9998 }}
+        >
+          <defs>
+            <mask id="tour-mask">
+              {/* 白色填充整个屏幕 */}
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              {/* 黑色区域表示挖洞（透明区域） */}
+              {targetRects.map((rect, index) => {
+                if (!rect.found) return null;
+                const padding = 8;
+                return (
+                  <rect
+                    key={index}
+                    x={rect.left - padding}
+                    y={rect.top - padding}
+                    width={rect.width + padding * 2}
+                    height={rect.height + padding * 2}
+                    rx="16"
+                    ry="16"
+                    fill="black"
+                  />
+                );
+              })}
+            </mask>
+          </defs>
+          {/* 使用 mask 的半透明蒙层 */}
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            fill="rgba(0, 0, 0, 0.7)"
+            mask="url(#tour-mask)"
+          />
+        </svg>
+      )}
+
+      {/* 单目标高亮区域（原有的 box-shadow 挖洞效果） */}
+      {!useMultipleTargets && step.position !== 'center' && targetRect.found && (
         <div style={getHighlightStyle()} />
       )}
 

@@ -7,6 +7,7 @@ import {
   type TourContext,
 } from '../constants/appTourSteps';
 import { useAuth } from './useAuth';
+import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
 
 /**
  * useProductTour 的返回类型
@@ -125,10 +126,18 @@ export function useProductTour(): UseProductTourReturn {
       // 立即更新本地状态（UI 响应）
       setLocalCompleted(true);
 
+      // 🔍 调试日志
+      console.log('🎯 [useProductTour] nextStep: Tour 完成，准备更新数据库和通知原生端');
+
       // 异步更新数据库
       markHabitOnboardingCompleted().catch((err) => {
         console.error('❌ 更新 habit onboarding 状态失败:', err);
       });
+
+      // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
+      // 原生端收到后可以决定下一步操作
+      console.log('🎯 [useProductTour] nextStep: 通知原生端 onboardingCompleted');
+      notifyNativeOnboardingCompleted();
 
       // 移除 URL 参数，保持在当前页面
       const newUrl = location.pathname;
@@ -153,10 +162,17 @@ export function useProductTour(): UseProductTourReturn {
     // 立即更新本地状态（UI 响应）
     setLocalCompleted(true);
 
+    // 🔍 调试日志
+    console.log('🎯 [useProductTour] skipTour: Tour 跳过，准备更新数据库和通知原生端');
+
     // 异步更新数据库
     markHabitOnboardingCompleted().catch((err) => {
       console.error('❌ 更新 habit onboarding 状态失败:', err);
     });
+
+    // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
+    console.log('🎯 [useProductTour] skipTour: 通知原生端 onboardingCompleted');
+    notifyNativeOnboardingCompleted();
 
     // 移除 URL 参数，保持在当前页面
     const newUrl = location.pathname;

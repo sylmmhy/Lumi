@@ -88,33 +88,48 @@ const tokenResponse = await client.authTokens.create({
 
 ---
 
-## ⚠️ 待解决的问题
+### 3. Seed 数据问题 ✅
 
-### 3. Seed 数据列名不匹配 ⏸️
+**症状**：`supabase db reset` 时报多种错误
 
-**症状**：`supabase db reset` 时 seed.sql 报错 `column "memory_text" does not exist`
+**根因**（三个问题）：
 
-**根因**：`supabase/seed.sql` 中的 `user_memories` 表列名与实际表定义不匹配
+1. **VALUES 列表长度不匹配**：tasks INSERT 的第三条记录有 15 个值，但列定义只有 14 列
+2. **触发器问题**：tasks 插入时触发 `check_task_on_insert()` 函数，该函数查询 `user_devices` 表
+3. **外键约束问题**：`user_memories.user_id` 外键指向 `auth.users`，而非 `public.users`
 
-**需要修改**（seed.sql 第 255-261 行）：
+**解决方案**：
 
-| 错误列名 | 正确列名 |
-|---------|---------|
-| `memory_text` | `content` |
-| `memory_tag` | `tag` |
-| `source_task_name` | `task_name` |
+1. 将已完成任务拆分为独立 INSERT（添加 `completed_at` 列）：
+   ```sql
+   -- 单独 INSERT 已完成任务，包含 completed_at 列
+   INSERT INTO public.tasks (..., completed_at) VALUES (...);
+   ```
 
-**已做**：修改了 `memory_text` → `content`, `memory_tag` → `tag`, `source_task_name` → `task_name`
+2. 在 tasks INSERT 前后禁用/启用触发器：
+   ```sql
+   ALTER TABLE public.tasks DISABLE TRIGGER task_insert_check;
+   -- ... INSERT 语句 ...
+   ALTER TABLE public.tasks ENABLE TRIGGER task_insert_check;
+   ```
 
-**未完成**：还有其他 INSERT 语句可能有 VALUES 列表长度不匹配的问题
+3. 在 `auth.users` 中也创建测试用户：
+   ```sql
+   INSERT INTO auth.users (id, email, aud, role, created_at, updated_at)
+   VALUES
+       ('11111111-...', 'xiaoming@test.local', 'authenticated', 'authenticated', NOW(), NOW()),
+       ...;
+   ```
 
-**临时方案**：已在 `config.toml` 中禁用 seed：
-```toml
-[db.seed]
-enabled = false  # 暂时禁用
-```
+4. 使用 `BEGIN;` ... `COMMIT;` 包裹整个文件，确保事务一致性
 
-**下一步**：需要完整检查并修复 `supabase/seed.sql` 中的所有 INSERT 语句
+**状态**：✅ 已修复，`supabase db reset` 成功填充测试数据
+
+**验证结果**：
+- 3 个测试用户（小明、小红、John）
+- 6 个测试任务（3 pending + 3 completed）
+- 5 条测试记忆（PREF、PROC、SOMA、EFFECTIVE x2）
+- 2 个测试访客
 
 ---
 
@@ -124,8 +139,8 @@ enabled = false  # 暂时禁用
 |------|---------|
 | `supabase/functions/gemini-token/index.ts` | 使用新的 SDK API 创建 ephemeral token |
 | `supabase/migrations/00000000000000_schema.sql` | 从 init.sql 重命名，添加扩展和角色 |
-| `supabase/config.toml` | 禁用 seed（临时） |
-| `supabase/seed.sql` | 部分修复了列名（未完成） |
+| `supabase/config.toml` | 启用 seed |
+| `supabase/seed.sql` | 修复列名、触发器、外键约束问题 |
 | `docs/architecture/supabase-local-development.md` | 添加了 Q6 Gemini Token 问题说明 |
 
 ---
@@ -134,15 +149,15 @@ enabled = false  # 暂时禁用
 
 ### 立即执行
 
-1. **修复 seed.sql**：检查并修复所有 INSERT 语句的列名
-2. **重新启用 seed**：在 config.toml 中设置 `enabled = true`
-3. **测试完整流程**：`supabase db reset` 应该能成功填充测试数据
+1. **启动 Edge Functions**：`npm run supabase:functions`
+2. **启动前端**：`npm run dev:local`
+3. **测试 AI 对话功能**
 
 ### 验证测试
 
-1. 在本地 Studio (http://127.0.0.1:54323) 确认所有表存在
-2. 启动 Edge Functions：`npm run supabase:functions`
-3. 测试 AI 对话功能是否正常工作
+1. 在本地 Studio (http://127.0.0.1:54323) 确认所有表和数据存在
+2. 测试 AI 对话功能是否正常工作
+3. 测试记忆存储和检索功能
 
 ---
 
@@ -174,6 +189,6 @@ supabase status
 | 本地 Supabase | ✅ 运行中 |
 | 数据库表（24个） | ✅ 完整 |
 | Gemini Token API | ✅ 已修复 |
+| Seed 数据 | ✅ 已修复 |
 | Edge Functions | ⚠️ 需要启动 |
-| Seed 数据 | ❌ 暂时禁用 |
 | AI 对话测试 | ⏳ 待测试 |

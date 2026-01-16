@@ -1,6 +1,6 @@
 # 记忆系统架构文档
 
-> 最后更新：2026-01-07
+> 最后更新：2026-01-15
 
 ## 1. 概述
 
@@ -21,7 +21,7 @@
 | `id` | UUID | 主键 |
 | `user_id` | UUID | 用户 ID（外键关联 auth.users） |
 | `content` | TEXT | 记忆内容（AI 提取的见解） |
-| `tag` | TEXT | 分类标签（5 种，见下表） |
+| `tag` | TEXT | 分类标签（6 种，见下表） |
 | `confidence` | FLOAT | 置信度 (0-1) |
 | `task_name` | TEXT | 产生该记忆的任务名称 |
 | `embedding` | vector(1536) | OpenAI 向量嵌入 |
@@ -54,6 +54,7 @@
 | **SOMA** | 身心反应 | 物理症状与特定活动的关联 | 按任务上下文加载 |
 | **EMO** | 情绪触发 | 情绪与特定任务/情况的关联 | 按任务上下文加载 |
 | **SAB** | 自我妨碍 | 削弱目标达成的重复行为 | 按任务上下文加载 |
+| **EFFECTIVE** | 有效激励方式 | AI 成功激励用户时使用的方式 | **始终加载**（正向强化） |
 
 ### 3.1 提取规则示例
 
@@ -63,6 +64,8 @@
 - ✅ "User reports recurring headaches specifically before workout" → SOMA
 - ✅ "User feels anxious when facing deadlines" → EMO
 - ✅ "User checks phone immediately before important tasks" → SAB
+- ✅ "User responds well to countdown pressure" → EFFECTIVE
+- ✅ "User is motivated by streak reminders" → EFFECTIVE
 
 **不会被提取的（过滤掉）**：
 - ❌ 时间/日期提及（"it's 4pm", "today"）
@@ -83,7 +86,7 @@
 
 1. **用户与 AI 教练对话**（Gemini Live）
 2. **会话结束**时自动调用 `memory-extractor`
-3. **Azure OpenAI** 按 5 种标签识别行为模式
+3. **Azure OpenAI** 按 6 种标签识别行为模式
 4. 为每条记忆生成 **1536 维向量嵌入**
 
 ### 4.2 去重合并机制
@@ -178,6 +181,7 @@ const { data } = await supabaseClient.functions.invoke('get-system-instruction',
 | **EMO** | 了解情绪触发点，避免刺激 |
 | **SOMA** | 注意身心状态，调整难度 |
 | **SAB** | 识别自我妨碍行为，提前干预 |
+| **EFFECTIVE** | 始终加载，复用成功激励策略 |
 
 ---
 
@@ -219,11 +223,46 @@ const saveSessionMemory = useCallback(async () => {
 
 ---
 
-## 8. 文件位置清单
+## 8. 任务成功元数据
+
+除了 `user_memories` 表的记忆系统，项目还在 `tasks` 表中记录用户的**行为完成数据**，用于正向记忆激励系统。
+
+### 8.1 成功元数据字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `completion_mood` | TEXT | 完成时情绪：proud/relieved/satisfied/neutral |
+| `difficulty_perception` | TEXT | 难度感知：easier_than_usual/normal/harder_than_usual |
+| `overcame_resistance` | BOOLEAN | 是否克服了阻力（一开始不想做但最终完成） |
+| `actual_duration_minutes` | INTEGER | 实际完成时长（分钟） |
+| `personal_best_at_completion` | INTEGER | 完成时的个人最佳记录 |
+
+### 8.2 辅助函数
+
+| 函数 | 说明 |
+|------|------|
+| `get_personal_best(user_id, task_keywords)` | 获取某任务类型的个人最佳时长 |
+| `calculate_user_streak(user_id, task_keywords)` | 计算连续完成天数 |
+| `get_user_success_summary(user_id, task_keywords)` | 获取成功记录摘要（总完成数、连胜、最佳等） |
+
+### 8.3 与记忆系统的关系
+
+```
+任务完成 → 记录成功元数据(tasks) → AI 提取 EFFECTIVE 记忆 → 注入系统指令
+                ↓
+        用于计算连胜、个人最佳等正向激励数据
+```
+
+**迁移文件**：`supabase/migrations/20260108210000_add_success_metadata_to_tasks.sql`
+
+---
+
+## 9. 文件位置清单
 
 | 组件 | 路径 |
 |------|------|
-| **数据库迁移** | `supabase/migrations/20260108*_*.sql` |
+| **记忆表迁移** | `supabase/migrations/20260108*_*.sql`、`20260109*_*.sql` |
+| **任务成功元数据迁移** | `supabase/migrations/20260108210000_add_success_metadata_to_tasks.sql` |
 | **内部记忆 API** | `supabase/functions/memory-extractor/index.ts` |
 | **外部记忆 API** | `supabase/functions/mem0-memory/index.ts` |
 | **系统指令生成** | `supabase/functions/get-system-instruction/index.ts` |
@@ -232,7 +271,7 @@ const saveSessionMemory = useCallback(async () => {
 
 ---
 
-## 9. 环境变量
+## 10. 环境变量
 
 ```bash
 # Azure AI（memory-extractor 使用）
@@ -247,7 +286,7 @@ MEM0_API_KEY=xxx
 
 ---
 
-## 10. 技术指标
+## 11. 技术指标
 
 | 指标 | 值 |
 |------|-----|
@@ -255,11 +294,11 @@ MEM0_API_KEY=xxx
 | 相似度阈值 | 0.85（向量）/ 0.40（文本回退） |
 | 提取模型 | gpt-5.1-chat |
 | 嵌入模型 | text-embedding-3-large |
-| 记忆标签数 | 5 |
+| 记忆标签数 | 6 |
 
 ---
 
-## 11. 数据流示意图
+## 12. 数据流示意图
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

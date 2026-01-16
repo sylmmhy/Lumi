@@ -22,5 +22,5 @@ DROP FUNCTION IF EXISTS mark_notification_sent(UUID, BOOLEAN, TEXT);
 -- 5. 删除表（会自动删除相关索引和 RLS 策略）
 DROP TABLE IF EXISTS pending_push_notifications;
 
--- 6. 添加注释说明清理原因
-COMMENT ON FUNCTION process_task_notifications IS '主推送通知处理函数 - 由 check-task-notifications cron job 每分钟调用，直接查询 tasks 表并调用 send-voip-push/send-fcm-push Edge Functions';
+-- 注意：process_task_notifications 函数的注释已移动到 20260108200000_sync_production_notification_functions.sql
+-- 该函数在那个迁移中创建

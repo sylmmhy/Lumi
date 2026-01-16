@@ -151,11 +151,11 @@ Onboarding 必须严格遵守以下状态流转：
 - **Urgency View**: 这是核心功能入口，点击 Start 必须复用 `useAICoachSession` 逻辑，而不是简单的页面跳转。
 
 **4. 记忆系统 (Memory System)**：
-文件参考：`docs/memory-architecture.md`（完整架构文档）
+文件参考：`docs/architecture/memory-system.md`（完整架构文档）
 
 **核心概念**：让 AI 教练理解用户的行为模式和偏好，提供个性化陪伴。
 
-**记忆标签分类（5 种）**：
+**记忆标签分类（6 种）**：
 | 标签 | 含义 | 加载策略 |
 |------|------|---------|
 | **PREF** | AI 交互偏好 | **始终加载** |
@@ -163,9 +163,11 @@ Onboarding 必须严格遵守以下状态流转：
 | **SOMA** | 身心反应 | 按任务上下文 |
 | **EMO** | 情绪触发 | 按任务上下文 |
 | **SAB** | 自我妨碍 | 按任务上下文 |
+| **EFFECTIVE** | 有效激励方式 | **始终加载** |
 
 **关键文件**：
-- 数据库表：`supabase/migrations/20260108*_*.sql` → `user_memories` 表
+- 数据库表：`supabase/migrations/20260108*_*.sql`、`20260109*_*.sql` → `user_memories` 表
+- 任务成功元数据：`supabase/migrations/20260108210000_add_success_metadata_to_tasks.sql`
 - 后端 API：`supabase/functions/memory-extractor/index.ts`（提取、搜索、合并）
 - 系统指令：`supabase/functions/get-system-instruction/index.ts`（注入记忆到 AI）
 - 前端展示：`src/components/profile/MemoriesSection.tsx`
@@ -178,7 +180,7 @@ Onboarding 必须严格遵守以下状态流转：
 **关键规则**：
 - 记忆在 `useAICoachSession` 的 `saveSessionMemory()` 中自动保存
 - 向量相似度 > 0.85 视为重复，会自动合并
-- PREF 记忆始终加载到 AI 系统指令，影响交互风格
+- PREF 和 EFFECTIVE 记忆始终加载到 AI 系统指令，影响交互风格和激励策略
 
 ---
 

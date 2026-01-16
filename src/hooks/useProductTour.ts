@@ -129,20 +129,21 @@ export function useProductTour(): UseProductTourReturn {
       // 🔍 调试日志
       console.log('🎯 [useProductTour] nextStep: Tour 完成，准备更新数据库和通知原生端');
 
-      // 异步更新数据库
-      // 注意：markHabitOnboardingCompleted 返回 { error: string | null }，不会 throw
-      markHabitOnboardingCompleted().then((result) => {
+      // ⚠️ 重要：必须先等待数据库更新完成，再通知原生端
+      // 因为原生端收到消息后会立即跳转页面，中断未完成的异步操作
+      try {
+        const result = await markHabitOnboardingCompleted();
         if (result.error) {
           console.error('❌ [useProductTour] nextStep: 更新 habit onboarding 状态失败:', result.error);
         } else {
           console.log('✅ [useProductTour] nextStep: 数据库已更新 has_completed_habit_onboarding = true');
         }
-      }).catch((err) => {
+      } catch (err) {
         console.error('❌ [useProductTour] nextStep: 更新时发生异常:', err);
-      });
+      }
 
       // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
-      // 原生端收到后可以决定下一步操作
+      // 原生端收到后会跳转到主页，所以必须在数据库更新后再调用
       console.log('🎯 [useProductTour] nextStep: 通知原生端 onboardingCompleted');
       notifyNativeOnboardingCompleted();
 
@@ -172,19 +173,21 @@ export function useProductTour(): UseProductTourReturn {
     // 🔍 调试日志
     console.log('🎯 [useProductTour] skipTour: Tour 跳过，准备更新数据库和通知原生端');
 
-    // 异步更新数据库
-    // 注意：markHabitOnboardingCompleted 返回 { error: string | null }，不会 throw
-    markHabitOnboardingCompleted().then((result) => {
+    // ⚠️ 重要：必须先等待数据库更新完成，再通知原生端
+    // 因为原生端收到消息后会立即跳转页面，中断未完成的异步操作
+    try {
+      const result = await markHabitOnboardingCompleted();
       if (result.error) {
         console.error('❌ [useProductTour] skipTour: 更新 habit onboarding 状态失败:', result.error);
       } else {
         console.log('✅ [useProductTour] skipTour: 数据库已更新 has_completed_habit_onboarding = true');
       }
-    }).catch((err) => {
+    } catch (err) {
       console.error('❌ [useProductTour] skipTour: 更新时发生异常:', err);
-    });
+    }
 
     // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
+    // 原生端收到后会跳转到主页，所以必须在数据库更新后再调用
     console.log('🎯 [useProductTour] skipTour: 通知原生端 onboardingCompleted');
     notifyNativeOnboardingCompleted();
 

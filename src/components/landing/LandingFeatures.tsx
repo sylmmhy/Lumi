@@ -5,6 +5,9 @@ import Feature3 from '../../assets/3.png';
 import Feature4 from '../../assets/4.png';
 import Feature5 from '../../assets/5.png';
 
+/**
+ * 落地页功能卡片的数据结构
+ */
 interface Feature {
     id: string;
     tab: string;
@@ -14,6 +17,10 @@ interface Feature {
     bgColor: string;
 }
 
+/**
+ * 功能卡片配置
+ * 用于驱动 Tab、卡片内容与图像展示。
+ */
 const features: Feature[] = [
     {
         id: 'body-double',
@@ -57,12 +64,22 @@ const features: Feature[] = [
     }
 ];
 
-/** 卡片宽度（像素） */
+/**
+ * 卡片宽度（像素）
+ * 仅用于桌面端横向滚动时的计算基准。
+ */
 const CARD_WIDTH = 900;
 
+/**
+ * 落地页功能展示区
+ * 桌面端使用横向滚动卡片；移动端使用纵向平铺，避免横滑操作。
+ */
 export const LandingFeatures: React.FC = () => {
+    /** 当前激活的功能卡片索引（用于桌面端导航与指示器） */
     const [activeIndex, setActiveIndex] = useState(0);
+    /** 横向滚动容器引用（桌面端用于居中与滚动定位） */
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    /** 标记是否由程序触发滚动，避免滚动回调抖动 */
     const isScrollingRef = useRef(false);
 
     /**
@@ -100,7 +117,12 @@ export const LandingFeatures: React.FC = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
+        /**
+         * 根据容器中心点计算当前最接近的卡片索引
+         * 仅在桌面端横向滚动时启用。
+         */
         const handleScroll = () => {
+            if (container.scrollWidth <= container.offsetWidth) return;
             // 如果是程序触发的滚动，不更新状态
             if (isScrollingRef.current) return;
 
@@ -140,6 +162,7 @@ export const LandingFeatures: React.FC = () => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
+        if (container.scrollWidth <= container.offsetWidth) return;
         // 设置初始滚动位置
         const containerWidth = container.offsetWidth;
         const initialScroll = -(containerWidth - CARD_WIDTH) / 2;
@@ -149,7 +172,7 @@ export const LandingFeatures: React.FC = () => {
     return (
         <section className="pt-24 pb-16 bg-white" style={{ fontFamily: 'Nunito, sans-serif' }}>
             {/* Tabs Navigation */}
-            <div className="flex flex-wrap justify-center gap-3 mb-10 px-6">
+            <div className="hidden md:flex flex-wrap justify-center gap-3 mb-10 px-6">
                 {features.map((feature, index) => (
                     <button
                         key={feature.id}
@@ -168,7 +191,7 @@ export const LandingFeatures: React.FC = () => {
             {/* Horizontal Scroll Container */}
             <div
                 ref={scrollContainerRef}
-                className="flex gap-6 overflow-x-auto snap-x snap-mandatory"
+                className="flex flex-col md:flex-row gap-6 overflow-x-visible md:overflow-x-auto md:snap-x md:snap-mandatory scrollbar-hide"
                 style={{
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
@@ -189,12 +212,11 @@ export const LandingFeatures: React.FC = () => {
                         key={feature.id}
                         data-card
                         onClick={() => scrollToCard(index)}
-                        className={`flex-shrink-0 snap-center cursor-pointer transition-all duration-500 ${
+                        className={`flex-shrink-0 w-full md:w-[900px] md:snap-center md:cursor-pointer transition-all duration-500 ${
                             activeIndex === index
                                 ? 'opacity-100 scale-100'
-                                : 'opacity-40 scale-[0.97]'
+                                : 'md:opacity-40 md:scale-[0.97]'
                         }`}
-                        style={{ width: `${CARD_WIDTH}px`, maxWidth: '90vw' }}
                     >
                         <div
                             className="rounded-[32px] overflow-hidden border border-black/5 h-full"
@@ -239,7 +261,7 @@ export const LandingFeatures: React.FC = () => {
             </div>
 
             {/* Dot Indicators */}
-            <div className="flex justify-center gap-2 mt-4">
+            <div className="hidden md:flex justify-center gap-2 mt-4">
                 {features.map((_, index) => (
                     <button
                         key={index}

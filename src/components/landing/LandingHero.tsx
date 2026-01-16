@@ -7,6 +7,10 @@ interface LandingHeroProps {
     onRequestAndroid?: () => void;
 }
 
+/**
+ * Landing 页顶部 Hero 区域
+ * 增加移动端顶部留白，避免标题被固定导航栏遮挡。
+ */
 export const LandingHero: React.FC<LandingHeroProps> = ({ onDownloadiOS, onRequestAndroid }) => {
     return (
         <section
@@ -21,7 +25,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onDownloadiOS, onReque
         >
             {/* Content container */}
             <div className="max-w-6xl mx-auto relative w-full" style={{ zIndex: 10 }}>
-                <div className="flex flex-col lg:flex-row items-center justify-between pt-12 pb-24">
+                <div className="flex flex-col lg:flex-row items-center justify-between pt-24 md:pt-12 pb-24">
                     {/* Left side: Typography + CTA */}
                     <div className="w-full lg:w-[55%] z-10 text-left">
                         {/* Super Heading */}

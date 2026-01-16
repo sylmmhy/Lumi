@@ -514,13 +514,18 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                     </div>
                                 </div>
                             ) : (
-                                habits.map((habit) => (
-                                    <StatsCard
+                                habits.map((habit, index) => (
+                                    // 第一个习惯卡片添加 data-tour 属性，用于 Product Tour 高亮
+                                    <div
                                         key={habit.id}
-                                        habit={habit}
-                                        onToggleToday={() => void toggleHabitToday(habit.id)}
-                                        onClickDetail={() => setSelectedHabit(habit)}
-                                    />
+                                        data-tour={index === 0 ? 'habit-record-example' : undefined}
+                                    >
+                                        <StatsCard
+                                            habit={habit}
+                                            onToggleToday={() => void toggleHabitToday(habit.id)}
+                                            onClickDetail={() => setSelectedHabit(habit)}
+                                        />
+                                    </div>
                                 ))
                             )}
                         </div>

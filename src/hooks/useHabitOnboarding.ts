@@ -112,6 +112,32 @@ const HABIT_TRANSLATION_KEYS: Record<string, string> = {
   eat: 'habitOnboarding.habitSelect.eat',
 };
 
+/**
+ * 根据习惯类型返回合理的默认提醒时间
+ * - bedtime (按时睡觉): 23:00 晚上
+ * - wakeup (早起): 08:00 早上
+ * - exercise (运动): 09:00 早上
+ * - study (学习): 09:00 早上
+ * - eat (按时吃饭): 12:00 中午
+ * - custom (其他): 09:00 默认
+ */
+function getDefaultTimeForHabit(habitId: string): string {
+  switch (habitId) {
+    case 'bedtime':
+      return '23:00';
+    case 'wakeup':
+      return '08:00';
+    case 'exercise':
+      return '09:00';
+    case 'study':
+      return '09:00';
+    case 'eat':
+      return '12:00';
+    default:
+      return '09:00';
+  }
+}
+
 export function useHabitOnboarding() {
   const navigate = useNavigate();
   const { userId, markHabitOnboardingCompleted } = useAuth();
@@ -145,7 +171,14 @@ export function useHabitOnboarding() {
 
   // 数据设置
   const selectHabit = useCallback((habitId: string) => {
-    setState(prev => ({ ...prev, selectedHabitId: habitId, error: null }));
+    // 选择习惯时自动设置对应的默认时间，方便用户少滚动
+    const defaultTime = getDefaultTimeForHabit(habitId);
+    setState(prev => ({
+      ...prev,
+      selectedHabitId: habitId,
+      reminderTime: defaultTime,
+      error: null,
+    }));
   }, []);
 
   const setCustomHabitName = useCallback((name: string) => {

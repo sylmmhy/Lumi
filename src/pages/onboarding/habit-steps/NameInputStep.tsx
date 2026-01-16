@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useTranslation } from '../../../hooks/useTranslation';
 import lumiHappy from '../../../assets/Lumi-happy.png';
@@ -10,20 +10,14 @@ interface NameInputStepProps {
 /**
  * Step 6: Name Input
  * 让用户设置自己的名字，Lumi 将用这个名字称呼用户
+ * 注意：不自动预填名字，因为可能是邮箱前缀或 iOS 隐私邮箱乱码
  */
 export function NameInputStep({ onNext }: NameInputStepProps) {
   const { t } = useTranslation();
-  const { userId, userName, updateProfile } = useAuth();
+  const { userId, updateProfile } = useAuth();
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // 如果用户已有名字，预填充
-  useEffect(() => {
-    if (userName) {
-      setName(userName);
-    }
-  }, [userName]);
 
   const handleSave = async () => {
     const trimmedName = name.trim();

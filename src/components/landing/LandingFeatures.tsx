@@ -59,8 +59,6 @@ const features: Feature[] = [
 
 /** 卡片宽度（像素） */
 const CARD_WIDTH = 900;
-/** 卡片间距（像素） */
-const CARD_GAP = 24;
 
 export const LandingFeatures: React.FC = () => {
     const [activeIndex, setActiveIndex] = useState(0);

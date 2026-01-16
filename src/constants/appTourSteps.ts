@@ -21,8 +21,10 @@ export interface TourStep {
   step: number;
   /** 当前步骤所在路由 */
   route: string;
-  /** 目标元素的 CSS 选择器 */
+  /** 目标元素的 CSS 选择器（单个高亮区域） */
   targetSelector: string;
+  /** 多个高亮区域的 CSS 选择器（可选，优先于 targetSelector） */
+  targetSelectors?: string[];
   /** 步骤标题 */
   title: string;
   /** 步骤内容（支持字符串或动态函数） */
@@ -77,19 +79,19 @@ export const APP_TOUR_STEPS: TourStep[] = [
   {
     step: 4,
     route: '/app/stats',
-    targetSelector: '[data-tour="stats-area"]',
+    targetSelector: '[data-tour="habit-record-example"]',
     title: '打卡记录',
     content: '你的习惯打卡记录会显示在这里。',
-    position: 'center',
+    position: 'bottom',
     nextRoute: '/app/urgency?tour=5',
   },
   {
     step: 5,
     route: '/app/urgency',
-    targetSelector: '[data-tour="start-button"]',
+    targetSelector: '[data-tour="urgency-input-area"]',
     title: '立刻开始',
-    content: '如果你想立刻开始，可以点击这里启动！',
-    position: 'top',
+    content: '如果你想马上开始，可以在这里输入任务，然后点击底部的 Start 按钮启动！',
+    position: 'bottom',
     nextRoute: null,
     isLast: true,
   },

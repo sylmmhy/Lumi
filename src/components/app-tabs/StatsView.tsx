@@ -491,9 +491,19 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                 </div>
                             ) : habits.length === 0 ? (
                                 <div className="py-0 space-y-4 text-gray-700">
-                                    <p className="text-center text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
+                                    {/* Tour 高亮区域：标题 + 第一个示例卡片 */}
+                                    <div data-tour="habit-record-example" className="space-y-4">
+                                        <p className="text-center text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
+                                        <StatsCard
+                                            key={exampleHabitsState[0].id}
+                                            habit={exampleHabitsState[0]}
+                                            onToggleToday={() => toggleHabitToday(exampleHabitsState[0].id)}
+                                            onClickDetail={() => alert(t('home.exampleClickHint'))}
+                                        />
+                                    </div>
+                                    {/* 剩余的示例卡片 */}
                                     <div className="space-y-4">
-                                        {exampleHabitsState.map(habit => (
+                                        {exampleHabitsState.slice(1).map(habit => (
                                             <StatsCard
                                                 key={habit.id}
                                                 habit={habit}

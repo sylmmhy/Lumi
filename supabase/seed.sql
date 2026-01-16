@@ -3,6 +3,9 @@
 -- 用途：每次 supabase db reset 后自动填充测试数据
 -- ==============================================================================
 
+-- 强制顺序执行（Supabase CLI 默认会并行执行 SQL 语句）
+BEGIN;
+
 -- 清理现有测试数据（如果存在）
 -- 注意：这些 DELETE 语句会级联删除相关数据
 DELETE FROM public.tasks WHERE user_id IN (
@@ -12,14 +15,23 @@ DELETE FROM public.user_memories WHERE user_id IN (
     SELECT id FROM public.users WHERE email LIKE '%@test.local'
 );
 DELETE FROM public.users WHERE email LIKE '%@test.local';
+DELETE FROM auth.users WHERE email LIKE '%@test.local';
 DELETE FROM public.visitors WHERE metadata->>'is_test' = 'true';
 
 -- ==============================================================================
 -- 1. 测试用户
 -- ==============================================================================
--- 注意：本地 Supabase 中，我们直接在 public.users 表创建用户
--- 实际登录需要通过 Supabase Auth，这里只是预填充数据用于测试
+-- 注意：本地环境需要同时在 auth.users 和 public.users 中创建用户
+-- 因为 user_memories 的外键指向 auth.users
 
+-- 先在 auth.users 中创建测试用户（只需要最小字段）
+INSERT INTO auth.users (id, email, aud, role, created_at, updated_at)
+VALUES
+    ('11111111-1111-1111-1111-111111111111', 'xiaoming@test.local', 'authenticated', 'authenticated', NOW() - INTERVAL '30 days', NOW()),
+    ('22222222-2222-2222-2222-222222222222', 'xiaohong@test.local', 'authenticated', 'authenticated', NOW() - INTERVAL '2 days', NOW()),
+    ('33333333-3333-3333-3333-333333333333', 'john@test.local', 'authenticated', 'authenticated', NOW() - INTERVAL '7 days', NOW());
+
+-- 然后在 public.users 中创建完整的用户数据
 -- 测试用户 1：小明（活跃用户）
 INSERT INTO public.users (
     id,
@@ -93,7 +105,10 @@ INSERT INTO public.users (
 -- 2. 测试任务（小明的任务）
 -- ==============================================================================
 
--- 待办任务：今天的任务
+-- 禁用 tasks 表的触发器（避免在 seed 时触发 VoIP 推送逻辑）
+ALTER TABLE public.tasks DISABLE TRIGGER task_insert_check;
+
+-- 待办任务：今天的任务（前两个是 pending，不含 completed_at）
 INSERT INTO public.tasks (
     id,
     user_id,
@@ -141,7 +156,26 @@ INSERT INTO public.tasks (
     'afternoon',
     'Asia/Shanghai',
     NOW() - INTERVAL '1 hour'
-),
+);
+
+-- 已完成任务：晨间冥想（需要 completed_at 列）
+INSERT INTO public.tasks (
+    id,
+    user_id,
+    title,
+    description,
+    status,
+    priority,
+    category,
+    task_type,
+    time,
+    display_time,
+    reminder_date,
+    time_category,
+    timezone,
+    created_at,
+    completed_at
+) VALUES
 (
     'cccccccc-cccc-cccc-cccc-cccccccccccc',
     '11111111-1111-1111-1111-111111111111',
@@ -248,6 +282,9 @@ INSERT INTO public.tasks (
     NOW() - INTERVAL '30 minutes'
 );
 
+-- 重新启用 tasks 表的触发器
+ALTER TABLE public.tasks ENABLE TRIGGER task_insert_check;
+
 -- ==============================================================================
 -- 4. 测试用户记忆（小明的 AI 记忆）
 -- ==============================================================================
@@ -255,9 +292,9 @@ INSERT INTO public.tasks (
 INSERT INTO public.user_memories (
     id,
     user_id,
-    memory_text,
-    memory_tag,
-    source_task_name,
+    content,
+    tag,
+    task_name,
     created_at
 ) VALUES
 (
@@ -370,3 +407,6 @@ BEGIN
     RAISE NOTICE '   - xiaohong@test.local (新用户)';
     RAISE NOTICE '   - john@test.local (英文用户)';
 END $$;
+
+-- 提交事务
+COMMIT;

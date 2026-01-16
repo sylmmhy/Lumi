@@ -29,20 +29,17 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onDownloadiOS, onReque
                             className="text-gray-900"
                             style={{
                                 fontWeight: 900,
-                                fontSize: '64px',
-                                lineHeight: '1.1em',
-                                letterSpacing: '-0.04em',
-                                marginBottom: '40px'
+                                fontSize: '48px',
+                                lineHeight: '1.2em',
+                                letterSpacing: '-0.03em',
+                                marginBottom: '32px'
                             }}
                         >
-                            <span className="block opacity-40 text-sm font-bold uppercase tracking-widest mb-4">Introducing Lumi</span>
-                            Procrastination<br />
-                            is now <span style={{ color: '#2545BD' }}>optional.</span>
+                            An AI body double that builds <span style={{ color: '#2545BD' }}>follow-through</span> into daily life.
                         </h1>
 
-                        <p className="text-xl text-gray-500 mb-10 max-w-lg leading-relaxed font-medium">
-                            Meet your AI body double. Real-time accountability
-                            that actually sticks, so you can focus on what matters.
+                        <p className="text-lg text-gray-400 mb-10 max-w-lg leading-relaxed font-medium italic">
+                            Lumi is designed to help people begin — because starting is often the hardest part.
                         </p>
 
                         {/* CTA Buttons */}

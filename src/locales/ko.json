@@ -297,5 +297,18 @@
 
   "profile.accountManagement": "계정 관리",
   "profile.accountManagementHint": "계정 정보 보기 및 관리",
-  "profile.email": "이메일"
+  "profile.email": "이메일",
+
+  "tour.step1.title": "할 일 입력",
+  "tour.step1.content": "먼저, 여기에 할 일을 입력하거나 아래 퀵 태그에서 선택해봐.",
+  "tour.step2.title": "알림 시간 설정",
+  "tour.step2.content": "할 일을 입력했으면, 여기를 눌러 알림 시간을 설정해.",
+  "tour.step3.title": "첫 번째 습관",
+  "tour.step3.content": "이 습관은 매일 {{time}}에 알려줄 거야. 수정하거나 삭제할 수 있어.",
+  "tour.step4.title": "체크인 기록",
+  "tour.step4.content": "습관 체크인 기록이 여기에 표시돼.",
+  "tour.step5.title": "바로 시작",
+  "tour.step5.content": "바로 시작하고 싶어? 여기에 할 일을 입력하고 아래 Start 버튼을 눌러!",
+  "tour.next": "다음",
+  "tour.gotIt": "알겠어!"
 }

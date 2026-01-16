@@ -7,6 +7,7 @@ import {
   type TourContext,
 } from '../constants/appTourSteps';
 import { useAuth } from './useAuth';
+import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
 
 /**
  * useProductTour 的返回类型
@@ -111,10 +112,20 @@ export function useProductTour(): UseProductTourReturn {
       // 立即更新本地状态（UI 响应）
       setLocalCompleted(true);
 
-      // 异步更新数据库
-      markHabitOnboardingCompleted().catch((err) => {
-        console.error('❌ 更新 habit onboarding 状态失败:', err);
-      });
+      // ⚠️ 重要：必须先等待数据库更新完成，再通知原生端
+      // 因为原生端收到消息后会立即跳转页面，中断未完成的异步操作
+      try {
+        const result = await markHabitOnboardingCompleted();
+        if (result.error) {
+          console.error('[useProductTour] 更新 habit onboarding 状态失败:', result.error);
+        }
+      } catch (err) {
+        console.error('[useProductTour] 更新时发生异常:', err);
+      }
+
+      // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
+      // 原生端收到后会跳转到主页，所以必须在数据库更新后再调用
+      notifyNativeOnboardingCompleted();
 
       // 移除 URL 参数，保持在当前页面
       const newUrl = location.pathname;
@@ -139,10 +150,20 @@ export function useProductTour(): UseProductTourReturn {
     // 立即更新本地状态（UI 响应）
     setLocalCompleted(true);
 
-    // 异步更新数据库
-    markHabitOnboardingCompleted().catch((err) => {
-      console.error('❌ 更新 habit onboarding 状态失败:', err);
-    });
+    // ⚠️ 重要：必须先等待数据库更新完成，再通知原生端
+    // 因为原生端收到消息后会立即跳转页面，中断未完成的异步操作
+    try {
+      const result = await markHabitOnboardingCompleted();
+      if (result.error) {
+        console.error('[useProductTour] 更新 habit onboarding 状态失败:', result.error);
+      }
+    } catch (err) {
+      console.error('[useProductTour] 更新时发生异常:', err);
+    }
+
+    // 通知原生端：整个新手流程（Habit Onboarding + Product Tour）已完成
+    // 原生端收到后会跳转到主页，所以必须在数据库更新后再调用
+    notifyNativeOnboardingCompleted();
 
     // 移除 URL 参数，保持在当前页面
     const newUrl = location.pathname;

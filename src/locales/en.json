@@ -10,7 +10,7 @@
   "common.back": "Back",
   "common.continue": "Continue",
 
-  "home.procrastinating": "Procrastinating?",
+  "home.procrastinating": "Need a push?",
   "home.aiWillCallYou": "AI will call you",
   "home.placeholder": "Enter your task here.\ne.g., \"take shower\"",
   "home.setTime": "Set a time",
@@ -307,5 +307,18 @@
 
   "profile.accountManagement": "Account",
   "profile.accountManagementHint": "View and manage account info",
-  "profile.email": "Email"
+  "profile.email": "Email",
+
+  "tour.step1.title": "Enter your task",
+  "tour.step1.content": "First, you can enter your task here, or pick a quick tag from below.",
+  "tour.step2.title": "Set reminder time",
+  "tour.step2.content": "After entering your task, tap here to set a reminder time.",
+  "tour.step3.title": "Your first habit",
+  "tour.step3.content": "This habit will remind you daily at {{time}}. You can edit or delete it.",
+  "tour.step4.title": "Check-in records",
+  "tour.step4.content": "Your habit check-in records will be shown here.",
+  "tour.step5.title": "Start now",
+  "tour.step5.content": "Want to start right away? Enter your task here and tap the Start button below!",
+  "tour.next": "Next",
+  "tour.gotIt": "Got it!"
 }

@@ -10,7 +10,7 @@
   "common.back": "返回",
   "common.continue": "继续",
 
-  "home.procrastinating": "又在拖延？",
+  "home.procrastinating": "启动困难？",
   "home.aiWillCallYou": "AI 会打电话给你",
   "home.placeholder": "在这里输入你的任务\n例如：\"洗澡\"",
   "home.setTime": "设置时间",
@@ -307,5 +307,18 @@
 
   "profile.accountManagement": "账户管理",
   "profile.accountManagementHint": "查看和管理账户信息",
-  "profile.email": "邮箱"
+  "profile.email": "邮箱",
+
+  "tour.step1.title": "输入你的任务",
+  "tour.step1.content": "首先，你可以在这里输入你想设定的任务，或者从下面选择一个快捷标签。",
+  "tour.step2.title": "设置提醒时间",
+  "tour.step2.content": "输入任务后，点击这里设置提醒时间。",
+  "tour.step3.title": "你的第一个习惯",
+  "tour.step3.content": "这个习惯会每天 {{time}} 提醒你。如果不想要，可以点击修改或删除。",
+  "tour.step4.title": "打卡记录",
+  "tour.step4.content": "你的习惯打卡记录会显示在这里。",
+  "tour.step5.title": "立刻开始",
+  "tour.step5.content": "如果你想马上开始，可以在这里输入任务，然后点击底部的 Start 按钮启动！",
+  "tour.next": "下一步",
+  "tour.gotIt": "知道了！"
 }

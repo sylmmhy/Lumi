@@ -67,6 +67,17 @@ export function AppTabsPage() {
     // Product Tour（新用户引导）
     const productTour = useProductTour();
 
+    // 🔍 调试日志：追踪 tour 状态变化
+    useEffect(() => {
+        console.log('🎯 [AppTabsPage] Tour 状态变化:', {
+            isActive: productTour.isActive,
+            currentStep: productTour.currentStep?.step,
+            stepNumber: productTour.stepNumber,
+            totalSteps: productTour.totalSteps,
+            url: window.location.href,
+        });
+    }, [productTour.isActive, productTour.currentStep, productTour.stepNumber]);
+
     // 【已移除】onboarding 跳转逻辑
     // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
     // 纯浏览器访问时也不强制跳转，用户可自由访问任何页面

@@ -8,6 +8,7 @@
 
 | 文档 | 说明 | 维护状态 |
 |------|------|---------|
+| [supabase-local-development.md](./supabase-local-development.md) | **Supabase 本地开发**：环境设置、版本管理、同步部署 | ✅ 活跃维护 |
 | [memory-system.md](./memory-system.md) | 记忆系统架构：向量嵌入、去重合并、双轨系统 | ✅ 活跃维护 |
 | [identity-resolution.md](./identity-resolution.md) | 身份关联系统：跨设备用户识别、分析平台集成 | ✅ 活跃维护 |
 

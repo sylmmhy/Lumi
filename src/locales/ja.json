@@ -10,7 +10,7 @@
   "common.back": "戻る",
   "common.continue": "続ける",
 
-  "home.procrastinating": "サボってない？",
+  "home.procrastinating": "始められない？",
   "home.aiWillCallYou": "AIが電話するよ",
   "home.placeholder": "やることを書いてね\n例：「シャワー浴びる」",
   "home.setTime": "時間を決める",
@@ -297,5 +297,18 @@
 
   "profile.accountManagement": "アカウント管理",
   "profile.accountManagementHint": "アカウント情報の確認と管理",
-  "profile.email": "メールアドレス"
+  "profile.email": "メールアドレス",
+
+  "tour.step1.title": "やることを入力",
+  "tour.step1.content": "まず、ここにやりたいことを入力するか、下のクイックタグから選んでね。",
+  "tour.step2.title": "リマインダー時間を設定",
+  "tour.step2.content": "やることを入力したら、ここをタップしてリマインダー時間を設定してね。",
+  "tour.step3.title": "最初の習慣",
+  "tour.step3.content": "この習慣は毎日 {{time}} にリマインドするよ。編集したり削除したりできるよ。",
+  "tour.step4.title": "チェックイン記録",
+  "tour.step4.content": "習慣のチェックイン記録はここに表示されるよ。",
+  "tour.step5.title": "今すぐ始める",
+  "tour.step5.content": "すぐ始めたい？ここにやることを入力して、下の Start ボタンをタップ！",
+  "tour.next": "次へ",
+  "tour.gotIt": "わかった！"
 }

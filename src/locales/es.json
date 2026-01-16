@@ -297,5 +297,18 @@
 
   "profile.accountManagement": "Cuenta",
   "profile.accountManagementHint": "Ver y gestionar información de la cuenta",
-  "profile.email": "Correo electrónico"
+  "profile.email": "Correo electrónico",
+
+  "tour.step1.title": "Escribe tu tarea",
+  "tour.step1.content": "Primero, escribe aquí lo que quieres hacer, o elige una etiqueta rápida abajo.",
+  "tour.step2.title": "Establece la hora del recordatorio",
+  "tour.step2.content": "Después de escribir tu tarea, toca aquí para establecer la hora del recordatorio.",
+  "tour.step3.title": "Tu primer hábito",
+  "tour.step3.content": "Este hábito te recordará todos los días a las {{time}}. Puedes editarlo o eliminarlo.",
+  "tour.step4.title": "Registros de check-in",
+  "tour.step4.content": "Tus registros de check-in de hábitos aparecerán aquí.",
+  "tour.step5.title": "Empieza ahora",
+  "tour.step5.content": "¿Quieres empezar ya? Escribe tu tarea aquí y toca el botón Start abajo!",
+  "tour.next": "Siguiente",
+  "tour.gotIt": "¡Entendido!"
 }

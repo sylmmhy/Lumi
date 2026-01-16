@@ -25,10 +25,10 @@ export interface TourStep {
   targetSelector: string;
   /** 多个高亮区域的 CSS 选择器（可选，优先于 targetSelector） */
   targetSelectors?: string[];
-  /** 步骤标题 */
-  title: string;
-  /** 步骤内容（支持字符串或动态函数） */
-  content: string | ((ctx: TourContext) => string);
+  /** 步骤标题的翻译 key */
+  titleKey: string;
+  /** 步骤内容的翻译 key */
+  contentKey: string;
   /** Tooltip 相对于目标元素的位置 */
   position: 'top' | 'bottom' | 'left' | 'right' | 'center';
   /** 下一步要跳转的路由（null 表示同页面） */
@@ -52,8 +52,8 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 1,
     route: '/app/home',
     targetSelector: '[data-tour="task-input-area"]',
-    title: '输入你的任务',
-    content: '首先，你可以在这里输入你想设定的任务，或者从下面选择一个快捷标签。',
+    titleKey: 'tour.step1.title',
+    contentKey: 'tour.step1.content',
     position: 'bottom',
     nextRoute: null, // 同页面
   },
@@ -61,8 +61,8 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 2,
     route: '/app/home',
     targetSelector: '[data-tour="add-habit-button"]',
-    title: '设置提醒时间',
-    content: '输入任务后，点击这里设置提醒时间。',
+    titleKey: 'tour.step2.title',
+    contentKey: 'tour.step2.content',
     position: 'bottom',
     nextRoute: null, // 同页面
   },
@@ -70,9 +70,8 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 3,
     route: '/app/home',
     targetSelector: '[data-tour="first-habit"]',
-    title: '你的第一个习惯',
-    content: (ctx) =>
-      `这个习惯会每天 ${ctx.reminderTime || '设定时间'} 提醒你。如果不想要，可以点击修改或删除。`,
+    titleKey: 'tour.step3.title',
+    contentKey: 'tour.step3.content',
     position: 'bottom',
     nextRoute: '/app/stats?tour=4',
   },
@@ -80,8 +79,8 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 4,
     route: '/app/stats',
     targetSelector: '[data-tour="habit-record-example"]',
-    title: '打卡记录',
-    content: '你的习惯打卡记录会显示在这里。',
+    titleKey: 'tour.step4.title',
+    contentKey: 'tour.step4.content',
     position: 'bottom',
     nextRoute: '/app/urgency?tour=5',
   },
@@ -89,8 +88,8 @@ export const APP_TOUR_STEPS: TourStep[] = [
     step: 5,
     route: '/app/urgency',
     targetSelector: '[data-tour="urgency-input-area"]',
-    title: '立刻开始',
-    content: '如果你想马上开始，可以在这里输入任务，然后点击底部的 Start 按钮启动！',
+    titleKey: 'tour.step5.title',
+    contentKey: 'tour.step5.content',
     position: 'bottom',
     nextRoute: null,
     isLast: true,

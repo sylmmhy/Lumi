@@ -12,7 +12,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "use:local": "cp .env.supabase-local .env.local && echo '✅ 已切换到本地 Supabase'",
-    "use:remote": "cp .env.supabase-remote .env.local && echo '✅ 已切换到远程 Supabase'"
+    "use:remote": "cp .env.supabase-remote .env.local && echo '✅ 已切换到远程 Supabase'",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:push": "supabase db push --linked",
+    "supabase:deploy": "supabase functions deploy",
+    "supabase:sync": "echo '🚀 开始同步到远端 Supabase...' && npm run supabase:push && npm run supabase:deploy && echo '✅ 同步完成！'"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.31.3",

@@ -720,6 +720,14 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
                 className="relative bg-white rounded-[32px] shadow-2xl w-[320px] p-6 border border-gray-100/50"
                 onClick={(e) => e.stopPropagation()}
             >
+                {/* Title */}
+                <h2
+                    className="text-brand-blue text-center text-lg mb-4"
+                    style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700 }}
+                >
+                    When should Lumi call?
+                </h2>
+
                 {pickerContent}
 
                 {/* Routine Toggle Switch */}

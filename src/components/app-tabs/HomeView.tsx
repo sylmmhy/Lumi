@@ -491,7 +491,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                     {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
                     <div data-tour="task-input-area">
-                        <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-4 focus-within:ring-[#FEF9C3]">
+                        <div ref={inputContainerRef} className={`bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-4 focus-within:ring-[#FEF9C3] ${taskInputError ? 'ring-4 ring-red-300' : ''}`}>
                             {/* 使用 textarea 实现两行高度的输入框 */}
                             <textarea
                                 value={taskInput}
@@ -500,8 +500,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     // 用户开始输入时清除错误状态
                                     if (taskInputError) setTaskInputError(false);
                                 }}
-                                placeholder={t('home.placeholder')}
-                                className="w-full outline-none text-brand-text placeholder-gray-400 text-[15px] bg-transparent resize-none"
+                                placeholder={taskInputError ? 'Enter a task or pick a tag below' : t('home.placeholder')}
+                                className={`w-full outline-none text-brand-text text-[15px] bg-transparent resize-none ${taskInputError ? 'placeholder-red-400' : 'placeholder-gray-400'}`}
                                 style={{ fontFamily: "'Quicksand', sans-serif" }}
                                 rows={2}
                             />
@@ -561,7 +561,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
                                     }}
                                 >
-                                    Set a time
+                                    Get a Call
                                 </span>
                             </div>
                         </button>
@@ -829,36 +829,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
             )}
 
-            {/* Task Input Error Modal - 提示用户需要先输入任务 */}
-            {taskInputError && (
-                <div
-                    className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => setTaskInputError(false)}
-                >
-                    {/* Backdrop */}
-                    <div className="absolute inset-0 bg-black/40" />
-
-                    {/* Modal Content */}
-                    <div
-                        className="relative bg-white rounded-2xl shadow-xl w-[300px] p-6 text-center"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="text-4xl mb-3">✏️</div>
-                        <h3 className="text-gray-800 font-semibold text-lg mb-2">
-                            {t('home.pleaseEnterTask')}
-                        </h3>
-                        <p className="text-gray-500 text-sm mb-4">
-                            {t('home.taskInputHint')}
-                        </p>
-                        <button
-                            onClick={() => setTaskInputError(false)}
-                            className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
-                        >
-                            {t('common.ok')}
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

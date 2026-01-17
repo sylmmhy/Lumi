@@ -13,12 +13,14 @@ interface BottomNavBarProps {
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChange, onStart }) => (
     <div className="absolute bottom-0 left-0 right-0 bg-white h-20 px-6 flex items-center justify-around rounded-b-[40px] border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-[100]">
         <NavIcon
-            icon="fa-clock"
+            icon="fa-phone"
+            label="Calls"
             active={currentView === 'home'}
             onClick={() => onChange('home')}
         />
         <NavIcon
             icon="fa-chart-line"
+            label="Progress"
             active={currentView === 'stats'}
             onClick={() => onChange('stats')}
         />
@@ -39,23 +41,25 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
 
         <NavIcon
             icon="fa-trophy"
+            label="Rank"
             active={currentView === 'leaderboard'}
             onClick={() => onChange('leaderboard')}
         />
         <NavIcon
             icon="fa-user"
+            label="Me"
             active={currentView === 'profile'}
             onClick={() => onChange('profile')}
         />
     </div>
 );
 
-const NavIcon = ({ icon, active = false, onClick }: { icon: string, active?: boolean, onClick?: () => void }) => (
+const NavIcon = ({ icon, label, active = false, onClick }: { icon: string, label: string, active?: boolean, onClick?: () => void }) => (
     <button
         onClick={onClick}
-        className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${active ? 'text-brand-orange' : 'text-gray-300 hover:text-gray-400'}`}
+        className={`flex flex-col items-center justify-center gap-1 transition-colors ${active ? 'text-brand-orange' : 'text-gray-300 hover:text-gray-400'}`}
     >
         <i className={`fa-solid ${icon} text-xl`}></i>
-        {active && <div className="absolute bottom-5 w-1 h-1 bg-brand-orange rounded-full"></div>}
+        <span className="text-[10px] font-medium">{label}</span>
     </button>
 );

@@ -14,6 +14,8 @@
   "home.aiWillCallYou": "L'AI ti chiamerà",
   "home.placeholder": "Cosa stai rimandando adesso?",
   "home.setTime": "Imposta orario",
+  "home.getACall": "Ricevi chiamata",
+  "home.taskInputError": "Inserisci un'attività o scegli un tag",
   "home.routineTask": "Routine giornaliera",
   "home.settingReminder": "Impostando promemoria",
   "home.now": "Oggi",

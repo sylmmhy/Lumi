@@ -14,6 +14,8 @@
   "home.aiWillCallYou": "AI가 전화할게",
   "home.placeholder": "지금 뭘 미루고 있어?",
   "home.setTime": "시간 정하기",
+  "home.getACall": "전화 예약",
+  "home.taskInputError": "할 일을 입력하거나 아래 태그를 선택해",
   "home.routineTask": "매일 할 일",
   "home.settingReminder": "알림 설정 중",
   "home.now": "오늘",

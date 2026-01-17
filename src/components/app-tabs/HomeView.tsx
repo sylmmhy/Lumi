@@ -500,7 +500,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     // 用户开始输入时清除错误状态
                                     if (taskInputError) setTaskInputError(false);
                                 }}
-                                placeholder={taskInputError ? 'Enter a task or pick a tag below' : t('home.placeholder')}
+                                placeholder={taskInputError ? t('home.taskInputError') : t('home.placeholder')}
                                 className={`w-full outline-none text-brand-text text-[15px] bg-transparent resize-none ${taskInputError ? 'placeholder-red-400' : 'placeholder-gray-400'}`}
                                 style={{ fontFamily: "'Quicksand', sans-serif" }}
                                 rows={2}
@@ -561,7 +561,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
                                     }}
                                 >
-                                    Get a Call
+                                    {t('home.getACall')}
                                 </span>
                             </div>
                         </button>

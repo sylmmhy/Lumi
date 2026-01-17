@@ -14,6 +14,8 @@
   "home.aiWillCallYou": "AI will call you",
   "home.placeholder": "What are you putting off right now?",
   "home.setTime": "Set a time",
+  "home.getACall": "Get a Call",
+  "home.taskInputError": "Enter a task or pick a tag below",
   "home.routineTask": "Routine task",
   "home.settingReminder": "Setting Reminder",
   "home.now": "Now",

@@ -14,6 +14,8 @@
   "home.aiWillCallYou": "AIが電話するよ",
   "home.placeholder": "今、何を先延ばしにしてる？",
   "home.setTime": "時間を決める",
+  "home.getACall": "電話を予約",
+  "home.taskInputError": "タスクを入力するか、下のタグを選んでね",
   "home.routineTask": "毎日やること",
   "home.settingReminder": "リマインダー設定中",
   "home.now": "今日",

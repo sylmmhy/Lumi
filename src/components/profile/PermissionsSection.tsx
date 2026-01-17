@@ -59,6 +59,10 @@ const iOSBridge = {
     console.log('[PermissionsSection] iOS: opening app settings');
     window.webkit?.messageHandlers?.openAppSettings?.postMessage({});
   },
+  openSleepFocusSettings: () => {
+    console.log('[PermissionsSection] iOS: opening sleep focus settings guide');
+    window.webkit?.messageHandlers?.openSleepFocusSettings?.postMessage({});
+  },
 };
 
 /**
@@ -477,6 +481,30 @@ export function PermissionsSection() {
                 {t('profile.permissions.allEnabledMessage')}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* iOS Sleep Focus Settings - Only show on iOS WebView */}
+        {isIOSWebView() && (
+          <div className="border-t border-gray-100">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                iOSBridge.openSleepFocusSettings();
+              }}
+              className="w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-50 rounded-full flex items-center justify-center">
+                  <i className="fa-solid fa-moon text-indigo-500 text-sm"></i>
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-700 text-sm">{t('profile.permissions.sleepFocus')}</p>
+                  <p className="text-xs text-gray-400">{t('profile.permissions.sleepFocusDesc')}</p>
+                </div>
+              </div>
+              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+            </button>
           </div>
         )}
       </div>

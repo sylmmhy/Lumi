@@ -491,9 +491,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                     {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
                     <div data-tour="task-input-area">
-                        <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-2 focus-within:ring-blue-300">
-                            <input
-                                type="text"
+                        <div ref={inputContainerRef} className="bg-white rounded-2xl px-4 py-3 shadow-sm mb-4 transition-all focus-within:ring-4 focus-within:ring-[#FEF9C3]">
+                            {/* 使用 textarea 实现两行高度的输入框 */}
+                            <textarea
                                 value={taskInput}
                                 onChange={(e) => {
                                     setTaskInput(e.target.value);
@@ -501,8 +501,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     if (taskInputError) setTaskInputError(false);
                                 }}
                                 placeholder={t('home.placeholder')}
-                                className="w-full outline-none text-brand-text placeholder-gray-400 text-lg bg-transparent"
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
+                                className="w-full outline-none text-brand-text placeholder-gray-400 text-[15px] bg-transparent resize-none"
+                                style={{ fontFamily: "'Quicksand', sans-serif" }}
+                                rows={2}
                             />
                         </div>
 
@@ -535,18 +536,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 }
                                 setShowTimePicker(!showTimePicker);
                             }}
-                            className="bg-white rounded-full p-[10px] transition-transform hover:scale-105 active:scale-95"
+                            className="bg-white rounded-full p-[6px] transition-transform hover:scale-105 active:scale-95"
                             style={{
                                 boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.25)',
                             }}
                         >
-                            {/* Yellow-green inner button - 204x51 */}
+                            {/* Inner button - 变小并根据输入状态显示不同颜色 */}
                             <div
-                                className="flex items-center justify-center rounded-full"
+                                className="flex items-center justify-center rounded-full transition-colors duration-200"
                                 style={{
-                                    backgroundColor: '#E6FB47',
-                                    width: '204px',
-                                    height: '51px',
+                                    // 没有输入时显示灰色，有输入时显示黄绿色
+                                    backgroundColor: taskInput.trim() ? '#E6FB47' : '#F1F2E7',
+                                    width: '160px',
+                                    height: '40px',
                                 }}
                             >
                                 <span
@@ -554,8 +556,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         fontFamily: "'Sansita', sans-serif",
                                         fontStyle: 'italic',
                                         fontWeight: 700,
-                                        fontSize: '32px',
-                                        color: '#3A64E7',
+                                        fontSize: '24px',
+                                        // 没有输入时文字也变成灰色
+                                        color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
                                     }}
                                 >
                                     Set a time

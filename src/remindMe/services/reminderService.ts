@@ -624,13 +624,15 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
   const today = getLocalDateString();
 
   try {
-    // 1. 获取所有 routine 模板
+    // 1. 获取所有 routine 模板（仅获取 pending 状态的，排除已完成/归档的）
+    // 🔧 修复：用户标记 routine 为 completed 后，不应再为其生成每日实例
     const { data: routineTemplates, error: fetchError } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .eq('task_type', 'routine')
-      .eq('is_recurring', true);
+      .eq('is_recurring', true)
+      .eq('status', 'pending');
 
     if (fetchError) {
       console.error('Failed to fetch routine templates:', fetchError);

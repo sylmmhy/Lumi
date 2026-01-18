@@ -28,9 +28,9 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   onEdit,
 }) => (
     <div className="animate-fade-in-up">
-        <div className="bg-brand-cream inline-block px-4 py-2 rounded-lg mb-3">
-            <h3 className="text-lg text-[#3A3A3A] italic font-bold flex items-center gap-2" style={{ fontFamily: "'Sansita', sans-serif" }}>
-                {title} <span className="not-italic text-lg opacity-80">{icon}</span>
+        <div className="bg-brand-cream/60 inline-block px-3 py-1.5 rounded-lg mb-3">
+            <h3 className="text-[13px] text-gray-500 font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                {title} <span className="text-[13px]">{icon}</span>
             </h3>
         </div>
         <div className="space-y-3">

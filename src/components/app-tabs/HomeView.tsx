@@ -28,14 +28,14 @@ const QuickTag = ({ emoji, text, onClick, variant = 'gray' }: { emoji: string; t
     <button
         type="button"
         onClick={onClick}
-        className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-150 active:scale-[0.97] ${
+        className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-150 active:scale-[0.97] ${
             variant === 'blue'
                 ? 'bg-brand-darkBlue/80 text-white hover:bg-brand-darkBlue'
                 : 'border border-gray-200 bg-gray-100 text-gray-800 hover:bg-gray-200'
         }`}
     >
-        <span className="text-[15px] leading-none">{emoji}</span>
-        <span className="text-[15px] leading-none whitespace-nowrap">{text}</span>
+        <span className="text-[13px] leading-none">{emoji}</span>
+        <span className="text-[13px] leading-none whitespace-nowrap" style={{ fontFamily: "'Quicksand', sans-serif" }}>{text}</span>
     </button>
 );
 
@@ -476,8 +476,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                 {/* Header Section (Scrolls away) */}
                 <div className="bg-brand-blue px-6 pt-16 pb-12 relative z-[45] transition-colors duration-500 overflow-visible">
-                    <p className="text-white/90 text-2xl italic mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}>{t('home.procrastinating')}</p>
-                    <h1 className="text-5xl text-white italic mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.aiWillCallYou')}</h1>
+                    {/* Eyebrow: 小字说明 */}
+                    <p className="text-white/70 text-xs tracking-widest uppercase mb-2" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 500 }}>{t('home.procrastinating')}</p>
+                    {/* H1: 唯一的大标题 */}
+                    <h1 className="text-[34px] text-white mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700 }}>{t('home.aiWillCallYou')}</h1>
 
                     {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
                     <div data-tour="task-input-area">
@@ -546,7 +548,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         fontFamily: "'Sansita', sans-serif",
                                         fontStyle: 'italic',
                                         fontWeight: 700,
-                                        fontSize: '24px',
+                                        fontSize: '18px',
                                         // 没有输入时文字也变成灰色
                                         color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
                                     }}

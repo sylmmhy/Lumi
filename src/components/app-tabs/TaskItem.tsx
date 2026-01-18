@@ -116,19 +116,19 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                     >
                         {task.completed && <i className="fa-solid fa-check text-white text-xs"></i>}
                     </button>
-                    <span className={`text-lg text-gray-700 font-medium transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`}>
+                    <span className={`text-[15px] text-gray-700 font-medium transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
                         {task.text}
                     </span>
                     {/* Habit label for recurring tasks */}
                     {(task.isRecurring || task.type === 'routine') && (
-                        <span className="flex-shrink-0 px-2 py-0.5 bg-gray-200 text-gray-500 text-xs font-medium rounded-md">
+                        <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 text-gray-400 text-[11px] font-medium rounded" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             Habit
                         </span>
                     )}
                 </div>
                 {mode === 'home' ? (
-                    <div className="bg-brand-cream px-3 py-1 rounded-md min-w-[80px] text-right">
-                        <span className="text-sm font-bold text-gray-800" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                    <div className="bg-brand-cream/50 px-2.5 py-1 rounded-md min-w-[70px] text-right">
+                        <span className="text-xs font-medium text-gray-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             {task.displayTime}
                         </span>
                     </div>

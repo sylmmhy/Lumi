@@ -537,8 +537,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             <div
                                 className="flex items-center justify-center rounded-full transition-colors duration-200"
                                 style={{
-                                    // 没有输入时显示灰色，有输入时显示米白色
-                                    backgroundColor: taskInput.trim() ? '#F2F0E4' : '#F1F2E7',
+                                    // 没有输入时显示灰色，有输入时显示黄色
+                                    backgroundColor: taskInput.trim() ? '#E6FB47' : '#F1F2E7',
                                     width: '160px',
                                     height: '44px',
                                 }}
@@ -549,8 +549,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         fontStyle: 'italic',
                                         fontWeight: 700,
                                         fontSize: '22px',
-                                        // 没有输入时文字也变成灰色，有输入时显示深绿色
-                                        color: taskInput.trim() ? '#2D4035' : '#9CA3AF',
+                                        // 没有输入时文字灰色，有输入时显示蓝色
+                                        color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
                                     }}
                                 >
                                     {t('home.getACall')}

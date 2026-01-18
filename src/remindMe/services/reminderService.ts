@@ -549,7 +549,12 @@ export async function deleteReminder(id: string): Promise<boolean> {
  * - 取消完成时：恢复原生闹钟提醒
  */
 export async function toggleReminderCompletion(id: string, completed: boolean): Promise<Task | null> {
-  const result = await updateReminder(id, { completed });
+  // 取消完成时，同时重置 called 为 false，让后台可以重新打电话提醒
+  const updates = completed
+    ? { completed }
+    : { completed, called: false };
+
+  const result = await updateReminder(id, updates);
 
   if (result) {
     if (completed) {

@@ -17,34 +17,24 @@ interface TaskItemProps {
 
 export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDelete, onEdit, mode = 'home', onStart }) => {
     const [translateX, setTranslateX] = useState(0);
-    const [isAnimatingOut, setIsAnimatingOut] = useState(false);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
-    // 本地完成状态，用于控制动画显示，延迟通知父组件
-    const [localCompleted, setLocalCompleted] = useState(task.completed);
 
     const startX = useRef<number | null>(null);
     const currentTranslateX = useRef(0);
     const itemRef = useRef<HTMLDivElement>(null);
 
-    // 处理勾选：先播放动画，动画完成后再通知父组件
-    const handleComplete = () => {
-        if (localCompleted || task.completed) return;
-
-        // 1. 立即更新本地状态（显示勾选样式）
-        setLocalCompleted(true);
-
-        // 2. 触发彩带
-        setConfettiTrigger(Date.now());
-
-        // 3. 500ms 后开始淡出动画
-        setTimeout(() => {
-            setIsAnimatingOut(true);
-
-            // 4. 淡出动画完成后（1000ms），通知父组件
+    // 处理勾选切换：完成时播放彩带，取消完成时直接切换
+    const handleToggle = () => {
+        if (task.completed) {
+            // 取消完成：直接切换状态，无彩带
+            onToggle(task.id);
+        } else {
+            // 完成任务：触发彩带效果
+            setConfettiTrigger(Date.now());
             setTimeout(() => {
                 onToggle(task.id);
-            }, 1000);
-        }, 500);
+            }, 300);
+        }
     };
 
     const handleTouchStart = (e: React.TouchEvent) => {
@@ -81,16 +71,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                 recycle={false}
             />
 
-            <div
-                className={`
-                    relative overflow-hidden rounded-2xl
-                    transition-all duration-1000 ease-out
-                    ${isAnimatingOut ? 'opacity-0 scale-95 -translate-y-2 max-h-0 mb-0 mt-0 py-0' : 'opacity-100 scale-100 translate-y-0 max-h-32'}
-                `}
-                style={{
-                    transitionProperty: 'opacity, transform, max-height, margin, padding',
-                }}
-            >
+            <div className="relative overflow-hidden rounded-2xl">
 
             {/* Delete Button Background */}
             <div
@@ -113,14 +94,14 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
             {/* Task Content */}
             <div
                 ref={itemRef}
-                className={`bg-gray-50 p-4 flex items-center justify-between transition-transform duration-200 ease-out relative z-10 ${localCompleted ? '' : 'hover:bg-gray-100 cursor-pointer'}`}
+                className={`bg-gray-50 p-4 flex items-center justify-between transition-transform duration-200 ease-out relative z-10 ${task.completed ? '' : 'hover:bg-gray-100 cursor-pointer'}`}
                 style={{ transform: `translateX(${translateX}px)` }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onClick={() => {
                     // 只有在没有滑动且未完成时才触发编辑
-                    if (translateX === 0 && !localCompleted && onEdit) {
+                    if (translateX === 0 && !task.completed && onEdit) {
                         onEdit(task);
                     }
                 }}
@@ -129,14 +110,13 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            handleComplete();
+                            handleToggle();
                         }}
-                        disabled={localCompleted}
-                        className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all flex-shrink-0 ${localCompleted ? 'bg-brand-goldBorder border-brand-goldBorder' : 'border-brand-goldBorder bg-transparent'}`}
+                        className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-all flex-shrink-0 ${task.completed ? 'bg-brand-goldBorder border-brand-goldBorder' : 'border-brand-goldBorder bg-transparent'}`}
                     >
-                        {localCompleted && <i className="fa-solid fa-check text-white text-xs"></i>}
+                        {task.completed && <i className="fa-solid fa-check text-white text-xs"></i>}
                     </button>
-                    <span className={`text-lg text-gray-700 font-medium transition-all duration-300 truncate ${localCompleted ? 'line-through decoration-brand-blue/50' : ''}`}>
+                    <span className={`text-lg text-gray-700 font-medium transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`}>
                         {task.text}
                     </span>
                     {/* Habit label for recurring tasks */}
@@ -148,9 +128,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                 </div>
                 {mode === 'home' ? (
                     <div className="bg-brand-cream px-3 py-1 rounded-md min-w-[80px] text-right">
-                        <span className="text-sm font-bold text-gray-800 italic font-serif flex items-center justify-end gap-1">
+                        <span className="text-sm font-bold text-gray-800" style={{ fontFamily: "'Quicksand', sans-serif" }}>
                             {task.displayTime}
-                            {icon && <span className="text-brand-goldBorder">{icon}</span>}
                         </span>
                     </div>
                 ) : (

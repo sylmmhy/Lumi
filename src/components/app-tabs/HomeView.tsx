@@ -405,38 +405,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setEditingTask(null);
     };
 
-    // 显示所有未完成任务（routine + todo），不区分 tab
+    // 显示所有任务（routine + todo），包括已完成的
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
     // 排除 displayTime === 'Now' 的任务（这些是在 UrgencyView 中创建的即时任务，进行中不显示）
     const filteredTasks = tasks.filter(task =>
-        (task.type === 'todo' || task.type === 'routine') && !task.completed && task.displayTime !== 'Now'
+        (task.type === 'todo' || task.type === 'routine') && task.displayTime !== 'Now'
     );
 
-    // Group tasks by date, sorted with today first
-    // For routine tasks without date: if today's reminder time has passed, show in tomorrow
+    // 分离未完成和已完成的任务
+    const pendingTasks = filteredTasks.filter(task => !task.completed);
+    const completedTasks = filteredTasks.filter(task => task.completed);
+
+    // Group pending tasks by date, sorted with today first
+    // Routine tasks without date are shown as today's tasks (even if time has passed)
     const tasksByDate = useMemo(() => {
         const now = new Date();
         const today = getLocalDateString(now);
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = getLocalDateString(tomorrow);
 
         const grouped: { [date: string]: Task[] } = {};
 
-        filteredTasks.forEach(task => {
-            let taskDate = task.date || today;
-
-            // For routine tasks without a specific date, check if today's time has passed
-            if (task.type === 'routine' && !task.date && task.time) {
-                const [hours, minutes] = task.time.split(':').map(Number);
-                const taskTimeToday = new Date(now);
-                taskTimeToday.setHours(hours, minutes, 0, 0);
-
-                // If the task time has already passed today, show it as tomorrow's task
-                if (now > taskTimeToday) {
-                    taskDate = tomorrowStr;
-                }
-            }
+        pendingTasks.forEach(task => {
+            // Routine tasks without date are always shown as today
+            const taskDate = task.date || today;
 
             if (!grouped[taskDate]) {
                 grouped[taskDate] = [];
@@ -457,7 +447,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             eveningTasks: grouped[date].filter(task => task.category === 'evening'),
             latenightTasks: grouped[date].filter(task => task.category === 'latenight'),
         }));
-    }, [filteredTasks]);
+    }, [pendingTasks]);
 
 
     const showStickyHeader = scrollTop > 80;
@@ -647,7 +637,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             </div>
                         ))}
 
-                        {filteredTasks.length === 0 && (
+                        {/* Completed Section */}
+                        {completedTasks.length > 0 && (
+                            <div className="mt-8">
+                                <TaskGroup
+                                    title="Completed"
+                                    icon="✅"
+                                    tasks={completedTasks}
+                                    onToggle={onToggleComplete}
+                                    onDelete={onDeleteTask}
+                                    onEdit={handleEditTask}
+                                />
+                            </div>
+                        )}
+
+                        {pendingTasks.length === 0 && completedTasks.length === 0 && (
                             <p className="text-center font-serif italic text-lg text-gray-400 py-4">{t('home.noTasks')}</p>
                         )}
 

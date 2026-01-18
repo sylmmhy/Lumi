@@ -479,7 +479,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     {/* Need a push - Sansita Italic (情感标题) */}
                     <p className="text-[#94A3B8] text-[16px] mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 400 }}>{t('home.procrastinating')}</p>
                     {/* AI will call you - Sansita Bold Italic (主标题) */}
-                    <h1 className="text-[36px] text-white mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700, lineHeight: 1.1 }}>{t('home.aiWillCallYou')}</h1>
+                    <h1 className="text-[42px] text-white mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700, lineHeight: 1.1 }}>{t('home.aiWillCallYou')}</h1>
 
                     {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
                     <div data-tour="task-input-area">

@@ -29,7 +29,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
 }) => (
     <div className="animate-fade-in-up">
         <div className="bg-brand-cream inline-block px-4 py-2 rounded-lg mb-3">
-            <h3 className="font-serif text-2xl text-[#3A3A3A] italic font-bold flex items-center gap-2">
+            <h3 className="text-lg text-[#3A3A3A] italic font-bold flex items-center gap-2" style={{ fontFamily: "'Sansita', sans-serif" }}>
                 {title} <span className="not-italic text-lg opacity-80">{icon}</span>
             </h3>
         </div>

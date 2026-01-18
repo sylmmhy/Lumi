@@ -35,7 +35,7 @@ const QuickTag = ({ emoji, text, onClick, variant = 'gray' }: { emoji: string; t
         }`}
     >
         <span className="text-[13px] leading-none">{emoji}</span>
-        <span className="text-[13px] leading-none whitespace-nowrap" style={{ fontFamily: "'Quicksand', sans-serif" }}>{text}</span>
+        <span className="text-[13px] leading-none whitespace-nowrap" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 500 }}>{text}</span>
     </button>
 );
 
@@ -476,10 +476,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
                 {/* Header Section (Scrolls away) */}
                 <div className="bg-brand-blue px-6 pt-16 pb-12 relative z-[45] transition-colors duration-500 overflow-visible">
-                    {/* Eyebrow: 小字说明 */}
-                    <p className="text-white/70 text-xs tracking-widest uppercase mb-2" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 500 }}>{t('home.procrastinating')}</p>
-                    {/* H1: 唯一的大标题 */}
-                    <h1 className="text-[34px] text-white mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700 }}>{t('home.aiWillCallYou')}</h1>
+                    {/* Need a push - Sansita Italic (情感标题) */}
+                    <p className="text-[#94A3B8] text-[16px] mb-1" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 400 }}>{t('home.procrastinating')}</p>
+                    {/* AI will call you - Sansita Bold Italic (主标题) */}
+                    <h1 className="text-[36px] text-white mb-6" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 700, lineHeight: 1.1 }}>{t('home.aiWillCallYou')}</h1>
 
                     {/* 任务输入区域（输入框 + 快捷标签）- 用于 Product Tour */}
                     <div data-tour="task-input-area">
@@ -493,8 +493,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     if (taskInputError) setTaskInputError(false);
                                 }}
                                 placeholder={taskInputError ? t('home.taskInputError') : t('home.placeholder')}
-                                className={`w-full outline-none text-brand-text text-[15px] bg-transparent resize-none ${taskInputError ? 'placeholder-red-400' : 'placeholder-gray-400'}`}
-                                style={{ fontFamily: "'Quicksand', sans-serif" }}
+                                className={`w-full outline-none text-brand-text text-[16px] bg-transparent resize-none ${taskInputError ? 'placeholder-red-400' : 'placeholder-gray-300'}`}
+                                style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 400 }}
                                 rows={2}
                             />
                         </div>
@@ -537,10 +537,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             <div
                                 className="flex items-center justify-center rounded-full transition-colors duration-200"
                                 style={{
-                                    // 没有输入时显示灰色，有输入时显示黄绿色
-                                    backgroundColor: taskInput.trim() ? '#E6FB47' : '#F1F2E7',
+                                    // 没有输入时显示灰色，有输入时显示米白色
+                                    backgroundColor: taskInput.trim() ? '#F2F0E4' : '#F1F2E7',
                                     width: '160px',
-                                    height: '40px',
+                                    height: '44px',
                                 }}
                             >
                                 <span
@@ -548,9 +548,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         fontFamily: "'Sansita', sans-serif",
                                         fontStyle: 'italic',
                                         fontWeight: 700,
-                                        fontSize: '18px',
-                                        // 没有输入时文字也变成灰色
-                                        color: taskInput.trim() ? '#3A64E7' : '#9CA3AF',
+                                        fontSize: '22px',
+                                        // 没有输入时文字也变成灰色，有输入时显示深绿色
+                                        color: taskInput.trim() ? '#2D4035' : '#9CA3AF',
                                     }}
                                 >
                                     {t('home.getACall')}

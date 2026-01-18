@@ -28,8 +28,9 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   onEdit,
 }) => (
     <div className="animate-fade-in-up">
+        {/* Section Label - Quicksand Bold */}
         <div className="bg-brand-cream/60 inline-block px-3 py-1.5 rounded-lg mb-3">
-            <h3 className="text-[13px] text-gray-500 font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+            <h3 className="text-[13px] text-gray-500 flex items-center gap-1.5" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
                 {title} <span className="text-[13px]">{icon}</span>
             </h3>
         </div>

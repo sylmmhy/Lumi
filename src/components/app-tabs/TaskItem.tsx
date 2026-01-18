@@ -116,19 +116,21 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDele
                     >
                         {task.completed && <i className="fa-solid fa-check text-white text-xs"></i>}
                     </button>
-                    <span className={`text-[15px] text-gray-700 font-medium transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`} style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                    {/* Task Title - Quicksand SemiBold 17px Black */}
+                    <span className={`text-[17px] text-[#111827] transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`} style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
                         {task.text}
                     </span>
-                    {/* Habit label for recurring tasks */}
+                    {/* Habit - Quicksand Medium 12px Grey */}
                     {(task.isRecurring || task.type === 'routine') && (
-                        <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 text-gray-400 text-[11px] font-medium rounded" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                        <span className="flex-shrink-0 px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] text-[12px] rounded" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 500 }}>
                             Habit
                         </span>
                     )}
                 </div>
+                {/* Time - Quicksand Bold 14px Brand Blue */}
                 {mode === 'home' ? (
-                    <div className="bg-brand-cream/50 px-2.5 py-1 rounded-md min-w-[70px] text-right">
-                        <span className="text-xs font-medium text-gray-400" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+                    <div className="px-2.5 py-1 min-w-[70px] text-right">
+                        <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
                             {task.displayTime}
                         </span>
                     </div>

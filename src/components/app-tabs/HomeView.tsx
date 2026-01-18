@@ -457,9 +457,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col">
-            {/* Sticky Top Bar (Floating) */}
-            <div className={`absolute top-0 left-0 right-0 h-12 bg-white z-50 flex items-end justify-center pb-2 shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
-                <span className="italic text-brand-darkBlue text-xl" style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic', fontWeight: 800 }}>{t('home.settingReminder')}</span>
+            {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
+            <div className={`absolute top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+                <span className="text-brand-darkBlue text-[24px]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('home.settingReminder')}</span>
             </div>
 
             {/* Unified Scroll Container with Pull to Refresh */}

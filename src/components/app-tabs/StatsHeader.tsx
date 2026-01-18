@@ -33,7 +33,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
             </div>
 
             {/* Content Container */}
-            <div className="relative z-10 pt-20 pb-4 px-6 flex flex-col items-center">
+            <div className="relative z-10 pt-20 pb-12 px-6 flex flex-col items-center">
                 
                 {/* Streak Section - scales proportionally on narrow screens */}
                 <div
@@ -80,8 +80,8 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange
                     </div>
                 </div>
 
-                {/* Tabs Section */}
-                <div className="flex gap-4 w-full max-w-sm justify-end pb-6">
+                {/* Tabs Section - 暂时隐藏 */}
+                <div className="hidden flex gap-4 w-full max-w-sm justify-end pb-6">
                     <button
                         onClick={() => onTabChange('routine')}
                         className={`

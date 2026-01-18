@@ -15,7 +15,7 @@ interface TaskItemProps {
     onStart?: () => void;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, icon, onToggle, onDelete, onEdit, mode = 'home', onStart }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, mode = 'home', onStart }) => {
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
 

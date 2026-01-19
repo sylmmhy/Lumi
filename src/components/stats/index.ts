@@ -8,6 +8,7 @@ export { StatsCard } from './StatsCard';
 export { DoneHistoryView } from './DoneHistoryView';
 export { HeatmapDetailOverlay } from './HeatmapDetailOverlay';
 export { WaterTankProgress } from './WaterTankProgress';
+export { EnergyBall } from './EnergyBall';
 export { MilestoneProgressBar } from './MilestoneProgressBar';
 export { CheckInToast, getRandomToastMessage, useCheckInToast } from './CheckInToast';
 

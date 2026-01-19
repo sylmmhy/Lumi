@@ -18,6 +18,18 @@ export interface WeeklyProgress {
 }
 
 /**
+ * 本月进度数据结构
+ */
+export interface MonthlyProgress {
+    /** 当前完成数 */
+    current: number;
+    /** 目标数 */
+    target: number;
+    /** 本月起始日期 (ISO) */
+    monthStart: string;
+}
+
+/**
  * 获取本周一的日期（00:00:00）
  * @returns Date 本周一的日期对象
  */
@@ -29,6 +41,17 @@ const getThisMonday = (): Date => {
     monday.setDate(now.getDate() + mondayOffset);
     monday.setHours(0, 0, 0, 0);
     return monday;
+};
+
+/**
+ * 获取本月第一天的日期（00:00:00）
+ * @returns Date 本月第一天的日期对象
+ */
+const getThisMonthStart = (): Date => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    return monthStart;
 };
 
 /**
@@ -65,6 +88,42 @@ export async function getWeeklyCompletedCount(
         current: count || 0,
         target,
         weekStart: monday.toISOString(),
+    };
+}
+
+/**
+ * 获取本月完成的习惯总次数（能量球数据）
+ *
+ * 说明：
+ * - "本月"定义为本月第一天 00:00:00 到当前时间
+ * - 统计 routine_completions 表中本月内的所有完成记录
+ * - 这是用户本月所有习惯完成的总次数
+ *
+ * @param userId - 用户 ID
+ * @param target - 目标数，默认 20
+ * @returns MonthlyProgress 对象，包含 current 和 target
+ */
+export async function getMonthlyCompletedCount(
+    userId: string,
+    target: number = 20
+): Promise<MonthlyProgress> {
+    const monthStart = getThisMonthStart();
+
+    const { count, error } = await supabase
+        .from('routine_completions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('completion_date', monthStart.toISOString().split('T')[0]); // completion_date 是 DATE 类型
+
+    if (error) {
+        console.error('Failed to get monthly completed count:', error);
+        throw error;
+    }
+
+    return {
+        current: count || 0,
+        target,
+        monthStart: monthStart.toISOString(),
     };
 }
 

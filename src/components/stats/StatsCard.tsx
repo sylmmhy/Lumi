@@ -1,18 +1,15 @@
 /**
- * StatsCard - 习惯统计卡片组件
+ * StatsCard - 能量启动卡片组件
  *
- * 新版设计：
- * - 添加里程碑进度条（显示累计完成次数）
- * - 打卡按钮带弹跳动画
- * - 打卡成功时触发 onCheckIn 回调（用于联动蓄水池）
+ * 新版设计理念（截图版）：
+ * - 左侧：习惯名称 + 轻量化启动引导语
+ * - 右侧：3D 风格 Start 按钮（黄/橙色，有厚度）
+ * - 底部：累计经验进度条 + Level 显示
  */
 
 import React, { useState } from 'react';
 import { getLocalDateString } from '../../utils/timeUtils';
-import { getFixedHeatmapData } from './heatmapHelpers';
-import { MilestoneProgressBar } from './MilestoneProgressBar';
 import type { Habit } from './types';
-import { themeColorMap } from './types';
 
 interface StatsCardProps {
     /** 习惯数据 */
@@ -23,107 +20,237 @@ interface StatsCardProps {
     onClickDetail: () => void;
     /** 打卡成功回调（用于联动蓄水池和 Toast） */
     onCheckIn?: (habitId: string) => void;
+    /** 启动 AI Coach 任务的回调 */
+    onStartTask?: (habitTitle: string) => void;
 }
 
 /**
- * 习惯统计卡片
- *
- * 包含：
- * 1. 勾选框（带弹跳动画）
- * 2. 标题 + 时间标签
- * 3. 迷你热力图
- * 4. 里程碑进度条（新增）
+ * 默认的轻量化启动引导语
+ */
+const getDefaultSubtitle = (title: string): string => {
+    const lowerTitle = title.toLowerCase();
+
+    if (lowerTitle.includes('阅读') || lowerTitle.includes('read')) {
+        return '读 1 页也算赢';
+    }
+    if (lowerTitle.includes('运动') || lowerTitle.includes('workout') || lowerTitle.includes('exercise')) {
+        return '动 5 分钟也算赢';
+    }
+    if (lowerTitle.includes('冥想') || lowerTitle.includes('meditat')) {
+        return '静坐 1 分钟也算赢';
+    }
+    if (lowerTitle.includes('写') || lowerTitle.includes('write') || lowerTitle.includes('journal')) {
+        return '写 1 句话也算赢';
+    }
+    if (lowerTitle.includes('学') || lowerTitle.includes('learn') || lowerTitle.includes('study')) {
+        return '学 5 分钟也算赢';
+    }
+    if (lowerTitle.includes('睡') || lowerTitle.includes('sleep') || lowerTitle.includes('bed')) {
+        return '准时躺下就算赢';
+    }
+    if (lowerTitle.includes('起') || lowerTitle.includes('wake') || lowerTitle.includes('morning')) {
+        return '睁眼就是胜利';
+    }
+
+    return '开始就是胜利';
+};
+
+/**
+ * 根据累计次数计算当前等级和下一等级目标
+ * 等级里程碑：1, 5, 15, 30, 50, 80, 120, 170, 230, 300...
+ */
+const getLevelInfo = (totalCompletions: number): { level: number; current: number; target: number } => {
+    // 等级对应的累计次数要求（到达该次数升级）
+    const levelThresholds = [0, 1, 5, 15, 30, 50, 80, 120, 170, 230, 300, 400, 500, 650, 800, 1000];
+
+    let level = 1;
+    for (let i = 1; i < levelThresholds.length; i++) {
+        if (totalCompletions >= levelThresholds[i]) {
+            level = i + 1;
+        } else {
+            break;
+        }
+    }
+
+    // 当前等级的起始值
+    const currentLevelStart = levelThresholds[level - 1] || 0;
+    // 下一等级的目标值
+    const nextLevelTarget = levelThresholds[level] || currentLevelStart + 100;
+
+    return {
+        level,
+        current: totalCompletions - currentLevelStart,
+        target: nextLevelTarget - currentLevelStart,
+    };
+};
+
+/**
+ * 能量启动卡片
  */
 export const StatsCard: React.FC<StatsCardProps> = ({
     habit,
     onToggleToday,
     onClickDetail,
     onCheckIn,
+    onStartTask,
 }) => {
     const todayKey = getLocalDateString();
     const isTodayDone = !!habit.history[todayKey];
-    const { days } = getFixedHeatmapData(habit.history, 16);
 
-    // 打卡按钮弹跳动画状态
-    const [isAnimating, setIsAnimating] = useState(false);
+    // 动画状态
+    const [isPressed, setIsPressed] = useState(false);
+    const [showConfetti, setShowConfetti] = useState(false);
 
-    const currentTheme = themeColorMap[habit.theme];
+    // 获取引导语
+    const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);
+
+    // 获取等级信息（基于累计完成次数）
+    const totalCompletions = habit.totalCompletions || 0;
+    const { level, current, target } = getLevelInfo(totalCompletions);
+    const progress = Math.min(current / target, 1);
 
     /**
-     * 处理打卡点击
-     * 1. 触发弹跳动画
-     * 2. 调用 onToggleToday
-     * 3. 如果是从未完成→完成，触发 onCheckIn
+     * 处理启动按钮点击
+     * - 未完成：启动 AI Coach 任务
+     * - 已完成：当天不再触发任何操作（金币只是展示）
      */
-    const handleCheckIn = () => {
-        // 触发弹跳动画
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 300);
+    const handleStart = (e: React.MouseEvent) => {
+        e.stopPropagation();
 
-        // 切换完成状态
-        onToggleToday();
+        if (isTodayDone) {
+            // 已完成，当天点击金币不做任何操作
+            return;
+        }
 
-        // 如果是新完成（之前未完成），触发 onCheckIn
-        if (!isTodayDone && onCheckIn) {
-            onCheckIn(habit.id);
+        // 按下动画
+        setIsPressed(true);
+        setTimeout(() => setIsPressed(false), 150);
+
+        // 启动 AI Coach 任务（传递习惯标题作为任务名）
+        if (onStartTask) {
+            onStartTask(habit.title);
         }
     };
 
     return (
         <div
-            className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-gray-100 cursor-pointer"
+            className="bg-white rounded-3xl p-5 cursor-pointer"
+            style={{
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
+                border: '1px solid rgba(0, 0, 0, 0.04)',
+            }}
             onClick={onClickDetail}
         >
-            {/* 卡片头部：勾选框 + 标题 + 时间标签 */}
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                    {/* 今日完成勾选框（带弹跳动画） */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleCheckIn();
-                        }}
-                        className={`
-                            w-6 h-6 rounded border-[2px] flex items-center justify-center
-                            transition-all duration-200 cursor-pointer
-                            ${currentTheme.checkBorder}
-                            ${isTodayDone ? currentTheme.checkBg : 'hover:bg-gray-50'}
-                            ${isAnimating ? 'scale-125' : 'scale-100'}
-                        `}
-                    >
-                        {isTodayDone && <i className="fa-solid fa-check text-white text-xs"></i>}
-                    </button>
-                    {/* 习惯标题 */}
-                    <h3 className="text-gray-800 font-bold text-lg">{habit.title}</h3>
+            {/* 上半部分：标题 + 启动按钮 */}
+            <div className="flex items-center justify-between mb-6">
+                {/* 左侧：标题 + 引导语 */}
+                <div className="flex-1 min-w-0 pr-4">
+                    <h3 className="text-gray-800 font-bold text-xl truncate">
+                        {habit.title}
+                    </h3>
+                    <p className="text-gray-400 text-sm mt-1 truncate">
+                        {subtitle}
+                    </p>
                 </div>
-                {/* 时间标签 */}
-                <span className="text-xs font-serif italic px-3 py-1 rounded-full bg-brand-cream text-gray-700 font-semibold">
-                    {habit.timeLabel}
-                </span>
+
+                {/* 右侧：3D Start 按钮 */}
+                <div className="relative flex-shrink-0">
+                    {/* 粒子爆炸效果 */}
+                    {showConfetti && (
+                        <div className="absolute inset-0 pointer-events-none z-10">
+                            {[...Array(12)].map((_, i) => (
+                                <span
+                                    key={i}
+                                    className="absolute confetti-particle"
+                                    style={{
+                                        left: '50%',
+                                        top: '50%',
+                                        ['--angle' as string]: `${i * 30}deg`,
+                                        ['--color' as string]: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'][i % 6],
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {isTodayDone ? (
+                        /* 完成状态：金币图标（当天不可再次充能） */
+                        <div className="w-16 h-16 flex items-center justify-center">
+                            <img
+                                src="/coins.png"
+                                alt="Completed"
+                                className="w-12 h-12 object-contain"
+                            />
+                        </div>
+                    ) : (
+                        /* 未完成状态：绿色 3D Start 按钮图片 */
+                        <button
+                            onClick={handleStart}
+                            className={`w-20 h-20 transition-all duration-150 ${isPressed ? 'scale-95' : 'hover:scale-105'}`}
+                        >
+                            <img
+                                src="/start-button.png"
+                                alt="Start"
+                                className="w-full h-full object-contain"
+                            />
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* 迷你热力图（16周） */}
-            <div className="grid grid-rows-7 grid-flow-col gap-1 h-[90px] overflow-hidden">
-                {days.map((day, i) => (
+            {/* 下半部分：累计经验进度条 + Level */}
+            <div className="flex items-center gap-3">
+                {/* 进度条 */}
+                <div className="flex-1 relative">
                     <div
-                        key={i}
-                        title={day.date ? day.date.toDateString() : ''}
-                        className={`
-                            w-2.5 h-2.5 rounded-[3px] transition-colors duration-200
-                            ${day.level > 0 ? currentTheme.cellActive : 'bg-[#F0F0F0]'}
-                            ${!day.date ? 'opacity-0' : ''}
-                        `}
-                    />
-                ))}
+                        className="h-7 rounded-full overflow-hidden"
+                        style={{ backgroundColor: '#F0F0F0' }}
+                    >
+                        {/* 进度填充 */}
+                        <div
+                            className="h-full rounded-full transition-all duration-500 ease-out"
+                            style={{
+                                width: `${progress * 100}%`,
+                                background: 'linear-gradient(90deg, #FFD966 0%, #E6A800 100%)',
+                            }}
+                        />
+                    </div>
+                    {/* 进度文字 */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-gray-600 font-medium text-sm">
+                            {current} / {target}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Level 标签 */}
+                <div className="flex-shrink-0">
+                    <span className="text-gray-600 font-semibold text-sm">
+                        Level {level}
+                    </span>
+                </div>
             </div>
 
-            {/* 里程碑进度条（新增） */}
-            {habit.totalCompletions !== undefined && (
-                <MilestoneProgressBar
-                    totalCount={habit.totalCompletions}
-                    theme={habit.theme}
-                />
-            )}
+            {/* CSS 动画 */}
+            <style>{`
+                @keyframes confetti-burst {
+                    0% {
+                        opacity: 1;
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(1);
+                    }
+                    100% {
+                        opacity: 0;
+                        transform: translate(-50%, -50%) rotate(var(--angle)) translateX(60px) scale(0.3);
+                    }
+                }
+                .confetti-particle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: var(--color);
+                    animation: confetti-burst 0.8s ease-out forwards;
+                }
+            `}</style>
         </div>
     );
 };

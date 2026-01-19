@@ -632,6 +632,27 @@ export function AppTabsPage() {
     };
 
     /**
+     * Stats 页面的 Start 按钮点击处理
+     * 将习惯名称转换为 Task 对象，然后启动 AI Coach
+     *
+     * @param {string} taskName - 习惯/任务名称
+     */
+    const handleStatsStartTask = (taskName: string) => {
+        const task: Task = {
+            id: Date.now().toString(),
+            text: taskName,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            displayTime: 'Now',
+            date: getLocalDateString(),
+            completed: false,
+            type: 'todo',
+            category: 'morning',
+            called: false,
+        };
+        handleQuickStart(task);
+    };
+
+    /**
      * 会话验证完成后处理挂起的操作
      *
      * 背景：iOS WebView 的登录态恢复是异步的，过早判断"未登录"会触发登录流程
@@ -1034,6 +1055,7 @@ export function AppTabsPage() {
                     <StatsView
                         onToggleComplete={handleStatsToggle}
                         refreshTrigger={statsRefreshTrigger}
+                        onStartTask={handleStatsStartTask}
                     />
                 )}
 

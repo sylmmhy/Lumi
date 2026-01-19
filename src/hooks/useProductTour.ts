@@ -70,9 +70,14 @@ export function useProductTour(): UseProductTourReturn {
   /**
    * Tour 是否激活
    * 条件：有 URL 参数 tour=1~4 且未完成过
+   *
+   * ⚠️ 2026-01-18: 暂时禁用 Product Tour 功能
+   * 原因：产品决定先简化 onboarding 流程，Tour 功能暂不启用
+   * 恢复方法：移除下面的 `false &&` 条件
    */
   const isActive = useMemo(() => {
-    return stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
+    // TODO: 恢复 Tour 功能时，移除 `false &&`
+    return false && stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
   }, [stepNumber, hasCompleted]);
 
   /**

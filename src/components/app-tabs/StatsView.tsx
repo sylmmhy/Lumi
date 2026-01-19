@@ -12,11 +12,10 @@ import { getLocalDateString, getCategoryFromTimeString, getTimeIcon } from '../.
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
-import { TimePicker } from './TimePicker';
 import type { Task } from '../../remindMe/types';
 import { fetchRecurringReminders, toggleReminderCompletion, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
-import { getWeeklyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
+import { getMonthlyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
 
 // 从 stats 模块导入组件和类型
 import {
@@ -69,6 +68,8 @@ interface StatsViewProps {
     onToggleComplete?: (id: string, completed: boolean) => void;
     /** 可选数字，变化时触发重新加载数据 */
     refreshTrigger?: number;
+    /** 启动 AI Coach 任务的回调（传递任务名称） */
+    onStartTask?: (taskName: string) => void;
 }
 
 /**
@@ -79,7 +80,7 @@ interface StatsViewProps {
  * 2. 习惯卡片：热力图 + 里程碑进度条
  * 3. 打卡联动：打卡时水位上涨 + Toast 激励
  */
-export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger, onStartTask }) => {
     const auth = useAuth();
     const { t } = useTranslation();
 
@@ -90,9 +91,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [isLoading, setIsLoading] = useState(true);
     const [scrollTop, setScrollTop] = useState(0);
 
-    // 蓄水池数据
-    const [weeklyCount, setWeeklyCount] = useState(0);
-    const [weeklyTarget] = useState(20); // 目标固定为 20
+    // 能量球数据（本月习惯完成总次数）
+    const [monthlyCount, setMonthlyCount] = useState(0);
+    const [monthlyTarget] = useState(20); // 目标固定为 20
     const [triggerRise, setTriggerRise] = useState(false);
 
     // Toast 状态
@@ -105,6 +106,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-sleep',
             title: t('stats.goToBed'),
+            subtitle: '准时躺下就算赢',
             timeLabel: '10:30 pm',
             time: '22:30',
             theme: 'pink',
@@ -114,6 +116,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-wake',
             title: t('stats.wakeUp'),
+            subtitle: '睁眼就是胜利',
             timeLabel: '7:00 am',
             time: '07:00',
             theme: 'gold',
@@ -123,6 +126,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-workout',
             title: t('stats.workout'),
+            subtitle: '动 5 分钟也算赢',
             timeLabel: '6:30 pm',
             time: '18:30',
             theme: 'blue',
@@ -168,9 +172,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 // 2. 获取所有完成历史
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
 
-                // 3. 获取本周完成数（蓄水池数据）
-                const weeklyProgress = await getWeeklyCompletedCount(auth.userId);
-                setWeeklyCount(weeklyProgress.current);
+                // 3. 获取本月完成数（能量球数据）
+                const monthlyProgress = await getMonthlyCompletedCount(auth.userId);
+                setMonthlyCount(monthlyProgress.current);
 
                 // 4. 批量获取累计完成次数（里程碑进度条数据）
                 const habitIds = routineTasks.map(t => t.id);
@@ -257,11 +261,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     };
 
     /**
-     * 打卡成功回调（联动蓄水池和 Toast）
+     * 打卡成功回调（联动能量球和 Toast）
      */
-    const handleCheckIn = (habitId: string) => {
-        // 1. 蓄水池水位 +1（乐观更新）
-        setWeeklyCount(prev => prev + 1);
+    const handleCheckIn = (_habitId: string) => {
+        // 1. 能量球 +1（乐观更新）
+        setMonthlyCount(prev => prev + 1);
 
         // 2. 触发水位上涨动画
         setTriggerRise(true);
@@ -334,19 +338,24 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     // ========== 渲染 ==========
     return (
-        <div className="flex-1 relative h-full overflow-hidden flex flex-col bg-white">
+        <div
+            className="flex-1 relative h-full overflow-hidden flex flex-col"
+            style={{ backgroundColor: '#F5F5F5' }}
+        >
             {/* 打卡成功 Toast */}
             <CheckInToast message={toastMessage} onClose={hideToast} />
 
             {/* Sticky 顶部栏 */}
             <div className={`
-                absolute top-0 left-0 right-0 bg-white z-50
+                absolute top-0 left-0 right-0 z-50
                 flex items-end justify-start px-6 pb-3 pt-[59px]
                 shadow-sm transition-all duration-300
                 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}
-            `}>
+            `}
+            style={{ backgroundColor: '#429950' }}
+            >
                 <span
-                    className="text-[24px] text-gray-900"
+                    className="text-[24px] text-white"
                     style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                 >
                     {t('stats.habitProgress')}
@@ -363,13 +372,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 <StatsHeader
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
-                    weeklyCount={weeklyCount}
-                    weeklyTarget={weeklyTarget}
+                    weeklyCount={monthlyCount}
+                    weeklyTarget={monthlyTarget}
                     triggerRise={triggerRise}
                 />
 
-                {/* 内容区域 */}
-                <div className="px-4 pb-28 min-h-screen -mt-4 relative z-20">
+                {/* 内容区域 - pt-16 为悬挂的能量球留出空间 */}
+                <div className="px-4 pb-28 min-h-screen pt-16 relative z-10">
                     {activeTab === 'routine' ? (
                         <div className="space-y-4 mt-2">
                             {isLoading ? (
@@ -413,6 +422,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                             onToggleToday={() => void toggleHabitToday(habit.id)}
                                             onClickDetail={() => setSelectedHabit(habit)}
                                             onCheckIn={handleCheckIn}
+                                            onStartTask={onStartTask}
                                         />
                                     </div>
                                 ))

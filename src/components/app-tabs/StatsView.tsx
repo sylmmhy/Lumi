@@ -221,6 +221,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
     const [isLoading, setIsLoading] = useState(true);
     const [longestStreak, setLongestStreak] = useState(0);
+    const [scrollTop, setScrollTop] = useState(0);
+    const showStickyHeader = scrollTop > 80;
     const exampleHabits = useMemo<Habit[]>(() => [
         {
             id: 'example-sleep',
@@ -471,8 +473,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col bg-white">
+            {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
+            <div className={`absolute top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('stats.habitProgress')}</span>
+            </div>
+
             {/* Scroll Container - 用于 Product Tour 高亮整个统计区域 */}
-            <div className="flex-1 overflow-y-auto no-scrollbar relative" data-tour="stats-area">
+            <div
+                className="flex-1 overflow-y-auto no-scrollbar relative"
+                data-tour="stats-area"
+                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+            >
 
                 {/* New Stats Header (Matches Figma Design) */}
                 <StatsHeader

@@ -5,6 +5,7 @@ import { useTranslation } from './useTranslation';
 import { createReminder, generateTodayRoutineInstances } from '../remindMe/services/reminderService';
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 import { DEFAULT_APP_PATH } from '../constants/routes';
+import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
 
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -139,7 +140,7 @@ function getDefaultTimeForHabit(habitId: string): string {
 
 export function useHabitOnboarding() {
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, markHabitOnboardingCompleted } = useAuth();
   const { t } = useTranslation();
   // 从 sessionStorage 恢复状态，避免来电/刷新后回到第 1 步
   const [state, setState] = useState<HabitOnboardingState>(loadStateFromStorage);
@@ -247,21 +248,35 @@ export function useHabitOnboarding() {
       // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
       await generateTodayRoutineInstances(userId);
 
-      // ⚠️ 注意：这里不调用 markHabitOnboardingCompleted() 和 notifyNativeOnboardingCompleted()
-      // 正确的流程是：
-      // 1. Habit Onboarding 完成 → Web 端导航到 /app/home?tour=1
-      // 2. Product Tour 完成 → 才标记 hasCompletedHabitOnboarding 并通知原生端
+      // ✅ 2026-01-18: 在 Habit Onboarding 完成时就标记为已完成
+      // Product Tour 功能暂时禁用，所以在这里直接完成整个 onboarding 流程
+      // 1. 更新数据库 users.has_completed_habit_onboarding = true
+      // 2. 通知原生端（iOS/Android）onboarding 已完成
+      try {
+        const result = await markHabitOnboardingCompleted();
+        if (result.error) {
+          console.error('❌ [useHabitOnboarding] 更新 habit onboarding 状态失败:', result.error);
+        } else {
+          console.log('✅ [useHabitOnboarding] 已标记 habit onboarding 完成');
+        }
+      } catch (err) {
+        console.error('❌ [useHabitOnboarding] 更新时发生异常:', err);
+      }
+
+      // 通知原生端：onboarding 已完成
+      // 原生端收到后会跳转到主页
+      notifyNativeOnboardingCompleted();
+      console.log('📱 [useHabitOnboarding] 已通知原生端 onboarding 完成');
 
       // 清除 sessionStorage 中的临时状态
       clearStateFromStorage();
 
       // 🔍 调试日志
-      console.log('🔍 [useHabitOnboarding] saveAndFinish: Habit Onboarding 完成，导航到 Product Tour');
-      console.log('🔍 [useHabitOnboarding] saveAndFinish: 目标 URL:', `${DEFAULT_APP_PATH}?tour=1`);
+      console.log('🔍 [useHabitOnboarding] saveAndFinish: Habit Onboarding 完成，导航到主页');
+      console.log('🔍 [useHabitOnboarding] saveAndFinish: 目标 URL:', DEFAULT_APP_PATH);
 
-      // 无论是否在原生 App 中，都由 Web 端导航到 Product Tour
-      // Product Tour 完成后才会通知原生端
-      navigate(`${DEFAULT_APP_PATH}?tour=1`);
+      // 直接导航到主页（不带 ?tour=1 参数，因为 Product Tour 已禁用）
+      navigate(DEFAULT_APP_PATH);
     } catch (err) {
       console.error('Error saving habit:', err);
       setState(prev => ({
@@ -270,7 +285,7 @@ export function useHabitOnboarding() {
         error: err instanceof Error ? err.message : 'Failed to save habit',
       }));
     }
-  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, t]);
+  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, t, markHabitOnboardingCompleted]);
 
   // 计算属性
   const canProceed = useMemo(() => {

@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
 import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
 import { getPreferredLanguages } from '../../lib/language';
+import { DEFAULT_APP_PATH } from '../../constants/routes';
 
 // Step components
 import { WelcomeStep } from './habit-steps/WelcomeStep';
@@ -29,7 +31,8 @@ import { APPLE_REVIEW_MODE } from '../../constants/reviewMode';
  * 包含完整的 Edge Function prompt、虚拟消息系统等
  */
 export function HabitOnboardingPage() {
-  const { isLoggedIn, isSessionValidated, navigateToLogin } = useAuth();
+  const navigate = useNavigate();
+  const { isLoggedIn, isSessionValidated, navigateToLogin, hasCompletedHabitOnboarding } = useAuth();
   const onboarding = useHabitOnboarding();
   const [isInCall, setIsInCall] = useState(false);
 
@@ -74,9 +77,14 @@ export function HabitOnboardingPage() {
     }
   }, [isSessionValidated, isLoggedIn, navigateToLogin]);
 
-  // 【已移除】已完成 onboarding 检查
-  // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
-  // 用户可自由访问 /habit-onboarding 页面
+  // ✅ 2026-01-18: 已完成 onboarding 的用户重定向到主页
+  // 避免用户重复进入 onboarding 流程
+  useEffect(() => {
+    if (isSessionValidated && isLoggedIn && hasCompletedHabitOnboarding) {
+      console.log('🔄 [HabitOnboardingPage] 用户已完成 onboarding，重定向到主页');
+      navigate(DEFAULT_APP_PATH, { replace: true });
+    }
+  }, [isSessionValidated, isLoggedIn, hasCompletedHabitOnboarding, navigate]);
 
   /**
    * 开始试用通话

@@ -1,15 +1,14 @@
 /**
- * StatsHeader - 统计页面头部组件（蓄水池版）
+ * StatsHeader - 统计页面头部组件（能量收集版）
  *
  * 设计理念：
- * - 去压力化：不展示"连胜/断签"，只展示本周累计
+ * - 森系暖绿背景，营造温暖治愈的氛围
+ * - 居中标题 + 底部悬挂能量球布局
  * - 物理隐喻：蓄水池/充能球效果
- * - 正向激励：每完成一个任务，水位上涨
  */
 
 import React from 'react';
-import headerBg from '../../assets/stats-header-bg.png';
-import { WaterTankProgress } from '../stats/WaterTankProgress';
+import { EnergyBall } from '../stats/EnergyBall';
 
 interface StatsHeaderProps {
     /** Tab 切换（保留兼容性，暂时隐藏） */
@@ -28,9 +27,9 @@ interface StatsHeaderProps {
  * 统计页面头部组件
  *
  * 包含：
- * 1. 绿色背景图
- * 2. 蓄水池进度组件（替代原来的连胜圆圈）
- * 3. Routine/Done Tab（暂时隐藏）
+ * 1. 森系暖绿纯色背景
+ * 2. 居中标语文案
+ * 3. 底部悬挂的蓄水池/充能球进度组件
  */
 export const StatsHeader: React.FC<StatsHeaderProps> = ({
     weeklyCount,
@@ -38,23 +37,32 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
     triggerRise = false,
 }) => {
     return (
-        <div className="relative w-full overflow-hidden" data-tour="stats-header">
-            {/* 背景图 */}
-            <div className="absolute top-0 left-0 w-full h-[220px] z-0">
-                <img
-                    src={headerBg}
-                    alt="Background"
-                    className="w-full h-full object-cover align-top"
-                />
+        <div
+            className="relative w-full"
+            data-tour="stats-header"
+            style={{ backgroundColor: '#429950' }}
+        >
+            {/* 标题区域 - 居中布局 */}
+            <div className="relative z-10 pt-16 pb-16 px-6 flex flex-col items-center text-center">
+                <p
+                    className="text-white/90 text-xl italic mb-2"
+                    style={{ fontFamily: "'Sansita', 'Georgia', serif" }}
+                >
+                    Small Wins, Big Change
+                </p>
+                <h1
+                    className="text-white text-3xl font-bold"
+                    style={{ fontFamily: "'Noto Sans SC', sans-serif" }}
+                >
+                    一月冲能任务 ⚡
+                </h1>
             </div>
 
-            {/* 内容区域 */}
-            <div className="relative z-10 pt-16 pb-8 px-6">
-                {/* 蓄水池组件 */}
-                <WaterTankProgress
+            {/* 底部悬挂的能量球 - 一半在绿色区域，一半在白色区域 */}
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-1/2 z-20">
+                <EnergyBall
                     current={weeklyCount}
                     target={weeklyTarget}
-                    slogan="You're building momentum!"
                     triggerRise={triggerRise}
                 />
             </div>

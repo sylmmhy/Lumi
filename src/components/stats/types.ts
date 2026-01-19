@@ -22,6 +22,8 @@ export interface Habit {
     id: string;
     /** 习惯标题 */
     title: string;
+    /** 轻量化启动引导语，如 "读 1 页也算赢" */
+    subtitle?: string;
     /** 显示用的时间标签，如 "9:30 am ☀️" */
     timeLabel: string;
     /** 24小时格式的时间，如 "09:30" */

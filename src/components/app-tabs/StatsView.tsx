@@ -1,191 +1,32 @@
+/**
+ * StatsView - 统计视图主组件
+ * 展示 Routine 热力图与 Done 历史列表
+ *
+ * 拆分后的组件结构：
+ * - StatsCard: 习惯统计卡片（src/components/stats/StatsCard.tsx）
+ * - DoneHistoryView: 已完成任务历史（src/components/stats/DoneHistoryView.tsx）
+ * - HeatmapDetailOverlay: 热力图详情弹窗（src/components/stats/HeatmapDetailOverlay.tsx）
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { getLocalDateString, getCategoryFromTimeString, getTimeIcon } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
-import { TimePicker } from './TimePicker';
 import type { Task } from '../../remindMe/types';
-import { fetchRecurringReminders, toggleReminderCompletion, fetchCompletedTodoTasks, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
+import { fetchRecurringReminders, toggleReminderCompletion, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
 
-type HabitTheme = 'gold' | 'blue' | 'pink';
-
-interface Habit {
-    id: string;
-    title: string;
-    timeLabel: string; // e.g., "9:30 am ☀️"
-    time: string; // 24h format e.g., "09:30"
-    theme: HabitTheme;
-    // History is a map of date string (YYYY-MM-DD) to boolean (completed)
-    history: { [key: string]: boolean };
-}
-
-const DoneHistoryView: React.FC<{ refreshTrigger?: number }> = ({ refreshTrigger }) => {
-    const auth = useAuth();
-    const { t } = useTranslation();
-    const [historyGroups, setHistoryGroups] = useState<{ dateLabel: string; tasks: Task[] }[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const loadHistory = async () => {
-            if (!auth.userId) return;
-            setIsLoading(true);
-            try {
-                const tasks = await fetchCompletedTodoTasks(auth.userId);
-
-                // Group by date
-                const groups: { [key: string]: Task[] } = {};
-                tasks.forEach(task => {
-                    // Use reminder_date if available, otherwise fallback to today (using local date)
-                    const dateStr = task.date || getLocalDateString();
-                    if (!groups[dateStr]) {
-                        groups[dateStr] = [];
-                    }
-                    groups[dateStr].push(task);
-                });
-
-                // Sort dates descending and format
-                const sortedGroups = Object.keys(groups)
-                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-                    .map(dateStr => {
-                        const date = new Date(dateStr);
-                        // Format: "Apr 12 . Wed"
-                        const month = date.toLocaleDateString('en-US', { month: 'short' });
-                        const day = date.getDate();
-                        const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-                        return {
-                            dateLabel: `${month} ${day} . ${weekday}`,
-                            tasks: groups[dateStr]
-                        };
-                    });
-
-                setHistoryGroups(sortedGroups);
-            } catch (error) {
-                console.error('Failed to load done history:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        void loadHistory();
-    }, [auth.userId, refreshTrigger]);
-
-    if (isLoading) {
-        return (
-            <div className="text-center py-10 text-gray-400">
-                <p className="font-serif italic text-lg">{t('stats.loadingHistory')}</p>
-            </div>
-        );
-    }
-
-    if (historyGroups.length === 0) {
-        return (
-            <div className="text-center py-10 text-gray-400">
-                <p className="font-serif italic text-lg">{t('stats.noCompletedTasks')}</p>
-                <p className="text-sm mt-2">{t('stats.completeTasksHint')}</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-8 animate-fade-in-up">
-            {historyGroups.map((group, idx) => (
-                <div key={idx}>
-                    <div className="bg-brand-cream inline-block px-4 py-2 rounded-lg mb-4 mx-2">
-                        <h3 className="font-serif text-2xl text-[#3A3A3A] italic font-bold">
-                            {group.dateLabel}
-                        </h3>
-                    </div>
-                    <div className="space-y-3">
-                        {group.tasks.map(task => (
-                            <div key={task.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between opacity-80 border border-gray-100">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-6 h-6 rounded border-[2px] border-brand-goldBorder bg-brand-goldBorder flex items-center justify-center">
-                                        <i className="fa-solid fa-check text-white text-xs"></i>
-                                    </div>
-                                    <span className="text-lg text-gray-700 font-medium line-through decoration-brand-blue/50">
-                                        {task.text}
-                                    </span>
-                                </div>
-                                <div className="bg-brand-cream px-3 py-1 rounded-md">
-                                    <span className="text-sm font-bold text-gray-800 italic font-serif flex items-center gap-1">
-                                        {task.displayTime} <span className="text-brand-goldBorder">☀️</span>
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-};
-
-/**
- * 将 Task 和完成历史转换为 Habit 格式
- */
-const taskToHabit = (task: Task, completions: Set<string>): Habit => {
-    // 将 Set 转换为 history 对象
-    const history: { [key: string]: boolean } = {};
-    completions.forEach(date => {
-        history[date] = true;
-    });
-
-    // 根据时间分类选择主题颜色
-    let theme: HabitTheme = 'gold';
-    if (task.category === 'morning') theme = 'gold';
-    else if (task.category === 'noon') theme = 'gold';
-    else if (task.category === 'afternoon') theme = 'blue';
-    else if (task.category === 'evening') theme = 'pink';
-    else if (task.category === 'latenight') theme = 'pink';
-
-    // 获取时间图标（使用工具函数）
-    const icon = getTimeIcon(task.category || 'morning');
-
-    return {
-        id: task.id,
-        title: task.text,
-        timeLabel: `${task.displayTime} ${icon}`,
-        time: task.time || '',
-        theme,
-        history,
-    };
-};
-
-/**
- * 构造示例热力图历史，使用相对日期的完成记录。
- *
- * @param {number[]} completedOffsets - 以天为单位的偏移（0 表示今天，1 表示昨天）
- * @returns {Record<string, boolean>} 示例完成历史
- */
-const buildExampleHistory = (completedOffsets: number[]): Record<string, boolean> => {
-    const history: Record<string, boolean> = {};
-    completedOffsets.forEach(offset => {
-        const date = new Date();
-        date.setDate(date.getDate() - offset);
-        history[getLocalDateString(date)] = true;
-    });
-    return history;
-};
-
-/**
- * 构造高密度示例历史：最近 totalDays 内几乎每日完成，仅在给定间隔/特定日略过形成空白。
- *
- * @param {number} totalDays - 向前回溯的天数（从 0=今天 开始）
- * @param {number[]} gapEvery - 周期性跳过的天数模式，例如 18 表示每 18 天缺一次
- * @param {number[]} extraSkips - 额外指定的偏移天数，用于制造零星空格
- * @returns {Record<string, boolean>} 示例完成历史
- */
-const buildDenseHistoryWithGaps = (totalDays: number, gapEvery: number[] = [], extraSkips: number[] = []): Record<string, boolean> => {
-    const extraSet = new Set(extraSkips);
-    const offsets: number[] = [];
-    for (let i = 0; i < totalDays; i++) {
-        const hitPattern = gapEvery.some(interval => interval > 0 && i % interval === interval - 1);
-        if (hitPattern || extraSet.has(i)) continue;
-        offsets.push(i);
-    }
-    return buildExampleHistory(offsets);
-};
+// 从拆分后的 stats 模块导入
+import {
+    StatsCard,
+    DoneHistoryView,
+    HeatmapDetailOverlay,
+    taskToHabit,
+    calculateCurrentStreak,
+    buildDenseHistoryWithGaps,
+} from '../stats';
+import type { Habit, HabitTheme } from '../stats';
 
 /**
  * StatsView Props
@@ -198,10 +39,7 @@ interface StatsViewProps {
 }
 
 /**
- * 统计视图，展示 Routine 热力图与 Done 历史列表。
- *
- * @param {StatsViewProps} props - 控制任务完成回调与刷新标记
- * @returns {JSX.Element} 含热力图与历史列表的页面
+ * 统计视图，展示 Routine 热力图与 Done 历史列表
  */
 export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger }) => {
     const auth = useAuth();
@@ -213,6 +51,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [longestStreak, setLongestStreak] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
     const showStickyHeader = scrollTop > 80;
+
+    // 示例习惯数据（用户没有习惯时展示）
     const exampleHabits = useMemo<Habit[]>(() => [
         {
             id: 'example-sleep',
@@ -239,8 +79,12 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             history: buildDenseHistoryWithGaps(120, [20], [10, 37, 68, 99]),
         },
     ], [t]);
+
     const [exampleHabitsState, setExampleHabitsState] = useState<Habit[]>(exampleHabits);
 
+    /**
+     * 更新示例习惯的历史记录（仅本地状态）
+     */
     const updateExampleHabitHistory = (habitId: string, dateKey: string, newStatus?: boolean) => {
         setExampleHabitsState(prev => prev.map(habit => {
             if (habit.id !== habitId) return habit;
@@ -271,10 +115,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             try {
                 // 获取所有 Routine 任务
                 const routineTasks = await fetchRecurringReminders(auth.userId);
-
                 // 获取所有完成历史
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
-
                 // 转换为 Habit 格式
                 const habitsData = routineTasks.map(task =>
                     taskToHabit(task, completionsMap.get(task.id) || new Set())
@@ -283,7 +125,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 setHabits(habitsData);
 
                 // 计算所有任务的「当前连续打卡天数」中的最大值
-                // 使用 calculateCurrentStreak，从今天往前连续统计
                 let maxStreak = 0;
                 habitsData.forEach(habit => {
                     const streak = calculateCurrentStreak(habit.history);
@@ -305,13 +146,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     /**
      * 切换今天的完成状态
-     * 同时更新：
-     * 1. tasks 表的 status 字段（通过 toggleReminderCompletion）
-     * 2. routine_completions 表的打卡记录（通过 toggleRoutineCompletion）
-     * 3. 本地 UI 状态
+     * 同时更新：tasks 表、routine_completions 表、本地 UI 状态
      */
     const toggleHabitToday = async (id: string) => {
-        // 示例数据：仅本地更新，不触发后端
+        // 示例数据：仅本地更新
         if (id.startsWith('example-')) {
             const todayKey = getLocalDateString();
             updateExampleHabitHistory(id, todayKey);
@@ -321,8 +159,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         if (!auth.userId) return;
 
         const todayKey = getLocalDateString();
-
-        // 先获取当前状态，决定新状态
         const currentHabit = habits.find(h => h.id === id);
         if (!currentHabit) return;
 
@@ -334,16 +170,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             await toggleReminderCompletion(id, newStatus);
 
             // 2. 更新 routine_completions 表（用于热力图历史）
-            // 注意：根据 newStatus 决定是添加还是删除记录，而不是切换
             if (newStatus) {
-                // 标记为完成：添加打卡记录
                 await markRoutineComplete(auth.userId, id, todayKey);
             } else {
-                // 标记为未完成：删除打卡记录
                 await unmarkRoutineComplete(auth.userId, id, todayKey);
             }
 
-            // 3. 通知父组件同步状态（如果提供了回调）
+            // 3. 通知父组件同步状态
             if (onToggleComplete) {
                 onToggleComplete(id, newStatus);
             }
@@ -355,23 +188,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                         ...habit,
                         history: { ...habit.history, [todayKey]: newStatus }
                     };
-
-                    // 如果这个任务正在详情弹窗中显示，同步更新弹窗数据
                     if (selectedHabit?.id === id) {
                         setSelectedHabit(updatedHabit);
                     }
-
                     return updatedHabit;
                 }
                 return habit;
             }));
 
-            // 5. 基于所有习惯重新计算「当前连续打卡天数」
-            // 先计算当前这个习惯最新的连续天数
+            // 5. 重新计算连续打卡天数
             const updatedHistory = { ...currentHabit.history, [todayKey]: newStatus };
             let maxStreak = calculateCurrentStreak(updatedHistory);
-
-            // 再和其他习惯的连续天数比较，取最大的那个
             habits.forEach(habit => {
                 if (habit.id === id) return;
                 const streak = calculateCurrentStreak(habit.history);
@@ -387,7 +214,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     /**
      * 切换指定日期的完成状态（用于补打卡）
-     * 只更新 routine_completions 表
      */
     const toggleHabitOnDate = async (id: string, date: Date) => {
         if (id.startsWith('example-')) {
@@ -400,7 +226,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         const dateKey = getLocalDateString(date);
         const todayKey = getLocalDateString();
 
-        // 如果是今天，走 toggleHabitToday 逻辑（会同步更新 tasks.status）
+        // 如果是今天，走 toggleHabitToday 逻辑
         if (dateKey === todayKey) {
             await toggleHabitToday(id);
             return;
@@ -434,8 +260,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                         ...habit,
                         history: { ...habit.history, [dateKey]: newStatus }
                     };
-
-                    // 同步更新弹窗数据
                     if (selectedHabit?.id === id) {
                         setSelectedHabit(updatedHabit);
                     }
@@ -444,10 +268,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 return habit;
             }));
 
-            // 重新计算基于今天的「当前连续打卡天数」
+            // 重新计算连续打卡天数
             const updatedHistory = { ...currentHabit.history, [dateKey]: newStatus };
             let maxStreak = calculateCurrentStreak(updatedHistory);
-
             habits.forEach(habit => {
                 if (habit.id === id) return;
                 const streak = calculateCurrentStreak(habit.history);
@@ -461,21 +284,87 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         }
     };
 
+    /**
+     * 更新习惯（名称、时间）
+     */
+    const handleUpdateHabit = async (newName: string, newTime: string) => {
+        if (!selectedHabit || selectedHabit.id.startsWith('example-')) return;
+
+        try {
+            // 根据时间计算 category
+            const category = getCategoryFromTimeString(newTime);
+            const icon = getTimeIcon(category);
+
+            // 获取主题颜色
+            const getTheme = (cat: Task['category']): HabitTheme => {
+                if (cat === 'morning' || cat === 'noon') return 'gold';
+                if (cat === 'afternoon') return 'blue';
+                return 'pink';
+            };
+
+            // 格式化显示时间
+            const [h] = newTime.split(':').map(Number);
+            const h12 = h % 12 || 12;
+            const [, m] = newTime.split(':');
+            const period = h >= 12 ? 'pm' : 'am';
+            const displayTime = `${h12}:${m} ${period}`;
+
+            // 更新数据库
+            await updateReminder(selectedHabit.id, {
+                text: newName,
+                time: newTime,
+                displayTime,
+                category
+            });
+
+            // 更新本地状态
+            const updatedHabit = {
+                ...selectedHabit,
+                title: newName,
+                time: newTime,
+                timeLabel: `${displayTime} ${icon}`,
+                theme: getTheme(category),
+            };
+
+            setHabits(prev => prev.map(h =>
+                h.id === selectedHabit.id ? updatedHabit : h
+            ));
+            setSelectedHabit(updatedHabit);
+        } catch (error) {
+            console.error('Failed to update habit:', error);
+        }
+    };
+
+    /**
+     * 删除习惯
+     */
+    const handleDeleteHabit = async () => {
+        if (!selectedHabit) return;
+        try {
+            await deleteReminder(selectedHabit.id);
+            setHabits(prev => prev.filter(h => h.id !== selectedHabit.id));
+            setSelectedHabit(null);
+        } catch (error) {
+            console.error('Failed to delete habit:', error);
+        }
+    };
+
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col bg-white">
-            {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
+            {/* Sticky Top Bar */}
             <div className={`absolute top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
-                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('stats.habitProgress')}</span>
+                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
+                    {t('stats.habitProgress')}
+                </span>
             </div>
 
-            {/* Scroll Container - 用于 Product Tour 高亮整个统计区域 */}
+            {/* Scroll Container */}
             <div
                 className="flex-1 overflow-y-auto no-scrollbar relative"
                 data-tour="stats-area"
                 onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
-
-                {/* New Stats Header (Matches Figma Design) */}
+                {/* Stats Header */}
                 <StatsHeader
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
@@ -491,8 +380,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                     <p className="font-serif italic text-lg">{t('common.loading')}</p>
                                 </div>
                             ) : habits.length === 0 ? (
+                                // 显示示例习惯
                                 <div className="py-0 space-y-4 text-gray-700">
-                                    {/* Tour 高亮区域：标题 + 第一个示例卡片 */}
                                     <div data-tour="habit-record-example" className="space-y-4">
                                         <p className="text-center text-sm text-gray-500">{t('stats.exampleStreaksHint')}</p>
                                         <StatsCard
@@ -502,7 +391,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                             onClickDetail={() => alert(t('home.exampleClickHint'))}
                                         />
                                     </div>
-                                    {/* 剩余的示例卡片 */}
                                     <div className="space-y-4">
                                         {exampleHabitsState.slice(1).map(habit => (
                                             <StatsCard
@@ -515,8 +403,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                                     </div>
                                 </div>
                             ) : (
+                                // 显示用户习惯
                                 habits.map((habit, index) => (
-                                    // 第一个习惯卡片添加 data-tour 属性，用于 Product Tour 高亮
                                     <div
                                         key={habit.id}
                                         data-tour={index === 0 ? 'habit-record-example' : undefined}
@@ -538,593 +426,15 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 </div>
             </div>
 
+            {/* 习惯详情弹窗 */}
             {selectedHabit && (
                 <HeatmapDetailOverlay
                     habit={selectedHabit}
                     onClose={() => setSelectedHabit(null)}
                     onToggleDate={(date) => toggleHabitOnDate(selectedHabit.id, date)}
-                    onUpdateHabit={async (newName: string, newTime: string) => {
-                        // 示例数据不支持更新
-                        if (selectedHabit.id.startsWith('example-')) return;
-
-                        try {
-                            // 根据时间计算 category（使用工具函数）
-                            const category = getCategoryFromTimeString(newTime);
-                            const icon = getTimeIcon(category);
-
-                            // 获取主题颜色
-                            const getTheme = (cat: Task['category']): HabitTheme => {
-                                if (cat === 'morning' || cat === 'noon') return 'gold';
-                                if (cat === 'afternoon') return 'blue';
-                                return 'pink';
-                            };
-
-                            // 格式化显示时间
-                            const [h] = newTime.split(':').map(Number);
-                            const h12 = h % 12 || 12;
-                            const [, m] = newTime.split(':');
-                            const period = h >= 12 ? 'pm' : 'am';
-                            const displayTime = `${h12}:${m} ${period}`;
-
-                            // 更新数据库
-                            await updateReminder(selectedHabit.id, {
-                                text: newName,
-                                time: newTime,
-                                displayTime,
-                                category
-                            });
-
-                            // 更新本地状态
-                            const updatedHabit = {
-                                ...selectedHabit,
-                                title: newName,
-                                time: newTime,
-                                timeLabel: `${displayTime} ${icon}`,
-                                theme: getTheme(category),
-                            };
-
-                            setHabits(prev => prev.map(h =>
-                                h.id === selectedHabit.id ? updatedHabit : h
-                            ));
-                            setSelectedHabit(updatedHabit);
-                        } catch (error) {
-                            console.error('Failed to update habit:', error);
-                        }
-                    }}
-                    onDeleteHabit={selectedHabit.id.startsWith('example-') ? undefined : async () => {
-                        try {
-                            await deleteReminder(selectedHabit.id);
-                            setHabits(prev => prev.filter(h => h.id !== selectedHabit.id));
-                            setSelectedHabit(null);
-                        } catch (error) {
-                            console.error('Failed to delete habit:', error);
-                        }
-                    }}
+                    onUpdateHabit={handleUpdateHabit}
+                    onDeleteHabit={selectedHabit.id.startsWith('example-') ? undefined : handleDeleteHabit}
                 />
-            )}
-        </div>
-    );
-};
-
-// --- Heatmap Helpers ---
-
-/**
- * 生成热力图数据（固定列数，今天在最右边）
- * @param history - 完成历史
- * @param columns - 列数（周数）
- * @returns 热力图数据，包含月份标签位置
- */
-const getFixedHeatmapData = (history: { [key: string]: boolean }, columns: number = 26) => {
-    const today = new Date();
-    const todayKey = getLocalDateString(today);
-
-    // 计算今天是周几（0=周一，6=周日）
-    const todayDayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
-
-    // 计算开始日期：往前推 (columns - 1) 周 + 今天之前的天数
-    // 我们希望今天在最后一列的对应位置
-    // 所以总天数 = (columns - 1) * 7 + (todayDayOfWeek + 1)
-    // 补全左侧空缺：为了保持完整的 7 行结构，起始日期应该是第一列的周一
-    // 第一列的周一 = 今天 - (totalDays - 1) - 第一列空缺
-    // 但更简单的逻辑是：生成 columns * 7 个格子，多余的未来日期留空
-
-    const totalGridCells = columns * 7;
-    const days: { date: Date | null; level: number; isToday: boolean }[] = [];
-    const monthLabels: { month: string; columnIndex: number }[] = [];
-
-    // 计算整个网格的起始日期（第一列的周一）
-    // 最后一列的周一 = 今天 - todayDayOfWeek
-    // 第一列的周一 = 最后一列的周一 - (columns - 1) * 7
-    const lastMonday = new Date(today);
-    lastMonday.setDate(today.getDate() - todayDayOfWeek);
-
-    const startMonday = new Date(lastMonday);
-    startMonday.setDate(lastMonday.getDate() - (columns - 1) * 7);
-
-    let lastMonth = -1;
-    const iterDate = new Date(startMonday);
-
-    for (let i = 0; i < totalGridCells; i++) {
-        const isFuture = iterDate > today;
-
-        if (isFuture) {
-            days.push({ date: null, level: 0, isToday: false });
-        } else {
-            const key = getLocalDateString(iterDate);
-            const isDone = !!history[key];
-
-            // 检测月份变化（只在每周第一天检测，或者是每月的1号所在周）
-            if (iterDate.getDate() <= 7 && iterDate.getMonth() !== lastMonth) {
-                const columnIndex = Math.floor(i / 7);
-                // 避免标签过于拥挤，至少间隔2列
-                const lastLabel = monthLabels[monthLabels.length - 1];
-                if (!lastLabel || columnIndex - lastLabel.columnIndex > 2) {
-                    lastMonth = iterDate.getMonth();
-                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    monthLabels.push({
-                        month: monthNames[iterDate.getMonth()],
-                        columnIndex,
-                    });
-                }
-            }
-
-            days.push({
-                date: new Date(iterDate),
-                level: isDone ? 1 : 0,
-                isToday: key === todayKey,
-            });
-        }
-
-        iterDate.setDate(iterDate.getDate() + 1);
-    }
-
-    return { days, monthLabels };
-};
-
-interface StatsCardProps {
-    habit: Habit;
-    onToggleToday: () => void;
-    onClickDetail: () => void;
-}
-
-const StatsCard: React.FC<StatsCardProps> = ({ habit, onToggleToday, onClickDetail }) => {
-    const todayKey = getLocalDateString();
-    const isTodayDone = !!habit.history[todayKey];
-    const { days } = getFixedHeatmapData(habit.history, 16);
-
-    // Dynamic styles based on theme
-    const themeColors = {
-        gold: {
-            checkBg: 'bg-brand-goldBorder',
-            checkBorder: 'border-brand-goldBorder',
-            cellActive: 'bg-brand-heatmapGold',
-        },
-        blue: {
-            checkBg: 'bg-brand-heatmapBlue',
-            checkBorder: 'border-brand-heatmapBlue',
-            cellActive: 'bg-brand-heatmapBlue',
-        },
-        pink: {
-            checkBg: 'bg-brand-heatmapPink',
-            checkBorder: 'border-brand-heatmapPink',
-            cellActive: 'bg-brand-heatmapPink',
-        }
-    };
-
-    const currentTheme = themeColors[habit.theme];
-
-    return (
-        <div
-            className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-gray-100 cursor-pointer"
-            onClick={onClickDetail}
-        >
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleToday();
-                        }}
-                        className={`w-6 h-6 rounded border-[2px] flex items-center justify-center transition-colors cursor-pointer ${currentTheme.checkBorder} ${isTodayDone ? currentTheme.checkBg : 'hover:bg-gray-50'}`}
-                    >
-                        {isTodayDone && <i className="fa-solid fa-check text-white text-xs"></i>}
-                    </button>
-                    <h3 className="text-gray-800 font-bold text-lg">{habit.title}</h3>
-                </div>
-                <span className={`text-xs font-serif italic px-3 py-1 rounded-full bg-brand-cream text-gray-700 font-semibold`}>
-                    {habit.timeLabel}
-                </span>
-            </div>
-
-            {/* Colorful Heatmap Grid */}
-            <div className="grid grid-rows-7 grid-flow-col gap-1 h-[90px] overflow-hidden">
-                {days.map((day, i) => (
-                    <div
-                        key={i}
-                        title={day.date ? day.date.toDateString() : ''}
-                        className={`w-2.5 h-2.5 rounded-[3px] transition-colors duration-200 ${day.level > 0 ? currentTheme.cellActive : 'bg-[#F0F0F0]'} ${!day.date ? 'opacity-0' : ''}`}
-                    ></div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-/**
- * 计算当前连续打卡天数（从今天往前数）
- */
-const calculateCurrentStreak = (history: { [key: string]: boolean }): number => {
-    const today = new Date();
-    let streak = 0;
-
-    for (let i = 0; i < 365; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const key = getLocalDateString(date);
-
-        if (history[key]) {
-            streak++;
-        } else {
-            break;
-        }
-    }
-
-    return streak;
-};
-
-/**
- * 生成月历数据
- */
-const getCalendarData = (year: number, month: number, history: { [key: string]: boolean }) => {
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const today = new Date();
-    const todayKey = getLocalDateString(today);
-
-    // 获取这个月第一天是周几（0=周日，1=周一...）
-    const startDayOfWeek = firstDay.getDay();
-    // 调整为周一开始（0=周一，6=周日）
-    const adjustedStartDay = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
-
-    const days: { date: number | null; isCompleted: boolean; isToday: boolean; isFuture: boolean }[] = [];
-
-    // 填充月初的空白
-    for (let i = 0; i < adjustedStartDay; i++) {
-        days.push({ date: null, isCompleted: false, isToday: false, isFuture: false });
-    }
-
-    // 填充日期
-    for (let d = 1; d <= lastDay.getDate(); d++) {
-        const dateObj = new Date(year, month, d);
-        const key = getLocalDateString(dateObj);
-        const isFuture = dateObj > today;
-
-        days.push({
-            date: d,
-            isCompleted: !!history[key],
-            isToday: key === todayKey,
-            isFuture,
-        });
-    }
-
-    return days;
-};
-
-/**
- * 任务详情弹窗
- * 包含：热力图、连续打卡统计、月历视图
- */
-const HeatmapDetailOverlay = ({
-    habit,
-    onClose,
-    onToggleDate,
-    onUpdateHabit,
-    onDeleteHabit
-}: {
-    habit: Habit,
-    onClose: () => void,
-    onToggleDate: (date: Date) => void,
-    onUpdateHabit?: (newName: string, newTime: string) => void,
-    onDeleteHabit?: () => void
-}) => {
-    const { t } = useTranslation();
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [editTime, setEditTime] = useState(habit.time || '09:00');
-    const [editDate, setEditDate] = useState(new Date());
-    const [editName, setEditName] = useState(habit.title);
-    const HEATMAP_COLUMNS = 160; // 显示160周（约3年）
-    const { days: heatmapDays, monthLabels } = getFixedHeatmapData(habit.history, HEATMAP_COLUMNS);
-    const currentStreak = calculateCurrentStreak(habit.history);
-    const scrollRef = React.useRef<HTMLDivElement>(null);
-
-    // 自动滚动到最右侧（最新日期）
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
-        }
-    }, []);
-
-    // 当 habit 变化时同步编辑状态
-    useEffect(() => {
-        setEditTime(habit.time || '09:00');
-        setEditName(habit.title);
-    }, [habit.time, habit.title]);
-
-    const themeColors = {
-        gold: 'bg-brand-heatmapGold',
-        blue: 'bg-brand-heatmapBlue',
-        pink: 'bg-brand-heatmapPink',
-    };
-    const activeColor = themeColors[habit.theme];
-
-    // 月份名称
-    const monthNames = [t('stats.jan'), t('stats.feb'), t('stats.mar'), t('stats.apr'), t('stats.may'), t('stats.jun'), t('stats.jul'), t('stats.aug'), t('stats.sep'), t('stats.oct'), t('stats.nov'), t('stats.dec')];
-    const weekDays = [t('stats.mon'), t('stats.tue'), t('stats.wed'), t('stats.thu'), t('stats.fri'), t('stats.sat'), t('stats.sun')];
-    const weekDaysShort = [t('stats.mon'), '', t('stats.wed'), '', t('stats.fri'), '', t('stats.sun')]; // 隔行显示
-
-    // 当前显示月份的日历数据
-    const calendarDays = getCalendarData(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        habit.history
-    );
-
-    // 切换月份
-    const goToPrevMonth = () => {
-        setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-    };
-
-    const goToNextMonth = () => {
-        const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-        if (next <= new Date()) {
-            setCurrentDate(next);
-        }
-    };
-
-    // 格式化月份显示
-    const formatMonthYear = (date: Date) => {
-        return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-    };
-
-    // 格子尺寸配置
-    const cellSize = 12;
-    const gap = 4;
-
-    return (
-        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-                {/* Header */}
-                <div className="flex justify-between items-start p-6 pb-4">
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-bold text-gray-800">{habit.title}</h2>
-                        <span className="text-sm text-gray-500 bg-brand-cream px-2 py-1 rounded-lg font-serif italic">
-                            {habit.timeLabel}
-                        </span>
-                        {onUpdateHabit && !habit.id.startsWith('example-') && (
-                            <button
-                                onClick={() => setShowEditModal(true)}
-                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                            >
-                                <i className="fa-solid fa-pen text-gray-400 text-sm"></i>
-                            </button>
-                        )}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                    >
-                        <i className="fa-solid fa-xmark text-gray-500"></i>
-                    </button>
-                </div>
-
-                {/* Mini Heatmap - Scrollable with Fixed Weekday Column */}
-                <div className="px-6 pb-4 flex gap-2">
-                    {/* Fixed Weekday Labels */}
-                    <div className="flex flex-col justify-between pt-5 pb-[2px] h-[128px] text-[9px] text-gray-400 shrink-0">
-                        {weekDaysShort.map((day, i) => (
-                            <span key={i} className="h-[12px] leading-[12px] flex items-center">{day}</span>
-                        ))}
-                    </div>
-
-                    {/* Scrollable Grid Container */}
-                    <div
-                        ref={scrollRef}
-                        className="flex-1 overflow-x-auto no-scrollbar"
-                    >
-                        <div className="min-w-max relative">
-                            {/* Month Labels */}
-                            <div className="relative h-5 w-full">
-                                {monthLabels.map((label, i) => (
-                                    <span
-                                        key={i}
-                                        className="absolute text-[10px] text-gray-400 transform -translate-x-1/2"
-                                        style={{
-                                            left: `${label.columnIndex * (cellSize + gap) + cellSize / 2}px`
-                                        }}
-                                    >
-                                        {label.month}
-                                    </span>
-                                ))}
-                            </div>
-
-                            {/* Heatmap Grid */}
-                            <div
-                                className="grid grid-rows-7 grid-flow-col"
-                                style={{ gap: `${gap}px` }}
-                            >
-                                {heatmapDays.map((day, i) => (
-                                    <div
-                                        key={i}
-                                        title={day.date ? `${day.date.toLocaleDateString()}: ${day.level > 0 ? '✓' : '✗'}` : ''}
-                                        style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
-                                        className={`
-                                            rounded-[3px] transition-all
-                                            ${!day.date ? 'bg-transparent' : (day.level > 0 ? activeColor : 'bg-[#F0F0F0]')} 
-                                            ${day.isToday ? 'ring-2 ring-brand-goldBorder ring-offset-1 z-10' : ''}
-                                        `}
-                                    ></div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Streak Badge */}
-                <div className="flex justify-center py-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-3xl">🔥</span>
-                        <span className="text-2xl font-bold text-brand-goldBorder font-serif italic">
-                            {currentStreak} {t('stats.daysWinning')}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Calendar View */}
-                <div className="px-6 pb-6">
-                    {/* Week Day Headers */}
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                        {weekDays.map(day => (
-                            <div key={day} className="text-center text-xs text-gray-400 py-2">
-                                {day}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div className="grid grid-cols-7 gap-1">
-                        {calendarDays.map((day, i) => (
-                            <div
-                                key={i}
-                                onClick={() => {
-                                    if (day.date !== null && !day.isFuture) {
-                                        const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day.date);
-                                        onToggleDate(targetDate);
-                                    }
-                                }}
-                                className={`
-                                    aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors
-                                    ${day.date === null ? '' : (day.isFuture ? 'cursor-default' : 'cursor-pointer')}
-                                    ${day.isToday ? 'bg-brand-cream ring-2 ring-brand-goldBorder' : ''}
-                                    ${day.isFuture ? 'text-gray-300' : 'text-gray-700'}
-                                    ${!day.isToday && day.date !== null && !day.isFuture ? 'hover:bg-gray-100 active:bg-gray-200' : ''}
-                                `}
-                            >
-                                {day.date !== null && (
-                                    <>
-                                        <span className={`font-medium ${day.isToday ? 'font-bold' : ''}`}>
-                                            {day.date}
-                                        </span>
-                                        {day.isCompleted && !day.isFuture && (
-                                            <span className="w-1.5 h-1.5 rounded-full bg-brand-goldBorder mt-0.5"></span>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Month Navigation */}
-                    <div className="flex justify-between items-center mt-6">
-                        <button
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
-                            onClick={() => setCurrentDate(new Date())}
-                        >
-                            <i className="fa-regular fa-calendar text-gray-500"></i>
-                            <span className="text-sm text-gray-600">{formatMonthYear(currentDate)}</span>
-                        </button>
-
-                        <div className="flex gap-2">
-                            <button
-                                onClick={goToPrevMonth}
-                                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                            >
-                                <i className="fa-solid fa-chevron-left text-gray-500"></i>
-                            </button>
-                            <button
-                                onClick={goToNextMonth}
-                                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                            >
-                                <i className="fa-solid fa-chevron-right text-gray-500"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Edit Task Modal */}
-            {showEditModal && (
-                <div
-                    className="fixed inset-0 z-[200] flex items-center justify-center animate-fade-in"
-                    onClick={() => setShowEditModal(false)}
-                >
-                    {/* Semi-transparent backdrop */}
-                    <div className="absolute inset-0 bg-black/50" />
-
-                    {/* Modal content */}
-                    <div
-                        className="relative bg-white rounded-[32px] shadow-2xl w-[340px] p-6 border border-gray-100/50"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header */}
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-gray-900 font-semibold text-lg">{t('home.editTask')}</h3>
-                            {onDeleteHabit && (
-                                <button
-                                    onClick={() => {
-                                        if (window.confirm(t('home.confirmDelete'))) {
-                                            onDeleteHabit();
-                                            setShowEditModal(false);
-                                        }
-                                    }}
-                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Task Name Input */}
-                        <div className="mb-4">
-                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskName')}</label>
-                            <input
-                                type="text"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 bg-white text-gray-800"
-                                style={{ fontFamily: "'Sansita', sans-serif", fontStyle: 'italic' }}
-                            />
-                        </div>
-
-                        {/* Time Picker */}
-                        <div className="mb-6">
-                            <label className="text-gray-500 text-sm mb-2 block">{t('home.taskTime')}</label>
-                            <TimePicker
-                                timeValue={editTime}
-                                onTimeChange={setEditTime}
-                                dateValue={editDate}
-                                onDateChange={setEditDate}
-                                onClose={() => {}}
-                                embedded
-                            />
-                        </div>
-
-                        {/* Save Button */}
-                        <button
-                            onClick={() => {
-                                if (onUpdateHabit) {
-                                    onUpdateHabit(editName, editTime);
-                                }
-                                setShowEditModal(false);
-                            }}
-                            className="w-full py-3 bg-brand-blue text-white font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors"
-                        >
-                            OK
-                        </button>
-                    </div>
-                </div>
             )}
         </div>
     );

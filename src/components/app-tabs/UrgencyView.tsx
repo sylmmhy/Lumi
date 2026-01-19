@@ -1,23 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import type { Task } from '../../remindMe/types';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { TaskItem } from './TaskItem';
 import { useTranslation } from '../../hooks/useTranslation';
-
-// Quick tags with translation keys
-const QUICK_TAG_KEYS = [
-    { emoji: '💪', key: 'urgency.workout' },
-    { emoji: '🛏️', key: 'urgency.getOutOfBed' },
-    { emoji: '😴', key: 'urgency.goToSleep' },
-    { emoji: '📚', key: 'urgency.startReading' },
-    { emoji: '🛁', key: 'urgency.needShower' },
-    { emoji: '📝', key: 'urgency.startStudying' },
-    { emoji: '✉️', key: 'urgency.replyEmails' },
-    { emoji: '📞', key: 'urgency.makeCall' },
-    { emoji: '🍳', key: 'urgency.cookDinner' },
-    { emoji: '🧹', key: 'urgency.cleanUp' },
-];
+import { QuickTagsRow } from '../common/QuickTags';
 
 interface UrgencyViewProps {
     tasks: Task[];
@@ -36,116 +23,6 @@ interface CustomTaskFormProps {
     onQuickFill: (text: string) => void;
     onRegisterSubmit?: (handler: (() => void) | null) => void;
 }
-
-const QuickTag = ({ emoji, text, onClick }: { emoji: string; text: string; onClick: () => void }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-gray-100 text-gray-800 hover:bg-gray-200 active:scale-[0.97] transition-all duration-150"
-    >
-        <span className="text-[15px] leading-none">{emoji}</span>
-        <span className="text-[15px] leading-none whitespace-nowrap">{text}</span>
-    </button>
-);
-
-const QuickTagsRow: React.FC<{ onSelect: (text: string) => void }> = ({ onSelect }) => {
-    const { t } = useTranslation();
-    const quickTagsScrollRef = useRef<HTMLDivElement | null>(null);
-    const quickTagsAnimationRef = useRef<number | null>(null);
-    const quickTagsVirtualScrollRef = useRef(0);
-    const quickTagsPauseRef = useRef(false);
-
-    // Translate quick tags
-    const QUICK_TAGS = QUICK_TAG_KEYS.map(tag => ({
-        emoji: tag.emoji,
-        text: t(tag.key),
-    }));
-
-    const pauseQuickTagsAutoScroll = () => {
-        quickTagsPauseRef.current = true;
-    };
-
-    const resumeQuickTagsAutoScroll = () => {
-        quickTagsPauseRef.current = false;
-    };
-
-    useEffect(() => {
-        quickTagsVirtualScrollRef.current = quickTagsScrollRef.current?.scrollLeft || 0;
-
-        const applyScrollPosition = (element: HTMLDivElement, value: number) => {
-            element.scrollLeft = value;
-            if (typeof element.scrollTo === 'function') {
-                element.scrollTo({ left: value, behavior: 'auto' });
-            }
-        };
-
-        const step = () => {
-            const container = quickTagsScrollRef.current;
-            if (container && !quickTagsPauseRef.current) {
-                const maxScrollable = container.scrollWidth - container.clientWidth;
-                if (maxScrollable > 2) {
-                    const resetPoint = container.scrollWidth / 2;
-                    let newScroll = quickTagsVirtualScrollRef.current + 0.8;
-                    if (newScroll >= resetPoint) {
-                        newScroll = 0;
-                    }
-                    quickTagsVirtualScrollRef.current = newScroll;
-                    applyScrollPosition(container, newScroll);
-                }
-            }
-            quickTagsAnimationRef.current = requestAnimationFrame(step);
-        };
-
-        quickTagsAnimationRef.current = requestAnimationFrame(step);
-        return () => {
-            if (quickTagsAnimationRef.current) {
-                cancelAnimationFrame(quickTagsAnimationRef.current);
-            }
-        };
-    }, []);
-
-    return (
-        <div className="w-full flex flex-col items-center gap-1">
-            <div className="relative w-full max-w-[345px]">
-                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
-                <div
-                    ref={quickTagsScrollRef}
-                    className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar"
-                    role="list"
-                    style={{
-                        scrollBehavior: 'auto',
-                        WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-x'
-                    }}
-                    onMouseEnter={pauseQuickTagsAutoScroll}
-                    onMouseLeave={resumeQuickTagsAutoScroll}
-                    onTouchStart={pauseQuickTagsAutoScroll}
-                    onTouchEnd={() => {
-                        setTimeout(resumeQuickTagsAutoScroll, 300);
-                    }}
-                    onScroll={() => {
-                        if (quickTagsPauseRef.current && quickTagsScrollRef.current) {
-                            quickTagsVirtualScrollRef.current = quickTagsScrollRef.current.scrollLeft;
-                        }
-                    }}
-                >
-                    {[0, 1].map(loopIndex => (
-                        QUICK_TAGS.map((tag) => (
-                            <div key={`${loopIndex}-${tag.text}`} className="flex-shrink-0" role="listitem">
-                                <QuickTag
-                                    emoji={tag.emoji}
-                                    text={tag.text}
-                                    onClick={() => onSelect(tag.text)}
-                                />
-                            </div>
-                        ))
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 /**
  * 自定义任务表单，用于输入并立即启动任务，供空列表和列表页底部复用。
@@ -211,7 +88,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
             )}
 
             <div className="w-full mb-6">
-                <QuickTagsRow onSelect={onQuickFill} />
+                <QuickTagsRow onSelect={onQuickFill} maxWidth="345px" />
             </div>
 
             {/* 按钮留存逻辑但不展示，如需恢复可去掉注释 */}

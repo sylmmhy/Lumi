@@ -1,142 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Task } from '../../remindMe/types';
-import { parseTimeToString, getLocalDateString, formatDateForSeparator } from '../../utils/timeUtils';
+import { parseTimeToString, getLocalDateString, formatDateForSeparator, getCategoryFromTimeString } from '../../utils/timeUtils';
 import { TimePicker } from './TimePicker';
 import { TaskGroup } from './TaskGroup';
 import { DateSeparator } from './DateSeparator';
 import { useTranslation } from '../../hooks/useTranslation';
 import { detectWebView } from '../../utils/webviewDetection';
 import { PullToRefresh } from '../common/PullToRefresh';
+import { QuickTagsRow } from '../common/QuickTags';
 
 import { supabase } from '../../lib/supabase';
-
-// Quick tags with translation keys for home page
-const QUICK_TAG_KEYS = [
-    { emoji: '🛏️', key: 'urgency.getOutOfBed' },
-    { emoji: '💪', key: 'urgency.workout' },
-    { emoji: '😴', key: 'urgency.goToSleep' },
-    { emoji: '📚', key: 'urgency.startReading' },
-    { emoji: '🛁', key: 'urgency.needShower' },
-    { emoji: '📝', key: 'urgency.startStudying' },
-    { emoji: '✉️', key: 'urgency.replyEmails' },
-    { emoji: '📞', key: 'urgency.makeCall' },
-    { emoji: '🍳', key: 'urgency.cookDinner' },
-    { emoji: '🧹', key: 'urgency.cleanUp' },
-];
-
-const QuickTag = ({ emoji, text, onClick, variant = 'gray' }: { emoji: string; text: string; onClick: () => void; variant?: 'gray' | 'blue' }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        className={`flex-shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-full transition-all duration-150 active:scale-[0.97] ${variant === 'blue'
-            ? 'bg-brand-darkBlue/80 text-white hover:bg-brand-darkBlue'
-            : 'border border-gray-200 bg-gray-100 text-gray-800 hover:bg-gray-200'
-            }`}
-    >
-        <span className="text-[14px] leading-none">{emoji}</span>
-        <span className="text-[14px] leading-none whitespace-nowrap" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 500 }}>{text}</span>
-    </button>
-);
-
-const QuickTagsRow: React.FC<{ onSelect: (text: string) => void; variant?: 'gray' | 'blue' }> = ({ onSelect, variant = 'gray' }) => {
-    const { t } = useTranslation();
-    const quickTagsScrollRef = useRef<HTMLDivElement | null>(null);
-    const quickTagsAnimationRef = useRef<number | null>(null);
-    const quickTagsVirtualScrollRef = useRef(0);
-    const quickTagsPauseRef = useRef(false);
-
-    // Translate quick tags
-    const QUICK_TAGS = QUICK_TAG_KEYS.map(tag => ({
-        emoji: tag.emoji,
-        text: t(tag.key),
-    }));
-
-    const pauseQuickTagsAutoScroll = () => {
-        quickTagsPauseRef.current = true;
-    };
-
-    const resumeQuickTagsAutoScroll = () => {
-        quickTagsPauseRef.current = false;
-    };
-
-    useEffect(() => {
-        quickTagsVirtualScrollRef.current = quickTagsScrollRef.current?.scrollLeft || 0;
-
-        const applyScrollPosition = (element: HTMLDivElement, value: number) => {
-            element.scrollLeft = value;
-            if (typeof element.scrollTo === 'function') {
-                element.scrollTo({ left: value, behavior: 'auto' });
-            }
-        };
-
-        const step = () => {
-            const container = quickTagsScrollRef.current;
-            if (container && !quickTagsPauseRef.current) {
-                const maxScrollable = container.scrollWidth - container.clientWidth;
-                if (maxScrollable > 2) {
-                    const resetPoint = container.scrollWidth / 2;
-                    let newScroll = quickTagsVirtualScrollRef.current + 0.8;
-                    if (newScroll >= resetPoint) {
-                        newScroll = 0;
-                    }
-                    quickTagsVirtualScrollRef.current = newScroll;
-                    applyScrollPosition(container, newScroll);
-                }
-            }
-            quickTagsAnimationRef.current = requestAnimationFrame(step);
-        };
-
-        quickTagsAnimationRef.current = requestAnimationFrame(step);
-        return () => {
-            if (quickTagsAnimationRef.current) {
-                cancelAnimationFrame(quickTagsAnimationRef.current);
-            }
-        };
-    }, []);
-
-    return (
-        <div className="w-full flex flex-col items-center gap-1 mb-4">
-            <div className="relative w-full">
-                <div className={`absolute left-0 top-0 bottom-0 w-8 z-10 pointer-events-none ${variant === 'blue' ? 'bg-gradient-to-r from-brand-blue to-transparent' : 'bg-gradient-to-r from-white to-transparent'}`} />
-                <div className={`absolute right-0 top-0 bottom-0 w-8 z-10 pointer-events-none ${variant === 'blue' ? 'bg-gradient-to-l from-brand-blue to-transparent' : 'bg-gradient-to-l from-white to-transparent'}`} />
-                <div
-                    ref={quickTagsScrollRef}
-                    className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar"
-                    role="list"
-                    style={{
-                        scrollBehavior: 'auto',
-                        WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-x'
-                    }}
-                    onMouseEnter={pauseQuickTagsAutoScroll}
-                    onMouseLeave={resumeQuickTagsAutoScroll}
-                    onTouchStart={pauseQuickTagsAutoScroll}
-                    onTouchEnd={() => {
-                        setTimeout(resumeQuickTagsAutoScroll, 300);
-                    }}
-                    onScroll={() => {
-                        if (quickTagsPauseRef.current && quickTagsScrollRef.current) {
-                            quickTagsVirtualScrollRef.current = quickTagsScrollRef.current.scrollLeft;
-                        }
-                    }}
-                >
-                    {[0, 1].map(loopIndex => (
-                        QUICK_TAGS.map((tag) => (
-                            <div key={`${loopIndex}-${tag.text}`} className="flex-shrink-0" role="listitem">
-                                <QuickTag
-                                    emoji={tag.emoji}
-                                    text={tag.text}
-                                    onClick={() => onSelect(tag.text)}
-                                    variant={variant}
-                                />
-                            </div>
-                        ))
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 interface HomeViewProps {
     tasks: Task[];
@@ -235,15 +108,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             });
         }
 
-        // selectedTime 由 TimePicker 自动设置，不可能为空
+        // 根据时间自动计算时间段分类
+        const category = getCategoryFromTimeString(selectedTime);
         const [h, m] = selectedTime.split(':').map(Number);
-        let category: Task['category'] = 'morning';
-        if (h >= 0 && h < 5) category = 'latenight';
-        else if (h >= 5 && h < 12) category = 'morning';
-        else if (h >= 12 && h < 14) category = 'noon';
-        else if (h >= 14 && h < 18) category = 'afternoon';
-        else if (h >= 18 && h < 23) category = 'evening';
-        else category = 'latenight';
 
         // For routine templates, don't set a specific date (they generate daily instances)
         // For todo tasks, use the selected date (using local date to avoid UTC timezone issues)
@@ -357,14 +224,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const handleSaveEdit = () => {
         if (!editingTask || !onUpdateTask) return;
 
-        const [h, m] = editTaskTime.split(':').map(Number);
-        let category: Task['category'] = 'morning';
-        if (h >= 0 && h < 5) category = 'latenight';
-        else if (h >= 5 && h < 12) category = 'morning';
-        else if (h >= 12 && h < 14) category = 'noon';
-        else if (h >= 14 && h < 18) category = 'afternoon';
-        else if (h >= 18 && h < 23) category = 'evening';
-        else category = 'latenight';
+        // 根据时间自动计算时间段分类
+        const category = getCategoryFromTimeString(editTaskTime);
+        const [editH, editM] = editTaskTime.split(':').map(Number);
 
         // 根据开关状态决定日期：日常任务不需要具体日期，单次任务需要
         let taskDate = editTaskIsRoutine ? undefined : getLocalDateString(editTaskDate);
@@ -372,7 +234,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         // 对于单次任务，检查时间是否已过
         if (!editTaskIsRoutine && taskDate) {
             const [year, month, day] = taskDate.split('-').map(Number);
-            const reminderTime = new Date(year, month - 1, day, h, m);
+            const reminderTime = new Date(year, month - 1, day, editH, editM);
 
             if (reminderTime.getTime() <= Date.now()) {
                 const confirmed = window.confirm(t('home.timePastConfirm'));
@@ -499,10 +361,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         </div>
 
                         {/* Quick Tags Row */}
-                        <QuickTagsRow onSelect={(tag) => {
-                            setTaskInput(tag);
-                            if (taskInputError) setTaskInputError(false);
-                        }} variant="blue" />
+                        <QuickTagsRow
+                            onSelect={(tag) => {
+                                setTaskInput(tag);
+                                if (taskInputError) setTaskInputError(false);
+                            }}
+                            variant="blue"
+                            className="mb-4"
+                        />
                     </div>
 
 

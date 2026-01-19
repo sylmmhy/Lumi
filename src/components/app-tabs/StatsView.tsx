@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getLocalDateString } from '../../utils/timeUtils';
+import { getLocalDateString, getCategoryFromTimeString, getTimeIcon } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatsHeader } from './StatsHeader';
@@ -139,18 +139,8 @@ const taskToHabit = (task: Task, completions: Set<string>): Habit => {
     else if (task.category === 'evening') theme = 'pink';
     else if (task.category === 'latenight') theme = 'pink';
 
-    // 获取时间图标
-    const getTimeIcon = (category: Task['category']) => {
-        switch (category) {
-            case 'morning': return '☀️';
-            case 'noon': return '🌞';
-            case 'afternoon': return '🌤️';
-            case 'evening': return '🌙';
-            case 'latenight': return '🌃';
-            default: return '☀️';
-        }
-    };
-    const icon = getTimeIcon(task.category);
+    // 获取时间图标（使用工具函数）
+    const icon = getTimeIcon(task.category || 'morning');
 
     return {
         id: task.id,
@@ -558,27 +548,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                         if (selectedHabit.id.startsWith('example-')) return;
 
                         try {
-                            // 根据时间计算 category
-                            const [h] = newTime.split(':').map(Number);
-                            let category: Task['category'] = 'morning';
-                            if (h >= 0 && h < 5) category = 'latenight';
-                            else if (h >= 5 && h < 12) category = 'morning';
-                            else if (h >= 12 && h < 14) category = 'noon';
-                            else if (h >= 14 && h < 18) category = 'afternoon';
-                            else if (h >= 18 && h < 23) category = 'evening';
-                            else category = 'latenight';
-
-                            // 获取时间图标
-                            const getTimeIcon = (cat: Task['category']) => {
-                                switch (cat) {
-                                    case 'morning': return '☀️';
-                                    case 'noon': return '🌞';
-                                    case 'afternoon': return '🌤️';
-                                    case 'evening': return '🌙';
-                                    case 'latenight': return '🌃';
-                                    default: return '☀️';
-                                }
-                            };
+                            // 根据时间计算 category（使用工具函数）
+                            const category = getCategoryFromTimeString(newTime);
                             const icon = getTimeIcon(category);
 
                             // 获取主题颜色
@@ -589,6 +560,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                             };
 
                             // 格式化显示时间
+                            const [h] = newTime.split(':').map(Number);
                             const h12 = h % 12 || 12;
                             const [, m] = newTime.split(':');
                             const period = h >= 12 ? 'pm' : 'am';

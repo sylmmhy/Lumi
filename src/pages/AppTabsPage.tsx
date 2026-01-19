@@ -343,12 +343,15 @@ export function AppTabsPage() {
 
                 setTasks(prev => [...prev, created]);
 
-                // 如果是 routine 任务，立即为今天生成实例
+                // 如果是 routine 任务，立即为今天生成实例，并触发 StatsView 刷新
                 if (created.type === 'routine') {
                     const newInstances = await generateTodayRoutineInstances(sessionData.user.id);
                     if (newInstances.length > 0) {
                         setTasks(prev => [...prev, ...newInstances]);
                     }
+                    // 🐛 Fix: 创建新的 routine 任务后，触发 StatsView 重新加载数据
+                    // 之前缺少这行代码，导致用户在 HomeView 创建习惯后切换到 StatsView 时看不到新习惯
+                    setStatsRefreshTrigger(prev => prev + 1);
                 }
 
                 // 第一次设置任务后显示测试版本弹窗（仅在网页版显示，App WebView 中不显示）

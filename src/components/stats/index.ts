@@ -7,9 +7,12 @@
 export { StatsCard } from './StatsCard';
 export { DoneHistoryView } from './DoneHistoryView';
 export { HeatmapDetailOverlay } from './HeatmapDetailOverlay';
+export { WaterTankProgress } from './WaterTankProgress';
+export { MilestoneProgressBar } from './MilestoneProgressBar';
+export { CheckInToast, getRandomToastMessage, useCheckInToast } from './CheckInToast';
 
 // 类型
-export type { Habit, HabitTheme, HeatmapDay, MonthLabel, CalendarDay } from './types';
+export type { Habit, HabitTheme, HeatmapDay, MonthLabel, CalendarDay, WeeklyProgress } from './types';
 export { themeColorMap, taskToHabit } from './types';
 
 // 辅助函数

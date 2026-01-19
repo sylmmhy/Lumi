@@ -1,0 +1,139 @@
+/**
+ * 统计数据服务
+ * 用于获取蓄水池和里程碑进度条所需的数据
+ */
+
+import { supabase } from '../../lib/supabase';
+
+/**
+ * 本周进度数据结构
+ */
+export interface WeeklyProgress {
+    /** 当前完成数 */
+    current: number;
+    /** 目标数 */
+    target: number;
+    /** 本周起始日期 (ISO) */
+    weekStart: string;
+}
+
+/**
+ * 获取本周一的日期（00:00:00）
+ * @returns Date 本周一的日期对象
+ */
+const getThisMonday = (): Date => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=周日
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+};
+
+/**
+ * 获取本周完成的任务数量（蓄水池数据）
+ *
+ * 说明：
+ * - "本周"定义为周一 00:00:00 到当前时间
+ * - 统计所有 status='completed' 且 completed_at 在本周内的任务
+ * - 使用现有索引 idx_tasks_user_completed 优化查询
+ *
+ * @param userId - 用户 ID
+ * @param target - 目标数，默认 20
+ * @returns WeeklyProgress 对象，包含 current 和 target
+ */
+export async function getWeeklyCompletedCount(
+    userId: string,
+    target: number = 20
+): Promise<WeeklyProgress> {
+    const monday = getThisMonday();
+
+    const { count, error } = await supabase
+        .from('tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .gte('completed_at', monday.toISOString());
+
+    if (error) {
+        console.error('Failed to get weekly completed count:', error);
+        throw error;
+    }
+
+    return {
+        current: count || 0,
+        target,
+        weekStart: monday.toISOString(),
+    };
+}
+
+/**
+ * 获取习惯的累计完成次数（用于里程碑进度条）
+ *
+ * 说明：
+ * - 统计 routine_completions 表中该习惯的总记录数
+ * - 这个数字永不清零，用于展示用户的长期积累
+ *
+ * @param userId - 用户 ID
+ * @param habitId - 习惯（Routine 任务）ID
+ * @returns 累计完成次数
+ */
+export async function getHabitTotalCompletions(
+    userId: string,
+    habitId: string
+): Promise<number> {
+    const { count, error } = await supabase
+        .from('routine_completions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('task_id', habitId);
+
+    if (error) {
+        console.error('Failed to get habit total completions:', error);
+        throw error;
+    }
+
+    return count || 0;
+}
+
+/**
+ * 批量获取多个习惯的累计完成次数
+ *
+ * @param userId - 用户 ID
+ * @param habitIds - 习惯 ID 数组
+ * @returns Map<habitId, totalCompletions>
+ */
+export async function getHabitsTotalCompletions(
+    userId: string,
+    habitIds: string[]
+): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+
+    // 初始化所有习惯为 0
+    habitIds.forEach(id => result.set(id, 0));
+
+    if (habitIds.length === 0) {
+        return result;
+    }
+
+    // 使用单次查询获取所有习惯的完成记录
+    const { data, error } = await supabase
+        .from('routine_completions')
+        .select('task_id')
+        .eq('user_id', userId)
+        .in('task_id', habitIds);
+
+    if (error) {
+        console.error('Failed to get habits total completions:', error);
+        throw error;
+    }
+
+    // 统计每个习惯的完成次数
+    data?.forEach(row => {
+        const currentCount = result.get(row.task_id) || 0;
+        result.set(row.task_id, currentCount + 1);
+    });
+
+    return result;
+}

@@ -1,113 +1,65 @@
+/**
+ * StatsHeader - 统计页面头部组件（蓄水池版）
+ *
+ * 设计理念：
+ * - 去压力化：不展示"连胜/断签"，只展示本周累计
+ * - 物理隐喻：蓄水池/充能球效果
+ * - 正向激励：每完成一个任务，水位上涨
+ */
+
 import React from 'react';
-import { useTranslation } from '../../hooks/useTranslation';
 import headerBg from '../../assets/stats-header-bg.png';
-import streakCircle from '../../assets/stats-streak-circle.png';
+import { WaterTankProgress } from '../stats/WaterTankProgress';
 
 interface StatsHeaderProps {
+    /** Tab 切换（保留兼容性，暂时隐藏） */
     activeTab: 'routine' | 'done';
+    /** Tab 切换回调 */
     onTabChange: (tab: 'routine' | 'done') => void;
-    streak: number;
+    /** 本周完成数 */
+    weeklyCount: number;
+    /** 本周目标数 */
+    weeklyTarget: number;
+    /** 水位上涨动画触发器 */
+    triggerRise?: boolean;
 }
 
 /**
- * 统计页面的头部组件
+ * 统计页面头部组件
+ *
  * 包含：
  * 1. 绿色背景图
- * 2. 连续打卡天数显示 (Streak)
- * 3. Routine/Done 切换 Tabs
- * 
- * @param props
+ * 2. 蓄水池进度组件（替代原来的连胜圆圈）
+ * 3. Routine/Done Tab（暂时隐藏）
  */
-export const StatsHeader: React.FC<StatsHeaderProps> = ({ activeTab, onTabChange, streak }) => {
-    const { t } = useTranslation();
-
+export const StatsHeader: React.FC<StatsHeaderProps> = ({
+    weeklyCount,
+    weeklyTarget,
+    triggerRise = false,
+}) => {
     return (
         <div className="relative w-full overflow-hidden" data-tour="stats-header">
-            {/* Background Shape */}
-            <div className="absolute top-0 left-0 w-full h-[160px] z-0">
-                <img 
-                    src={headerBg} 
-                    alt="Background" 
+            {/* 背景图 */}
+            <div className="absolute top-0 left-0 w-full h-[220px] z-0">
+                <img
+                    src={headerBg}
+                    alt="Background"
                     className="w-full h-full object-cover align-top"
                 />
             </div>
 
-            {/* Content Container */}
-            <div className="relative z-10 pt-20 pb-12 px-6 flex flex-col items-center">
-                
-                {/* Streak Section - scales proportionally on narrow screens */}
-                <div
-                    className="flex items-center gap-10 mb-0 origin-center relative z-20"
-                    style={{
-                        transform: 'scale(clamp(0.65, calc((100vw - 3rem) / 24rem), 1))',
-                    }}
-                >
-                    {/* Yellow Circle with Number */}
-                    <div className="relative w-28 h-28 flex-shrink-0 z-10">
-                        <img
-                            src={streakCircle}
-                            alt="Streak Circle"
-                            className="w-full h-full object-contain"
-                            style={{
-                                transform: 'scale(1.1) translateZ(0)',
-                                backfaceVisibility: 'hidden',
-                                filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))',
-                            }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[#45a259] text-6xl font-bold italic font-serif tracking-widest pt-0 pl-2">
-                                {streak}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Text / Decoration */}
-                    <div className="flex-shrink-0 pt-2 -translate-y-3">
-                        <span
-                            className="text-4xl font-extrabold italic text-white whitespace-nowrap"
-                            style={{
-                                fontFamily: "'Sansita', sans-serif",
-                                WebkitTextStroke: '4px #388444',
-                                paintOrder: 'stroke fill'
-                            }}
-                        >
-                            {t('stats.dayStreak')}&nbsp;
-                            <span className="relative inline-block">
-                                <span className="absolute -right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-[#E8C547] rounded-full -z-10"></span>
-                                <span className="relative z-10 text-white">!</span>
-                            </span>
-                        </span>
-                    </div>
-                </div>
-
-                {/* Tabs Section - 暂时隐藏 */}
-                <div className="hidden flex gap-4 w-full max-w-sm justify-end pb-6">
-                    <button
-                        onClick={() => onTabChange('routine')}
-                        className={`
-                            px-8 py-2.5 rounded-full text-base font-bold italic transition-all shadow-sm
-                            ${activeTab === 'routine'
-                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20'
-                                : 'bg-[#f5f0f0] text-[#b9b8ac] border border-[#e4e4e4]'}
-                        `}
-                        style={{ fontFamily: "'Sansita', sans-serif" }}
-                    >
-                        {t('stats.routineTab')}
-                    </button>
-                    <button
-                        onClick={() => onTabChange('done')}
-                        className={`
-                            px-8 py-2.5 rounded-full text-base font-bold italic transition-all shadow-sm
-                            ${activeTab === 'done'
-                                ? 'bg-[#388444] text-white border border-[#e4e4e4]/20'
-                                : 'bg-[#f5f0f0] text-[#b9b8ac] border border-[#e4e4e4]'}
-                        `}
-                        style={{ fontFamily: "'Sansita', sans-serif" }}
-                    >
-                        {t('stats.doneTab')}
-                    </button>
-                </div>
+            {/* 内容区域 */}
+            <div className="relative z-10 pt-16 pb-8 px-6">
+                {/* 蓄水池组件 */}
+                <WaterTankProgress
+                    current={weeklyCount}
+                    target={weeklyTarget}
+                    slogan="You're building momentum!"
+                    triggerRise={triggerRise}
+                />
             </div>
         </div>
     );
 };
+
+export default StatsHeader;

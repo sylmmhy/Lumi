@@ -128,6 +128,7 @@ export function AppTabsPage() {
     const [completionTime, setCompletionTime] = useState(0);
     const [currentTaskDescription, setCurrentTaskDescription] = useState('');
     const [currentTaskId, setCurrentTaskId] = useState<string | null>(null); // 当前正在进行的任务 ID
+    const [currentTaskType, setCurrentTaskType] = useState<'todo' | 'routine' | 'routine_instance' | null>(null); // 当前任务类型（用于完成时判断是否需要更新 routine_completions）
 
     const [hasSeenVoicePrompt, setHasSeenVoicePrompt] = useState(() => {
         try {
@@ -262,6 +263,7 @@ export function AppTabsPage() {
             }
             // 重置相关状态
             setCurrentTaskId(null);
+            setCurrentTaskType(null);
             setShowCelebration(false);
         }
     }, [auth.isLoggedIn, aiCoach.isSessionActive, aiCoach.isConnecting, aiCoach.cameraEnabled, aiCoach]);
@@ -569,8 +571,9 @@ export function AppTabsPage() {
             });
             console.log('✅ AI Coach session started successfully');
 
-            // 保存当前任务 ID，用于完成时更新数据库
+            // 保存当前任务 ID 和类型，用于完成时更新数据库
             setCurrentTaskId(taskId);
+            setCurrentTaskType(taskToUse.type || null);
 
             // P0 修复：持久化 called 状态到数据库（解决刷新后重复触发的问题）
             if (auth.userId && !isTemporaryId) {
@@ -633,19 +636,22 @@ export function AppTabsPage() {
 
     /**
      * Stats 页面的 Start 按钮点击处理
-     * 将习惯名称转换为 Task 对象，然后启动 AI Coach
+     * 使用真实的习惯 ID 创建 Task 对象，然后启动 AI Coach
      *
-     * @param {string} taskName - 习惯/任务名称
+     * 关键：使用习惯的真实 UUID 作为任务 ID，这样完成时能正确更新数据库中的习惯记录
+     *
+     * @param {string} habitId - 习惯的真实 UUID
+     * @param {string} habitTitle - 习惯名称
      */
-    const handleStatsStartTask = (taskName: string) => {
+    const handleStatsStartTask = (habitId: string, habitTitle: string) => {
         const task: Task = {
-            id: Date.now().toString(),
-            text: taskName,
+            id: habitId,  // 🔧 关键修复：使用习惯的真实 ID，而不是临时 ID
+            text: habitTitle,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             displayTime: 'Now',
             date: getLocalDateString(),
             completed: false,
-            type: 'todo',
+            type: 'routine',  // 🔧 修复：类型应该是 routine，不是 todo
             category: 'morning',
             called: false,
         };
@@ -837,10 +843,18 @@ export function AppTabsPage() {
 
     /**
      * 标记任务为已完成，更新数据库
+     *
+     * 对于习惯任务（routine），还会额外更新 routine_completions 表以记录打卡历史
+     *
      * @param taskId 任务 ID
      * @param actualDurationMinutes 实际完成时长（分钟）
+     * @param taskType 任务类型（可选），用于判断是否需要更新 routine_completions
      */
-    const markTaskAsCompleted = useCallback(async (taskId: string | null, actualDurationMinutes: number) => {
+    const markTaskAsCompleted = useCallback(async (
+        taskId: string | null,
+        actualDurationMinutes: number,
+        taskType?: 'todo' | 'routine' | 'routine_instance' | null
+    ) => {
         if (!taskId) {
             console.warn('⚠️ 无法标记任务完成：缺少 taskId');
             return;
@@ -854,13 +868,22 @@ export function AppTabsPage() {
         }
 
         try {
-            console.log('✅ 标记任务完成:', { taskId, actualDurationMinutes });
+            console.log('✅ 标记任务完成:', { taskId, actualDurationMinutes, taskType });
+
+            // 1. 更新 tasks 表
             await updateReminder(taskId, {
                 completed: true,
                 actualDurationMinutes,
             });
 
-            // 同步更新前端任务列表
+            // 2. 如果是习惯任务，还需要更新 routine_completions 表（记录打卡历史）
+            if (taskType === 'routine' && auth.userId) {
+                const todayKey = getLocalDateString();
+                await markRoutineComplete(auth.userId, taskId, todayKey);
+                console.log('✅ 习惯打卡记录已保存:', { taskId, date: todayKey });
+            }
+
+            // 3. 同步更新前端任务列表
             setTasks(prev => prev.map(t =>
                 t.id === taskId ? { ...t, completed: true } : t
             ));
@@ -869,7 +892,7 @@ export function AppTabsPage() {
         } catch (error) {
             console.error('❌ 标记任务完成失败:', error);
         }
-    }, []);
+    }, [auth.userId]);
 
     /**
      * 用户点击「END CALL」- 仅结束通话，不触发庆祝
@@ -886,6 +909,7 @@ export function AppTabsPage() {
 
         // 重置状态，返回主界面
         setCurrentTaskId(null);
+        setCurrentTaskType(null);
     }, [aiCoach]);
 
     /**
@@ -909,12 +933,13 @@ export function AppTabsPage() {
         aiCoach.endSession();
 
         // 标记任务为已完成（后台运行，不阻塞 UI）
-        void markTaskAsCompleted(currentTaskId, actualDurationMinutes);
+        // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
+        void markTaskAsCompleted(currentTaskId, actualDurationMinutes, currentTaskType);
 
         // 直接显示庆祝页面（跳过确认页面）
         setCelebrationFlow('success');
         setShowCelebration(true);
-    }, [aiCoach, currentTaskId, markTaskAsCompleted]);
+    }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -925,11 +950,12 @@ export function AppTabsPage() {
         const actualDurationMinutes = Math.round(completionTime / 60);
 
         // 标记任务为已完成
-        await markTaskAsCompleted(currentTaskId, actualDurationMinutes);
+        // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
+        await markTaskAsCompleted(currentTaskId, actualDurationMinutes, currentTaskType);
 
         // 显示庆祝页面
         setCelebrationFlow('success');
-    }, [currentTaskId, completionTime, markTaskAsCompleted]);
+    }, [currentTaskId, currentTaskType, completionTime, markTaskAsCompleted]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -947,6 +973,7 @@ export function AppTabsPage() {
         setCompletionTime(0);
         setCurrentTaskDescription('');
         setCurrentTaskId(null);
+        setCurrentTaskType(null);
     }, []);
 
     return (

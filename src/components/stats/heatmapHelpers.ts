@@ -74,15 +74,24 @@ export const getFixedHeatmapData = (
 };
 
 /**
- * 计算当前连续打卡天数（从今天往前数）
+ * 计算当前连续打卡天数
+ *
+ * 逻辑：
+ * - 如果今天已打卡，从今天开始往前数
+ * - 如果今天还没打卡，从昨天开始往前数（给用户留出当天打卡的机会）
+ *
  * @param history - 完成历史
  * @returns 连续天数
  */
 export const calculateCurrentStreak = (history: { [key: string]: boolean }): number => {
     const today = new Date();
+    const todayKey = getLocalDateString(today);
+
+    // 确定起始点：如果今天已打卡，从今天开始；否则从昨天开始
+    const startOffset = history[todayKey] ? 0 : 1;
     let streak = 0;
 
-    for (let i = 0; i < 365; i++) {
+    for (let i = startOffset; i < 365; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const key = getLocalDateString(date);

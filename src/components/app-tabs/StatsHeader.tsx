@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { EnergyBall } from '../stats/EnergyBall';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface StatsHeaderProps {
     /** Tab 切换（保留兼容性，暂时隐藏） */
@@ -36,6 +37,8 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
     weeklyTarget,
     triggerRise = false,
 }) => {
+    const { t } = useTranslation();
+
     return (
         <div
             className="relative w-full"
@@ -48,13 +51,13 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
                     className="text-white/90 text-xl italic mb-2"
                     style={{ fontFamily: "'Sansita', 'Georgia', serif" }}
                 >
-                    Small Wins, Big Change
+                    {t('stats.slogan')}
                 </p>
                 <h1
                     className="text-white text-3xl font-bold"
                     style={{ fontFamily: "'Noto Sans SC', sans-serif" }}
                 >
-                    一月冲能任务 ⚡
+                    {t('stats.monthlyMission')} ⚡
                 </h1>
             </div>
 

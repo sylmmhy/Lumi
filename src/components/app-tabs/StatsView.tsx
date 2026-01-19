@@ -68,8 +68,8 @@ interface StatsViewProps {
     onToggleComplete?: (id: string, completed: boolean) => void;
     /** 可选数字，变化时触发重新加载数据 */
     refreshTrigger?: number;
-    /** 启动 AI Coach 任务的回调（传递任务名称） */
-    onStartTask?: (taskName: string) => void;
+    /** 启动 AI Coach 任务的回调（传递习惯 ID 和名称） */
+    onStartTask?: (habitId: string, habitTitle: string) => void;
 }
 
 /**
@@ -313,6 +313,24 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 await markRoutineComplete(auth.userId, id, dateKey);
             } else {
                 await unmarkRoutineComplete(auth.userId, id, dateKey);
+            }
+
+            // 判断补打卡日期是否在当前月份，如果是则更新能量球计数
+            const currentMonth = new Date();
+            const isInCurrentMonth =
+                targetDate.getFullYear() === currentMonth.getFullYear() &&
+                targetDate.getMonth() === currentMonth.getMonth();
+
+            if (isInCurrentMonth) {
+                // 更新能量球计数
+                setMonthlyCount(prev => newStatus ? prev + 1 : Math.max(prev - 1, 0));
+
+                // 如果是打卡（非取消打卡），触发水位上涨动画和 Toast
+                if (newStatus) {
+                    setTriggerRise(true);
+                    setTimeout(() => setTriggerRise(false), 600);
+                    showToast();
+                }
             }
 
             setHabits(prev => prev.map(habit => {

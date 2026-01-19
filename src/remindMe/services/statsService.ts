@@ -70,6 +70,9 @@ export async function getWeeklyCompletedCount(
     userId: string,
     target: number = 20
 ): Promise<WeeklyProgress> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
     const monday = getThisMonday();
 
     const { count, error } = await supabase
@@ -107,6 +110,9 @@ export async function getMonthlyCompletedCount(
     userId: string,
     target: number = 20
 ): Promise<MonthlyProgress> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
     const monthStart = getThisMonthStart();
 
     const { count, error } = await supabase
@@ -142,6 +148,9 @@ export async function getHabitTotalCompletions(
     userId: string,
     habitId: string
 ): Promise<number> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
     const { count, error } = await supabase
         .from('routine_completions')
         .select('*', { count: 'exact', head: true })
@@ -167,6 +176,9 @@ export async function getHabitsTotalCompletions(
     userId: string,
     habitIds: string[]
 ): Promise<Map<string, number>> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
     const result = new Map<string, number>();
 
     // 初始化所有习惯为 0

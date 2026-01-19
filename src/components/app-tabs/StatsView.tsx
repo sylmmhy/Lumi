@@ -395,8 +395,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     triggerRise={triggerRise}
                 />
 
-                {/* 内容区域 - pt-16 为悬挂的能量球留出空间 */}
-                <div className="px-4 pb-28 min-h-screen pt-16 relative z-10">
+                {/* 内容区域 - pt-20 为悬挂的能量球留出空间 */}
+                <div className="px-4 pb-28 min-h-screen pt-20 relative z-10">
                     {activeTab === 'routine' ? (
                         <div className="space-y-4 mt-2">
                             {isLoading ? (

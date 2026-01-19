@@ -70,9 +70,9 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
         return () => clearTimeout(timer);
     }, []);
 
-    // 尺寸配置
-    const size = 96;
-    const borderWidth = 6;
+    // 尺寸配置（1.3倍）
+    const size = 125;
+    const borderWidth = 8;
     const innerSize = size - borderWidth * 2;
 
     // Canvas 绘制
@@ -190,7 +190,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
             {/* 中心文字 */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span
-                    className="font-extrabold text-2xl leading-none"
+                    className="font-extrabold text-3xl leading-none"
                     style={{
                         fontFamily: "'Quicksand', sans-serif",
                         color: '#8B5A3C',
@@ -203,8 +203,8 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
                     style={{
                         fontFamily: "'Quicksand', sans-serif",
                         color: '#AC6F46',
-                        fontSize: '7px',
-                        marginTop: '3px',
+                        fontSize: '9px',
+                        marginTop: '4px',
                     }}
                 >
                     {t('stats.monthlyProgress')}

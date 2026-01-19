@@ -45,8 +45,8 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
             data-tour="stats-header"
             style={{ backgroundColor: '#429950' }}
         >
-            {/* 标题区域 - 居中布局 */}
-            <div className="relative z-10 pt-16 pb-16 px-6 flex flex-col items-center text-center">
+            {/* 标题区域 - 居中布局，增加呼吸感 */}
+            <div className="relative z-10 pt-20 pb-20 px-6 flex flex-col items-center text-center">
                 <p
                     className="text-white/90 text-xl italic mb-2"
                     style={{ fontFamily: "'Sansita', 'Georgia', serif" }}

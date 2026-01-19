@@ -54,10 +54,10 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
                     {t('stats.slogan')}
                 </p>
                 <h1
-                    className="text-white text-3xl font-bold"
-                    style={{ fontFamily: "'Noto Sans SC', sans-serif" }}
+                    className="text-white italic font-bold whitespace-nowrap"
+                    style={{ fontFamily: "'Sansita', sans-serif", fontSize: 'clamp(28px, 10vw, 44px)' }}
                 >
-                    {t('stats.monthlyMission')} ⚡
+                    {t('stats.monthlyMission')}
                 </h1>
             </div>
 

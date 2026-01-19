@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface EnergyBallProps {
     /** 当前完成数 */
@@ -25,6 +26,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
     target,
     triggerRise = false,
 }) => {
+    const { t } = useTranslation();
     const percentage = Math.min((current / target) * 100, 100);
     const [isRising, setIsRising] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -205,7 +207,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
                         marginTop: '3px',
                     }}
                 >
-                    Monthly Progress
+                    {t('stats.monthlyProgress')}
                 </span>
             </div>
         </div>

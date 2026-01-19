@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { getLocalDateString } from '../../utils/timeUtils';
+import { calculateCurrentStreak } from './heatmapHelpers';
 import type { Habit } from './types';
 
 interface StatsCardProps {
@@ -20,8 +21,8 @@ interface StatsCardProps {
     onClickDetail: () => void;
     /** 打卡成功回调（用于联动蓄水池和 Toast） */
     onCheckIn?: (habitId: string) => void;
-    /** 启动 AI Coach 任务的回调 */
-    onStartTask?: (habitTitle: string) => void;
+    /** 启动 AI Coach 任务的回调（传递习惯 ID 和名称） */
+    onStartTask?: (habitId: string, habitTitle: string) => void;
 }
 
 /**
@@ -53,38 +54,6 @@ const getDefaultSubtitle = (title: string): string => {
     }
 
     return '开始就是胜利';
-};
-
-/**
- * 计算当前连胜天数
- * 从今天（或昨天，如果今天未完成）往前数连续完成的天数
- * @param history - 完成历史记录
- * @returns 连胜天数
- */
-const getStreakDays = (history: { [key: string]: boolean }): number => {
-    const today = new Date();
-    let streak = 0;
-    let checkDate = new Date(today);
-
-    // 检查今天是否完成
-    const todayKey = checkDate.toISOString().split('T')[0];
-    if (!history[todayKey]) {
-        // 今天没完成，从昨天开始算
-        checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    // 往前数连续完成的天数
-    while (true) {
-        const dateKey = checkDate.toISOString().split('T')[0];
-        if (history[dateKey]) {
-            streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-            break;
-        }
-    }
-
-    return streak;
 };
 
 /**
@@ -141,8 +110,8 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     const { level, current, target } = getLevelInfo(totalCompletions);
     const progress = Math.min(current / target, 1);
 
-    // 计算连胜天数
-    const streakDays = getStreakDays(habit.history);
+    // 计算连胜天数（复用 heatmapHelpers 中的统一逻辑）
+    const streakDays = calculateCurrentStreak(habit.history);
 
     /**
      * 处理启动按钮点击
@@ -161,9 +130,9 @@ export const StatsCard: React.FC<StatsCardProps> = ({
         setIsPressed(true);
         setTimeout(() => setIsPressed(false), 150);
 
-        // 启动 AI Coach 任务（传递习惯标题作为任务名）
+        // 启动 AI Coach 任务（传递习惯 ID 和名称，用于完成时更新正确的习惯记录）
         if (onStartTask) {
-            onStartTask(habit.title);
+            onStartTask(habit.id, habit.title);
         }
     };
 

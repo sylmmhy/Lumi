@@ -172,51 +172,17 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
 
             {/* Body */}
             <div className="flex-1 px-6 pb-28">
-                {/* List */}
-                <div className="space-y-4">
-                    {filteredTasks.length === 0 ? (
-                        <div className="flex flex-col items-center text-center pt-0" data-tour="urgency-input-area">
-                            <CustomTaskForm
-                                title={t('urgency.enterTaskHere')}
-                                value={customTask}
-                                onChange={setCustomTask}
-                                onSubmit={handleCustomTaskStart}
-                                onQuickFill={setCustomTask}
-                                onRegisterSubmit={onRegisterHelpMeStart}
-                            />
-                        </div>
-                    ) : (
-                        <>
-                            <h3 className="text-center font-serif italic text-brand-text text-[20px] font-bold mb-6">{t('urgency.pickOneTask')}</h3>
-                            {filteredTasks.map(task => (
-                                <TaskItem
-                                    key={task.id}
-                                    task={task}
-                                    mode="urgency"
-                                    onToggle={onToggleComplete}
-                                    onDelete={onDeleteTask}
-                                    onStart={() => onStartTask(task)}
-                                />
-                            ))}
-                        </>
-                    )}
+                {/* 只显示输入框，不显示任务列表 */}
+                <div className="flex flex-col items-center text-center pt-0" data-tour="urgency-input-area">
+                    <CustomTaskForm
+                        title={t('urgency.enterTaskHere')}
+                        value={customTask}
+                        onChange={setCustomTask}
+                        onSubmit={handleCustomTaskStart}
+                        onQuickFill={setCustomTask}
+                        onRegisterSubmit={onRegisterHelpMeStart}
+                    />
                 </div>
-
-                {/* Footer: Custom Task Input - Only show if tasks exist */}
-                {filteredTasks.length > 0 && (
-                    <div className="mt-16 mb-8" data-tour="urgency-input-area">
-                        <div className="h-[1px] bg-gray-200 w-full mb-12"></div>
-                        <CustomTaskForm
-                            title={t('urgency.enterTaskHere')}
-                            value={customTask}
-                            onChange={setCustomTask}
-                            onSubmit={handleCustomTaskStart}
-                            withBorder
-                            onQuickFill={setCustomTask}
-                            onRegisterSubmit={onRegisterHelpMeStart}
-                        />
-                    </div>
-                )}
             </div>
         </div>
     );

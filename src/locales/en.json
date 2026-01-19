@@ -161,6 +161,7 @@
 
   "task.start": "Start",
 
+  "urgency.startWithLumi": "Start with Lumi",
   "urgency.getYouStart": "Get You Start!",
   "urgency.inFiveMinutes": "In 5 Minutes!",
   "urgency.enterTaskHere": "Enter your task here",

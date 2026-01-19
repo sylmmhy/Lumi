@@ -49,6 +49,8 @@
   "stats.habitProgress": "习惯进度",
 
   "profile.title": "个人资料",
+
+  "urgency.startWithLumi": "和Lumi一起开始",
   "stats.loadingHistory": "加载历史中...",
   "stats.noCompletedTasks": "还没有完成的任务。",
   "stats.completeTasksHint": "在主页完成一些任务吧！",

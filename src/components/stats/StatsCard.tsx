@@ -56,6 +56,38 @@ const getDefaultSubtitle = (title: string): string => {
 };
 
 /**
+ * 计算当前连胜天数
+ * 从今天（或昨天，如果今天未完成）往前数连续完成的天数
+ * @param history - 完成历史记录
+ * @returns 连胜天数
+ */
+const getStreakDays = (history: { [key: string]: boolean }): number => {
+    const today = new Date();
+    let streak = 0;
+    let checkDate = new Date(today);
+
+    // 检查今天是否完成
+    const todayKey = checkDate.toISOString().split('T')[0];
+    if (!history[todayKey]) {
+        // 今天没完成，从昨天开始算
+        checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    // 往前数连续完成的天数
+    while (true) {
+        const dateKey = checkDate.toISOString().split('T')[0];
+        if (history[dateKey]) {
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+
+    return streak;
+};
+
+/**
  * 根据累计次数计算当前等级和下一等级目标
  * 等级里程碑：1, 5, 15, 30, 50, 80, 120, 170, 230, 300...
  */
@@ -109,6 +141,9 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     const { level, current, target } = getLevelInfo(totalCompletions);
     const progress = Math.min(current / target, 1);
 
+    // 计算连胜天数
+    const streakDays = getStreakDays(habit.history);
+
     /**
      * 处理启动按钮点击
      * - 未完成：启动 AI Coach 任务
@@ -145,8 +180,19 @@ export const StatsCard: React.FC<StatsCardProps> = ({
             <div className="flex items-center justify-between mb-6">
                 {/* 左侧：标题 + 引导语 */}
                 <div className="flex-1 min-w-0 pr-4">
-                    <h3 className="text-gray-800 font-bold text-xl truncate">
-                        {habit.title}
+                    <h3 className="text-gray-800 font-bold text-xl flex items-center gap-2">
+                        <span className="truncate">{habit.title}</span>
+                        {streakDays > 0 && (
+                            <span
+                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap"
+                                style={{
+                                    background: 'rgba(255, 200, 100, 0.35)',
+                                    color: '#B8860B',
+                                }}
+                            >
+                                🔥 {streakDays}天
+                            </span>
+                        )}
                     </h3>
                     <p className="text-gray-400 text-sm mt-1 truncate">
                         {subtitle}
@@ -175,18 +221,18 @@ export const StatsCard: React.FC<StatsCardProps> = ({
 
                     {isTodayDone ? (
                         /* 完成状态：金币图标（当天不可再次充能） */
-                        <div className="w-16 h-16 flex items-center justify-center">
+                        <div className="w-14 h-14 flex items-center justify-center">
                             <img
                                 src="/coins.png"
                                 alt="Completed"
-                                className="w-12 h-12 object-contain"
+                                className="w-14 h-14 object-contain"
                             />
                         </div>
                     ) : (
                         /* 未完成状态：绿色 3D Start 按钮图片 */
                         <button
                             onClick={handleStart}
-                            className={`w-20 h-20 transition-all duration-150 ${isPressed ? 'scale-95' : 'hover:scale-105'}`}
+                            className={`w-16 h-16 transition-all duration-150 ${isPressed ? 'scale-95' : 'hover:scale-105'}`}
                         >
                             <img
                                 src="/start-button.png"

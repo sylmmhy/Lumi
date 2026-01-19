@@ -30,6 +30,20 @@ export interface Habit {
     theme: HabitTheme;
     /** 完成历史，key 为日期字符串 (YYYY-MM-DD)，value 为是否完成 */
     history: { [key: string]: boolean };
+    /** 累计完成次数（用于里程碑进度条） */
+    totalCompletions?: number;
+}
+
+/**
+ * 本周进度数据（蓄水池组件用）
+ */
+export interface WeeklyProgress {
+    /** 当前完成数 */
+    current: number;
+    /** 目标数 */
+    target: number;
+    /** 本周起始日期 (ISO) */
+    weekStart: string;
 }
 
 /**

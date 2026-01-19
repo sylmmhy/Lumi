@@ -2,7 +2,7 @@
 title: "Stats 页面重构 - 蓄水池设计"
 created: 2026-01-18
 updated: 2026-01-18 14:00
-stage: "📐 设计"
+stage: "🔨 实现中"
 due: 2026-01-25
 issue: ""
 ---
@@ -12,7 +12,7 @@ issue: ""
 ## 阶段进度
 - [x] 阶段 1：需求分析
 - [x] 阶段 2：方案设计
-- [ ] 阶段 3：核心实现
+- [x] 阶段 3：核心实现
 - [ ] 阶段 4：测试验证
 - [ ] 阶段 5：文档更新
 
@@ -422,6 +422,18 @@ export interface Habit {
 - 确认 tasks 表结构：`status='completed'` + `completed_at` 字段
 - 已有索引 `idx_tasks_user_completed` 可直接利用
 - 创建本计划文档
+
+### 2026-01-18 (核心实现)
+- 创建 `src/remindMe/services/statsService.ts` - 蓄水池和里程碑数据服务
+- 创建 `src/components/stats/WaterTankProgress.tsx` - 蓄水池组件（SVG 波浪动画）
+- 创建 `src/components/stats/MilestoneProgressBar.tsx` - 里程碑进度条
+- 创建 `src/components/stats/CheckInToast.tsx` - 打卡 Toast 激励组件
+- 修改 `src/components/stats/types.ts` - 添加 `WeeklyProgress` 和 `totalCompletions`
+- 修改 `src/components/stats/StatsCard.tsx` - 集成进度条和弹跳动画
+- 修改 `src/components/stats/index.ts` - 导出新组件
+- 重写 `src/components/app-tabs/StatsHeader.tsx` - 用蓄水池替代连胜圈
+- 重写 `src/components/app-tabs/StatsView.tsx` - 整合所有新组件，添加打卡联动逻辑
+- TypeScript 类型检查通过
 
 ---
 

@@ -57,6 +57,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // Time format state
     const [currentTimeFormat, setCurrentTimeFormat] = useState<TimeFormat>(getTimeFormat());
 
+    // Scroll state for sticky header
+    const [scrollTop, setScrollTop] = useState(0);
+    const showStickyHeader = scrollTop > 80;
+
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
@@ -253,7 +257,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     };
 
     return (
-        <div className="flex-1 bg-gray-50 flex flex-col h-full relative overflow-y-auto no-scrollbar">
+        <div
+            className="flex-1 bg-gray-50 flex flex-col h-full relative overflow-y-auto no-scrollbar"
+            onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        >
+            {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
+            <div className={`fixed top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('profile.title')}</span>
+            </div>
+
             {/* Header Profile Section */}
             <div className="bg-white pt-12 px-4 pb-6 flex flex-col items-center shadow-sm rounded-b-[40px] z-10 relative flex-none">
                 <input

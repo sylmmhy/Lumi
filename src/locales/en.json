@@ -46,6 +46,7 @@
   "home.setOnceReminder": "Set One-time Reminder",
   "home.taskInputHint": "Enter what you want to do first, then set the time.",
 
+  "stats.habitProgress": "Habit Progress",
   "stats.loadingHistory": "Loading history...",
   "stats.noCompletedTasks": "No completed tasks yet.",
   "stats.completeTasksHint": "Complete some tasks in the Home tab!",

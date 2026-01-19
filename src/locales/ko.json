@@ -18,6 +18,8 @@
   "home.taskInputError": "할 일을 입력하거나 아래 태그를 선택해",
   "home.routineTask": "매일 할 일",
   "home.settingReminder": "전화 설정 중",
+
+  "stats.habitProgress": "습관 진행",
   "home.now": "오늘",
   "home.routine": "습관",
   "home.morning": "아침",

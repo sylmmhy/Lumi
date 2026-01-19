@@ -18,6 +18,8 @@
   "home.taskInputError": "Escribe una tarea o elige una etiqueta",
   "home.routineTask": "Rutina diaria",
   "home.settingReminder": "Configurando llamada",
+
+  "stats.habitProgress": "Progreso de hábitos",
   "home.now": "Hoy",
   "home.routine": "Rutina",
   "home.morning": "Mañana",

@@ -234,6 +234,8 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
 export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, onToggleComplete, onDeleteTask, onRegisterHelpMeStart }) => {
     const { t } = useTranslation();
     const [customTask, setCustomTask] = useState('');
+    const [scrollTop, setScrollTop] = useState(0);
+    const showStickyHeader = scrollTop > 80;
     // 显示今天所有未完成的任务（todo + routine_instance），不显示 routine 模板
     // 排除 displayTime === 'Now' 的任务（这些是即时任务，进行中不显示在列表中）
     const filteredTasks = tasks.filter(task => (task.type === 'todo' || task.type === 'routine_instance') && !task.completed && task.displayTime !== 'Now');
@@ -257,7 +259,15 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, on
     }, [customTask, onStartTask]);
 
     return (
-        <div className="flex-1 bg-transparent flex flex-col h-full relative overflow-y-auto no-scrollbar">
+        <div
+            className="flex-1 bg-transparent flex flex-col h-full relative overflow-y-auto no-scrollbar"
+            onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        >
+            {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
+            <div className={`fixed top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('urgency.startWithLumi')}</span>
+            </div>
+
             {/* Header - non-sticky, scrolls with content */}
             <div className="relative bg-brand-darkOrange pt-16 pb-4 flex flex-col items-center text-center transition-colors duration-500">
                 {/* Fire Icon */}

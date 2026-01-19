@@ -57,6 +57,8 @@
   "stats.completeTasksHint": "¡Completa algo en Home!",
   "stats.exampleStreaksHint": "Ejemplo de rachas",
   "stats.daysWinning": "días seguidos",
+  "stats.startTodayTask": "✨ Check-in de hoy",
+  "stats.todayCompleted": "Completado hoy",
   "stats.goToBed": "Dormir temprano",
   "stats.wakeUp": "Despertar a tiempo",
   "stats.workout": "Hacer ejercicio",

@@ -56,6 +56,8 @@
   "stats.completeTasksHint": "在主页完成一些任务吧！",
   "stats.exampleStreaksHint": "连续记录示例",
   "stats.daysWinning": "连续天数",
+  "stats.startTodayTask": "✨ 今日打卡",
+  "stats.todayCompleted": "今日已完成",
   "stats.goToBed": "按时睡觉",
   "stats.wakeUp": "按时起床",
   "stats.workout": "锻炼",

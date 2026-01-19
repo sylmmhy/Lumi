@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { TimePicker } from '../app-tabs/TimePicker';
 import { getFixedHeatmapData, getCalendarData, calculateCurrentStreak } from './heatmapHelpers';
+import { getLocalDateString } from '../../utils/timeUtils';
 import type { Habit } from './types';
 
 interface HeatmapDetailOverlayProps {
@@ -32,7 +33,7 @@ export const HeatmapDetailOverlay: React.FC<HeatmapDetailOverlayProps> = ({
     onClose,
     onToggleDate,
     onUpdateHabit,
-    onDeleteHabit
+    onDeleteHabit,
 }) => {
     const { t } = useTranslation();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -44,6 +45,10 @@ export const HeatmapDetailOverlay: React.FC<HeatmapDetailOverlayProps> = ({
     const { days: heatmapDays, monthLabels } = getFixedHeatmapData(habit.history, HEATMAP_COLUMNS);
     const currentStreak = calculateCurrentStreak(habit.history);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    // 判断今天是否已完成
+    const todayKey = getLocalDateString();
+    const isTodayDone = !!habit.history[todayKey];
 
     // 自动滚动到最右侧（最新日期）
     useEffect(() => {
@@ -187,14 +192,26 @@ export const HeatmapDetailOverlay: React.FC<HeatmapDetailOverlayProps> = ({
                     </div>
                 </div>
 
-                {/* Streak Badge */}
+                {/* Check-in Button */}
                 <div className="flex justify-center py-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-3xl">🔥</span>
-                        <span className="text-2xl font-bold text-brand-goldBorder font-serif italic">
-                            {currentStreak} {t('stats.daysWinning')}
-                        </span>
-                    </div>
+                    {isTodayDone ? (
+                        /* 已完成状态 */
+                        <div className="flex items-center gap-2 px-6 py-3 rounded-full text-lg font-semibold text-green-600 bg-green-50">
+                            ✅ {t('stats.todayCompleted')}
+                        </div>
+                    ) : (
+                        /* 未完成状态：打卡按钮 */
+                        <button
+                            onClick={() => onToggleDate(new Date())}
+                            className="px-6 py-3 rounded-full text-lg font-semibold text-white transition-all duration-200 hover:scale-105 active:scale-95"
+                            style={{
+                                background: 'linear-gradient(135deg, #FFD966 0%, #E6A800 100%)',
+                                boxShadow: '0 4px 12px rgba(230, 168, 0, 0.3)',
+                            }}
+                        >
+                            {t('stats.startTodayTask')}
+                        </button>
+                    )}
                 </div>
 
                 {/* Calendar View */}

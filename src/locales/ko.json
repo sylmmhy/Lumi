@@ -57,6 +57,8 @@
   "stats.completeTasksHint": "홈에서 할 일 완료해봐!",
   "stats.exampleStreaksHint": "연속 기록 예시",
   "stats.daysWinning": "일 연속 달성",
+  "stats.startTodayTask": "✨ 오늘 체크인",
+  "stats.todayCompleted": "오늘 완료됨",
   "stats.goToBed": "일찍 자기",
   "stats.wakeUp": "제때 일어나기",
   "stats.workout": "운동하기",

@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { TimePicker } from '../app-tabs/TimePicker';
-import { getFixedHeatmapData, getCalendarData, calculateCurrentStreak } from './heatmapHelpers';
+import { getFixedHeatmapData, getCalendarData } from './heatmapHelpers';
 import { getLocalDateString } from '../../utils/timeUtils';
 import type { Habit } from './types';
 
@@ -43,7 +43,6 @@ export const HeatmapDetailOverlay: React.FC<HeatmapDetailOverlayProps> = ({
     const [editName, setEditName] = useState(habit.title);
     const HEATMAP_COLUMNS = 160; // 显示160周（约3年）
     const { days: heatmapDays, monthLabels } = getFixedHeatmapData(habit.history, HEATMAP_COLUMNS);
-    const currentStreak = calculateCurrentStreak(habit.history);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // 判断今天是否已完成

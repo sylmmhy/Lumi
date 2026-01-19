@@ -113,9 +113,7 @@ const getLevelInfo = (totalCompletions: number): { level: number; current: numbe
  */
 export const StatsCard: React.FC<StatsCardProps> = ({
     habit,
-    onToggleToday,
     onClickDetail,
-    onCheckIn,
     onStartTask,
 }) => {
     const todayKey = getLocalDateString();
@@ -123,7 +121,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
 
     // 动画状态
     const [isPressed, setIsPressed] = useState(false);
-    const [showConfetti, setShowConfetti] = useState(false);
+    const [showConfetti] = useState(false);
 
     // 获取引导语
     const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);

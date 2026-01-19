@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import type { Task } from '../../remindMe/types';
 import { getLocalDateString } from '../../utils/timeUtils';
-import { TaskItem } from './TaskItem';
 import { useTranslation } from '../../hooks/useTranslation';
 import { QuickTagsRow } from '../common/QuickTags';
 
@@ -108,14 +107,11 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
  * @param {UrgencyViewProps} props - 任务数据与启动回调
  * @returns {JSX.Element} 含快捷标签滚动条、任务列表和自定义输入的视图
  */
-export const UrgencyView: React.FC<UrgencyViewProps> = ({ tasks, onStartTask, onToggleComplete, onDeleteTask, onRegisterHelpMeStart }) => {
+export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegisterHelpMeStart }) => {
     const { t } = useTranslation();
     const [customTask, setCustomTask] = useState('');
     const [scrollTop, setScrollTop] = useState(0);
     const showStickyHeader = scrollTop > 80;
-    // 显示今天所有未完成的任务（todo + routine_instance），不显示 routine 模板
-    // 排除 displayTime === 'Now' 的任务（这些是即时任务，进行中不显示在列表中）
-    const filteredTasks = tasks.filter(task => (task.type === 'todo' || task.type === 'routine_instance') && !task.completed && task.displayTime !== 'Now');
 
     const handleCustomTaskStart = useCallback(() => {
         const trimmed = customTask.trim();

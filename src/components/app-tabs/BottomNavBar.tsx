@@ -32,7 +32,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
                 onClick={() => (onStart ? onStart() : onChange('urgency'))}
             >
                 <img
-                    src="/start-button.png"
+                    src="/lumi.png"
                     alt="Start"
                     className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.15)]"
                 />

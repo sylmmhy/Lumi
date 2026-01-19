@@ -57,6 +57,8 @@
   "stats.completeTasksHint": "ホームでタスクを完了してみて！",
   "stats.exampleStreaksHint": "連続記録の例",
   "stats.daysWinning": "日連続達成",
+  "stats.startTodayTask": "✨ 今日チェックイン",
+  "stats.todayCompleted": "今日完了",
   "stats.goToBed": "早く寝る",
   "stats.wakeUp": "ちゃんと起きる",
   "stats.workout": "運動する",

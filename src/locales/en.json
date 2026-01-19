@@ -52,6 +52,8 @@
   "stats.completeTasksHint": "Complete some tasks in the Home tab!",
   "stats.exampleStreaksHint": "Example streaks",
   "stats.daysWinning": "Days Winning",
+  "stats.startTodayTask": "✨ Check In Today",
+  "stats.todayCompleted": "Completed Today",
   "stats.goToBed": "Go to bed on time",
   "stats.wakeUp": "Wake up on time",
   "stats.workout": "Work out",

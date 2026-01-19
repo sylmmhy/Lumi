@@ -11,7 +11,7 @@ interface BottomNavBarProps {
  * 底部导航栏组件，负责在各个 tab 间切换并提供中间的快速 Start 按钮入口。
  */
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChange, onStart }) => (
-    <div className="absolute bottom-0 left-0 right-0 bg-white h-20 px-6 flex items-center justify-around rounded-b-[40px] border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-[100]">
+    <div className="absolute bottom-0 left-0 right-0 bg-white h-20 px-6 flex items-center justify-around border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-[100]">
         <NavIcon
             icon="fa-phone"
             label="Calls"

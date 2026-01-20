@@ -523,6 +523,7 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
             date: instance.reminder_date,
             completed: false,
             called: false,
+            type: 'routine_instance',
           };
           if (shouldTriggerNativeReminder(instanceTask)) {
             notifyNativeTaskCreated(taskToNativeReminder(instanceTask, taskRecord.user_id));

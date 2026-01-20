@@ -166,19 +166,6 @@ export function AppTabsPage() {
         }
     }, []);
 
-    /**
-     * 底部导航 Start 按钮点击逻辑：
-     * - 若当前不在 Urgency 页：先通过路由跳转到该页
-     * - 若已在 Urgency 页：直接复用页面内的「Help me start」逻辑启动 AI 教练
-     */
-    const handleBottomNavStart = useCallback(() => {
-        if (currentView === 'urgency') {
-            urgencyStartRef.current?.();
-            return;
-        }
-        handleChangeView('urgency');
-    }, [currentView, handleChangeView]);
-
     // 加载任务的函数（可用于初始加载和下拉刷新）
     const loadTasks = useCallback(async () => {
         setTasksLoaded(false);
@@ -1112,7 +1099,6 @@ export function AppTabsPage() {
                     <BottomNavBar
                         currentView={currentView}
                         onChange={(view) => handleChangeView(view)}
-                        onStart={handleBottomNavStart}
                     />
                 )}
 

@@ -6,7 +6,6 @@ import { PermissionAlertModal } from '../modals/PermissionAlertModal';
 interface BottomNavBarProps {
     currentView: AppTab;
     onChange: (view: AppTab) => void;
-    onStart?: () => void;
 }
 
 /**
@@ -18,7 +17,7 @@ interface BottomNavBarProps {
  * 3. Profile (Me) 图标上显示权限提示红点
  * 4. 点击红点时弹出权限提示弹窗
  */
-export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChange, onStart }) => {
+export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChange }) => {
     // 获取权限状态
     const { shouldShowBadge } = usePermission();
     // 控制权限提示弹窗的显示

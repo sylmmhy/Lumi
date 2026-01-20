@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
+import { getTimeFormat, setTimeFormat, type TimeFormat } from '../../lib/timeFormat';
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
@@ -553,8 +554,17 @@ export interface TimePickerProps {
  *
  * @param {TimePickerProps} props - 组件的受控参数与关闭行为
  */
-export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false, use24Hour = true, onConfirm, isRoutine, onRoutineChange, routineLabel, confirmRoutineLabel, confirmOnceLabel }: TimePickerProps) => {
+export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, onClose, embedded = false, use24Hour: use24HourProp, onConfirm, isRoutine, onRoutineChange, routineLabel, confirmRoutineLabel, confirmOnceLabel }: TimePickerProps) => {
     const [mode, setMode] = useState<'time' | 'date'>('time');
+
+    /**
+     * 内部时间格式状态
+     * 从全局设置读取初始值，用户可以在滚轴面板中切换
+     */
+    const [internalTimeFormat, setInternalTimeFormat] = useState<TimeFormat>(() => getTimeFormat());
+
+    // 如果外部传入了 use24Hour prop，则优先使用；否则使用内部状态
+    const use24Hour = use24HourProp !== undefined ? use24HourProp : internalTimeFormat === '24h';
 
     // --- Time Logic ---
     const hours = use24Hour ? HOURS_24 : HOURS_12;
@@ -565,6 +575,22 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
     // State for 24-hour mode: { h, m }
     const [timeState12, setTimeState12] = useState(parseTime12(timeValue));
     const [timeState24, setTimeState24] = useState(parseTime24(timeValue));
+
+    /**
+     * 切换时间格式（12/24小时制）
+     * 同时更新内部状态和全局设置，并同步时间状态
+     */
+    const handleToggleTimeFormat = useCallback(() => {
+        const newFormat: TimeFormat = internalTimeFormat === '24h' ? '12h' : '24h';
+        setTimeFormat(newFormat);
+        setInternalTimeFormat(newFormat);
+
+        // 切换时强制同步两个状态，避免滚轮抖动
+        const parsed12 = parseTime12(timeValue);
+        const parsed24 = parseTime24(timeValue);
+        setTimeState12(parsed12);
+        setTimeState24(parsed24);
+    }, [internalTimeFormat, timeValue]);
 
     // Sync from parent timeValue (12-hour mode)
     useEffect(() => {
@@ -673,12 +699,24 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
                 </div>
             </div>
 
-            {/* Wheels Container */}
-            <div className="relative flex justify-center gap-2 mask-gradient h-[160px]">
-                {/* Center Highlight Bar */}
-                <div className="absolute top-1/2 -translate-y-1/2 w-full h-[36px] bg-gray-100/40 rounded-lg pointer-events-none z-0"></div>
+            {/* Wheels Container Wrapper */}
+            <div className="relative">
+                {/* 12/24 小时制切换按钮 - 只在时间模式下显示，显示当前格式 */}
+                {mode === 'time' && (
+                    <button
+                        onClick={handleToggleTimeFormat}
+                        className="absolute top-0 right-0 px-2 py-1 text-[10px] text-gray-400 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 rounded-md z-30"
+                    >
+                        {use24Hour ? '24H' : '12H'}
+                    </button>
+                )}
 
-                {mode === 'time' ? (
+                {/* Wheels Container */}
+                <div className="relative flex justify-center gap-2 mask-gradient h-[160px]">
+                    {/* Center Highlight Bar */}
+                    <div className="absolute top-1/2 -translate-y-1/2 w-full h-[36px] bg-gray-100/40 rounded-lg pointer-events-none z-0"></div>
+
+                    {mode === 'time' ? (
                     use24Hour ? (
                         <div className="flex gap-4 z-10 w-full justify-center">
                             <ScrollWheel items={hours} value={timeState24.h} onChange={(val) => setTimeState24(s => ({ ...s, h: val }))} loop />
@@ -698,6 +736,7 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
                         <ScrollWheel items={years} value={dateState.year} onChange={(val) => setDateState(s => ({ ...s, year: val }))} />
                     </div>
                 )}
+                </div>
             </div>
         </>
     );

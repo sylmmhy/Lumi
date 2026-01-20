@@ -115,7 +115,9 @@
       "Bash(python3:*)",
       "Bash(xargs:*)",
       "Bash(vercel:*)",
-      "WebFetch(domain:www.hackingwithswift.com)"
+      "WebFetch(domain:www.hackingwithswift.com)",
+      "WebFetch(domain:medium.com)",
+      "Bash(brew info:*)"
     ],
     "deny": [],
     "ask": []

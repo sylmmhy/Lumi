@@ -81,6 +81,9 @@ declare global {
       // FCM Token 上传相关
       getFcmToken?: () => string;
       uploadFcmToken?: () => void;
+      // Ringtone settings
+      setRingtoneType?: (type: string) => void;
+      getRingtoneType?: () => string;
       onWebLoginSuccess?: (
         accessToken: string,
         refreshToken: string,
@@ -108,6 +111,8 @@ declare global {
         openSleepFocusSettings?: { postMessage: (message: unknown) => void };
         // Onboarding-related handlers (iOS WebView)
         onboardingCompleted?: { postMessage: (message: Record<string, never>) => void };
+        // Ringtone settings
+        setRingtoneType?: { postMessage: (message: { type: string }) => void };
       };
     };
   }

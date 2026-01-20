@@ -11,6 +11,7 @@ import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
 import { getTimeFormat, setTimeFormat, type TimeFormat } from '../../lib/timeFormat';
+import { getRingtoneType, setRingtoneType, type RingtoneType } from '../../lib/ringtoneSettings';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -57,6 +58,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // Time format state
     const [currentTimeFormat, setCurrentTimeFormat] = useState<TimeFormat>(getTimeFormat());
 
+    // Ringtone type state
+    const [currentRingtoneType, setCurrentRingtoneType] = useState<RingtoneType>(getRingtoneType());
+
     // Scroll state for sticky header
     const [scrollTop, setScrollTop] = useState(0);
     const showStickyHeader = scrollTop > 80;
@@ -74,6 +78,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         const newFormat: TimeFormat = currentTimeFormat === '24h' ? '12h' : '24h';
         setTimeFormat(newFormat);
         setCurrentTimeFormat(newFormat);
+    };
+
+    // Handle ringtone type toggle
+    const handleRingtoneTypeToggle = () => {
+        const newType: RingtoneType = currentRingtoneType === 'voice' ? 'music' : 'voice';
+        setRingtoneType(newType);
+        setCurrentRingtoneType(newType);
     };
 
     const handleClosePremium = () => {
@@ -412,7 +423,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Time Format Setting */}
                     <button
                         onClick={handleTimeFormatToggle}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
@@ -429,6 +440,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </span>
                             <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentTimeFormat === '24h' ? 'bg-brand-blue' : 'bg-gray-300'}`}>
                                 <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentTimeFormat === '24h' ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </div>
+                        </div>
+                    </button>
+
+                    {/* Ringtone Type Setting */}
+                    <button
+                        onClick={handleRingtoneTypeToggle}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-bell text-pink-500"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.ringtoneType')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.ringtoneTypeHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {currentRingtoneType === 'voice' ? t('profile.ringtoneVoice') : t('profile.ringtoneMusic')}
+                            </span>
+                            <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentRingtoneType === 'music' ? 'bg-brand-blue' : 'bg-gray-300'}`}>
+                                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentRingtoneType === 'music' ? 'translate-x-5' : 'translate-x-0'}`} />
                             </div>
                         </div>
                     </button>
@@ -567,8 +602,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             {/* Account Management Modal */}
             {showAccountManageModal && (
                 <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
-                    {/* Header */}
-                    <div className="bg-white shadow-sm px-4 py-4 flex items-center">
+                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
+                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
                         <button
                             onClick={() => setShowAccountManageModal(false)}
                             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"

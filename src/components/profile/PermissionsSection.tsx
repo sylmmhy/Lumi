@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
-type PermissionType = 'notification' | 'microphone' | 'camera';
+type PermissionType = 'notification' | 'microphone' | 'camera' | 'sleepFocus';
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'prompt';
 
 /**
@@ -69,6 +69,9 @@ const iOSBridge = {
  * PermissionsSection - Display and manage device permissions in profile
  * Collapsible design - shows as a single row, expands to show details
  */
+/** localStorage key: 用户是否已配置睡眠模式免打扰 */
+const SLEEP_FOCUS_CONFIGURED_KEY = 'sleep_focus_configured';
+
 export function PermissionsSection() {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -76,9 +79,20 @@ export function PermissionsSection() {
     notification: 'unknown',
     microphone: 'unknown',
     camera: 'unknown',
+    sleepFocus: 'unknown',
   });
   const [isRequesting, setIsRequesting] = useState<PermissionType | 'all' | null>(null);
   const pendingPermissionRef = useRef<PermissionType | null>(null);
+
+  /**
+   * 获取睡眠模式配置状态（从 localStorage 读取）
+   */
+  const getSleepFocusStatus = useCallback((): PermissionStatus => {
+    if (!isIOSWebView()) {
+      return 'granted'; // 非 iOS 设备默认为已授权
+    }
+    return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true' ? 'granted' : 'prompt';
+  }, []);
 
   // Check current permission status on mount
   useEffect(() => {
@@ -131,6 +145,7 @@ export function PermissionsSection() {
         notification: notifGranted ? 'granted' : 'prompt',
         microphone: micGranted ? 'granted' : 'prompt',
         camera: camGranted ? 'granted' : 'prompt',
+        sleepFocus: 'granted', // Android 不需要配置睡眠模式
       });
       return;
     }
@@ -140,6 +155,11 @@ export function PermissionsSection() {
       iOSBridge.hasNotificationPermission();
       iOSBridge.hasMicrophonePermission();
       iOSBridge.hasCameraPermission();
+      // 睡眠模式状态从 localStorage 读取
+      setPermissions(prev => ({
+        ...prev,
+        sleepFocus: getSleepFocusStatus(),
+      }));
       return;
     }
 
@@ -148,6 +168,7 @@ export function PermissionsSection() {
       notification: 'unknown',
       microphone: 'unknown',
       camera: 'unknown',
+      sleepFocus: 'granted', // Web 浏览器不需要配置睡眠模式
     };
 
     // Check notification
@@ -194,7 +215,7 @@ export function PermissionsSection() {
     }
 
     setPermissions(newPermissions);
-  }, []);
+  }, [getSleepFocusStatus]);
 
   /**
    * Open app settings to let user manually enable permissions
@@ -227,6 +248,19 @@ export function PermissionsSection() {
     console.log(`[PermissionsSection] Platform: Android=${isAndroidWebView()}, iOS=${isIOSWebView()}`);
     console.log(`[PermissionsSection] Current status: ${permissions[type]}`);
     setIsRequesting(type);
+
+    // 特殊处理：睡眠模式免打扰（仅 iOS）
+    if (type === 'sleepFocus') {
+      if (isIOSWebView()) {
+        // 打开睡眠模式设置引导
+        iOSBridge.openSleepFocusSettings();
+        // 标记用户已点击过设置，假设用户已配置
+        localStorage.setItem(SLEEP_FOCUS_CONFIGURED_KEY, 'true');
+        setPermissions(prev => ({ ...prev, sleepFocus: 'granted' }));
+      }
+      setIsRequesting(null);
+      return;
+    }
 
     // If permission was denied, open app settings instead of requesting again
     // On iOS and Android, once denied, the system won't show the permission dialog again
@@ -298,6 +332,8 @@ export function PermissionsSection() {
     if (permissions.notification !== 'granted') typesToRequest.push('notification');
     if (permissions.microphone !== 'granted') typesToRequest.push('microphone');
     if (permissions.camera !== 'granted') typesToRequest.push('camera');
+    // 睡眠模式仅在 iOS 上需要请求
+    if (isIOSWebView() && permissions.sleepFocus !== 'granted') typesToRequest.push('sleepFocus');
 
     for (const type of typesToRequest) {
       await requestPermission(type);
@@ -308,9 +344,14 @@ export function PermissionsSection() {
     setIsRequesting(null);
   }, [permissions, requestPermission]);
 
-  const grantedCount = [permissions.notification, permissions.microphone, permissions.camera]
-    .filter(s => s === 'granted').length;
-  const allGranted = grantedCount === 3;
+  // 计算权限数量（iOS 有 4 个权限，其他平台有 3 个）
+  const isIOS = isIOSWebView();
+  const totalPermissions = isIOS ? 4 : 3;
+  const permissionsToCount = isIOS
+    ? [permissions.notification, permissions.microphone, permissions.camera, permissions.sleepFocus]
+    : [permissions.notification, permissions.microphone, permissions.camera];
+  const grantedCount = permissionsToCount.filter(s => s === 'granted').length;
+  const allGranted = grantedCount === totalPermissions;
 
   const getStatusIcon = (status: PermissionStatus) => {
     switch (status) {
@@ -334,6 +375,7 @@ export function PermissionsSection() {
     }
   };
 
+  // 权限项列表（睡眠模式仅在 iOS 上显示）
   const permissionItems = [
     {
       type: 'microphone' as PermissionType,
@@ -359,6 +401,15 @@ export function PermissionsSection() {
       title: t('profile.permissions.notifications'),
       description: t('profile.permissions.notificationsDesc'),
     },
+    // 睡眠模式免打扰（仅 iOS）
+    ...(isIOS ? [{
+      type: 'sleepFocus' as PermissionType,
+      icon: 'fa-moon',
+      iconBg: 'bg-indigo-50',
+      iconColor: 'text-indigo-500',
+      title: t('profile.permissions.sleepFocus'),
+      description: t('profile.permissions.sleepFocusDesc'),
+    }] : []),
   ];
 
   return (
@@ -386,7 +437,7 @@ export function PermissionsSection() {
           ) : (
             <span className="text-xs text-amber-500 flex items-center gap-1">
               <i className="fa-solid fa-triangle-exclamation"></i>
-              {grantedCount}/3
+              {grantedCount}/{totalPermissions}
             </span>
           )}
           <i className={`fa-solid fa-chevron-right text-gray-300 text-sm transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}></i>
@@ -394,7 +445,7 @@ export function PermissionsSection() {
       </button>
 
       {/* Expandable Content */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
         {/* Divider */}
         <div className="border-t border-gray-100"></div>
 
@@ -433,6 +484,18 @@ export function PermissionsSection() {
             </div>
           </button>
         ))}
+
+        {/* Sleep Focus Special Warning - Only show when sleepFocus is not granted on iOS */}
+        {isIOS && permissions.sleepFocus !== 'granted' && (
+          <div className="px-4 py-3 bg-indigo-50 border-t border-indigo-100">
+            <div className="flex items-start gap-2">
+              <i className="fa-solid fa-moon text-indigo-500 mt-0.5 text-xs"></i>
+              <p className="text-xs text-indigo-700">
+                {t('profile.permissions.sleepFocusLong')}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Warning Message */}
         {!allGranted && (
@@ -484,29 +547,6 @@ export function PermissionsSection() {
           </div>
         )}
 
-        {/* iOS Sleep Focus Settings - Only show on iOS WebView */}
-        {isIOSWebView() && (
-          <div className="border-t border-gray-100">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                iOSBridge.openSleepFocusSettings();
-              }}
-              className="w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-50 rounded-full flex items-center justify-center">
-                  <i className="fa-solid fa-moon text-indigo-500 text-sm"></i>
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-gray-700 text-sm">{t('profile.permissions.sleepFocus')}</p>
-                  <p className="text-xs text-gray-400">{t('profile.permissions.sleepFocusDesc')}</p>
-                </div>
-              </div>
-              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -90,13 +90,17 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
                 <QuickTagsRow onSelect={onQuickFill} maxWidth="345px" />
             </div>
 
-            {/* 按钮留存逻辑但不展示，如需恢复可去掉注释 */}
-            {/* <button
+            {/* 陪我开始按钮 - 没有输入时灰色，有输入时黄色 */}
+            <button
                 onClick={handleSubmit}
-                className="w-full max-w-[320px] bg-[#fae267] text-[#bc3813] font-sansita italic font-bold text-[20px] px-8 py-3 rounded-[100px] border border-[rgba(190,190,190,0.2)] shadow-lg transform transition-transform hover:scale-105 active:scale-95"
+                className={`w-full max-w-[320px] font-sansita italic font-bold text-[20px] px-8 py-3 rounded-[100px] border shadow-lg transform transition-all duration-300 ${
+                    value.trim()
+                        ? 'bg-[#fae267] text-[#bc3813] border-[rgba(190,190,190,0.2)] hover:scale-105 active:scale-95'
+                        : 'bg-gray-300 text-gray-500 border-gray-200'
+                }`}
             >
-                Help me start
-            </button> */}
+                {t('urgency.helpMeStart')}
+            </button>
         </div>
     );
 };

@@ -27,6 +27,7 @@ import {
     buildDenseHistoryWithGaps,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
+import { StickyHeader } from './StickyHeader';
 
 /**
  * 将 Task 和完成历史转换为 Habit 格式
@@ -364,21 +365,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             <CheckInToast message={toastMessage} onClose={hideToast} />
 
             {/* Sticky 顶部栏 */}
-            <div className={`
-                absolute top-0 left-0 right-0 z-50
-                flex items-end justify-start px-6 pb-3 pt-[59px]
-                shadow-sm transition-all duration-300
-                ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}
-            `}
-            style={{ backgroundColor: '#429950' }}
-            >
-                <span
-                    className="text-[24px] text-white"
-                    style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
-                >
-                    {t('stats.habitProgress')}
-                </span>
-            </div>
+            <StickyHeader
+                title={t('stats.habitProgress')}
+                bgColor="#429950"
+                visible={showStickyHeader}
+            />
 
             {/* 滚动容器 */}
             <div

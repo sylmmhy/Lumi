@@ -95,19 +95,25 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
     // 初始化时从 localStorage 读取用户是否跳过
     return localStorage.getItem(PERMISSION_DISMISSED_KEY) === 'true';
   });
+  // 追踪用户是否已看过睡眠模式教程（用于触发重新渲染）
+  const [sleepFocusSeen, setSleepFocusSeen] = useState<boolean>(() => {
+    return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
+  });
   const pendingPermissionRef = useRef<PermissionType | null>(null);
 
   /**
-   * 检查睡眠模式是否已配置（从 localStorage 读取）
-   * 由于 iOS 没有 API 直接检测睡眠模式免打扰状态，
-   * 我们使用 localStorage 记录用户是否已点击过设置
+   * 获取睡眠模式的显示状态
+   * 由于 iOS 没有 API 检测睡眠模式免打扰状态，
+   * iOS 上始终返回 'prompt' 让按钮保持可点击（用户可反复查看教程）
+   * 红点的显示由 sleepFocusSeen 状态控制，而非此函数
    */
   const getSleepFocusStatus = useCallback((): PermissionStatus => {
     // 只在 iOS WebView 中才需要配置睡眠模式
     if (!isIOSWebView()) {
-      return 'granted'; // 非 iOS 设备默认为已授权
+      return 'granted'; // 非 iOS 设备默认为已授权（不显示此选项）
     }
-    return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true' ? 'granted' : 'prompt';
+    // iOS 上始终返回 prompt，让按钮保持可点击
+    return 'prompt';
   }, []);
 
   /**
@@ -240,9 +246,10 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       if (isIOSWebView()) {
         // 打开睡眠模式设置引导
         iOSBridge.openSleepFocusSettings();
-        // 标记用户已点击过设置，假设用户已配置
+        // 标记用户已看过教程（仅用于隐藏红点，不代表已授权）
         localStorage.setItem(SLEEP_FOCUS_CONFIGURED_KEY, 'true');
-        setPermissions(prev => ({ ...prev, sleepFocus: 'granted' }));
+        setSleepFocusSeen(true);
+        // 注意：不设置为 granted，保持 prompt 状态让按钮始终可点击
       }
       setIsRequesting(null);
       return;
@@ -325,16 +332,22 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
 
   // 计算派生状态（使用 useMemo 避免重复计算）
   const derivedState = useMemo(() => {
-    // 计算需要检查的权限列表（sleepFocus 仅在 iOS 需要检查）
-    const permissionsToCheck = [
+    // 只计算可检测的基础权限（notification, microphone, camera）
+    // sleepFocus 无法检测是否真的授权，用 localStorage 判断是否看过教程
+    const basePermissions = [
       permissions.notification,
       permissions.microphone,
       permissions.camera,
-      permissions.sleepFocus, // iOS 上会是 prompt/granted，其他平台默认 granted
     ];
-    const grantedCount = permissionsToCheck.filter(s => s === 'granted').length;
-    const totalCount = permissionsToCheck.length;
-    const allGranted = grantedCount === totalCount;
+    const grantedCount = basePermissions.filter(s => s === 'granted').length;
+    const totalCount = basePermissions.length;
+    const baseAllGranted = grantedCount === totalCount;
+
+    // iOS 上检查用户是否已看过睡眠模式教程（使用 state 而非直接读取 localStorage）
+    const hasSleepFocusMissing = isIOSWebView() && !sleepFocusSeen;
+
+    // 只有基础权限全部授权且（非 iOS 或已看过睡眠教程）才算全部完成
+    const allGranted = baseAllGranted && !hasSleepFocusMissing;
     const hasMissingPermissions = !allGranted;
 
     // 是否应该显示红点：有缺失权限 且 用户没有跳过
@@ -345,7 +358,7 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
     if (permissions.notification !== 'granted') missingPermissions.push('notification');
     if (permissions.microphone !== 'granted') missingPermissions.push('microphone');
     if (permissions.camera !== 'granted') missingPermissions.push('camera');
-    if (permissions.sleepFocus !== 'granted') missingPermissions.push('sleepFocus');
+    if (hasSleepFocusMissing) missingPermissions.push('sleepFocus');
 
     return {
       grantedCount,
@@ -354,7 +367,7 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
       shouldShowBadge,
       missingPermissions,
     };
-  }, [permissions, isDismissed]);
+  }, [permissions, isDismissed, sleepFocusSeen]);
 
   // 构建 Context value
   const value = useMemo(() => ({

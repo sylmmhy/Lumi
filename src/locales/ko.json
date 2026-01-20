@@ -317,6 +317,7 @@
   "profile.permissions.sleepFocus": "수면 집중 모드",
   "profile.permissions.sleepFocusDesc": "취침/기상 알림에 필수",
   "profile.permissions.sleepFocusLong": "iOS 수면 모드는 기본적으로 모든 알림을 차단합니다. 설정하지 않으면 Lumi가 취침이나 기상 시간에 알림을 보낼 수 없어요.",
+  "profile.permissions.sleepFocusAction": "설정 보기",
 
   "profile.deleteAccount": "계정 삭제",
   "profile.deleteAccountTitle": "계정 삭제",

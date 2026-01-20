@@ -83,15 +83,22 @@ export function PermissionsSection() {
   });
   const [isRequesting, setIsRequesting] = useState<PermissionType | 'all' | null>(null);
   const pendingPermissionRef = useRef<PermissionType | null>(null);
+  // 追踪用户是否已看过睡眠模式教程（用于触发重新渲染隐藏红点）
+  const [sleepFocusSeen, setSleepFocusSeen] = useState<boolean>(() => {
+    return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
+  });
 
   /**
-   * 获取睡眠模式配置状态（从 localStorage 读取）
+   * 获取睡眠模式的显示状态
+   * iOS 上始终返回 'prompt' 让按钮保持可点击（用户可反复查看教程）
+   * 红点的显示由 hasSleepFocusSeen 控制，而非此状态
    */
   const getSleepFocusStatus = useCallback((): PermissionStatus => {
     if (!isIOSWebView()) {
-      return 'granted'; // 非 iOS 设备默认为已授权
+      return 'granted'; // 非 iOS 设备默认为已授权（不显示此选项）
     }
-    return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true' ? 'granted' : 'prompt';
+    // iOS 上始终返回 prompt，让按钮保持可点击
+    return 'prompt';
   }, []);
 
   // Check current permission status on mount
@@ -250,13 +257,18 @@ export function PermissionsSection() {
     setIsRequesting(type);
 
     // 特殊处理：睡眠模式免打扰（仅 iOS）
+    // 由于 iOS 无法检测是否真的配置了，所以：
+    // 1. 始终可点击打开教程
+    // 2. 点击后标记为"已看过"（用于隐藏红点），但不标记为 granted
     if (type === 'sleepFocus') {
       if (isIOSWebView()) {
         // 打开睡眠模式设置引导
         iOSBridge.openSleepFocusSettings();
-        // 标记用户已点击过设置，假设用户已配置
+        // 标记用户已看过教程（用于隐藏红点）
         localStorage.setItem(SLEEP_FOCUS_CONFIGURED_KEY, 'true');
-        setPermissions(prev => ({ ...prev, sleepFocus: 'granted' }));
+        // 注意：不设置为 granted，保持可点击状态
+        // 但更新状态触发重新渲染，让红点消失
+        setPermissions(prev => ({ ...prev, sleepFocus: 'prompt' }));
       }
       setIsRequesting(null);
       return;
@@ -332,8 +344,9 @@ export function PermissionsSection() {
     if (permissions.notification !== 'granted') typesToRequest.push('notification');
     if (permissions.microphone !== 'granted') typesToRequest.push('microphone');
     if (permissions.camera !== 'granted') typesToRequest.push('camera');
-    // 睡眠模式仅在 iOS 上需要请求
-    if (isIOSWebView() && permissions.sleepFocus !== 'granted') typesToRequest.push('sleepFocus');
+    // 睡眠模式仅在 iOS 上需要请求，且只有在用户未看过教程时才请求
+    const sleepFocusSeen = localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
+    if (isIOSWebView() && !sleepFocusSeen) typesToRequest.push('sleepFocus');
 
     for (const type of typesToRequest) {
       await requestPermission(type);
@@ -344,14 +357,19 @@ export function PermissionsSection() {
     setIsRequesting(null);
   }, [permissions, requestPermission]);
 
-  // 计算权限数量（iOS 有 4 个权限，其他平台有 3 个）
+  // 计算权限数量
+  // 注意：sleepFocus 不参与计数，因为 iOS 无法检测是否真的授权
+  // sleepFocus 只影响红点显示（用户是否看过教程）
   const isIOS = isIOSWebView();
-  const totalPermissions = isIOS ? 4 : 3;
-  const permissionsToCount = isIOS
-    ? [permissions.notification, permissions.microphone, permissions.camera, permissions.sleepFocus]
-    : [permissions.notification, permissions.microphone, permissions.camera];
+  const totalPermissions = 3; // 只计算可检测的权限：notification, microphone, camera
+  const permissionsToCount = [permissions.notification, permissions.microphone, permissions.camera];
   const grantedCount = permissionsToCount.filter(s => s === 'granted').length;
   const allGranted = grantedCount === totalPermissions;
+
+  // 检查用户是否已看过睡眠模式教程（用于隐藏红点）
+  const hasSleepFocusSeen = localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
+  // iOS 上如果睡眠模式教程未看过，也算有缺失权限（用于显示红点）
+  const hasSleepFocusMissing = isIOS && !hasSleepFocusSeen;
 
   const getStatusIcon = (status: PermissionStatus) => {
     switch (status) {
@@ -429,7 +447,8 @@ export function PermissionsSection() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {allGranted ? (
+          {/* 只有当所有基础权限都授权且没有睡眠模式缺失提醒时，才显示"全部已开启" */}
+          {allGranted && !hasSleepFocusMissing ? (
             <span className="text-xs text-green-500 flex items-center gap-1">
               <i className="fa-solid fa-circle-check"></i>
               {t('profile.permissions.allEnabled')}
@@ -450,43 +469,58 @@ export function PermissionsSection() {
         <div className="border-t border-gray-100"></div>
 
         {/* Permission Items */}
-        {permissionItems.map((item, index) => (
-          <button
-            key={item.type}
-            onClick={(e) => {
-              e.stopPropagation();
-              requestPermission(item.type);
-            }}
-            disabled={isRequesting !== null || permissions[item.type] === 'granted'}
-            className={`w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:hover:bg-white
-              ${index < permissionItems.length - 1 ? 'border-b border-gray-100' : ''}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 ${item.iconBg} rounded-full flex items-center justify-center`}>
-                <i className={`fa-solid ${item.icon} ${item.iconColor} text-sm`}></i>
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-700 text-sm">{item.title}</p>
-                <p className="text-xs text-gray-400">{item.description}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {isRequesting === item.type ? (
-                <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
-              ) : (
-                <>
-                  <span className={`text-xs ${permissions[item.type] === 'granted' ? 'text-green-500' : permissions[item.type] === 'denied' ? 'text-red-500' : 'text-gray-400'}`}>
-                    {getStatusText(permissions[item.type])}
-                  </span>
-                  {getStatusIcon(permissions[item.type])}
-                </>
-              )}
-            </div>
-          </button>
-        ))}
+        {permissionItems.map((item, index) => {
+          const isSleepFocus = item.type === 'sleepFocus';
+          // sleepFocus 始终可点击（打开教程），其他权限在已授权时禁用
+          const isDisabled = isRequesting !== null || (!isSleepFocus && permissions[item.type] === 'granted');
 
-        {/* Sleep Focus Special Warning - Only show when sleepFocus is not granted on iOS */}
-        {isIOS && permissions.sleepFocus !== 'granted' && (
+          return (
+            <button
+              key={item.type}
+              onClick={(e) => {
+                e.stopPropagation();
+                requestPermission(item.type);
+              }}
+              disabled={isDisabled}
+              className={`w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:hover:bg-white
+                ${index < permissionItems.length - 1 ? 'border-b border-gray-100' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 ${item.iconBg} rounded-full flex items-center justify-center`}>
+                  <i className={`fa-solid ${item.icon} ${item.iconColor} text-sm`}></i>
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-700 text-sm">{item.title}</p>
+                  <p className="text-xs text-gray-400">{item.description}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {isRequesting === item.type ? (
+                  <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                ) : isSleepFocus ? (
+                  // sleepFocus 显示"查看教程"和右箭头
+                  <>
+                    <span className="text-xs text-indigo-500">
+                      {t('profile.permissions.sleepFocusAction')}
+                    </span>
+                    <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                  </>
+                ) : (
+                  // 其他权限显示状态
+                  <>
+                    <span className={`text-xs ${permissions[item.type] === 'granted' ? 'text-green-500' : permissions[item.type] === 'denied' ? 'text-red-500' : 'text-gray-400'}`}>
+                      {getStatusText(permissions[item.type])}
+                    </span>
+                    {getStatusIcon(permissions[item.type])}
+                  </>
+                )}
+              </div>
+            </button>
+          );
+        })}
+
+        {/* Sleep Focus Special Warning - Only show when user hasn't seen the guide on iOS */}
+        {hasSleepFocusMissing && (
           <div className="px-4 py-3 bg-indigo-50 border-t border-indigo-100">
             <div className="flex items-start gap-2">
               <i className="fa-solid fa-moon text-indigo-500 mt-0.5 text-xs"></i>

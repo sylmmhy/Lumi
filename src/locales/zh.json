@@ -11,7 +11,7 @@
   "common.continue": "继续",
 
   "home.procrastinating": "启动困难？",
-  "home.aiWillCallYou": "让 Lumi 打给你",
+  "home.aiWillCallYou": "让Lumi陪你开始",
   "home.placeholder": "你现在在拖延什么？",
   "home.setTime": "设置时间",
   "home.getACall": "预约来电",
@@ -326,6 +326,7 @@
   "profile.permissions.sleepFocus": "睡眠专注模式",
   "profile.permissions.sleepFocusDesc": "睡觉/起床提醒必需",
   "profile.permissions.sleepFocusLong": "iOS 睡眠模式会默认屏蔽所有通知。如果不设置，Lumi 无法在睡眠时间提醒你按时睡觉或起床。",
+  "profile.permissions.sleepFocusAction": "查看教程",
 
   "profile.deleteAccount": "删除账户",
   "profile.deleteAccountTitle": "删除账户",

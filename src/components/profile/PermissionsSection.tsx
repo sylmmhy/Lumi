@@ -266,9 +266,8 @@ export function PermissionsSection() {
         iOSBridge.openSleepFocusSettings();
         // 标记用户已看过教程（用于隐藏红点）
         localStorage.setItem(SLEEP_FOCUS_CONFIGURED_KEY, 'true');
-        // 注意：不设置为 granted，保持可点击状态
-        // 但更新状态触发重新渲染，让红点消失
-        setPermissions(prev => ({ ...prev, sleepFocus: 'prompt' }));
+        setSleepFocusSeen(true);
+        // 注意：不设置为 granted，保持 prompt 状态让按钮始终可点击
       }
       setIsRequesting(null);
       return;
@@ -345,7 +344,6 @@ export function PermissionsSection() {
     if (permissions.microphone !== 'granted') typesToRequest.push('microphone');
     if (permissions.camera !== 'granted') typesToRequest.push('camera');
     // 睡眠模式仅在 iOS 上需要请求，且只有在用户未看过教程时才请求
-    const sleepFocusSeen = localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
     if (isIOSWebView() && !sleepFocusSeen) typesToRequest.push('sleepFocus');
 
     for (const type of typesToRequest) {
@@ -366,10 +364,9 @@ export function PermissionsSection() {
   const grantedCount = permissionsToCount.filter(s => s === 'granted').length;
   const allGranted = grantedCount === totalPermissions;
 
-  // 检查用户是否已看过睡眠模式教程（用于隐藏红点）
-  const hasSleepFocusSeen = localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
   // iOS 上如果睡眠模式教程未看过，也算有缺失权限（用于显示红点）
-  const hasSleepFocusMissing = isIOS && !hasSleepFocusSeen;
+  // 使用 state 而非直接读取 localStorage，这样点击后能触发重新渲染
+  const hasSleepFocusMissing = isIOS && !sleepFocusSeen;
 
   const getStatusIcon = (status: PermissionStatus) => {
     switch (status) {

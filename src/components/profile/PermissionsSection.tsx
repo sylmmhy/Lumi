@@ -353,7 +353,7 @@ export function PermissionsSection() {
     }
 
     setIsRequesting(null);
-  }, [permissions, requestPermission]);
+  }, [permissions, requestPermission, sleepFocusSeen]);
 
   // 计算权限数量
   // 注意：sleepFocus 不参与计数，因为 iOS 无法检测是否真的授权

@@ -317,6 +317,7 @@
   "profile.permissions.sleepFocus": "Modalità Sonno",
   "profile.permissions.sleepFocusDesc": "Necessario per promemoria sonno/sveglia",
   "profile.permissions.sleepFocusLong": "La modalità Sonno di iOS blocca tutte le notifiche per impostazione predefinita. Senza questa impostazione, Lumi non può ricordarti di andare a dormire o svegliarti in orario.",
+  "profile.permissions.sleepFocusAction": "Vedi guida",
 
   "profile.deleteAccount": "Elimina account",
   "profile.deleteAccountTitle": "Elimina account",

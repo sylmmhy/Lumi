@@ -317,6 +317,7 @@
   "profile.permissions.sleepFocus": "睡眠集中モード",
   "profile.permissions.sleepFocusDesc": "就寝/起床リマインダーに必要",
   "profile.permissions.sleepFocusLong": "iOSの睡眠モードはデフォルトですべての通知をブロックします。設定しないと、Lumiは就寝時間や起床時間にリマインドできません。",
+  "profile.permissions.sleepFocusAction": "設定を見る",
 
   "profile.deleteAccount": "アカウントを削除",
   "profile.deleteAccountTitle": "アカウントを削除",

@@ -324,6 +324,7 @@
   "profile.permissions.sleepFocus": "Sleep Focus",
   "profile.permissions.sleepFocusDesc": "Required for bedtime & wake-up reminders",
   "profile.permissions.sleepFocusLong": "iOS Sleep Focus blocks all notifications by default. Without this, Lumi cannot remind you to go to bed or wake up on time.",
+  "profile.permissions.sleepFocusAction": "View Guide",
 
   "profile.deleteAccount": "Delete Account",
   "profile.deleteAccountTitle": "Delete Account",

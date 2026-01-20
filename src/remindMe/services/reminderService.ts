@@ -466,21 +466,31 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   const updatedTask = dbToTask(data as TaskRecord);
   const taskRecord = data as TaskRecord;
 
-  // 🔧 关键修复：如果是 routine 模板且修改了时间，同步更新所有关联的 routine_instance
-  // 问题背景：用户修改 routine 的时间后，已生成的 routine_instance 没有同步更新
-  // 导致后端 cron 仍然使用旧时间，且 called 状态未重置
-  if (
-    taskRecord.task_type === 'routine' &&
-    (updates.time !== undefined || updates.displayTime !== undefined)
-  ) {
+  // 🔧 关键修复：如果是 routine 模板且修改了时间或名字，同步更新所有关联的 routine_instance
+  // 问题背景：用户修改 routine 后，已生成的 routine_instance 没有同步更新
+  const hasTimeChange = updates.time !== undefined || updates.displayTime !== undefined;
+  const hasNameChange = updates.text !== undefined;
+
+  if (taskRecord.task_type === 'routine' && (hasTimeChange || hasNameChange)) {
     const today = getLocalDateString();
 
     // 构建要同步的字段
-    const instanceUpdates: Record<string, unknown> = {
-      called: false, // 重置 called 状态，让后端重新发送提醒
-    };
-    if (updates.time !== undefined) instanceUpdates.time = updates.time;
-    if (updates.displayTime !== undefined) instanceUpdates.display_time = updates.displayTime;
+    const instanceUpdates: Record<string, unknown> = {};
+
+    // 只有时间变化时才重置 called 和 push 状态（让后端重新发送提醒）
+    if (hasTimeChange) {
+      instanceUpdates.called = false;
+      instanceUpdates.push_attempts = 0;
+      instanceUpdates.push_last_attempt = null;
+      instanceUpdates.push_last_error = null;
+      if (updates.time !== undefined) instanceUpdates.time = updates.time;
+      if (updates.displayTime !== undefined) instanceUpdates.display_time = updates.displayTime;
+    }
+
+    // 同步名字变化
+    if (hasNameChange) {
+      instanceUpdates.title = updates.text;
+    }
 
     // 同步更新当天及未来的 routine_instance
     const { data: updatedInstances, error: syncError } = await supabase
@@ -496,7 +506,10 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
       console.warn('⚠️ Failed to sync routine_instance:', syncError);
     } else {
       const count = updatedInstances?.length || 0;
-      console.log(`✅ Synced ${count} routine_instance(s) with new time:`, updates.time);
+      const syncedFields = [];
+      if (hasTimeChange) syncedFields.push(`time=${updates.time}`);
+      if (hasNameChange) syncedFields.push(`title="${updates.text}"`);
+      console.log(`✅ Synced ${count} routine_instance(s):`, syncedFields.join(', '));
       if (updatedInstances && updatedInstances.length > 0) {
         console.log('   Updated instances:', updatedInstances.map(i => `${i.id} (${i.reminder_date})`).join(', '));
 
@@ -535,14 +548,19 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
     if (shouldResetCalled) {
       const { error: resetCalledError } = await supabase
         .from('tasks')
-        .update({ called: false })
+        .update({
+          called: false,
+          push_attempts: 0, // 🔧 重置推送尝试次数
+          push_last_attempt: null,
+          push_last_error: null,
+        })
         .eq('id', id)
         .eq('user_id', sessionUser.id);
 
       if (resetCalledError) {
         console.warn('⚠️ Failed to reset called status:', resetCalledError);
       } else {
-        console.log('✅ Reset called=false for task after time change:', id);
+        console.log('✅ Reset called=false and push_attempts=0 for task after time change:', id);
         updatedTask.called = false;
       }
     }

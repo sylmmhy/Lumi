@@ -373,7 +373,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
             {/* 滚动容器 */}
             <div
-                className="flex-1 overflow-y-auto no-scrollbar relative"
+                className="flex-1 overflow-y-auto no-scrollbar relative overscroll-none"
                 data-tour="stats-area"
                 onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >

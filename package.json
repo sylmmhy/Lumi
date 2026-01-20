@@ -25,7 +25,7 @@
     "supabase:restore": "bash scripts/supabase-restore.sh",
     "supabase:reset": "supabase db reset",
     "supabase:verify": "bash scripts/verify-local-supabase.sh",
-    "supabase:functions": "supabase functions serve --env-file supabase/.env.local"
+    "supabase:functions": "supabase functions serve --env-file supabase/.env.local --no-verify-jwt"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.31.3",

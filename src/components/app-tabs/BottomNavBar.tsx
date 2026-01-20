@@ -39,7 +39,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
 
     return (
         <>
-    <div className="absolute bottom-0 left-0 right-0 bg-white h-20 px-6 flex items-center border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-[100]">
+    <div className="absolute bottom-0 left-0 right-0 bg-white px-6 flex items-center border-t border-gray-100 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-[100] pt-2" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}>
         {/* 左侧两个图标，占据一半宽度 */}
         <div className="flex-1 flex justify-around">
             <NavIcon
@@ -58,15 +58,15 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
 
         {/* Big Center Button - 固定宽度，真正居中 */}
         {/* 点击后始终跳转到 urgency 页面，开始按钮在页面内 */}
-        <div className="relative -top-5 flex-shrink-0" data-tour="start-button">
+        <div className="relative -top-6 flex-shrink-0" data-tour="start-button">
             <button
-                className="w-20 h-20 transform transition-transform hover:scale-105 active:scale-95"
+                className="w-16 h-16 transform transition-transform hover:scale-105 active:scale-95"
                 onClick={() => onChange('urgency')}
             >
                 <img
                     src="/lumi.png"
                     alt="Start"
-                    className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.15)]"
+                    className="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)]"
                 />
             </button>
         </div>

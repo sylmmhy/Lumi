@@ -1,6 +1,6 @@
 # Supabase 本地开发环境
 
-> 最后更新：2026-01-16
+> 最后更新：2026-01-20
 
 本文档描述如何设置和管理本地 Supabase 开发环境，包括版本管理、同步部署等完整工作流程。
 
@@ -597,6 +597,92 @@ INSERT INTO public.user_memories (
     created_at
 ) VALUES ...
 ```
+
+### Q11: Edge Functions JWT 验证失败 - ES256 算法不兼容（CLI 2.72.x）
+
+**错误信息**：
+```
+TypeError: Key for the ES256 algorithm must be of type CryptoKey. Received an instance of Uint8Array
+```
+
+或前端报错：
+```
+❌ Failed to start AI coach session: Error: 获取系统指令失败: Edge Function returned a non-2xx status code
+```
+
+**原因**：
+Supabase CLI 2.72.x 版本开始使用 **ES256 算法**签发 JWT（之前是 HS256），但本地 Edge Functions 运行时的 JWT 验证代码还不兼容 ES256。这是一个**已知的过渡期 bug**（[GitHub Issue #4453](https://github.com/supabase/cli/issues/4453)）。
+
+| 对比 | 旧版本 | 新版本 (2.72.x) |
+|------|--------|----------------|
+| JWT 算法 | HS256 (HMAC) | ES256 (ECDSA) |
+| Edge Functions 兼容性 | ✅ 正常 | ❌ 验证失败 |
+
+**诊断方法**：
+
+```bash
+# 查看 Edge Functions 日志
+docker logs supabase_edge_runtime_firego-local --tail 30
+
+# 如果看到 "ES256 algorithm" 或 "CryptoKey" 错误，就是这个问题
+```
+
+**解决方案**：
+
+在本地开发时禁用 Edge Functions 的 JWT 验证。修改 `package.json`：
+
+```json
+// 修改前
+"supabase:functions": "supabase functions serve --env-file supabase/.env.local"
+
+// 修改后（添加 --no-verify-jwt）
+"supabase:functions": "supabase functions serve --env-file supabase/.env.local --no-verify-jwt"
+```
+
+然后重启 Edge Functions：
+
+```bash
+npm run supabase:functions
+```
+
+**注意事项**：
+- `--no-verify-jwt` **只影响本地开发**，生产环境不受影响
+- 这是官方推荐的临时方案
+- 等 Supabase CLI 下一版本修复后可移除此参数
+- 相关 PR [#4489](https://github.com/supabase/cli/pull/4489) 已合并，等待发布
+
+### Q12: 本地登录失败 - 测试账户不存在
+
+**错误信息**：
+```
+❌ Dev backdoor login failed: AuthApiError: Invalid login credentials
+```
+
+**原因**：
+本地 Supabase 数据库是空的，没有测试账户。代码中的开发后门尝试用 `q@q.com` 登录但用户不存在。
+
+**解决方案**：
+
+创建本地测试用户：
+
+```bash
+# 使用 curl 调用 Supabase Auth Admin API
+curl -k -X POST 'https://127.0.0.1:54321/auth/v1/admin/users' \
+  -H "apikey: <你的 secret key>" \
+  -H "Authorization: Bearer <你的 secret key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "q@q.com",
+    "password": "test123456",
+    "email_confirm": true
+  }'
+```
+
+获取 secret key：运行 `supabase status`，找到 `Secret` 那一行。
+
+创建成功后，用以下凭据登录：
+- 邮箱：`q@q.com`
+- 验证码：`123456`
 
 ---
 

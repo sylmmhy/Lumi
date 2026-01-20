@@ -12,6 +12,7 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
+import { PermissionProvider } from './context/PermissionContext'
 import { DevConsole } from './components/debug/DevConsole'
 
 /**
@@ -71,6 +72,7 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
+        <PermissionProvider>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           {/* 开发测试页面 - 仅在 DEV 模式下可用 */}
@@ -88,6 +90,7 @@ function App() {
         </Routes>
         {/* WebView 调试控制台 - 仅在原生 App 或开发模式下显示 */}
         <DevConsole />
+        </PermissionProvider>
       </AuthProvider>
     </LanguageProvider>
   )

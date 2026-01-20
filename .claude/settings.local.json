@@ -114,7 +114,8 @@
       "Bash(supabase migration list:*)",
       "Bash(python3:*)",
       "Bash(xargs:*)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "WebFetch(domain:www.hackingwithswift.com)"
     ],
     "deny": [],
     "ask": []

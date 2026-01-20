@@ -464,14 +464,75 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   }
 
   const updatedTask = dbToTask(data as TaskRecord);
+  const taskRecord = data as TaskRecord;
 
-  // 🆕 如果修改了时间，重新设置原生提醒（仅当提醒时间在未来时）
-  // 同时重置 called 状态，让系统将其视为新的提醒请求
-  if (updatedTask && (updates.date !== undefined || updates.time !== undefined)) {
-    // 🔧 关键修复：当用户修改了提醒时间时，重置 called 为 false
-    // 这样即使任务之前已触发过电话提醒并被挂断，系统也会根据新时间再次触发
-    if (shouldTriggerNativeReminder(updatedTask) && updates.called === undefined) {
-      // 只有在未来时间且用户没有显式设置 called 时才重置
+  // 🔧 关键修复：如果是 routine 模板且修改了时间，同步更新所有关联的 routine_instance
+  // 问题背景：用户修改 routine 的时间后，已生成的 routine_instance 没有同步更新
+  // 导致后端 cron 仍然使用旧时间，且 called 状态未重置
+  if (
+    taskRecord.task_type === 'routine' &&
+    (updates.time !== undefined || updates.displayTime !== undefined)
+  ) {
+    const today = getLocalDateString();
+
+    // 构建要同步的字段
+    const instanceUpdates: Record<string, unknown> = {
+      called: false, // 重置 called 状态，让后端重新发送提醒
+    };
+    if (updates.time !== undefined) instanceUpdates.time = updates.time;
+    if (updates.displayTime !== undefined) instanceUpdates.display_time = updates.displayTime;
+
+    // 同步更新当天及未来的 routine_instance
+    const { data: updatedInstances, error: syncError } = await supabase
+      .from('tasks')
+      .update(instanceUpdates)
+      .eq('parent_routine_id', id)
+      .eq('task_type', 'routine_instance')
+      .eq('status', 'pending') // 只更新未完成的实例
+      .gte('reminder_date', today) // 只更新今天及未来的实例
+      .select('id, title, time, reminder_date');
+
+    if (syncError) {
+      console.warn('⚠️ Failed to sync routine_instance:', syncError);
+    } else {
+      const count = updatedInstances?.length || 0;
+      console.log(`✅ Synced ${count} routine_instance(s) with new time:`, updates.time);
+      if (updatedInstances && updatedInstances.length > 0) {
+        console.log('   Updated instances:', updatedInstances.map(i => `${i.id} (${i.reminder_date})`).join(', '));
+
+        // 为更新后的实例发送原生通知
+        updatedInstances.forEach(instance => {
+          const instanceTask: Task = {
+            id: instance.id,
+            text: instance.title,
+            time: instance.time || '',
+            displayTime: updates.displayTime || '',
+            date: instance.reminder_date,
+            completed: false,
+            called: false,
+          };
+          if (shouldTriggerNativeReminder(instanceTask)) {
+            notifyNativeTaskCreated(taskToNativeReminder(instanceTask, taskRecord.user_id));
+          }
+        });
+      }
+    }
+  }
+
+  // 🆕 对于非 routine 任务，如果修改了时间，重置 called 状态
+  if (
+    updatedTask &&
+    taskRecord.task_type !== 'routine' &&
+    (updates.date !== undefined || updates.time !== undefined)
+  ) {
+    // 检查是否应该重置 called
+    const shouldResetCalled =
+      updates.called === undefined &&
+      updatedTask.displayTime !== 'Now' &&
+      updatedTask.date &&
+      updatedTask.time;
+
+    if (shouldResetCalled) {
       const { error: resetCalledError } = await supabase
         .from('tasks')
         .update({ called: false })
@@ -482,13 +543,13 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
         console.warn('⚠️ Failed to reset called status:', resetCalledError);
       } else {
         console.log('✅ Reset called=false for task after time change:', id);
-        // 更新本地对象以反映数据库变化
         updatedTask.called = false;
       }
+    }
 
-      // 从数据库记录中获取 user_id
-      const userId = (data as TaskRecord).user_id;
-      notifyNativeTaskCreated(taskToNativeReminder(updatedTask, userId));
+    // 发送原生通知（仅当时间在未来时）
+    if (shouldTriggerNativeReminder(updatedTask)) {
+      notifyNativeTaskCreated(taskToNativeReminder(updatedTask, taskRecord.user_id));
     }
   }
 

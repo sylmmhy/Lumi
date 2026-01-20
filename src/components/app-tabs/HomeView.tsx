@@ -8,6 +8,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { detectWebView } from '../../utils/webviewDetection';
 import { PullToRefresh } from '../common/PullToRefresh';
 import { QuickTagsRow } from '../common/QuickTags';
+import { StickyHeader } from './StickyHeader';
 
 import { supabase } from '../../lib/supabase';
 
@@ -320,9 +321,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col">
             {/* Sticky Top Bar (Floating) - 59pt 顶部留白适配 iPhone 刘海 */}
-            <div className={`absolute top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm transition-all duration-300 ${showStickyHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
-                <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('home.settingReminder')}</span>
-            </div>
+            <StickyHeader
+                title={t('home.settingReminder')}
+                bgColor="bg-brand-blue"
+                visible={showStickyHeader}
+            />
 
             {/* Unified Scroll Container with Pull to Refresh */}
             <PullToRefresh

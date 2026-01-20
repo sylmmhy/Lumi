@@ -227,9 +227,14 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                 animationRef.current = requestAnimationFrame(animate);
             } else {
                 animationRef.current = null;
-                isAnimatingRef.current = false;
                 checkAndReposition();
+                // 先调用 onComplete（设置 currentIndex 和 onChange），
+                // 然后再设置 isAnimatingRef = false，避免后续 scroll 事件覆盖 currentIndex
                 onComplete?.();
+                // 使用 requestAnimationFrame 延迟重置，确保状态更新完成后再允许 scroll 更新
+                requestAnimationFrame(() => {
+                    isAnimatingRef.current = false;
+                });
             }
         };
 
@@ -345,10 +350,13 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
     }, [items, loop, onChange, smoothScrollTo, value]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        // 在动画、拖拽或重定位期间，不要更新 currentIndex，避免覆盖已设置的值
+        if (isDraggingRef.current || isRepositioningRef.current || isAnimatingRef.current) {
+            return;
+        }
+
         // 实时更新当前索引，确保视觉高亮与滚动位置同步
         updateCurrentIndex();
-
-        if (isDraggingRef.current || isRepositioningRef.current || isAnimatingRef.current) return;
 
         const target = e.currentTarget as HTMLDivElement & { scrollTimeout?: NodeJS.Timeout };
         if (target.scrollTimeout) {
@@ -495,13 +503,6 @@ const ScrollWheel = ({ items, value, onChange, loop = false }: ScrollWheelProps)
                     <div
                         key={`${item}-${index}`}
                         className={`h-[40px] flex items-center justify-center text-lg transition-all duration-150 select-none ${isSelected ? 'text-black font-bold scale-110' : 'text-gray-300 scale-90'}`}
-                        onClick={() => {
-                            if (isDraggingRef.current || hasMovedRef.current) return;
-                            onChange(item);
-                            setCurrentIndex(originalIndex);
-                            // Smooth scroll to this item
-                            smoothScrollTo(index * ITEM_HEIGHT, 250);
-                        }}
                     >
                         {item}
                     </div>

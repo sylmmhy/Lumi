@@ -117,7 +117,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         {task.completed && <i className="fa-solid fa-check text-white text-xs"></i>}
                     </button>
                     {/* Task Title - Quicksand SemiBold 17px Black */}
-                    <span className={`text-[17px] text-[#111827] transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50' : ''}`} style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
+                    <span className={`text-[17px] transition-all duration-300 truncate ${task.completed ? 'line-through decoration-brand-blue/50 decoration-2 text-gray-400' : 'text-[#111827]'}`} style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
                         {task.text}
                     </span>
                     {/* Habit - Quicksand Medium 12px Grey */}

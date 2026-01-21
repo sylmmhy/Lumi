@@ -887,11 +887,11 @@ export function AppTabsPage() {
      * - 结束当前 AI 会话
      * - 返回主界面
      */
-    const handleEndCall = useCallback(() => {
-        // 🚀 优化：不等待 saveSessionMemory 完成，让它在后台运行
-        // saveSessionMemory 内部已经复制了所有需要的状态（messages, timeRemaining 等）
-        // 所以可以安全地在后台保存，不阻塞用户操作
-        void aiCoach.saveSessionMemory({ forceTaskCompleted: false });
+    const handleEndCall = useCallback(async () => {
+        // 🐛 修复：必须等待 saveSessionMemory 完成后再调用 endSession
+        // 否则 endSession 会触发 cleanup，可能中断正在进行的网络请求
+        // 详见 docs/implementation-log/20260120-memory-save-race-condition-fix.md
+        await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
         aiCoach.endSession();
 
         // 重置状态，返回主界面
@@ -906,7 +906,7 @@ export function AppTabsPage() {
      * - 直接显示庆祝页面（跳过确认页面）
      * - 标记任务为已完成
      */
-    const handleEndAICoachSession = useCallback(() => {
+    const handleEndAICoachSession = useCallback(async () => {
         // 计算完成时间（已用时间 = 初始时间 - 剩余时间）
         const usedTime = 300 - aiCoach.state.timeRemaining;
         const actualDurationMinutes = Math.round(usedTime / 60);
@@ -914,9 +914,10 @@ export function AppTabsPage() {
         setCompletionTime(usedTime);
         setCurrentTaskDescription(aiCoach.state.taskDescription);
 
-        // 🚀 优化：不等待网络请求完成，让它们在后台运行
-        // 用户主动点击完成，强制标记为成功会话（用于提取 EFFECTIVE 激励方式）
-        void aiCoach.saveSessionMemory({ forceTaskCompleted: true });
+        // 🐛 修复：必须等待 saveSessionMemory 完成后再调用 endSession
+        // 否则 endSession 会触发 cleanup，可能中断正在进行的网络请求
+        // 详见 docs/implementation-log/20260120-memory-save-race-condition-fix.md
+        await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
         aiCoach.endSession();
 
         // 标记任务为已完成（后台运行，不阻塞 UI）
@@ -1049,8 +1050,8 @@ export function AppTabsPage() {
             )}
 
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
-            {/* 当显示庆祝页面时隐藏主内容 */}
-            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${showCelebration ? 'hidden' : ''}`}>
+            {/* 当 AI 会话激活或显示庆祝页面时隐藏主内容，避免 UrgencyView 的 fixed header 穿透显示 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting) ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView

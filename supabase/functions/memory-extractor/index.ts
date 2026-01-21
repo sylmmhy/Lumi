@@ -10,7 +10,12 @@ const corsHeaders = {
 const AZURE_ENDPOINT = Deno.env.get('AZURE_AI_ENDPOINT') || 'https://conta-mcvprtb1-eastus2.openai.azure.com'
 const AZURE_API_KEY = Deno.env.get('AZURE_AI_API_KEY')
 const MODEL_NAME = Deno.env.get('MEMORY_EXTRACTOR_MODEL') || 'gpt-5.1-chat'
-const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embedding-3-large'
+
+// Embedding 配置 - 可以使用独立的 endpoint 和 API key
+// 如果未设置，则回退到主 Azure 配置
+const EMBEDDING_ENDPOINT = Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || AZURE_ENDPOINT
+const EMBEDDING_API_KEY = Deno.env.get('AZURE_EMBEDDING_API_KEY') || AZURE_API_KEY
+const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embedding-3-small'
 
 // 记忆整合配置
 const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
@@ -222,22 +227,29 @@ interface SaveResult {
 
 /**
  * 生成文本的 embedding 向量
+ * 使用 OpenAI SDK 兼容的 API 格式
  */
 async function generateEmbedding(text: string): Promise<number[]> {
-  if (!AZURE_API_KEY) {
-    throw new Error('AZURE_AI_API_KEY environment variable not set')
+  if (!EMBEDDING_API_KEY) {
+    throw new Error('AZURE_EMBEDDING_API_KEY (or AZURE_AI_API_KEY) environment variable not set')
   }
 
-  const apiUrl = `${AZURE_ENDPOINT}/openai/v1/embeddings`
+  // OpenAI SDK 兼容格式
+  // EMBEDDING_ENDPOINT 应该是完整的 base URL，如：https://xxx.azure.com/openai/v1/
+  // 去掉末尾的斜杠（如果有），然后加上 /embeddings
+  const baseUrl = EMBEDDING_ENDPOINT.replace(/\/+$/, '')
+  const apiUrl = `${baseUrl}/embeddings`
+
+  console.log(`Calling embedding API: ${apiUrl}`)
 
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AZURE_API_KEY}`,
+      'Authorization': `Bearer ${EMBEDDING_API_KEY}`,  // OpenAI 兼容格式
     },
     body: JSON.stringify({
-      model: EMBEDDING_MODEL,
+      model: EMBEDDING_MODEL,  // "text-embedding-3-small"
       input: text,
       dimensions: 1536,  // 降维到 1536，兼容 HNSW 索引（最大 2000 维）
     }),
@@ -245,12 +257,14 @@ async function generateEmbedding(text: string): Promise<number[]> {
 
   if (!response.ok) {
     const error = await response.text()
-    console.error('Embedding API error:', error)
-    throw new Error(`Embedding request failed: ${response.status}`)
+    console.error('Embedding API error:', response.status, error)
+    throw new Error(`Embedding request failed: ${response.status} - ${error}`)
   }
 
   const result = await response.json()
-  return result.data?.[0]?.embedding || []
+  const embedding = result.data?.[0]?.embedding || []
+  console.log(`Embedding generated successfully, dimensions: ${embedding.length}`)
+  return embedding
 }
 
 /**
@@ -585,6 +599,37 @@ async function saveOrMergeMemories(
 
     } catch (err) {
       console.error(`Error processing memory: ${memory.content.substring(0, 50)}...`, err)
+
+      // Fallback：即使 embedding 失败，也尝试保存记忆（不做去重）
+      try {
+        console.log('Attempting fallback save without embedding...')
+        const { data, error } = await supabase
+          .from('user_memories')
+          .insert({
+            user_id: userId,
+            content: memory.content,
+            tag: memory.tag,
+            confidence: memory.confidence,
+            task_name: taskDescription || null,
+            metadata: {
+              ...metadata,
+              embeddingFailed: true,
+              embeddingError: String(err),
+            },
+          })
+          .select()
+          .single()
+
+        if (data) {
+          console.log(`Fallback save successful: ${data.id}`)
+          results.push({ action: 'created', memoryId: data.id, content: memory.content })
+          savedCount++
+        } else if (error) {
+          console.error('Fallback save failed:', error)
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback save exception:', fallbackErr)
+      }
     }
   }
 

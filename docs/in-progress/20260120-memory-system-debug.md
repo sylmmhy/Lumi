@@ -2,8 +2,17 @@
 
 ---
 date: 2026-01-20
-updated: 2026-01-20 16:50
+updated: 2026-01-20 17:15
 stage: 🔧 进行中
+---
+
+## 阶段进度
+- [x] 阶段 1：问题复现 - 确认记忆没有保存到数据库
+- [x] 阶段 2：调查根因 - 发现前端竞态条件
+- [x] 阶段 3：修复竞态条件 - 已修复并验证
+- [ ] 阶段 4：解决 Embedding 失败 - **当前阶段**
+- [ ] 阶段 5：完整功能验证
+
 ---
 
 ## 问题描述
@@ -78,38 +87,52 @@ for (const memory of memories) {
 
 如果 `generateEmbedding` 函数抛出异常（而不是返回空数组），整条记忆就被跳过了。
 
-**可能的失败原因**：
+**根因确认（2026-01-20 17:30 通过数据库查询验证）**：
 
-1. **Embedding 模型不可用**
-   - AI 提取使用 `gpt-5.1-chat` 模型（成功）
-   - Embedding 使用 `text-embedding-3-large` 模型（可能失败）
-   - 配置在 `memory-extractor/index.ts` 行 12-13：
-     ```typescript
-     const MODEL_NAME = Deno.env.get('MEMORY_EXTRACTOR_MODEL') || 'gpt-5.1-chat'
-     const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embedding-3-large'
-     ```
+查询数据库发现：
+```
+所有现有记忆（8条）都 **没有 embedding**
+最后一次成功保存记忆是 2026-01-08（12 天前）
+```
 
-2. **API 调用失败**
-   - `generateEmbedding` 函数（行 226-254）在 API 失败时会抛出异常
-   - 异常被外层 catch 捕获，记忆被跳过
+这说明：之前的代码可能没有强制要求 embedding，但**现在的代码在 embedding 失败时会跳过保存**。
+
+**失败流程**：
+```
+generateEmbedding() 抛异常
+  → 进入 catch 块（行 586-588）
+  → 只打印日志，不保存
+  → 记忆丢失
+```
+
+**可能的异常原因**：
+
+1. **AZURE_AI_API_KEY 环境变量未设置**
+   - 代码行 227-229 会抛出 `AZURE_AI_API_KEY environment variable not set`
+
+2. **Embedding 模型不可用**
+   - `text-embedding-3-large` 可能在 Azure endpoint 上未部署
+   - 代码行 246-250 会抛出 `Embedding request failed: {status}`
 
 ---
 
 ## 当前状态
 
-| 项目 | 状态 |
-|------|------|
-| 前端竞态条件修复 | ✅ 已完成 |
-| API 调用到达服务器 | ✅ 已验证 |
-| AI 提取记忆 | ✅ 工作正常 |
-| Embedding 生成 | ❌ **可能失败** |
-| 记忆保存到数据库 | ❌ **未保存** |
+| 项目 | 状态 | 证据 |
+|------|------|------|
+| 前端竞态条件修复 | ✅ 已完成 | 前端日志显示 API 调用完成 |
+| API 调用到达服务器 | ✅ 已验证 | Supabase 日志显示 200 响应 |
+| AI 提取记忆 | ✅ 工作正常 | `extracted: 2` |
+| Embedding 生成 | ❌ **抛异常** | 数据库所有记忆都没有 embedding |
+| 记忆保存到数据库 | ❌ **被跳过** | catch 块没有 fallback 保存逻辑 |
 
 ---
 
 ## 下一步行动
 
-### 方案 A：查看详细日志确认问题
+> **建议顺序**：先执行 **方案 A** 确认具体错误，再决定用 **方案 B** 或 **方案 C** 修复。
+
+### 方案 A：查看详细日志确认问题（优先）
 
 1. 打开 Supabase Dashboard：
    - URL: https://supabase.com/dashboard/project/ivlfsixvfovqitkajyjc/functions/memory-extractor/logs
@@ -118,43 +141,59 @@ for (const memory of memories) {
    - `Embedding API error:` - 确认 API 是否返回错误
    - `Error processing memory:` - 确认是否有异常被捕获
 
-### 方案 B：修复代码让 embedding 失败时也能保存
+### 方案 B：修复代码让 embedding 失败时也能保存（推荐）
 
-修改 `supabase/functions/memory-extractor/index.ts` 的 `saveOrMergeMemories` 函数：
+修改 `supabase/functions/memory-extractor/index.ts:586-588` 的 catch 块：
 
+**当前代码**：
 ```typescript
-// 行 470-496，修改 catch 块
-for (const memory of memories) {
+} catch (err) {
+  console.error(`Error processing memory: ${memory.content.substring(0, 50)}...`, err)
+  // ❌ 记忆被丢弃
+}
+```
+
+**修复后**：
+```typescript
+} catch (err) {
+  console.error(`Error processing memory: ${memory.content.substring(0, 50)}...`, err)
+
+  // 🆕 fallback：即使 embedding 失败，也保存记忆（不做去重）
   try {
-    // ... 现有逻辑 ...
-  } catch (err) {
-    console.error(`Error processing memory: ${memory.content.substring(0, 50)}...`, err)
+    const { data, error } = await supabase
+      .from('user_memories')
+      .insert({
+        user_id: userId,
+        content: memory.content,
+        tag: memory.tag,
+        confidence: memory.confidence,
+        task_name: taskDescription || null,
+        metadata: {
+          ...metadata,
+          embeddingFailed: true,
+          embeddingError: String(err),
+        },
+      })
+      .select()
+      .single()
 
-    // 🆕 新增：即使 embedding 失败，也尝试保存记忆（不做去重）
-    try {
-      const { data } = await supabase
-        .from('user_memories')
-        .insert({
-          user_id: userId,
-          content: memory.content,
-          tag: memory.tag,
-          confidence: memory.confidence,
-          task_name: taskDescription || null,
-          metadata: { ...metadata, embeddingFailed: true },
-        })
-        .select()
-        .single()
-
-      if (data) {
-        results.push({ action: 'created', memoryId: data.id, content: memory.content })
-        savedCount++
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback save also failed:', fallbackErr)
+    if (data) {
+      console.log(`Saved memory without embedding: ${data.id}`)
+      results.push({ action: 'created', memoryId: data.id, content: memory.content })
+      savedCount++
+    } else if (error) {
+      console.error('Fallback save failed:', error)
     }
+  } catch (fallbackErr) {
+    console.error('Fallback save exception:', fallbackErr)
   }
 }
 ```
+
+**优点**：
+- 即使 embedding 失败，记忆也会被保存
+- metadata 中会标记 `embeddingFailed: true`，方便后续排查
+- 不影响正常流程（有 embedding 时仍然去重）
 
 ### 方案 C：检查 Azure AI 配置
 

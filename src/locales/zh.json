@@ -160,6 +160,10 @@
   "profile.ringtoneTypeHint": "选择人声或音乐",
   "profile.ringtoneVoice": "人声",
   "profile.ringtoneMusic": "音乐",
+  "profile.voiceMode": "通话模式",
+  "profile.voiceModeHint": "原生或网页通话",
+  "profile.voiceModeLiveKit": "原生",
+  "profile.voiceModeWebView": "网页",
 
   "feedback.title": "感谢你的反馈！",
   "feedback.contactInfo": "联系方式",

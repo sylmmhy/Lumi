@@ -26,6 +26,12 @@ import { isNativeApp, syncAllTasksToNative } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
+import {
+    isLiveKitMode,
+    startLiveKitRoom,
+    endLiveKitRoom,
+    onLiveKitEvent,
+} from '../lib/liveKitSettings';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -139,6 +145,13 @@ export function AppTabsPage() {
         }
     });
     const [hasAutoStarted, setHasAutoStarted] = useState(false);
+
+    // LiveKit 模式状态
+    const [usingLiveKit, setUsingLiveKit] = useState(false);
+    const [liveKitConnected, setLiveKitConnected] = useState(false);
+    const [liveKitError, setLiveKitError] = useState<string | null>(null);
+    const [liveKitTimeRemaining, setLiveKitTimeRemaining] = useState(300);
+    const liveKitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         // Just navigate, no local state update needed
@@ -260,6 +273,69 @@ export function AppTabsPage() {
         enabled: showCelebration && celebrationFlow === 'success',
         remainingTime: 300 - completionTime, // 剩余时间用于计算奖励
     });
+
+    // LiveKit 事件监听
+    useEffect(() => {
+        if (!usingLiveKit) return;
+
+        const cleanupConnected = onLiveKitEvent('connected', () => {
+            console.log('🎙️ [AppTabsPage] LiveKit connected');
+            setLiveKitConnected(true);
+            setLiveKitError(null);
+        });
+
+        const cleanupDisconnected = onLiveKitEvent('disconnected', () => {
+            console.log('🎙️ [AppTabsPage] LiveKit disconnected');
+            setLiveKitConnected(false);
+        });
+
+        const cleanupError = onLiveKitEvent('error', (detail) => {
+            console.error('🎙️ [AppTabsPage] LiveKit error:', detail);
+            const errorDetail = detail as { message?: string } | undefined;
+            setLiveKitError(errorDetail?.message || 'LiveKit 连接失败');
+            setLiveKitConnected(false);
+        });
+
+        return () => {
+            cleanupConnected();
+            cleanupDisconnected();
+            cleanupError();
+        };
+    }, [usingLiveKit]);
+
+    // LiveKit 倒计时（当 usingLiveKit 为 true 且 LiveKit 连接成功时开始倒计时）
+    useEffect(() => {
+        if (!usingLiveKit || !liveKitConnected) return;
+
+        console.log('🎙️ [AppTabsPage] LiveKit 倒计时开始');
+        liveKitTimerRef.current = setInterval(() => {
+            setLiveKitTimeRemaining((prev) => {
+                if (prev <= 1) {
+                    // 倒计时结束
+                    console.log('🎙️ [AppTabsPage] LiveKit 倒计时结束');
+                    if (liveKitTimerRef.current) {
+                        clearInterval(liveKitTimerRef.current);
+                        liveKitTimerRef.current = null;
+                    }
+                    endLiveKitRoom();
+                    setCompletionTime(300);
+                    setCelebrationFlow('confirm');
+                    setShowCelebration(true);
+                    setUsingLiveKit(false);
+                    setLiveKitConnected(false);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => {
+            if (liveKitTimerRef.current) {
+                clearInterval(liveKitTimerRef.current);
+                liveKitTimerRef.current = null;
+            }
+        };
+    }, [usingLiveKit, liveKitConnected]);
 
     // Handle Stripe success return without setting state inside the effect body
     useEffect(() => {
@@ -548,6 +624,39 @@ export function AppTabsPage() {
             }
         }
 
+        // 调试日志：检测 LiveKit 状态
+        console.log('🎙️ LiveKit 检测:', {
+            isLiveKitMode: isLiveKitMode(),
+            voiceMode: localStorage.getItem('lumi_voice_mode'),
+        });
+
+        // 检测是否使用 LiveKit 模式
+        if (isLiveKitMode()) {
+            console.log('🎙️ 使用 LiveKit 原生模式');
+            setUsingLiveKit(true);
+            setLiveKitTimeRemaining(300);
+            setLiveKitError(null);
+            setCurrentTaskDescription(taskToUse.text);
+            setCurrentTaskId(taskId);
+            setCurrentTaskType(taskToUse.type || null);
+
+            // 调用 iOS 原生 LiveKit
+            startLiveKitRoom();
+
+            // 标记任务已被呼叫
+            if (auth.userId && !isTemporaryId) {
+                try {
+                    await updateReminder(taskId, { called: true });
+                    console.log('✅ Task called status persisted to database');
+                } catch (updateError) {
+                    console.error('⚠️ Failed to persist called status:', updateError);
+                }
+            }
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, called: true } : t));
+            return;
+        }
+
+        // WebView 模式：使用 Gemini Live
         try {
             const preferredLanguages = getPreferredLanguages();
             await aiCoach.startSession(taskToUse.text, {
@@ -975,7 +1084,59 @@ export function AppTabsPage() {
             )}
 
             {/* 为了保证前端有明显反馈，这里在「连接中」和「会话进行中」两种状态下都显示任务执行视图 */}
-            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && (
+            {/* LiveKit 模式：使用原生音频，不显示摄像头 */}
+            {usingLiveKit && !showCelebration && (
+                <TaskWorkingView
+                    taskDescription={currentTaskDescription}
+                    time={liveKitTimeRemaining}
+                    timeMode="countdown"
+                    aiStatus={{
+                        isConnected: liveKitConnected,
+                        error: liveKitError,
+                        // LiveKit 模式显示简单的波形（音频在原生端处理）
+                        waveformHeights: liveKitConnected ? [0.5, 0.7, 0.6, 0.8, 0.5] : undefined,
+                        isSpeaking: liveKitConnected,
+                        isObserving: false,
+                    }}
+                    primaryButton={{
+                        label: "I'M DOING IT!",
+                        emoji: '✅',
+                        onClick: () => {
+                            // 结束 LiveKit 并显示庆祝页面
+                            const usedSeconds = 300 - liveKitTimeRemaining;
+                            endLiveKitRoom();
+                            if (liveKitTimerRef.current) {
+                                clearInterval(liveKitTimerRef.current);
+                                liveKitTimerRef.current = null;
+                            }
+                            setCompletionTime(usedSeconds);
+                            setCelebrationFlow('success');
+                            setShowCelebration(true);
+                            setUsingLiveKit(false);
+                            setLiveKitConnected(false);
+                        },
+                    }}
+                    secondaryButton={{
+                        label: 'END CALL',
+                        emoji: '🛑',
+                        onClick: () => {
+                            // 结束 LiveKit 并返回
+                            endLiveKitRoom();
+                            if (liveKitTimerRef.current) {
+                                clearInterval(liveKitTimerRef.current);
+                                liveKitTimerRef.current = null;
+                            }
+                            setUsingLiveKit(false);
+                            setLiveKitConnected(false);
+                            setLiveKitTimeRemaining(300);
+                        },
+                    }}
+                    hasBottomNav={false}
+                />
+            )}
+
+            {/* WebView 模式（Gemini Live）：显示摄像头和 AI 状态 */}
+            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && (
                 <>
                     <canvas ref={aiCoach.canvasRef} className="hidden" />
                     <TaskWorkingView
@@ -1050,8 +1211,8 @@ export function AppTabsPage() {
             )}
 
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
-            {/* 当 AI 会话激活或显示庆祝页面时隐藏主内容，避免 UrgencyView 的 fixed header 穿透显示 */}
-            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting) ? 'hidden' : ''}`}>
+            {/* 当 AI 会话激活、LiveKit 模式或显示庆祝页面时隐藏主内容，避免 UrgencyView 的 fixed header 穿透显示 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit) ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView
@@ -1095,8 +1256,8 @@ export function AppTabsPage() {
                     />
                 )}
 
-                {/* AI 会话全屏展示或庆祝页面时隐藏底部导航，避免与浮层控件重叠 */}
-                {!(aiCoach.isSessionActive || aiCoach.isConnecting || showCelebration) && (
+                {/* AI 会话全屏展示、LiveKit 模式或庆祝页面时隐藏底部导航，避免与浮层控件重叠 */}
+                {!(aiCoach.isSessionActive || aiCoach.isConnecting || showCelebration || usingLiveKit) && (
                     <BottomNavBar
                         currentView={currentView}
                         onChange={(view) => handleChangeView(view)}

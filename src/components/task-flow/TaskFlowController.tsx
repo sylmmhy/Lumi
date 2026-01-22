@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { TaskWorkingView } from '../task/TaskWorkingView';
 import { StartCelebrationView } from '../celebration/StartCelebrationView';
 import { SimpleTaskExecutionView } from '../task/SimpleTaskExecutionView';
@@ -6,6 +6,12 @@ import { CelebrationView } from '../celebration/CelebrationView';
 import type { CelebrationFlow } from '../celebration/CelebrationView';
 import { useAICoachSession } from '../../hooks/useAICoachSession';
 import { useCelebrationAnimation } from '../../hooks/useCelebrationAnimation';
+import {
+  isLiveKitMode,
+  startLiveKitRoom,
+  endLiveKitRoom,
+  onLiveKitEvent,
+} from '../../lib/liveKitSettings';
 
 type FlowStep = 'idle' | 'working' | 'startCelebration' | 'simpleExecution' | 'finish';
 
@@ -37,6 +43,72 @@ export function TaskFlowController({
   const [step, setStep] = useState<FlowStep>('idle');
   const [completionTime, setCompletionTime] = useState(0);
   const [celebrationFlow, setCelebrationFlow] = useState<CelebrationFlow>('success');
+
+  // LiveKit 模式状态
+  const [usingLiveKit, setUsingLiveKit] = useState(false);
+  const [liveKitConnected, setLiveKitConnected] = useState(false);
+  const [liveKitError, setLiveKitError] = useState<string | null>(null);
+  const [liveKitTimeRemaining, setLiveKitTimeRemaining] = useState(initialCountdown);
+  const liveKitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 监听 LiveKit 事件
+  useEffect(() => {
+    if (!usingLiveKit) return;
+
+    const cleanupConnected = onLiveKitEvent('connected', () => {
+      console.log('🎙️ LiveKit connected');
+      setLiveKitConnected(true);
+      setLiveKitError(null);
+    });
+
+    const cleanupDisconnected = onLiveKitEvent('disconnected', () => {
+      console.log('🎙️ LiveKit disconnected');
+      setLiveKitConnected(false);
+    });
+
+    const cleanupError = onLiveKitEvent('error', (detail) => {
+      console.error('🎙️ LiveKit error:', detail);
+      const errorDetail = detail as { message?: string } | undefined;
+      setLiveKitError(errorDetail?.message || 'LiveKit 连接失败');
+      setLiveKitConnected(false);
+    });
+
+    return () => {
+      cleanupConnected();
+      cleanupDisconnected();
+      cleanupError();
+    };
+  }, [usingLiveKit]);
+
+  // LiveKit 模式倒计时
+  useEffect(() => {
+    if (!usingLiveKit || step !== 'working') return;
+
+    liveKitTimerRef.current = setInterval(() => {
+      setLiveKitTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // 倒计时结束
+          if (liveKitTimerRef.current) {
+            clearInterval(liveKitTimerRef.current);
+            liveKitTimerRef.current = null;
+          }
+          endLiveKitRoom();
+          setCompletionTime(initialCountdown);
+          setCelebrationFlow('confirm');
+          setStep('finish');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (liveKitTimerRef.current) {
+        clearInterval(liveKitTimerRef.current);
+        liveKitTimerRef.current = null;
+      }
+    };
+  }, [usingLiveKit, step, initialCountdown]);
 
   const aiCoach = useAICoachSession({
     initialTime: initialCountdown,
@@ -74,13 +146,38 @@ export function TaskFlowController({
   const handleStart = useCallback(async () => {
     setCelebrationFlow('success');
     setCompletionTime(0);
+
+    // 调试日志：检测 LiveKit 状态
+    console.log('🎙️ LiveKit 检测:', {
+      isNativeLiveKitAvailable: typeof window !== 'undefined' && !!(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).webkit?.messageHandlers?.startNativeLiveKitCall
+      ),
+      isLiveKitMode: isLiveKitMode(),
+      voiceMode: localStorage.getItem('lumi_voice_mode') || 'livekit (default)',
+    });
+
+    // 检测是否使用 LiveKit 模式
+    if (isLiveKitMode()) {
+      console.log('🎙️ 使用 LiveKit 原生模式');
+      setUsingLiveKit(true);
+      setLiveKitTimeRemaining(initialCountdown);
+      setLiveKitError(null);
+
+      // 调用 iOS 原生 LiveKit
+      startLiveKitRoom();
+      setStep('working');
+      return;
+    }
+
+    // WebView 模式：使用 Gemini Live
     try {
       await aiCoach.startSession(taskName);
       setStep('working');
     } catch (error) {
       alert('AI 连接失败，请重试：' + (error as Error).message);
     }
-  }, [aiCoach, taskName]);
+  }, [aiCoach, taskName, initialCountdown]);
 
   // 点击 "I'M DOING IT!"
   const handleDoingIt = useCallback(() => {
@@ -89,20 +186,42 @@ export function TaskFlowController({
 
   // StartCelebrationView: Continue Doing It
   const handleContinue = useCallback(() => {
-    const usedSeconds = computeCompletionTime();
+    const usedSeconds = usingLiveKit
+      ? initialCountdown - liveKitTimeRemaining
+      : computeCompletionTime();
     setCompletionTime(usedSeconds);
-    aiCoach.endSession();
+
+    if (usingLiveKit) {
+      endLiveKitRoom();
+      if (liveKitTimerRef.current) {
+        clearInterval(liveKitTimerRef.current);
+        liveKitTimerRef.current = null;
+      }
+    } else {
+      aiCoach.endSession();
+    }
     setStep('simpleExecution');
-  }, [aiCoach, computeCompletionTime]);
+  }, [aiCoach, computeCompletionTime, usingLiveKit, initialCountdown, liveKitTimeRemaining]);
 
   // StartCelebrationView / SimpleTaskExecutionView: Finish this task
   const handleFinish = useCallback(() => {
-    const usedSeconds = computeCompletionTime();
+    const usedSeconds = usingLiveKit
+      ? initialCountdown - liveKitTimeRemaining
+      : computeCompletionTime();
     setCompletionTime(usedSeconds);
-    aiCoach.endSession();
+
+    if (usingLiveKit) {
+      endLiveKitRoom();
+      if (liveKitTimerRef.current) {
+        clearInterval(liveKitTimerRef.current);
+        liveKitTimerRef.current = null;
+      }
+    } else {
+      aiCoach.endSession();
+    }
     setCelebrationFlow('success');
     setStep('finish');
-  }, [aiCoach, computeCompletionTime]);
+  }, [aiCoach, computeCompletionTime, usingLiveKit, initialCountdown, liveKitTimeRemaining]);
 
   // StartCelebrationView: 关闭回到工作阶段
   const handleCloseCelebration = useCallback(() => {
@@ -111,13 +230,55 @@ export function TaskFlowController({
 
   // 重置回初始状态
   const handleRestart = useCallback(() => {
-    aiCoach.resetSession();
+    if (usingLiveKit) {
+      endLiveKitRoom();
+      if (liveKitTimerRef.current) {
+        clearInterval(liveKitTimerRef.current);
+        liveKitTimerRef.current = null;
+      }
+      setUsingLiveKit(false);
+      setLiveKitConnected(false);
+      setLiveKitError(null);
+      setLiveKitTimeRemaining(initialCountdown);
+    } else {
+      aiCoach.resetSession();
+    }
     setStep('idle');
     setCompletionTime(0);
     setCelebrationFlow('success');
-  }, [aiCoach]);
+  }, [aiCoach, usingLiveKit, initialCountdown]);
 
   if (step === 'working') {
+    // LiveKit 模式：使用原生音频，不需要摄像头和 canvas
+    if (usingLiveKit) {
+      return (
+        <TaskWorkingView
+          taskDescription={taskName}
+          time={liveKitTimeRemaining}
+          timeMode="countdown"
+          aiStatus={{
+            isConnected: liveKitConnected,
+            error: liveKitError,
+            // LiveKit 模式不显示波形动画（音频在原生端处理）
+            waveformHeights: liveKitConnected ? [0.5, 0.7, 0.6, 0.8, 0.5] : undefined,
+            isSpeaking: liveKitConnected,
+            isObserving: false,
+          }}
+          primaryButton={{
+            label: "I'M DOING IT!",
+            emoji: '✅',
+            onClick: handleDoingIt,
+          }}
+          secondaryButton={{
+            label: 'RESTART',
+            emoji: '🔁',
+            onClick: handleRestart,
+          }}
+        />
+      );
+    }
+
+    // WebView 模式：使用 Gemini Live
     return (
       <>
         {/* 隐藏画布：Gemini Live 需要 canvas 来推送视频帧 */}

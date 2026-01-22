@@ -151,6 +151,10 @@
   "profile.ringtoneTypeHint": "音声または音楽を選択",
   "profile.ringtoneVoice": "音声",
   "profile.ringtoneMusic": "音楽",
+  "profile.voiceMode": "通話モード",
+  "profile.voiceModeHint": "ネイティブまたはウェブ通話",
+  "profile.voiceModeLiveKit": "ネイティブ",
+  "profile.voiceModeWebView": "ウェブ",
 
   "feedback.title": "感想ありがとう！",
   "feedback.contactInfo": "連絡先",

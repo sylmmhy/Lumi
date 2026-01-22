@@ -11,6 +11,7 @@ import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
 import { getRingtoneType, setRingtoneType, type RingtoneType } from '../../lib/ringtoneSettings';
+import { getVoiceMode, setVoiceMode, isLiveKitAvailable, type VoiceMode } from '../../lib/liveKitSettings';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -57,6 +58,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // Ringtone type state
     const [currentRingtoneType, setCurrentRingtoneType] = useState<RingtoneType>(getRingtoneType());
 
+    // LiveKit mode state (iOS only)
+    const [showLiveKitOption] = useState<boolean>(isLiveKitAvailable());
+    const [currentVoiceMode, setCurrentVoiceMode] = useState<VoiceMode>(getVoiceMode());
+
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
@@ -70,6 +75,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         const newType: RingtoneType = currentRingtoneType === 'voice' ? 'music' : 'voice';
         setRingtoneType(newType);
         setCurrentRingtoneType(newType);
+    };
+
+    // Handle voice mode toggle (LiveKit / WebView)
+    const handleVoiceModeToggle = () => {
+        const newMode: VoiceMode = currentVoiceMode === 'webview' ? 'livekit' : 'webview';
+        setVoiceMode(newMode);
+        setCurrentVoiceMode(newMode);
     };
 
     const handleClosePremium = () => {
@@ -405,7 +417,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Ringtone Type Setting */}
                     <button
                         onClick={handleRingtoneTypeToggle}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
@@ -425,6 +437,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </div>
                         </div>
                     </button>
+
+                    {/* LiveKit Voice Mode Setting - iOS Only */}
+                    {showLiveKitOption && (
+                        <button
+                            onClick={handleVoiceModeToggle}
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center">
+                                    <i className="fa-solid fa-phone text-green-500"></i>
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-medium text-gray-800">{t('profile.voiceMode')}</p>
+                                    <p className="text-sm text-gray-400">{t('profile.voiceModeHint')}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-500">
+                                    {currentVoiceMode === 'livekit' ? t('profile.voiceModeLiveKit') : t('profile.voiceModeWebView')}
+                                </span>
+                                <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentVoiceMode === 'livekit' ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                    <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentVoiceMode === 'livekit' ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </div>
+                            </div>
+                        </button>
+                    )}
                 </div>
 
                 {/* Account Management Section - Only show for logged in users */}

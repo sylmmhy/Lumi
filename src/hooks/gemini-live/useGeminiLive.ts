@@ -307,11 +307,15 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
   /**
    * 发送文本消息
-   * 注意：使用 session.isConnected 和 session.sendRealtimeInput 作为依赖
-   * 而不是整个 session 对象，避免因对象引用变化导致函数频繁重建
+   * 🔧 同时检查 sessionRef（用于连接刚建立时）和 isConnected（用于连接断开时）
    */
   const sendTextMessage = useCallback((text: string) => {
-    if (session.isConnected) {
+    // 🔧 两个条件都检查：
+    // - sessionRef.current !== null: 确保 session 对象存在（解决连接刚建立时 state 延迟问题）
+    // - session.isConnected: 确保 WebSocket 没有断开
+    const hasActiveSession = session.sessionRef.current !== null || session.isConnected;
+    
+    if (hasActiveSession) {
       session.sendRealtimeInput({ text });
       if (import.meta.env.DEV) {
         console.log('📤 [GeminiLive] 发送文本:', text.substring(0, 60) + (text.length > 60 ? '...' : ''));
@@ -319,7 +323,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     } else if (import.meta.env.DEV) {
       console.warn('⚠️ [GeminiLive] 发送失败: 连接已断开');
     }
-  }, [session.isConnected, session.sendRealtimeInput]);
+  }, [session.sessionRef, session.sendRealtimeInput, session.isConnected]);
 
   /**
    * 设置 onTurnComplete 回调
@@ -327,6 +331,45 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   const setOnTurnComplete = useCallback((handler: (() => void) | null | undefined) => {
     onTurnCompleteRef.current = handler ?? null;
   }, []);
+
+  /**
+   * 中途更新 System Instruction
+   * 
+   * 用于在会话过程中动态切换 AI 的行为模式，例如：
+   * - 当用户持续抵抗时，切换到严厉语气
+   * - 当用户情绪低落时，切换到温和语气
+   * 
+   * 此方法使用 Gemini Live API 官方支持的 system role 消息，
+   * 不会占用对话 token，对剩余整个会话持久生效。
+   * 
+   * @param instruction - 新的系统指令内容
+   * 
+   * @example
+   * // 切换到严厉模式
+   * updateSystemInstruction('用户持续抵抗。从现在开始使用严厉直接的语气，如："好了，借口够多了。3、2、1，站起来。"');
+   * 
+   * @see https://docs.cloud.google.com/vertex-ai/generative-ai/docs/live-api/start-manage-session
+   */
+  const updateSystemInstruction = useCallback((instruction: string) => {
+    if (!session.isConnected) {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ [GeminiLive] updateSystemInstruction 失败: 连接已断开');
+      }
+      return;
+    }
+
+    session.sendClientContent({
+      turns: {
+        role: 'system',
+        parts: [{ text: instruction }]
+      },
+      turnComplete: true
+    });
+
+    if (import.meta.env.DEV) {
+      console.log('🎭 [GeminiLive] System Instruction 已更新:', instruction.substring(0, 80) + (instruction.length > 80 ? '...' : ''));
+    }
+  }, [session.isConnected, session.sendClientContent]);
 
   // ============================================================================
   // Auto-enable Effects
@@ -383,6 +426,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     toggleCamera,
     sendTextMessage,
     setOnTurnComplete,
+    updateSystemInstruction,
 
     // Refs for UI
     videoRef,

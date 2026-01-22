@@ -151,6 +151,10 @@
   "profile.ringtoneTypeHint": "Voce o musica",
   "profile.ringtoneVoice": "Voce",
   "profile.ringtoneMusic": "Musica",
+  "profile.voiceMode": "Modalità chiamata",
+  "profile.voiceModeHint": "Chiamate native o web",
+  "profile.voiceModeLiveKit": "Nativo",
+  "profile.voiceModeWebView": "Web",
 
   "feedback.title": "Grazie per il feedback!",
   "feedback.contactInfo": "Contatti",

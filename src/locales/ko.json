@@ -151,6 +151,10 @@
   "profile.ringtoneTypeHint": "음성 또는 음악 선택",
   "profile.ringtoneVoice": "음성",
   "profile.ringtoneMusic": "음악",
+  "profile.voiceMode": "통화 모드",
+  "profile.voiceModeHint": "네이티브 또는 웹 통화",
+  "profile.voiceModeLiveKit": "네이티브",
+  "profile.voiceModeWebView": "웹",
 
   "feedback.title": "피드백 고마워!",
   "feedback.contactInfo": "연락처",

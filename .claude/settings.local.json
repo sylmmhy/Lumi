@@ -122,7 +122,13 @@
       "mcp__notion__API-get-self",
       "mcp__notion__API-query-data-source",
       "mcp__notion__API-retrieve-a-data-source",
-      "mcp__notion__API-get-block-children"
+      "mcp__notion__API-get-block-children",
+      "mcp__notion__API-post-page",
+      "mcp__notion__API-create-a-data-source",
+      "mcp__notion__API-retrieve-a-page",
+      "mcp__notion__API-patch-block-children",
+      "mcp__Amplitude__get_event_properties",
+      "mcp__Amplitude__create_cohort"
     ],
     "deny": [],
     "ask": []

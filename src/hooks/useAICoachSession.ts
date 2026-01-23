@@ -21,9 +21,6 @@ const MAX_CAMERA_RETRIES = 2;
 /** 摄像头重试间隔（毫秒） */
 const CAMERA_RETRY_DELAY_MS = 1000;
 
-/** Tone 切换触发词发送延迟（毫秒） */
-const TONE_TRIGGER_DELAY_MS = 500;
-
 /** 静默检测间隔（毫秒）- 用户多久不说话后 AI 主动提问 */
 const SILENCE_CHECK_INTERVAL_MS = 30000;
 

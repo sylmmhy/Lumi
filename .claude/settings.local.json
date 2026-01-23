@@ -117,7 +117,12 @@
       "Bash(vercel:*)",
       "WebFetch(domain:www.hackingwithswift.com)",
       "WebFetch(domain:medium.com)",
-      "Bash(brew info:*)"
+      "Bash(brew info:*)",
+      "mcp__notion__API-post-search",
+      "mcp__notion__API-get-self",
+      "mcp__notion__API-query-data-source",
+      "mcp__notion__API-retrieve-a-data-source",
+      "mcp__notion__API-get-block-children"
     ],
     "deny": [],
     "ask": []

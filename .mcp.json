@@ -27,6 +27,16 @@
         "MEM0_API_KEY": "m0-9qtbgj5W9LBGsAZ6pZFs38tkdZNEKKoqjsKBTR15",
         "MEM0_DEFAULT_USER_ID": "jasmine"
       }
+    },
+    "notion": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
+      "env": {
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\":\"Bearer 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\",\"Notion-Version\":\"2022-06-28\"}"
+      }
     }
   }
 }

@@ -21,15 +21,18 @@ export type VoiceMode = 'webview' | 'livekit';
  * 检测是否在 iOS 原生 App 中且支持原生 LiveKit 通话
  *
  * @returns true 如果在 iOS 原生 App 中且支持原生 LiveKit 通话
+ *
+ * 2026-01-23: 暂时禁用原生 LiveKit，iOS 默认使用 WebView 模式
  */
 export function isNativeLiveKitAvailable(): boolean {
-  if (typeof window === 'undefined') return false;
+  // 暂时禁用原生 LiveKit 功能
+  // TODO: 等 LiveKit Agent 延迟问题解决后重新启用
+  return false;
 
-  // 检测 iOS WKWebView 的原生 LiveKit 桥接
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const webkit = (window as any).webkit;
-
-  return !!webkit?.messageHandlers?.startNativeLiveKitCall;
+  // 原逻辑（暂时注释）：
+  // if (typeof window === 'undefined') return false;
+  // const webkit = (window as any).webkit;
+  // return !!webkit?.messageHandlers?.startNativeLiveKitCall;
 }
 
 /**

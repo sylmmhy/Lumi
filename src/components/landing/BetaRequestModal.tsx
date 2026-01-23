@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { trackEvent } from '../../lib/amplitude';
 
 export interface BetaRequestModalProps {
   /** 是否展示弹窗 */
@@ -85,6 +86,11 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
       if (error) {
         throw error;
       }
+
+      // 追踪 Android Beta 邮箱提交成功
+      trackEvent('android_beta_email_submitted', {
+        email_domain: email.trim().split('@')[1] || 'unknown'
+      });
 
       setIsSuccess(true);
       setEmail('');

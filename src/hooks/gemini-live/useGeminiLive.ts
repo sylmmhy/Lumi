@@ -226,11 +226,16 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
   /**
    * 连接 Gemini Live
+   * @param customSystemInstruction - 自定义系统指令
+   * @param customTools - 自定义工具列表
+   * @param prefetchedToken - 预获取的 Gemini token
+   * @param voiceName - AI 声音名称（如 'Puck', 'Kore'）
    */
   const connect = useCallback(async (
     customSystemInstruction?: string,
     customTools?: FunctionDeclaration[],
-    prefetchedToken?: string
+    prefetchedToken?: string,
+    voiceName?: string
   ) => {
     // 重置统计
     analytics.resetStats();
@@ -245,6 +250,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       {
         systemInstruction: customSystemInstruction || systemInstruction,
         tools: customTools || tools,
+        voiceName,
       },
       prefetchedToken
     );

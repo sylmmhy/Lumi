@@ -155,6 +155,12 @@
   "profile.voiceModeHint": "ネイティブまたはウェブ通話",
   "profile.voiceModeLiveKit": "ネイティブ",
   "profile.voiceModeWebView": "ウェブ",
+  "profile.aiVoice": "Lumiの声",
+  "profile.aiVoiceHint": "AI音声の性別を選択",
+  "profile.aiVoiceMale": "男性",
+  "profile.aiVoiceFemale": "女性",
+  "profile.aiVoiceTitle": "Lumiの声",
+  "profile.aiVoiceDescription": "Lumiの音声の性別を選択してください",
 
   "feedback.title": "感想ありがとう！",
   "feedback.contactInfo": "連絡先",

@@ -155,6 +155,12 @@
   "profile.voiceModeHint": "네이티브 또는 웹 통화",
   "profile.voiceModeLiveKit": "네이티브",
   "profile.voiceModeWebView": "웹",
+  "profile.aiVoice": "Lumi의 목소리",
+  "profile.aiVoiceHint": "AI 음성 성별 선택",
+  "profile.aiVoiceMale": "남성",
+  "profile.aiVoiceFemale": "여성",
+  "profile.aiVoiceTitle": "Lumi의 목소리",
+  "profile.aiVoiceDescription": "Lumi의 음성 성별을 선택하세요",
 
   "feedback.title": "피드백 고마워!",
   "feedback.contactInfo": "연락처",

@@ -257,6 +257,11 @@
   "habitOnboarding.languageSelect.continue": "Continuar",
   "habitOnboarding.languageSelect.skipHint": "Saltar para detectar automáticamente",
 
+  "habitOnboarding.voiceSelect.title": "¿Lumi es chico o chica?",
+  "habitOnboarding.voiceSelect.subtitle": "Toca el botón de reproducir para escuchar",
+  "habitOnboarding.voiceSelect.male": "Chico",
+  "habitOnboarding.voiceSelect.female": "Chica",
+
   "habitOnboarding.tryNow.title": "¿Listo para probar?",
   "habitOnboarding.tryNow.description": "Puedo llamarte ahora para una sesión de 5 minutos.",
   "habitOnboarding.tryNow.callNow": "Llámame ahora",

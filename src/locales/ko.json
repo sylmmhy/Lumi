@@ -257,6 +257,11 @@
   "habitOnboarding.languageSelect.continue": "계속",
   "habitOnboarding.languageSelect.skipHint": "건너뛰면 자동 감지",
 
+  "habitOnboarding.voiceSelect.title": "Lumi는 남자일까 여자일까?",
+  "habitOnboarding.voiceSelect.subtitle": "재생 버튼으로 미리 들어봐",
+  "habitOnboarding.voiceSelect.male": "남자",
+  "habitOnboarding.voiceSelect.female": "여자",
+
   "habitOnboarding.tryNow.title": "해볼래?",
   "habitOnboarding.tryNow.description": "지금 바로 5분 체험 통화할 수 있어.",
   "habitOnboarding.tryNow.callNow": "지금 전화해줘",

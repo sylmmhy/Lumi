@@ -257,6 +257,11 @@
   "habitOnboarding.languageSelect.continue": "Continua",
   "habitOnboarding.languageSelect.skipHint": "Salta per rilevamento automatico",
 
+  "habitOnboarding.voiceSelect.title": "Lumi è un ragazzo o una ragazza?",
+  "habitOnboarding.voiceSelect.subtitle": "Tocca play per ascoltare l'anteprima",
+  "habitOnboarding.voiceSelect.male": "Ragazzo",
+  "habitOnboarding.voiceSelect.female": "Ragazza",
+
   "habitOnboarding.tryNow.title": "Pronto a provare?",
   "habitOnboarding.tryNow.description": "Posso chiamarti ora per una sessione di 5 minuti.",
   "habitOnboarding.tryNow.callNow": "Chiamami ora",

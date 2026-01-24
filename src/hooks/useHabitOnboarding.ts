@@ -7,7 +7,7 @@ import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../type
 import { DEFAULT_APP_PATH } from '../constants/routes';
 import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 interface HabitOnboardingState {
   step: OnboardingStep;

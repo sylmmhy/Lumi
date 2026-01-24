@@ -1,13 +1,14 @@
 /**
  * Generate Voice Preview Edge Function
  *
- * 使用 Gemini TTS API 为 AI 声音生成试听音频文件
+ * 使用 Gemini TTS API 为 AI 声音生成多语言试听音频文件
  * 生成后存储到 Supabase Storage 的 voice-previews bucket
  *
  * 支持的声音: Puck, Kore, Zephyr
+ * 支持的语言: en, zh, ja, ko, es, fr, de, it, pt, ru, ar, vi, nl, id
  *
  * @example POST /functions/v1/generate-voice-preview
- * Body: { "voiceName": "Puck", "regenerate": false }
+ * Body: { "voiceName": "Puck", "language": "zh", "regenerate": false }
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -24,8 +25,25 @@ const corsHeaders = {
 const SUPPORTED_VOICES = ['Puck', 'Kore', 'Zephyr'] as const;
 type VoiceName = typeof SUPPORTED_VOICES[number];
 
-// 试听文本（英文）
-const PREVIEW_TEXT = "Hi, I'm Lumi. Let me help you build good habits.";
+// 支持的语言及其试听文本
+const PREVIEW_TEXTS: Record<string, string> = {
+  'en': "Hi, I'm Lumi. Let me help you build good habits.",
+  'zh': "你好，我是 Lumi。让我陪你养成好习惯。",
+  'ja': "こんにちは、ルミです。一緒にいい習慣を作りましょう。",
+  'ko': "안녕, 나는 루미야. 좋은 습관을 만들어 보자.",
+  'es': "Hola, soy Lumi. Déjame ayudarte a crear buenos hábitos.",
+  'fr': "Salut, je suis Lumi. Laisse-moi t'aider à prendre de bonnes habitudes.",
+  'de': "Hallo, ich bin Lumi. Lass mich dir helfen, gute Gewohnheiten aufzubauen.",
+  'it': "Ciao, sono Lumi. Lascia che ti aiuti a costruire buone abitudini.",
+  'pt': "Oi, eu sou a Lumi. Deixa eu te ajudar a criar bons hábitos.",
+  'ru': "Привет, я Луми. Давай вместе создадим хорошие привычки.",
+  'ar': "مرحبا، أنا لومي. دعني أساعدك في بناء عادات جيدة.",
+  'vi': "Xin chào, tôi là Lumi. Để tôi giúp bạn xây dựng thói quen tốt.",
+  'nl': "Hoi, ik ben Lumi. Laat me je helpen goede gewoonten op te bouwen.",
+  'id': "Hai, aku Lumi. Biar aku bantu kamu membangun kebiasaan baik.",
+};
+
+const SUPPORTED_LANGUAGES = Object.keys(PREVIEW_TEXTS);
 
 /**
  * 使用 Gemini TTS API 生成语音
@@ -163,23 +181,30 @@ serve(async (req) => {
   }
 
   try {
-    // GET 请求返回所有声音的预览 URL
+    // GET 请求返回所有声音和语言的预览 URL
     if (req.method === 'GET') {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 
-      const previewUrls: Record<string, string> = {};
+      const previewUrls: Record<string, Record<string, string>> = {};
       for (const voice of SUPPORTED_VOICES) {
-        previewUrls[voice] = `${supabaseUrl}/storage/v1/object/public/voice-previews/${voice.toLowerCase()}-preview.wav`;
+        previewUrls[voice] = {};
+        for (const lang of SUPPORTED_LANGUAGES) {
+          previewUrls[voice][lang] = `${supabaseUrl}/storage/v1/object/public/voice-previews/${voice.toLowerCase()}-${lang}-preview.wav`;
+        }
       }
 
       return new Response(
-        JSON.stringify({ previews: previewUrls }),
+        JSON.stringify({
+          previews: previewUrls,
+          voices: SUPPORTED_VOICES,
+          languages: SUPPORTED_LANGUAGES
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // POST 请求生成音频
-    const { voiceName, regenerate = false } = await req.json();
+    const { voiceName, language = 'en', regenerate = false } = await req.json();
 
     // 验证声音名称
     if (!voiceName || !SUPPORTED_VOICES.includes(voiceName)) {
@@ -195,12 +220,26 @@ serve(async (req) => {
       );
     }
 
+    // 验证语言
+    if (!SUPPORTED_LANGUAGES.includes(language)) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid language',
+          supported: SUPPORTED_LANGUAGES
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     // 初始化 Supabase 客户端（使用 service role key 以便写入 storage）
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const fileName = `${voiceName.toLowerCase()}-preview.wav`;
+    const fileName = `${voiceName.toLowerCase()}-${language}-preview.wav`;
 
     // 检查文件是否已存在（除非强制重新生成）
     if (!regenerate) {
@@ -214,17 +253,19 @@ serve(async (req) => {
           JSON.stringify({
             message: 'Preview already exists',
             url: publicUrl,
-            voiceName
+            voiceName,
+            language
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
 
-    console.log(`Generating preview for voice: ${voiceName}`);
+    const previewText = PREVIEW_TEXTS[language];
+    console.log(`Generating preview for voice: ${voiceName}, language: ${language}, text: ${previewText}`);
 
     // 生成语音
-    const base64Audio = await generateSpeech(voiceName, PREVIEW_TEXT);
+    const base64Audio = await generateSpeech(voiceName, previewText);
 
     // 转换为 WAV
     const wavData = pcmToWav(base64Audio);
@@ -245,13 +286,14 @@ serve(async (req) => {
     // 获取公开 URL
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/voice-previews/${fileName}`;
 
-    console.log(`Successfully generated preview for ${voiceName}: ${publicUrl}`);
+    console.log(`Successfully generated preview for ${voiceName} (${language}): ${publicUrl}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         url: publicUrl,
-        voiceName
+        voiceName,
+        language
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

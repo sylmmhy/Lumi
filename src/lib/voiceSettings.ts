@@ -23,37 +23,80 @@ export type VoiceName = 'Puck' | 'Kore' | 'Zephyr';
 export type VoiceGender = 'male' | 'female';
 
 /**
+ * 支持试听的语言代码
+ */
+export type PreviewLanguage = 'en' | 'zh' | 'ja' | 'ko' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ru' | 'ar' | 'vi' | 'nl' | 'id';
+
+/**
  * 声音信息
  */
 export interface VoiceInfo {
   name: VoiceName;
   gender: VoiceGender;
   displayName: string;
-  /** 试听音频 URL */
-  previewUrl: string;
 }
 
 /**
- * 获取声音试听 URL
- * @param voiceName - 声音名称
- * @returns 试听音频的公开 URL
+ * 获取 Supabase URL
  */
-function getPreviewUrl(voiceName: VoiceName): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+function getSupabaseUrl(): string {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  if (!url) {
     console.warn('VITE_SUPABASE_URL not configured');
     return '';
   }
-  return `${supabaseUrl}/storage/v1/object/public/voice-previews/${voiceName.toLowerCase()}-preview.wav`;
+  return url;
+}
+
+/**
+ * 获取声音试听 URL（支持多语言）
+ * @param voiceName - 声音名称
+ * @param language - 语言代码（默认英文）
+ * @returns 试听音频的公开 URL
+ */
+export function getVoicePreviewUrl(voiceName: VoiceName, language: PreviewLanguage = 'en'): string {
+  const supabaseUrl = getSupabaseUrl();
+  if (!supabaseUrl) return '';
+  return `${supabaseUrl}/storage/v1/object/public/voice-previews/${voiceName.toLowerCase()}-${language}-preview.wav`;
+}
+
+/**
+ * 从 UI 语言代码映射到试听语言代码
+ * @param uiLanguage - UI 语言代码（如 'zh-CN', 'en-US'）
+ * @returns 试听语言代码
+ */
+export function mapUILanguageToPreviewLanguage(uiLanguage: string): PreviewLanguage {
+  // 提取语言代码前缀
+  const langCode = uiLanguage.split('-')[0].toLowerCase();
+
+  // 映射到支持的试听语言
+  const languageMap: Record<string, PreviewLanguage> = {
+    'en': 'en',
+    'zh': 'zh',
+    'ja': 'ja',
+    'ko': 'ko',
+    'es': 'es',
+    'fr': 'fr',
+    'de': 'de',
+    'it': 'it',
+    'pt': 'pt',
+    'ru': 'ru',
+    'ar': 'ar',
+    'vi': 'vi',
+    'nl': 'nl',
+    'id': 'id',
+  };
+
+  return languageMap[langCode] || 'en';
 }
 
 /**
  * 所有可用声音列表
  */
 export const AVAILABLE_VOICES: VoiceInfo[] = [
-  { name: 'Puck', gender: 'male', displayName: 'Puck', previewUrl: getPreviewUrl('Puck') },
-  { name: 'Kore', gender: 'female', displayName: 'Kore', previewUrl: getPreviewUrl('Kore') },
-  { name: 'Zephyr', gender: 'female', displayName: 'Zephyr', previewUrl: getPreviewUrl('Zephyr') },
+  { name: 'Puck', gender: 'male', displayName: 'Puck' },
+  { name: 'Kore', gender: 'female', displayName: 'Kore' },
+  { name: 'Zephyr', gender: 'female', displayName: 'Zephyr' },
 ];
 
 /**

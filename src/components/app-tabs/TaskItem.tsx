@@ -129,10 +129,21 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                 </div>
                 {/* Time - Quicksand Bold 14px Brand Blue */}
                 {mode === 'home' ? (
-                    <div className="px-2.5 py-1 min-w-[70px] text-right">
-                        <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
-                            {task.displayTime}
-                        </span>
+                    <div className="flex flex-col items-end gap-1">
+                        {/* Snoozed 标签 - 粉色背景，显示 +15 mins · later */}
+                        {task.isSnoozed && (
+                            <span
+                                className="px-2 py-0.5 bg-[#FEE2E2] text-[#9B2C2C] text-[11px] rounded-full"
+                                style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
+                            >
+                                +15 mins · later
+                            </span>
+                        )}
+                        <div className="px-2.5 py-1 min-w-[70px] text-right">
+                            <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
+                                {task.displayTime}
+                            </span>
+                        </div>
                     </div>
                 ) : (
                     <button

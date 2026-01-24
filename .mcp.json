@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "vertex-ai": {
-      "command": "bunx",
+      "command": "npx",
       "args": ["-y", "vertex-ai-mcp-server"],
       "env": {
         "AI_PROVIDER": "vertex",

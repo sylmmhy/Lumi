@@ -66,6 +66,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // AI Voice state
     const [currentVoiceName, setCurrentVoiceName] = useState<VoiceName>(getVoiceName());
     const [showVoiceSelectionModal, setShowVoiceSelectionModal] = useState(false);
+    const [playingVoice, setPlayingVoice] = useState<VoiceName | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     // 获取按性别分组的声音列表
     const maleVoices = getVoicesByGender('male');
@@ -101,6 +103,51 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         setVoiceName(voiceName);
         setCurrentVoiceName(voiceName);
         setShowVoiceSelectionModal(false);
+    };
+
+    /**
+     * 播放声音试听
+     * @param voice - 声音信息（包含 previewUrl）
+     */
+    const handlePlayPreview = (voice: { name: VoiceName; previewUrl: string }) => {
+        // 如果正在播放同一个声音，停止播放
+        if (playingVoice === voice.name && audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            setPlayingVoice(null);
+            return;
+        }
+
+        // 停止当前播放
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
+
+        // 检查 URL 是否有效
+        if (!voice.previewUrl) {
+            console.warn('No preview URL for voice:', voice.name);
+            return;
+        }
+
+        // 创建新的 Audio 实例并播放
+        const audio = new Audio(voice.previewUrl);
+        audioRef.current = audio;
+        setPlayingVoice(voice.name);
+
+        audio.play().catch(error => {
+            console.error('Failed to play audio:', error);
+            setPlayingVoice(null);
+        });
+
+        // 播放结束后重置状态
+        audio.onended = () => {
+            setPlayingVoice(null);
+        };
+
+        audio.onerror = () => {
+            console.error('Audio playback error');
+            setPlayingVoice(null);
+        };
     };
 
     const handleClosePremium = () => {
@@ -711,23 +758,42 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </div>
                             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                                 {maleVoices.map((voice, index) => (
-                                    <button
+                                    <div
                                         key={voice.name}
-                                        onClick={() => handleVoiceSelect(voice.name)}
-                                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < maleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                        className={`flex items-center justify-between p-4 ${index < maleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
                                     >
+                                        {/* 左侧：头像 + 名称 + 播放按钮 */}
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
                                                 <span className="text-blue-600 font-medium">{voice.name.charAt(0)}</span>
                                             </div>
                                             <p className="font-medium text-gray-800">{voice.displayName}</p>
+                                            {/* 播放试听按钮 */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePlayPreview(voice);
+                                                }}
+                                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors"
+                                                aria-label={`Play ${voice.name} preview`}
+                                            >
+                                                <i className={`fa-solid ${playingVoice === voice.name ? 'fa-stop' : 'fa-play'} text-gray-600 text-xs`}></i>
+                                            </button>
                                         </div>
-                                        {currentVoiceName === voice.name && (
-                                            <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center">
+                                        {/* 右侧：选择按钮 */}
+                                        <button
+                                            onClick={() => handleVoiceSelect(voice.name)}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                                currentVoiceName === voice.name
+                                                    ? 'bg-brand-blue'
+                                                    : 'border-2 border-gray-300 hover:border-brand-blue'
+                                            }`}
+                                        >
+                                            {currentVoiceName === voice.name && (
                                                 <i className="fa-solid fa-check text-white text-xs"></i>
-                                            </div>
-                                        )}
-                                    </button>
+                                            )}
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -740,23 +806,42 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </div>
                             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                                 {femaleVoices.map((voice, index) => (
-                                    <button
+                                    <div
                                         key={voice.name}
-                                        onClick={() => handleVoiceSelect(voice.name)}
-                                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < femaleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                        className={`flex items-center justify-between p-4 ${index < femaleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
                                     >
+                                        {/* 左侧：头像 + 名称 + 播放按钮 */}
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
                                                 <span className="text-pink-600 font-medium">{voice.name.charAt(0)}</span>
                                             </div>
                                             <p className="font-medium text-gray-800">{voice.displayName}</p>
+                                            {/* 播放试听按钮 */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePlayPreview(voice);
+                                                }}
+                                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors"
+                                                aria-label={`Play ${voice.name} preview`}
+                                            >
+                                                <i className={`fa-solid ${playingVoice === voice.name ? 'fa-stop' : 'fa-play'} text-gray-600 text-xs`}></i>
+                                            </button>
                                         </div>
-                                        {currentVoiceName === voice.name && (
-                                            <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center">
+                                        {/* 右侧：选择按钮 */}
+                                        <button
+                                            onClick={() => handleVoiceSelect(voice.name)}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                                currentVoiceName === voice.name
+                                                    ? 'bg-brand-blue'
+                                                    : 'border-2 border-gray-300 hover:border-brand-blue'
+                                            }`}
+                                        >
+                                            {currentVoiceName === voice.name && (
                                                 <i className="fa-solid fa-check text-white text-xs"></i>
-                                            </div>
-                                        )}
-                                    </button>
+                                            )}
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>

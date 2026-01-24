@@ -8,7 +8,6 @@
  * - Puck: 男声（默认）
  * - Orus: 男声
  * - Kore: 女声
- * - Leda: 女声
  * - Zephyr: 女声
  */
 
@@ -17,7 +16,7 @@ const VOICE_NAME_STORAGE_KEY = 'lumi_voice_name';
 /**
  * AI 声音名称
  */
-export type VoiceName = 'Puck' | 'Orus' | 'Kore' | 'Leda' | 'Zephyr';
+export type VoiceName = 'Puck' | 'Orus' | 'Kore' | 'Zephyr';
 
 /**
  * 声音性别类型（用于 UI 显示）
@@ -40,7 +39,6 @@ export const AVAILABLE_VOICES: VoiceInfo[] = [
   { name: 'Puck', gender: 'male', displayName: 'Puck' },
   { name: 'Orus', gender: 'male', displayName: 'Orus' },
   { name: 'Kore', gender: 'female', displayName: 'Kore' },
-  { name: 'Leda', gender: 'female', displayName: 'Leda' },
   { name: 'Zephyr', gender: 'female', displayName: 'Zephyr' },
 ];
 
@@ -51,7 +49,6 @@ const VOICE_TO_GENDER: Record<VoiceName, VoiceGender> = {
   Puck: 'male',
   Orus: 'male',
   Kore: 'female',
-  Leda: 'female',
   Zephyr: 'female',
 };
 

@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
 import { getRingtoneType, setRingtoneType, type RingtoneType } from '../../lib/ringtoneSettings';
 import { getVoiceMode, setVoiceMode, isLiveKitAvailable, type VoiceMode } from '../../lib/liveKitSettings';
+import { getVoiceName, setVoiceName, getVoicesByGender, type VoiceName } from '../../lib/voiceSettings';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -62,6 +63,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showLiveKitOption] = useState<boolean>(isLiveKitAvailable());
     const [currentVoiceMode, setCurrentVoiceMode] = useState<VoiceMode>(getVoiceMode());
 
+    // AI Voice state
+    const [currentVoiceName, setCurrentVoiceName] = useState<VoiceName>(getVoiceName());
+    const [showVoiceSelectionModal, setShowVoiceSelectionModal] = useState(false);
+
+    // 获取按性别分组的声音列表
+    const maleVoices = getVoicesByGender('male');
+    const femaleVoices = getVoicesByGender('female');
+
     // Get current UI language from context
     const { uiLanguage } = useTranslation();
 
@@ -82,6 +91,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         const newMode: VoiceMode = currentVoiceMode === 'webview' ? 'livekit' : 'webview';
         setVoiceMode(newMode);
         setCurrentVoiceMode(newMode);
+    };
+
+    /**
+     * 处理 AI 声音选择
+     * @param voiceName - 选择的声音名称
+     */
+    const handleVoiceSelect = (voiceName: VoiceName) => {
+        setVoiceName(voiceName);
+        setCurrentVoiceName(voiceName);
+        setShowVoiceSelectionModal(false);
     };
 
     const handleClosePremium = () => {
@@ -417,7 +436,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Ringtone Type Setting */}
                     <button
                         onClick={handleRingtoneTypeToggle}
-                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
@@ -435,6 +454,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentRingtoneType === 'music' ? 'bg-brand-blue' : 'bg-gray-300'}`}>
                                 <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentRingtoneType === 'music' ? 'translate-x-5' : 'translate-x-0'}`} />
                             </div>
+                        </div>
+                    </button>
+
+                    {/* AI Voice Gender Setting */}
+                    <button
+                        onClick={() => setShowVoiceSelectionModal(true)}
+                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-volume-high text-orange-500"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.aiVoice')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.aiVoiceHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {currentVoiceName}
+                            </span>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
                         </div>
                     </button>
 
@@ -636,6 +677,89 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             <i className="fa-solid fa-trash-can"></i>
                             <span>{t('profile.deleteAccount')}</span>
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Voice Selection Modal */}
+            {showVoiceSelectionModal && (
+                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
+                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
+                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
+                        <button
+                            onClick={() => setShowVoiceSelectionModal(false)}
+                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                        >
+                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
+                        </button>
+                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
+                            {t('profile.aiVoiceTitle')}
+                        </h2>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <p className="text-gray-500 text-sm mb-4 text-center">
+                            {t('profile.aiVoiceDescription')}
+                        </p>
+
+                        {/* Male Voices Section */}
+                        <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-2 px-1">
+                                <i className="fa-solid fa-mars text-blue-500"></i>
+                                <span className="text-sm font-medium text-gray-600">{t('profile.aiVoiceMale')}</span>
+                            </div>
+                            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                                {maleVoices.map((voice, index) => (
+                                    <button
+                                        key={voice.name}
+                                        onClick={() => handleVoiceSelect(voice.name)}
+                                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < maleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                                                <span className="text-blue-600 font-medium">{voice.name.charAt(0)}</span>
+                                            </div>
+                                            <p className="font-medium text-gray-800">{voice.displayName}</p>
+                                        </div>
+                                        {currentVoiceName === voice.name && (
+                                            <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center">
+                                                <i className="fa-solid fa-check text-white text-xs"></i>
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Female Voices Section */}
+                        <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-2 px-1">
+                                <i className="fa-solid fa-venus text-pink-500"></i>
+                                <span className="text-sm font-medium text-gray-600">{t('profile.aiVoiceFemale')}</span>
+                            </div>
+                            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                                {femaleVoices.map((voice, index) => (
+                                    <button
+                                        key={voice.name}
+                                        onClick={() => handleVoiceSelect(voice.name)}
+                                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < femaleVoices.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
+                                                <span className="text-pink-600 font-medium">{voice.name.charAt(0)}</span>
+                                            </div>
+                                            <p className="font-medium text-gray-800">{voice.displayName}</p>
+                                        </div>
+                                        {currentVoiceName === voice.name && (
+                                            <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center">
+                                                <i className="fa-solid fa-check text-white text-xs"></i>
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

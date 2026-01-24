@@ -155,6 +155,12 @@
   "profile.voiceModeHint": "Llamadas nativas o web",
   "profile.voiceModeLiveKit": "Nativo",
   "profile.voiceModeWebView": "Web",
+  "profile.aiVoice": "Voz de Lumi",
+  "profile.aiVoiceHint": "Elige el género de voz del AI",
+  "profile.aiVoiceMale": "Masculino",
+  "profile.aiVoiceFemale": "Femenino",
+  "profile.aiVoiceTitle": "Voz de Lumi",
+  "profile.aiVoiceDescription": "Elige el género de voz de Lumi",
 
   "feedback.title": "¡Gracias por tu opinión!",
   "feedback.contactInfo": "Contacto",

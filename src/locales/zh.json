@@ -164,6 +164,12 @@
   "profile.voiceModeHint": "原生或网页通话",
   "profile.voiceModeLiveKit": "原生",
   "profile.voiceModeWebView": "网页",
+  "profile.aiVoice": "Lumi 的声音",
+  "profile.aiVoiceHint": "选择 AI 声音性别",
+  "profile.aiVoiceMale": "男声",
+  "profile.aiVoiceFemale": "女声",
+  "profile.aiVoiceTitle": "Lumi 的声音",
+  "profile.aiVoiceDescription": "选择 Lumi 的声音性别",
 
   "feedback.title": "感谢你的反馈！",
   "feedback.contactInfo": "联系方式",

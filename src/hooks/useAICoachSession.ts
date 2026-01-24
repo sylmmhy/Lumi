@@ -7,6 +7,7 @@ import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
+import { getVoiceName } from '../lib/voiceSettings';
 
 // ==========================================
 // 配置常量
@@ -632,9 +633,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         console.log('✅ 并行获取完成，正在连接 Gemini Live...');
       }
 
+      // 获取用户选择的 AI 声音
+      const voiceName = getVoiceName();
+      if (import.meta.env.DEV) {
+        console.log('🎤 使用 AI 声音:', voiceName);
+      }
+
       // 使用预获取的 token 连接（带超时保护）
       await withTimeout(
-        geminiLive.connect(systemInstruction, undefined, token),
+        geminiLive.connect(systemInstruction, undefined, token, voiceName),
         CONNECTION_TIMEOUT_MS,
         '连接 AI 服务超时，请检查网络连接后重试'
       );

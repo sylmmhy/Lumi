@@ -21,172 +21,8 @@ const MAX_CAMERA_RETRIES = 2;
 /** 摄像头重试间隔（毫秒） */
 const CAMERA_RETRY_DELAY_MS = 1000;
 
-/** 静默检测间隔（毫秒）- 用户多久不说话后 AI 主动提问 */
-const SILENCE_CHECK_INTERVAL_MS = 30000;
-
-/** AI 主动提问的最大次数（避免无限循环） */
-const MAX_PROACTIVE_PROMPTS = 5;
-
-// ==========================================
-// 语气切换配置
-// ==========================================
-
-/** 根据抗拒次数获取语气类型 */
-function getToneByResistCount(count: number): string {
-  switch (count) {
-    case 1:
-      return 'acknowledge_tiny';
-    case 2:
-      return 'curious_memory';
-    case 3:
-      return 'tough_love';
-    case 4:
-      return 'absurd_humor';
-    default:
-      // 5次以上：在 tough_love 和 absurd_humor 之间循环
-      return count % 2 === 1 ? 'tough_love' : 'absurd_humor';
-  }
-}
-
-/** 获取语气的中文描述（用于日志） */
-function getToneDescription(tone: string): string {
-  const descriptions: Record<string, string> = {
-    'friendly': '友好开场',
-    'acknowledge_tiny': '承认+超小步骤',
-    'curious_memory': '好奇探索+记忆成功',
-    'tough_love': '严厉推力模式',
-    'absurd_humor': '荒谬幽默模式',
-    'gentle': '温和模式',
-  };
-  return descriptions[tone] || tone;
-}
-
-/**
- * 生成语气指令虚拟消息
- */
-function generateToneInstruction(
-  resistCount: number,
-  isEmotional: boolean,
-  hasSuccessMemory: boolean = false,
-  successMemoryHint: string = ''
-): string {
-  // 情绪低落时，始终用 gentle
-  if (isEmotional) {
-    return `[TONE_INSTRUCTION] emotional_state=low_mood tone=gentle
-
-The user seems emotionally struggling. Use GENTLE mode.
-Be super soft and caring. Zero pressure. Validate their emotions first.
-
-GOOD EXAMPLES:
-- "听起来今天很不容易。我在这里陪你。"
-- "Hey, today sounds really hard. I am here with you."
-- "不用做很多。就陪你坐一会。"
-
-BAD (DO NOT DO):
-- Being harsh or using countdown
-- Making jokes about furniture
-- Pushing them to do the task`;
-  }
-
-  const tone = getToneByResistCount(resistCount);
-
-  switch (tone) {
-    case 'acknowledge_tiny':
-      return `[TONE_INSTRUCTION] resist_count=${resistCount} tone=acknowledge_tiny
-
-Use ACKNOWLEDGE + TINY STEP mode.
-First acknowledge their feeling ("I get it", "Okay", "我懂"), then offer ONE embarrassingly tiny step.
-Do NOT ask questions about why. Do NOT make jokes.
-
-GOOD EXAMPLES:
-- "我懂。那就...站起来？就这样，不用做别的。"
-- "I get it. What if you just stood up? That is it."
-- "好吧。那你就看一眼那封邮件的标题？不用点开。"
-
-BAD (DO NOT DO):
-- Asking "Why don't you want to?" (that is curious mode, for resist #2)
-- Making jokes about crying furniture (that is humor mode, for resist #4+)
-- Being harsh or disappointed (that is tough love, for resist #3)`;
-
-    case 'curious_memory':
-      if (hasSuccessMemory && successMemoryHint) {
-        return `[TONE_INSTRUCTION] resist_count=${resistCount} tone=curious_memory has_success_memory=true
-
-Use MEMORY RECALL mode. The user has past successes!
-${successMemoryHint}
-
-Remind them of their past success to motivate them. Be encouraging, not pushy.
-
-GOOD EXAMPLES:
-- "你之前也做过这个呀，当时是怎么开始的？"
-- "You have done this before. How did you start last time?"
-- "你已经坚持了好几次了，这次也可以的。"
-- "上次你也不想，但最后还是做完了，记得那种感觉吗？"
-
-BAD (DO NOT DO):
-- Giving another tiny step (you already tried that in resist #1)
-- Being harsh (that is tough love, for resist #3)
-- Making jokes (that is humor, for resist #4+)`;
-      } else {
-        return `[TONE_INSTRUCTION] resist_count=${resistCount} tone=curious_memory has_success_memory=false
-
-Use CURIOUS EXPLORATION mode. No past success data available.
-Ask open questions about WHY they resist, or invite them to imagine the outcome.
-
-GOOD EXAMPLES:
-- "怎么了？今天是什么让这件事特别难？"
-- "What is going on? What is making this hard today?"
-- "你有没有想过，做完之后会是什么感觉？"
-- "如果你现在站起来，5分钟后的你会怎么想？"
-- "好奇问一下，是什么在挡着你？"
-
-BAD (DO NOT DO):
-- Giving another tiny step (you already tried that)
-- Being harsh (that is tough love, for resist #3)
-- Making jokes (that is humor, for resist #4+)`;
-      }
-
-    case 'tough_love':
-      return `[TONE_INSTRUCTION] resist_count=${resistCount} tone=tough_love
-
-Use TOUGH LOVE mode. Be HARSH and DISAPPOINTED.
-Sound impatient. Use countdown or direct commands. NO jokes. NO softening. NO "I understand".
-
-GOOD EXAMPLES:
-- "够了。三、二、一。动。"
-- "Enough. 3, 2, 1. Move."
-- "我以为你不是这样的人。起来。"
-- "I expected better from you. Get up."
-- "累？谁不累。动。"
-- "还要我说几遍？现在。"
-
-BAD (DO NOT DO - VERY IMPORTANT):
-- "你的床在哭" / "Your bed is crying" - This is HUMOR, absolutely BANNED!
-- "我懂，但是..." / "I understand, but..." - No softening!
-- Any jokes or personification of objects - BANNED in tough love!
-- Being gentle or understanding - Wrong mode!`;
-
-    case 'absurd_humor':
-      return `[TONE_INSTRUCTION] resist_count=${resistCount} tone=absurd_humor
-
-Use ABSURD HUMOR mode. Break the loop with ridiculous jokes.
-Personify objects, make silly bets/challenges, sneak in a tiny step inside the joke.
-
-GOOD EXAMPLES:
-- "你的床在哭，说你压得它喘不过气了。站起来让它休息一下。"
-- "Your bed is crying. It says you are crushing it. Stand up to give it a break."
-- "我赌五毛钱你连站都不敢。来，证明我错了。"
-- "I bet you cannot even stand up. Prove me wrong."
-- "技术上来说，站起来只是竖着躺。试试？"
-
-BAD (DO NOT DO):
-- Being harsh or disappointed (that was tough love)
-- Asking serious questions (that was curious mode)`;
-
-    default:
-      return '';
-  }
-}
+/** Tone 切换触发词发送延迟（毫秒） */
+const TONE_TRIGGER_DELAY_MS = 500;
 
 // ==========================================
 // 工具函数
@@ -242,7 +78,7 @@ export interface UseAICoachSessionOptions {
   initialTime?: number;
   /** 倒计时结束时的回调 */
   onCountdownComplete?: () => void;
-  /** 是否启用虚拟消息（AI 主动问候），默认 false（已禁用，改用直接开场问候） */
+  /** 是否启用虚拟消息（AI 主动问候），默认 true */
   enableVirtualMessages?: boolean;
   /** 是否启用 VAD（用户说话检测），默认 true */
   enableVAD?: boolean;
@@ -264,7 +100,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const {
     initialTime = 300,
     onCountdownComplete,
-    enableVirtualMessages = false, // 禁用虚拟消息，避免干扰语气切换
+    enableVirtualMessages = true,
     enableVAD = true,
     enableToneManager = true,
   } = options;
@@ -318,28 +154,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
-  // 🔧 防重复触发机制 - 记录上次处理的抗拒消息 ID
-  const lastProcessedResistIdRef = useRef<string>('');
-
-  // 🎯 语气切换：追踪确认的抗拒次数（基于 AI 的 [RESIST] 标记）
-  const confirmedResistCountRef = useRef<number>(0);
-  // 🔧 防止虚拟消息重复发送 - 记录上次发送语气指令时的抗拒计数
-  const lastSentToneInstructionCountRef = useRef<number>(0);
-  // 追踪情绪状态（基于 AI 的 [RESIST_EMO] 标记）
-  const isEmotionalRef = useRef<boolean>(false);
-  // 上一次的语气（用于日志显示切换）
-  const lastToneRef = useRef<string>('friendly');
-
-  // 🔇 静默检测相关 refs
-  const lastActivityTimeRef = useRef<number>(Date.now());
-  const proactivePromptCountRef = useRef<number>(0);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   // ==========================================
   // 动态语气管理（Tone Manager）
   // ==========================================
   const toneManager = useToneManager({
-    minToneChangeInterval: 15000,    // 15秒内不重复切换
+    rejectionThreshold: 2,           // 连续2次抗拒后切换语气
+    minToneChangeInterval: 30000,    // 30秒内不重复切换
     enableDebugLog: import.meta.env.DEV,
   });
 
@@ -406,169 +226,38 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
         let displayText = lastMessage.text;
         if (enableToneManager) {
-          // 🔧 新一轮开始时重置 flag
-          // 注意：不在这里判断用户是否配合，因为 AI 回复是流式的
-          // [RESIST] 可能在后面的 chunk 中才出现
+          // 🔧 新一轮开始时，判断上一轮是否有抗拒
           if (isNewAITurn) {
+            if (!currentTurnHasResistRef.current) {
+              // 上一轮没有 [RESIST]，说明用户在配合
+              toneManager.recordAcceptance();
+            }
+            // 重置 flag，准备新一轮的检测
             currentTurnHasResistRef.current = false;
           }
 
-          // 检测 [RESIST_EMO]（情绪性抗拒）或 [RESIST]（普通抗拒）或 [ACTION]（开始行动）
-          const hasResistEmoTag = lastMessage.text.startsWith('[RESIST_EMO]');
           const hasResistTag = lastMessage.text.startsWith('[RESIST]');
-          const hasActionTag = lastMessage.text.startsWith('[ACTION]');
 
-          if (hasResistEmoTag) {
-            // 移除 [RESIST_EMO] 标记
-            displayText = lastMessage.text.replace(/^\[RESIST_EMO\]\s*/, '');
-            currentTurnHasResistRef.current = true;
-
-            // 🔧 防重复：检查是否已处理过这条消息
-            if (lastProcessedResistIdRef.current !== messageId) {
-              lastProcessedResistIdRef.current = messageId;
-              
-              // 🎯 标记为情绪性抗拒，下一轮用 gentle 模式
-              confirmedResistCountRef.current += 1;
-              isEmotionalRef.current = true;
-              
-              // 日志：显示语气切换
-              const newTone = 'gentle';
-              if (import.meta.env.DEV) {
-                console.log('😢 [ToneManager] AI 检测到情绪性抗拒');
-                console.log(`🔄 [ToneManager] 语气切换: ${getToneDescription(lastToneRef.current)} → ${getToneDescription(newTone)}`);
-              }
-              lastToneRef.current = newTone;
-
-              // 🎯 立即发送下一轮的语气指令（在 AI 确认抗拒后立即发送，而不是等用户下次说话）
-              if (geminiLive.isConnected) {
-                const hasSuccessMemory = successRecordRef.current !== null && 
-                                         successRecordRef.current.totalCompletions > 0;
-                
-                let successMemoryHint = '';
-                if (hasSuccessMemory && successRecordRef.current) {
-                  const record = successRecordRef.current;
-                  const hints: string[] = [];
-                  if (record.totalCompletions > 0) {
-                    hints.push(`User has completed this type of task ${record.totalCompletions} time(s) before.`);
-                  }
-                  if (record.currentStreak > 0) {
-                    hints.push(`User is on a ${record.currentStreak}-day streak.`);
-                  }
-                  if (record.lastDuration) {
-                    hints.push(`Last time they did it for ${record.lastDuration} minutes.`);
-                  }
-                  if (record.personalBest) {
-                    hints.push(`Their personal best is ${record.personalBest} minutes.`);
-                  }
-                  successMemoryHint = hints.join(' ');
-                }
-                
-                const toneInstruction = generateToneInstruction(
-                  confirmedResistCountRef.current,
-                  isEmotionalRef.current,
-                  hasSuccessMemory,
-                  successMemoryHint
-                );
-                
-                // 延迟 100ms 发送，确保 AI 当前回复完成
-                setTimeout(() => {
-                  if (geminiLive.isConnected) {
-                    geminiLive.sendTextMessage(toneInstruction);
-                    lastSentToneInstructionCountRef.current = confirmedResistCountRef.current;
-                    if (import.meta.env.DEV) {
-                      console.log(`📤 [ToneManager] 发送语气指令: resist=${confirmedResistCountRef.current}, emotional=${isEmotionalRef.current}, hasMemory=${hasSuccessMemory}`);
-                    }
-                  }
-                }, 100);
-              }
-
-              // 注意：不再调用 toneManager.recordResistance()，避免重复日志
-            }
-          } else if (hasResistTag) {
+          if (hasResistTag) {
             // 移除 [RESIST] 标记
             displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
+
+            // 🔧 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
             currentTurnHasResistRef.current = true;
 
-            // 🔧 防重复：检查是否已处理过这条消息
-            if (lastProcessedResistIdRef.current !== messageId) {
-              lastProcessedResistIdRef.current = messageId;
-              
-              // 🎯 增加确认的抗拒计数
-              confirmedResistCountRef.current += 1;
-              isEmotionalRef.current = false; // 普通抗拒，不是情绪性的
-              
-              // 日志：显示语气切换
-              const newTone = getToneByResistCount(confirmedResistCountRef.current);
-              if (import.meta.env.DEV) {
-                console.log(`🚫 [ToneManager] AI 确认用户抗拒 (第 ${confirmedResistCountRef.current} 次)`);
-                console.log(`🔄 [ToneManager] 语气切换: ${getToneDescription(lastToneRef.current)} → ${getToneDescription(newTone)}`);
-              }
-              lastToneRef.current = newTone;
+            // 记录抗拒（AI 检测到用户在抗拒）
+            // 返回值是触发词字符串（如果发生了语气切换），避免闭包过期问题
+            const triggerString = toneManager.recordResistance('ai_detected');
 
-              // 🎯 立即发送下一轮的语气指令（在 AI 确认抗拒后立即发送，而不是等用户下次说话）
-              if (geminiLive.isConnected) {
-                const hasSuccessMemory = successRecordRef.current !== null && 
-                                         successRecordRef.current.totalCompletions > 0;
-                
-                let successMemoryHint = '';
-                if (hasSuccessMemory && successRecordRef.current) {
-                  const record = successRecordRef.current;
-                  const hints: string[] = [];
-                  if (record.totalCompletions > 0) {
-                    hints.push(`User has completed this type of task ${record.totalCompletions} time(s) before.`);
-                  }
-                  if (record.currentStreak > 0) {
-                    hints.push(`User is on a ${record.currentStreak}-day streak.`);
-                  }
-                  if (record.lastDuration) {
-                    hints.push(`Last time they did it for ${record.lastDuration} minutes.`);
-                  }
-                  if (record.personalBest) {
-                    hints.push(`Their personal best is ${record.personalBest} minutes.`);
-                  }
-                  successMemoryHint = hints.join(' ');
-                }
-                
-                const toneInstruction = generateToneInstruction(
-                  confirmedResistCountRef.current,
-                  isEmotionalRef.current,
-                  hasSuccessMemory,
-                  successMemoryHint
-                );
-                
-                // 延迟 100ms 发送，确保 AI 当前回复完成
-                setTimeout(() => {
-                  if (geminiLive.isConnected) {
-                    geminiLive.sendTextMessage(toneInstruction);
-                    lastSentToneInstructionCountRef.current = confirmedResistCountRef.current;
-                    if (import.meta.env.DEV) {
-                      console.log(`📤 [ToneManager] 发送语气指令: resist=${confirmedResistCountRef.current}, emotional=${isEmotionalRef.current}, hasMemory=${hasSuccessMemory}`);
-                    }
-                  }
-                }, 100);
-              }
-
-              // 注意：不再调用 toneManager.recordResistance()，避免重复日志
+            if (import.meta.env.DEV) {
+              console.log('🚫 [ToneManager] AI 检测到用户抗拒');
             }
-          } else if (hasActionTag) {
-            // 移除 [ACTION] 标记
-            displayText = lastMessage.text.replace(/^\[ACTION\]\s*/, '');
 
-            // 🔧 防重复：检查是否已处理过这条消息
-            if (lastProcessedResistIdRef.current !== messageId) {
-              lastProcessedResistIdRef.current = messageId;
-              
-              // 🎯 用户开始行动，重置抗拒计数
-              confirmedResistCountRef.current = 0;
-              isEmotionalRef.current = false;
-              
-              if (import.meta.env.DEV) {
-                console.log('🎉 [ToneManager] 用户开始行动！');
-                console.log(`🔄 [ToneManager] 语气重置: ${getToneDescription(lastToneRef.current)} → ${getToneDescription('friendly')}`);
-              }
-              lastToneRef.current = 'friendly';
-
-              // 注意：不再调用 toneManager.recordActionStarted()，避免重复日志
+            // 如果触发了语气切换，稍后发送触发词
+            if (triggerString) {
+              setTimeout(() => {
+                sendToneTriggerRef.current(triggerString);
+              }, TONE_TRIGGER_DELAY_MS);
             }
           }
         }
@@ -584,18 +273,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       if (lastMessage.role === 'user') {
-        // 🔧 用户开始说话时，不再自动调用 recordAcceptance()
-        // 因为 AI 有时不会加 [RESIST] 标记，但用户实际上在抗拒
-        // 只依赖 [ACTION] 标记来重置抗拒计数
-        
         // 累积用户语音碎片，不立即存储
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
-          // 🔇 用户说话了，更新活动时间并重置主动提问计数
-          lastActivityTimeRef.current = Date.now();
-          proactivePromptCountRef.current = 0;
-          
-          // 注意：语气指令现在在 AI 确认抗拒后立即发送，不再在用户说话时发送
         }
 
         // 更新角色跟踪
@@ -658,91 +338,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     return () => setOnTurnComplete(null);
   }, [recordTurnComplete, setOnTurnComplete]);
 
-  // 当 AI 开始说话时，关闭观察状态并更新活动时间
+  // 当 AI 开始说话时，关闭观察状态
   useEffect(() => {
-    if (geminiLive.isSpeaking) {
-      // AI 说话也算活动，重置静默计时器
-      lastActivityTimeRef.current = Date.now();
-      
-      if (isObserving) {
-        setIsObserving(false);
-        if (import.meta.env.DEV) {
-          console.log('👀 AI 开始说话，观察阶段结束');
-        }
+    if (geminiLive.isSpeaking && isObserving) {
+      setIsObserving(false);
+      if (import.meta.env.DEV) {
+        console.log('👀 AI 开始说话，观察阶段结束');
       }
     }
   }, [geminiLive.isSpeaking, isObserving]);
-
-  // ==========================================
-  // 🔇 静默检测 - 用户长时间不说话时 AI 主动提问
-  // ==========================================
-  useEffect(() => {
-    // 只有在会话活跃时才启动静默检测
-    if (!isSessionActive || !geminiLive.isConnected) {
-      if (silenceTimerRef.current) {
-        clearInterval(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-      return;
-    }
-
-    // 启动静默检测定时器
-    silenceTimerRef.current = setInterval(() => {
-      const now = Date.now();
-      const timeSinceLastActivity = now - lastActivityTimeRef.current;
-
-      // 检查是否超过静默间隔
-      if (timeSinceLastActivity >= SILENCE_CHECK_INTERVAL_MS) {
-        // 检查是否达到最大主动提问次数
-        if (proactivePromptCountRef.current >= MAX_PROACTIVE_PROMPTS) {
-          if (import.meta.env.DEV) {
-            console.log('🔇 已达到最大主动提问次数，停止提问');
-          }
-          return;
-        }
-
-        // 如果 AI 正在说话，不要打断
-        if (geminiLive.isSpeaking) {
-          return;
-        }
-
-        // 发送主动提问
-        const currentTime = new Date();
-        const timeStr = `${currentTime.getHours().toString().padStart(2, '0')}:${currentTime.getMinutes().toString().padStart(2, '0')}`;
-        const elapsedSeconds = Math.floor((now - taskStartTime) / 1000);
-        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-        
-        // 根据主动提问次数选择不同的提问类型
-        let promptType = 'check_in';
-        if (proactivePromptCountRef.current === 0) {
-          promptType = 'friendly_check';
-        } else if (proactivePromptCountRef.current === 1) {
-          promptType = 'curious';
-        } else if (proactivePromptCountRef.current >= 2) {
-          promptType = 'encouraging';
-        }
-
-        geminiLive.sendTextMessage(
-          `[SILENCE_CHECK] type=${promptType} silence_duration=${Math.floor(timeSinceLastActivity / 1000)}s elapsed=${elapsedMinutes}m prompt_count=${proactivePromptCountRef.current + 1} current_time=${timeStr}`
-        );
-
-        if (import.meta.env.DEV) {
-          console.log(`🔇 检测到用户静默 ${Math.floor(timeSinceLastActivity / 1000)}秒，发送主动提问 #${proactivePromptCountRef.current + 1}`);
-        }
-
-        // 更新计数和活动时间
-        proactivePromptCountRef.current += 1;
-        lastActivityTimeRef.current = now;
-      }
-    }, 5000); // 每5秒检查一次
-
-    return () => {
-      if (silenceTimerRef.current) {
-        clearInterval(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-    };
-  }, [isSessionActive, geminiLive.isConnected, geminiLive.isSpeaking, geminiLive.sendTextMessage, taskStartTime]);
 
   // ==========================================
   // 倒计时
@@ -780,13 +384,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // 2. 断开 Gemini 连接
     geminiLive.disconnect();
 
-    // 3. 清理静默检测定时器
-    if (silenceTimerRef.current) {
-      clearInterval(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-
-    // 4. 重置状态
+    // 3. 重置状态
     setIsSessionActive(false);
     setIsObserving(false);
     setIsConnecting(false);
@@ -879,9 +477,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
-    // 🔇 重置静默检测相关的 refs
-    lastActivityTimeRef.current = Date.now();
-    proactivePromptCountRef.current = 0;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 
@@ -889,12 +484,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     if (enableToneManager) {
       toneManager.resetToneState();
     }
-    
-    // 🎯 重置语气切换相关状态
-    confirmedResistCountRef.current = 0;
-    isEmotionalRef.current = false;
-    lastToneRef.current = 'friendly';
-    lastSentToneInstructionCountRef.current = 0;
 
    try {
       if (import.meta.env.DEV) {
@@ -1061,18 +650,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // 开始倒计时
       startCountdown();
 
-      // 🔧 直接发送开场问候
-      // connect() 完成后 session 已建立，但需要短暂延迟确保 WebSocket 完全就绪
-      const now = new Date();
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      
-      // 延迟 300ms 确保 WebSocket 完全就绪（现在使用 sessionRef 检查，应该更可靠）
-      setTimeout(() => {
-        geminiLive.sendTextMessage(`[GREETING] task="${taskDescription}" current_time=${currentTime}`);
-        if (import.meta.env.DEV) {
-          console.log('👋 发送开场问候，任务:', taskDescription);
-        }
-      }, 300);
+      // 注意：AI 开场白由 useVirtualMessages 系统触发
+      // 不在这里发送消息，让虚拟消息系统统一处理
 
       if (import.meta.env.DEV) {
         console.log('✨ AI 教练会话已成功开始');
@@ -1285,11 +864,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // 🔧 重置流式响应相关的 refs
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
-    // 🎯 重置语气切换相关状态
-    confirmedResistCountRef.current = 0;
-    isEmotionalRef.current = false;
-    lastToneRef.current = 'friendly';
-    lastSentToneInstructionCountRef.current = 0;
     setConnectionError(null); // 清除错误状态
     setState({
       taskDescription: '',

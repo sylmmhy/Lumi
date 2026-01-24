@@ -18,7 +18,7 @@ import {
   type Tool as GeminiTool,
   type FunctionDeclaration
 } from '@google/genai';
-import type { GeminiSession, GeminiSessionConfig, ClientContent } from '../types';
+import type { GeminiSession, GeminiSessionConfig } from '../types';
 import { devLog } from '../utils';
 
 // ============================================================================
@@ -96,7 +96,6 @@ interface UseGeminiSessionReturn {
       response: Record<string, unknown>;
     }>;
   }) => void;
-  sendClientContent: (content: ClientContent) => void;
 }
 
 // ============================================================================
@@ -190,8 +189,6 @@ export function useGeminiSession(
             onError?.(errorMessage);
           },
           onclose: () => {
-            // 🔧 确保连接断开时同步清空 sessionRef
-            sessionRef.current = null;
             setIsConnected(false);
             devLog('Gemini Live disconnected');
             onDisconnected?.();
@@ -251,44 +248,6 @@ export function useGeminiSession(
     }
   }, []);
 
-  /**
-   * 发送 Client Content（支持 user/system role）
-   * 
-   * 这个方法有两个主要用途：
-   * 1. 发送 user role 消息：作为用户输入进入对话上下文
-   * 2. 发送 system role 消息：中途更新 System Instruction（不占用对话 token）
-   * 
-   * @param content - ClientContent 对象
-   * 
-   * @example
-   * // 中途更新 System Instruction（用于语气切换）
-   * sendClientContent({
-   *   turns: {
-   *     role: 'system',
-   *     parts: [{ text: '从现在开始使用严厉直接的语气督促用户' }]
-   *   },
-   *   turnComplete: true
-   * });
-   * 
-   * @see https://docs.cloud.google.com/vertex-ai/generative-ai/docs/live-api/start-manage-session
-   */
-  const sendClientContent = useCallback((content: ClientContent) => {
-    if (sessionRef.current) {
-      // @google/genai SDK 的 session 对象原生支持 sendClientContent 方法
-      (sessionRef.current as unknown as {
-        sendClientContent: (content: ClientContent) => void;
-      }).sendClientContent(content);
-      
-      if (import.meta.env.DEV) {
-        const turns = Array.isArray(content.turns) ? content.turns : [content.turns];
-        const role = turns[0]?.role || 'unknown';
-        devLog(`📤 sendClientContent (role: ${role})`);
-      }
-    } else if (import.meta.env.DEV) {
-      devLog('⚠️ sendClientContent failed: session not connected');
-    }
-  }, []);
-
   return {
     // State
     isConnected,
@@ -302,7 +261,6 @@ export function useGeminiSession(
     // Methods
     sendRealtimeInput,
     sendToolResponse,
-    sendClientContent,
   };
 }
 

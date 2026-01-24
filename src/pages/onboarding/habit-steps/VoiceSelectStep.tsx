@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { setVoiceName, type VoiceName, AVAILABLE_VOICES } from '../../../lib/voiceSettings';
+import { setVoiceName, type VoiceName, getVoicePreviewUrl, mapUILanguageToPreviewLanguage } from '../../../lib/voiceSettings';
 import { useTranslation } from '../../../hooks/useTranslation';
 import lumiHappy from '../../../assets/Lumi-happy.png';
 
@@ -12,21 +12,18 @@ interface VoiceSelectStepProps {
  * 让用户选择 Lumi 的声音性别（男声 Puck / 女声 Zephyr）
  */
 export function VoiceSelectStep({ onNext }: VoiceSelectStepProps) {
-  const { t } = useTranslation();
+  const { t, uiLanguage } = useTranslation();
   const [selectedGender, setSelectedGender] = useState<'male' | 'female'>('male');
   const [playingVoice, setPlayingVoice] = useState<VoiceName | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 获取男声和女声的配置（用于试听）
-  const maleVoice = AVAILABLE_VOICES.find(v => v.name === 'Puck')!;
-  const femaleVoice = AVAILABLE_VOICES.find(v => v.name === 'Zephyr')!;
-
   /**
    * 播放声音试听
+   * @param voiceName - 声音名称
    */
-  const handlePlayPreview = (voice: { name: VoiceName; previewUrl: string }) => {
+  const handlePlayPreview = (voiceName: VoiceName) => {
     // 如果正在播放同一个声音，停止播放
-    if (playingVoice === voice.name && audioRef.current) {
+    if (playingVoice === voiceName && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       setPlayingVoice(null);
@@ -38,16 +35,20 @@ export function VoiceSelectStep({ onNext }: VoiceSelectStepProps) {
       audioRef.current.pause();
     }
 
+    // 根据当前 UI 语言获取对应的试听 URL
+    const previewLanguage = mapUILanguageToPreviewLanguage(uiLanguage);
+    const previewUrl = getVoicePreviewUrl(voiceName, previewLanguage);
+
     // 检查 URL 是否有效
-    if (!voice.previewUrl) {
-      console.warn('No preview URL for voice:', voice.name);
+    if (!previewUrl) {
+      console.warn('No preview URL for voice:', voiceName);
       return;
     }
 
     // 创建新的 Audio 实例并播放
-    const audio = new Audio(voice.previewUrl);
+    const audio = new Audio(previewUrl);
     audioRef.current = audio;
-    setPlayingVoice(voice.name);
+    setPlayingVoice(voiceName);
 
     audio.play().catch(error => {
       console.error('Failed to play audio:', error);
@@ -131,7 +132,7 @@ export function VoiceSelectStep({ onNext }: VoiceSelectStepProps) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handlePlayPreview(maleVoice);
+                    handlePlayPreview('Puck');
                   }}
                   className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors"
                   aria-label="Play male voice preview"
@@ -183,7 +184,7 @@ export function VoiceSelectStep({ onNext }: VoiceSelectStepProps) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handlePlayPreview(femaleVoice);
+                    handlePlayPreview('Zephyr');
                   }}
                   className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors"
                   aria-label="Play female voice preview"

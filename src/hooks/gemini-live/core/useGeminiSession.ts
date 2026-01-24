@@ -143,6 +143,9 @@ export function useGeminiSession(
         ? ([{ functionDeclarations: config.tools }] satisfies GeminiTool[])
         : undefined;
 
+      const selectedVoice = config?.voiceName || 'Puck';
+      devLog('🎤 Gemini Live 使用声音:', selectedVoice);
+
       const session = await ai.live.connect({
         model,
         config: {
@@ -151,7 +154,7 @@ export function useGeminiSession(
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: config?.voiceName || 'Puck',
+                voiceName: selectedVoice,
               },
             },
           },

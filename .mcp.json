@@ -1,5 +1,14 @@
 {
   "mcpServers": {
+    "vertex-ai": {
+      "command": "bunx",
+      "args": ["-y", "vertex-ai-mcp-server"],
+      "env": {
+        "AI_PROVIDER": "vertex",
+        "GOOGLE_CLOUD_PROJECT": "mindboat-467810",
+        "GOOGLE_CLOUD_LOCATION": "us-central1"
+      }
+    },
     "figma": {
       "command": "npx",
       "args": ["-y", "figma-developer-mcp", "--stdio"],

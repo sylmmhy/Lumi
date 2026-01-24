@@ -221,3 +221,7 @@ verify_jwt = true
 # 设备管理
 [functions.manage-user-devices]
 verify_jwt = true
+
+# 声音试听生成（无需 JWT，通过 service role key 验证）
+[functions.generate-voice-preview]
+verify_jwt = false

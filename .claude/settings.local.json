@@ -130,16 +130,24 @@
       "mcp__Amplitude__get_event_properties",
       "mcp__Amplitude__create_cohort",
       "Bash(xcodebuild:*)",
-      "Bash(claude mcp:*)"
+      "Bash(claude mcp:*)",
+      "Bash(gcloud auth application-default login:*)",
+      "Bash(bun --version:*)",
+      "Bash(source ~/.zshrc)",
+      "Bash(source ~/.bashrc)",
+      "Bash(gcloud auth:*)",
+      "mcp__vertex-ai__get_doc_snippets"
     ],
     "deny": [],
     "ask": []
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
+    "vertex-ai",
     "figma",
     "supabase",
-    "mem0"
+    "mem0",
+    "notion"
   ],
   "hooks": {
     "PreToolUse": [

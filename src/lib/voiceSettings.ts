@@ -29,15 +29,31 @@ export interface VoiceInfo {
   name: VoiceName;
   gender: VoiceGender;
   displayName: string;
+  /** 试听音频 URL */
+  previewUrl: string;
+}
+
+/**
+ * 获取声音试听 URL
+ * @param voiceName - 声音名称
+ * @returns 试听音频的公开 URL
+ */
+function getPreviewUrl(voiceName: VoiceName): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl) {
+    console.warn('VITE_SUPABASE_URL not configured');
+    return '';
+  }
+  return `${supabaseUrl}/storage/v1/object/public/voice-previews/${voiceName.toLowerCase()}-preview.wav`;
 }
 
 /**
  * 所有可用声音列表
  */
 export const AVAILABLE_VOICES: VoiceInfo[] = [
-  { name: 'Puck', gender: 'male', displayName: 'Puck' },
-  { name: 'Kore', gender: 'female', displayName: 'Kore' },
-  { name: 'Zephyr', gender: 'female', displayName: 'Zephyr' },
+  { name: 'Puck', gender: 'male', displayName: 'Puck', previewUrl: getPreviewUrl('Puck') },
+  { name: 'Kore', gender: 'female', displayName: 'Kore', previewUrl: getPreviewUrl('Kore') },
+  { name: 'Zephyr', gender: 'female', displayName: 'Zephyr', previewUrl: getPreviewUrl('Zephyr') },
 ];
 
 /**

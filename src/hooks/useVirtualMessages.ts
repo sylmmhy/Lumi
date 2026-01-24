@@ -50,12 +50,12 @@ export interface UseVirtualMessagesOptions {
   initialDuration?: number;
 }
 
-// 冷却时间：30秒（增加，避免干扰语气切换）
-const COOLDOWN_MS = 30 * 1000;
+// 冷却时间：15秒
+const COOLDOWN_MS = 15 * 1000;
 // 初始延迟：立即发送，不要延迟（thinking 已经够慢了）
 const INITIAL_DELAY_MS = 0;
-// 检查间隔：每15秒检查一次（增加，减少虚拟消息频率）
-const CHECK_INTERVAL_MS = 15000;
+// 检查间隔：每5秒检查一次
+const CHECK_INTERVAL_MS = 5000;
 
 export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const {

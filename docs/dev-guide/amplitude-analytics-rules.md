@@ -47,8 +47,17 @@ Segment: User Property "gp:email" is not any of [上述邮箱列表]
 ### 排除的用户类型
 
 - 纯网页访问（非 App 内 WebView）
-- HeadlessChrome（爬虫/自动化测试）
+- **HeadlessChrome**（爬虫/自动化测试）
 - 内部开发人员账户
+
+### HeadlessChrome 排除规则
+
+在 Amplitude 查询时，必须排除 HeadlessChrome 用户：
+```
+Segment 条件: User Property "os" does not contain "HeadlessChrome"
+```
+
+**原因**：HeadlessChrome 是无头浏览器，通常用于爬虫、自动化测试或机器人，不是真实用户。
 
 ---
 
@@ -91,10 +100,11 @@ Segment: User Property "gp:email" is not any of [上述邮箱列表]
 }
 ```
 
-### 2. 排除内部用户的真实新用户查询
+### 2. 排除内部用户和爬虫的真实新用户查询
 
 在 Segment 中添加条件：
 - `gp:email` is not any of [内部邮箱列表]
+- `os` does not contain "HeadlessChrome"
 - `os` contains "WKWebView" OR `device` is "Android"
 
 ### 3. iOS WebView 真实用户漏斗
@@ -124,4 +134,5 @@ Segment: User Property "gp:email" is not any of [上述邮箱列表]
 
 | 日期 | 更新内容 |
 |------|---------|
+| 2026-01-23 | 添加 HeadlessChrome 排除规则：爬虫/自动化测试不计入真实用户 |
 | 2026-01-23 | 初始创建：添加 landing_page_viewed 和 landing_cta_clicked 事件追踪 |

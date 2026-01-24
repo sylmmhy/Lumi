@@ -257,6 +257,11 @@
   "habitOnboarding.languageSelect.continue": "続ける",
   "habitOnboarding.languageSelect.skipHint": "スキップすると自動検出",
 
+  "habitOnboarding.voiceSelect.title": "Lumiは男の子？女の子？",
+  "habitOnboarding.voiceSelect.subtitle": "再生ボタンで試聴できるよ",
+  "habitOnboarding.voiceSelect.male": "男の子",
+  "habitOnboarding.voiceSelect.female": "女の子",
+
   "habitOnboarding.tryNow.title": "試してみる？",
   "habitOnboarding.tryNow.description": "今すぐ5分間の体験通話ができるよ。",
   "habitOnboarding.tryNow.callNow": "今すぐ電話して",

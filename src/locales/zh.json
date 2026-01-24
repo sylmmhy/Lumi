@@ -266,6 +266,11 @@
   "habitOnboarding.languageSelect.continue": "继续",
   "habitOnboarding.languageSelect.skipHint": "跳过将自动检测语言",
 
+  "habitOnboarding.voiceSelect.title": "Lumi 是男生还是女生？",
+  "habitOnboarding.voiceSelect.subtitle": "点击播放按钮试听",
+  "habitOnboarding.voiceSelect.male": "男生",
+  "habitOnboarding.voiceSelect.female": "女生",
+
   "habitOnboarding.tryNow.title": "准备好试试了吗？",
   "habitOnboarding.tryNow.description": "我现在可以给你打个电话，进行 5 分钟的快速体验。",
   "habitOnboarding.tryNow.callNow": "现在打给我",

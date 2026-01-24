@@ -12,6 +12,7 @@ import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { WelcomeStep } from './habit-steps/WelcomeStep';
 import { HabitSelectStep } from './habit-steps/HabitSelectStep';
 import { TimeSelectStep } from './habit-steps/TimeSelectStep';
+import { VoiceSelectStep } from './habit-steps/VoiceSelectStep';
 import { HowItWorksStep } from './habit-steps/HowItWorksStep';
 import { PermissionsStep } from './habit-steps/PermissionsStep';
 import { PermissionsStepReview } from './habit-steps/PermissionsStepReview';
@@ -25,7 +26,7 @@ import { APPLE_REVIEW_MODE } from '../../constants/reviewMode';
 
 /**
  * Habit Onboarding 主页面
- * 9 步流程：Welcome -> Choose Habit -> Set Time -> How It Works -> Permissions -> Name Input -> Language Select -> Try Now -> Done
+ * 10 步流程：Welcome -> Choose Habit -> Set Time -> Voice Select -> How It Works -> Permissions -> Name Input -> Language Select -> Try Now -> Done
  *
  * 直接复用完整的 useAICoachSession + TaskWorkingView 组件
  * 包含完整的 Edge Function prompt、虚拟消息系统等
@@ -191,21 +192,24 @@ export function HabitOnboardingPage() {
         );
 
       case 4:
-        return <HowItWorksStep onNext={onboarding.goNext} />;
+        return <VoiceSelectStep onNext={onboarding.goNext} />;
 
       case 5:
+        return <HowItWorksStep onNext={onboarding.goNext} />;
+
+      case 6:
         // Use review version for Apple App Store submission (complies with Guideline 5.1.1)
         return APPLE_REVIEW_MODE
           ? <PermissionsStepReview onNext={onboarding.goNext} />
           : <PermissionsStep onNext={onboarding.goNext} />;
 
-      case 6:
+      case 7:
         return <NameInputStep onNext={onboarding.goNext} />;
 
-      case 7:
+      case 8:
         return <LanguageSelectStep onNext={onboarding.goNext} />;
 
-      case 8:
+      case 9:
         return (
           <TryNowStep
             onStartCall={handleStartCall}
@@ -213,7 +217,7 @@ export function HabitOnboardingPage() {
           />
         );
 
-      case 9:
+      case 10:
         return (
           <DoneStep
             onFinish={handleFinish}

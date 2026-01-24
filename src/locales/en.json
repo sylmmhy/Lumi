@@ -264,6 +264,11 @@
   "habitOnboarding.languageSelect.continue": "Continue",
   "habitOnboarding.languageSelect.skipHint": "Skip to auto-detect language",
 
+  "habitOnboarding.voiceSelect.title": "Should Lumi be a boy or girl?",
+  "habitOnboarding.voiceSelect.subtitle": "Tap the play button to preview",
+  "habitOnboarding.voiceSelect.male": "Boy",
+  "habitOnboarding.voiceSelect.female": "Girl",
+
   "habitOnboarding.tryNow.title": "Ready to try?",
   "habitOnboarding.tryNow.description": "I can call you now for a quick 5-minute session.",
   "habitOnboarding.tryNow.callNow": "Call Me Now",

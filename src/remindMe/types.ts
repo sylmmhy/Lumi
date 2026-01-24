@@ -24,6 +24,11 @@ export interface Task {
    * 对于 routine_instance，指向父 routine 模板的 ID
    */
   parentRoutineId?: string | null
+  /**
+   * 是否被临时推迟（通过 iOS Live Activity 的 Later 按钮）
+   * true 时显示 "+15 mins · later" 标签
+   */
+  isSnoozed?: boolean | null
 
   // Success metadata fields - 成功元数据字段
   /**

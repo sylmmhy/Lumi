@@ -30,6 +30,7 @@ interface TaskRecord {
   recurrence_days: number[] | null; // 重复日期
   recurrence_end_date: string | null; // 重复结束日期
   parent_routine_id: string | null; // 父 routine 模板 ID（仅用于 routine_instance）
+  is_snoozed: boolean; // 是否被临时推迟（iOS Live Activity Later 按钮）
   created_at: string;
   updated_at: string;
   // Success metadata fields - 成功元数据字段
@@ -126,6 +127,7 @@ function dbToTask(record: TaskRecord): Task {
     recurrenceDays: record.recurrence_days || undefined,
     recurrenceEndDate: record.recurrence_end_date || undefined,
     parentRoutineId: record.parent_routine_id || undefined,
+    isSnoozed: record.is_snoozed || false,
     // Success metadata fields
     completionMood: record.completion_mood || undefined,
     difficultyPerception: record.difficulty_perception || undefined,

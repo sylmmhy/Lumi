@@ -128,7 +128,9 @@
       "mcp__notion__API-retrieve-a-page",
       "mcp__notion__API-patch-block-children",
       "mcp__Amplitude__get_event_properties",
-      "mcp__Amplitude__create_cohort"
+      "mcp__Amplitude__create_cohort",
+      "Bash(xcodebuild:*)",
+      "Bash(claude mcp:*)"
     ],
     "deny": [],
     "ask": []

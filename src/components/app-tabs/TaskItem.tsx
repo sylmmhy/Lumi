@@ -19,6 +19,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
 
+    // 调试日志：检查 isSnoozed 值
+    if (task.isSnoozed && !task.completed) {
+        console.log('🏷️ [TaskItem DEBUG] 发现 snoozed 任务:', {
+            id: task.id,
+            title: task.text,
+            isSnoozed: task.isSnoozed,
+            completed: task.completed,
+            shouldShowTag: task.isSnoozed && !task.completed,
+        });
+    }
+
     const startX = useRef<number | null>(null);
     const currentTranslateX = useRef(0);
     const itemRef = useRef<HTMLDivElement>(null);
@@ -72,10 +83,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
             />
 
             <div className="relative pt-4">
-                {/* Snoozed 标签 - 卡在任务条右上角边缘 */}
-                {task.isSnoozed && mode === 'home' && (
+                {/* Snoozed 标签 - 卡在任务条右上角边缘，仅未完成任务显示 */}
+                {task.isSnoozed && !task.completed && (
                     <span
-                        className="absolute -top-0 right-3 z-20 px-3 py-1.5 bg-[#E6FB04] text-[#1a1a1a] text-[12px] rounded-full"
+                        className="absolute -top-0 right-3 z-20 px-3 py-1.5 bg-[#FDDEBD] text-[#1a1a1a] text-[12px] rounded-full"
                         style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                     >
                         +15 mins · later

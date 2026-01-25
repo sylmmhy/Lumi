@@ -230,6 +230,52 @@ export function notifyNativeTaskCalled(taskId: string, called: boolean): void {
 }
 
 /**
+ * 注册原生端调用的刷新任务函数
+ *
+ * iOS 在更新数据库后（例如 Live Activity 点击 "later"），
+ * 会调用 window.refreshTasks() 来通知 WebView 刷新任务列表
+ *
+ * @param callback - 刷新任务的回调函数
+ * @returns 取消注册的函数
+ *
+ * @example
+ * ```typescript
+ * // 在 AppTabsPage 中
+ * useEffect(() => {
+ *   const unregister = registerNativeRefreshTasks(() => {
+ *     loadTasks();
+ *   });
+ *   return unregister;
+ * }, [loadTasks]);
+ * ```
+ */
+export function registerNativeRefreshTasks(callback: () => void): () => void {
+  // 暴露全局函数供 iOS 调用
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).refreshTasks = () => {
+    console.log('📱 [iOS] refreshTasks 被调用，刷新任务列表');
+    callback();
+  };
+
+  // 同时监听 CustomEvent（备用方式）
+  const handleRefresh = () => {
+    console.log('📱 mindboat:tasksNeedRefresh 事件触发，刷新任务列表');
+    callback();
+  };
+  window.addEventListener('mindboat:tasksNeedRefresh', handleRefresh);
+
+  console.log('📱 已注册 window.refreshTasks() 供原生端调用');
+
+  // 返回取消注册函数
+  return () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).refreshTasks;
+    window.removeEventListener('mindboat:tasksNeedRefresh', handleRefresh);
+    console.log('📱 已取消注册 window.refreshTasks()');
+  };
+}
+
+/**
  * 通知原生端：新手引导已完成
  *
  * 调用此函数后：

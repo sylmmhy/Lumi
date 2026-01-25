@@ -71,6 +71,17 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                 recycle={false}
             />
 
+            <div className="relative pt-4">
+                {/* Snoozed 标签 - 卡在任务条右上角边缘 */}
+                {task.isSnoozed && mode === 'home' && (
+                    <span
+                        className="absolute -top-0 right-3 z-20 px-3 py-1.5 bg-[#E6FB04] text-[#1a1a1a] text-[12px] rounded-full"
+                        style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
+                    >
+                        +15 mins · later
+                    </span>
+                )}
+
             <div className="relative overflow-hidden rounded-2xl">
 
             {/* Delete Button Background */}
@@ -129,21 +140,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                 </div>
                 {/* Time - Quicksand Bold 14px Brand Blue */}
                 {mode === 'home' ? (
-                    <div className="flex flex-col items-end gap-1">
-                        {/* Snoozed 标签 - 粉色背景，显示 +15 mins · later */}
-                        {task.isSnoozed && (
-                            <span
-                                className="px-2 py-0.5 bg-[#FEE2E2] text-[#9B2C2C] text-[11px] rounded-full"
-                                style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
-                            >
-                                +15 mins · later
-                            </span>
-                        )}
-                        <div className="px-2.5 py-1 min-w-[70px] text-right">
-                            <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
-                                {task.displayTime}
-                            </span>
-                        </div>
+                    <div className="px-2.5 py-1 min-w-[70px] text-right">
+                        <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
+                            {task.displayTime}
+                        </span>
                     </div>
                 ) : (
                     <button
@@ -156,6 +156,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         Start
                     </button>
                 )}
+            </div>
             </div>
             </div>
         </>

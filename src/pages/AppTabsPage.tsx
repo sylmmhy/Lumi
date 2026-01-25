@@ -22,7 +22,7 @@ import {
     fetchRecurringReminders,
     taskToNativeReminder,
 } from '../remindMe/services/reminderService';
-import { isNativeApp, syncAllTasksToNative } from '../utils/nativeTaskEvents';
+import { isNativeApp, syncAllTasksToNative, registerNativeRefreshTasks } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
@@ -200,8 +200,28 @@ export function AppTabsPage() {
                 fetchRecurringReminders(auth.userId),
             ]);
 
-            // 合并所有任务
-            const allTasks = [...todayTasks, ...routineTemplates];
+            // 将 routine_instance 的 snooze 状态同步到对应的 routine 模板
+            // 这样 UI 上的 routine 模板会显示 "+15 mins · later" 标签
+            // 注意：只有未完成的 snoozed 实例才显示标签，完成后标签消失
+            const snoozedInstances = todayTasks.filter(t =>
+                t.type === 'routine_instance' && t.isSnoozed && t.parentRoutineId && !t.completed
+            );
+
+            const routineTemplatesWithSnoozeStatus = routineTemplates.map(routine => {
+                // 检查这个 routine 是否有被 snooze 的今日实例
+                const hasSnoozedInstance = snoozedInstances.some(
+                    instance => instance.parentRoutineId === routine.id
+                );
+                if (hasSnoozedInstance) {
+                    console.log('🏷️ [loadTasks] 同步 snooze 状态到 routine:', routine.text);
+                    return { ...routine, isSnoozed: true };
+                }
+                return routine;
+            });
+
+            // 合并所有任务（routine_instance 不会显示在 UI 中，但 routine 模板会带有 snooze 标签）
+            const allTasks = [...todayTasks, ...routineTemplatesWithSnoozeStatus];
+
             setTasks(allTasks);
 
             // P0 修复：同步所有任务到原生端（解决 App 重启后丢失提醒的问题）
@@ -221,6 +241,15 @@ export function AppTabsPage() {
     // Load tasks from Supabase when user is logged in
     useEffect(() => {
         void loadTasks();
+    }, [loadTasks]);
+
+    // 注册原生端刷新任务的回调（iOS Live Activity "later" 按钮触发）
+    useEffect(() => {
+        const unregister = registerNativeRefreshTasks(() => {
+            console.log('🔄 原生端请求刷新任务列表');
+            void loadTasks();
+        });
+        return unregister;
     }, [loadTasks]);
 
     // 下拉刷新处理函数

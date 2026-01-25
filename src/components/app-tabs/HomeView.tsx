@@ -269,6 +269,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
     // 显示所有任务（routine + todo），包括已完成的
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
+    // routine_instance 的 snooze 状态会同步到对应的 routine 模板上（在 AppTabsPage.loadTasks 中处理）
     // 排除 displayTime === 'Now' 的任务（这些是在 UrgencyView 中创建的即时任务，进行中不显示）
     const filteredTasks = tasks.filter(task =>
         (task.type === 'todo' || task.type === 'routine') && task.displayTime !== 'Now'

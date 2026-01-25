@@ -276,6 +276,17 @@ export async function fetchReminders(userId: string, date: string = getLocalDate
     return [];
   }
 
+  // 调试日志：检查 is_snoozed 字段
+  if (data && data.length > 0) {
+    console.log('🔍 [DEBUG] fetchReminders 返回的任务:', data.map((t: TaskRecord) => ({
+      id: t.id,
+      title: t.title,
+      is_snoozed: t.is_snoozed,
+      time: t.time,
+      reminder_date: t.reminder_date,
+    })));
+  }
+
   return (data as TaskRecord[]).map(dbToTask);
 }
 

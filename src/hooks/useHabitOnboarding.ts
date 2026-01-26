@@ -6,8 +6,11 @@ import { createReminder, generateTodayRoutineInstances } from '../remindMe/servi
 import { PRESET_HABITS, TOTAL_ONBOARDING_STEPS, type PresetHabit } from '../types/habit';
 import { DEFAULT_APP_PATH } from '../constants/routes';
 import { notifyNativeOnboardingCompleted } from '../utils/nativeTaskEvents';
+import { supabase } from '../lib/supabase';
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+import type { ReferralSourceId } from '../pages/onboarding/habit-steps/ReferralSourceStep';
+
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 interface HabitOnboardingState {
   step: OnboardingStep;
@@ -15,6 +18,8 @@ interface HabitOnboardingState {
   customHabitName: string;
   reminderTime: string;
   trialCallCompleted: boolean;
+  referralSource: ReferralSourceId | null;  // 用户来源渠道
+  otherSourceText: string;                   // 如果选择"其他"，用户填写的内容
   isSaving: boolean;
   error: string | null;
 }
@@ -27,6 +32,8 @@ const INITIAL_STATE: HabitOnboardingState = {
   customHabitName: '',
   reminderTime: '09:00',
   trialCallCompleted: false,
+  referralSource: null,
+  otherSourceText: '',
   isSaving: false,
   error: null,
 };
@@ -65,6 +72,8 @@ function saveStateToStorage(state: HabitOnboardingState): void {
       customHabitName: state.customHabitName,
       reminderTime: state.reminderTime,
       trialCallCompleted: state.trialCallCompleted,
+      referralSource: state.referralSource,
+      otherSourceText: state.otherSourceText,
     };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -194,6 +203,16 @@ export function useHabitOnboarding() {
     setState(prev => ({ ...prev, trialCallCompleted: true }));
   }, []);
 
+  // 设置用户来源
+  const selectReferralSource = useCallback((source: ReferralSourceId) => {
+    setState(prev => ({ ...prev, referralSource: source, error: null }));
+  }, []);
+
+  // 设置"其他"来源文本
+  const setOtherSourceText = useCallback((text: string) => {
+    setState(prev => ({ ...prev, otherSourceText: text, error: null }));
+  }, []);
+
   // 保存习惯并完成
   const saveAndFinish = useCallback(async () => {
     if (!userId) {
@@ -248,6 +267,29 @@ export function useHabitOnboarding() {
       // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
       await generateTodayRoutineInstances(userId);
 
+      // 🆕 保存用户来源（如果用户选择了）
+      if (state.referralSource) {
+        try {
+          const { error: referralError } = await supabase
+            .from('user_referral_sources')
+            .upsert({
+              user_id: userId,
+              source: state.referralSource,
+              other_source: state.referralSource === 'other' ? state.otherSourceText : null,
+            }, {
+              onConflict: 'user_id',  // 如果已存在则更新
+            });
+
+          if (referralError) {
+            console.error('❌ [useHabitOnboarding] 保存用户来源失败:', referralError);
+          } else {
+            console.log('✅ [useHabitOnboarding] 已保存用户来源:', state.referralSource);
+          }
+        } catch (err) {
+          console.error('❌ [useHabitOnboarding] 保存用户来源时发生异常:', err);
+        }
+      }
+
       // ✅ 2026-01-18: 在 Habit Onboarding 完成时就标记为已完成
       // Product Tour 功能暂时禁用，所以在这里直接完成整个 onboarding 流程
       // 1. 更新数据库 users.has_completed_habit_onboarding = true
@@ -285,7 +327,7 @@ export function useHabitOnboarding() {
         error: err instanceof Error ? err.message : 'Failed to save habit',
       }));
     }
-  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, navigate, t, markHabitOnboardingCompleted]);
+  }, [userId, state.selectedHabitId, state.customHabitName, state.reminderTime, state.referralSource, state.otherSourceText, navigate, t, markHabitOnboardingCompleted]);
 
   // 计算属性
   const canProceed = useMemo(() => {
@@ -335,6 +377,8 @@ export function useHabitOnboarding() {
     customHabitName: state.customHabitName,
     reminderTime: state.reminderTime,
     trialCallCompleted: state.trialCallCompleted,
+    referralSource: state.referralSource,
+    otherSourceText: state.otherSourceText,
     isSaving: state.isSaving,
     error: state.error,
 
@@ -347,6 +391,8 @@ export function useHabitOnboarding() {
     selectHabit,
     setCustomHabitName,
     setReminderTime,
+    selectReferralSource,
+    setOtherSourceText,
 
     // 完成
     completeTrialCall,

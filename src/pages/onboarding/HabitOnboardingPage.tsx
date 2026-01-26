@@ -19,6 +19,7 @@ import { PermissionsStepReview } from './habit-steps/PermissionsStepReview';
 import { NameInputStep } from './habit-steps/NameInputStep';
 import { LanguageSelectStep } from './habit-steps/LanguageSelectStep';
 import { TryNowStep } from './habit-steps/TryNowStep';
+import { ReferralSourceStep } from './habit-steps/ReferralSourceStep';
 import { DoneStep } from './habit-steps/DoneStep';
 
 // Apple Review Mode - set to true when submitting for App Store review
@@ -218,6 +219,17 @@ export function HabitOnboardingPage() {
         );
 
       case 10:
+        return (
+          <ReferralSourceStep
+            selectedSource={onboarding.referralSource}
+            otherSourceText={onboarding.otherSourceText}
+            onSelectSource={onboarding.selectReferralSource}
+            onSetOtherSourceText={onboarding.setOtherSourceText}
+            onNext={onboarding.goNext}
+          />
+        );
+
+      case 11:
         return (
           <DoneStep
             onFinish={handleFinish}

@@ -85,8 +85,13 @@ export function requestNativeAuth(): void {
 
 /**
  * 检查 token 是否为有效的 JWT 格式
+ *
+ * 注意：此函数只应用于验证 accessToken
+ * Supabase 的 refreshToken 不是 JWT 格式，而是一个短随机字符串（如 "frmsy6zx3efo"）
+ * 这是 Supabase 的设计，不是错误
+ *
  * @param token - 要检查的 token
- * @returns 是否为 JWT 格式
+ * @returns 是否为 JWT 格式（有 3 个点分隔的部分）
  */
 export function isValidJwt(token?: string | null): boolean {
   return Boolean(token && token.split('.').length === 3);

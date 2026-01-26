@@ -1478,8 +1478,11 @@ export function AuthProvider({
     let setSessionSucceeded = false;
 
     if (supabase && accessToken && refreshToken) {
-      if (!isValidJwt(accessToken) || !isValidJwt(refreshToken)) {
-        console.warn('⚠️ 原生登录提供的 token 不是有效的 JWT，已跳过 Supabase 会话设置');
+      // 注意：只验证 accessToken 是否为 JWT 格式
+      // Supabase 的 refreshToken 不是 JWT，而是一个短随机字符串（如 "frmsy6zx3efo"）
+      // 这是 Supabase 的设计，不是错误
+      if (!isValidJwt(accessToken)) {
+        console.warn('⚠️ 原生登录提供的 accessToken 不是有效的 JWT，已跳过 Supabase 会话设置');
       } else {
         // 添加重试机制：确保 Supabase 会话成功建立，否则 autoRefreshToken 不会工作
         const MAX_SET_SESSION_RETRIES = 3;

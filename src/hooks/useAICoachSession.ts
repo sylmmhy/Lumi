@@ -513,23 +513,24 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }));
 
       // 步骤1：尝试启用摄像头（带重试机制）
-      if (import.meta.env.DEV) {
-        console.log('🎬 步骤1: 尝试启用摄像头...');
-      }
+      console.log('🎬 步骤1: 尝试启用摄像头...', { cameraEnabled: geminiLive.cameraEnabled });
       if (!geminiLive.cameraEnabled) {
         let cameraRetries = 0;
         let cameraSuccess = false;
 
         while (cameraRetries < MAX_CAMERA_RETRIES && !cameraSuccess) {
+          console.log(`📹 摄像头尝试 #${cameraRetries + 1}，调用 toggleCamera()...`);
           try {
             await geminiLive.toggleCamera();
             cameraSuccess = true;
-            if (import.meta.env.DEV) {
-              console.log('✅ 摄像头启用成功');
-            }
+            console.log('✅ 摄像头启用成功');
           } catch (cameraError) {
             cameraRetries++;
             const errorMessage = cameraError instanceof Error ? cameraError.message : String(cameraError);
+
+            // 🔍 调试：打印具体错误信息
+            console.error('❌ 摄像头启用异常:', cameraError);
+            console.log('❌ 摄像头错误详情:', errorMessage);
 
             // 如果是权限被拒绝，不重试
             if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowed')) {
@@ -540,31 +541,30 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             }
 
             if (cameraRetries < MAX_CAMERA_RETRIES) {
-              if (import.meta.env.DEV) {
-                console.log(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
-              }
+              console.log(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
               await new Promise(resolve => setTimeout(resolve, CAMERA_RETRY_DELAY_MS));
+              console.log(`🔄 重试等待结束，开始第 ${cameraRetries + 1} 次尝试...`);
             } else {
-              if (import.meta.env.DEV) {
-                console.log('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
-              }
+              console.log('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
             }
           }
         }
+        // 摄像头循环结束后的状态
+        console.log(`📹 摄像头初始化循环结束: cameraSuccess=${cameraSuccess}, cameraEnabled=${geminiLive.cameraEnabled}`);
       }
 
       // 步骤2：启用麦克风
-      if (import.meta.env.DEV) {
-        console.log('🎤 步骤2: 启用麦克风...');
-      }
+      console.log('🎤 步骤2: 启用麦克风...');
       if (!geminiLive.isRecording) {
+        console.log('🎤 步骤2: 调用 toggleMicrophone()...');
         await geminiLive.toggleMicrophone();
+        console.log('🎤 步骤2: toggleMicrophone() 完成');
+      } else {
+        console.log('🎤 步骤2: 麦克风已启用，跳过');
       }
 
       // 步骤3：并行获取系统指令和 Gemini token（带超时保护）
-      if (import.meta.env.DEV) {
-        console.log('⚡ 步骤3: 并行获取系统指令和 token...');
-      }
+      console.log('⚡ 步骤3: 并行获取系统指令和 token...');
 
       const supabaseClient = getSupabaseClient();
       if (!supabaseClient) {

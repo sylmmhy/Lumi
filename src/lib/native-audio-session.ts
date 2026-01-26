@@ -23,6 +23,48 @@ export function isAudioSessionReady(): boolean {
 }
 
 /**
+ * 初始化 iOS Native WebView 的音频会话桥接监听器。
+ *
+ * 作用：
+ * - 提前监听 nativeAudioSessionReady 事件，降低事件早发导致的丢失风险
+ * - 把事件结果写入 window.__nativeAudioSessionReady 作为粘性标记，供后续快速判定
+ *
+ * 使用方式：
+ * - 在应用启动入口尽早调用一次（如 src/main.tsx）
+ *
+ * 注意：
+ * - 仅在 iOS Native WebView 中生效；非原生环境会直接返回
+ */
+export function initNativeAudioSessionBridge(): void {
+  if (typeof window === 'undefined') return;
+  if (!isInNativeWebView()) return;
+
+  /** 用于避免重复初始化的标记 key（写入 window）。 */
+  const initFlagKey = '__nativeAudioSessionBridgeInitialized';
+  /** window 的扩展引用，用于存储粘性标记与初始化状态。 */
+  const nativeWindow = window as unknown as {
+    __nativeAudioSessionReady?: boolean;
+    [key: string]: unknown;
+  };
+
+  if (nativeWindow[initFlagKey]) return;
+  nativeWindow[initFlagKey] = true;
+
+  // 如果原生已写入粘性标记，不需要再监听事件
+  if (nativeWindow.__nativeAudioSessionReady) return;
+
+  /** 标记音频会话就绪并移除监听，避免重复触发。 */
+  const markReady = () => {
+    nativeWindow.__nativeAudioSessionReady = true;
+    window.removeEventListener('nativeAudioSessionReady', markReady);
+    document.removeEventListener('nativeAudioSessionReady', markReady);
+  };
+
+  window.addEventListener('nativeAudioSessionReady', markReady);
+  document.addEventListener('nativeAudioSessionReady', markReady);
+}
+
+/**
  * 等待 iOS 音频会话就绪
  *
  * 使用场景：

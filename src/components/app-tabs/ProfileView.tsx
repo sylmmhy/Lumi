@@ -55,6 +55,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
     // Account management state
     const [showAccountManageModal, setShowAccountManageModal] = useState(false);
+    const [emailCopied, setEmailCopied] = useState(false);
 
     // Ringtone type state
     const [currentRingtoneType, setCurrentRingtoneType] = useState<RingtoneType>(getRingtoneType());
@@ -308,6 +309,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
             console.error('Delete account error:', error);
         } finally {
             setIsDeleting(false);
+        }
+    };
+
+    /**
+     * 复制用户邮箱到剪贴板
+     * 复制成功后显示 2 秒的成功反馈
+     */
+    const handleCopyEmail = async () => {
+        if (!auth?.userEmail) return;
+
+        try {
+            await navigator.clipboard.writeText(auth.userEmail);
+            setEmailCopied(true);
+            // 2 秒后重置状态
+            setTimeout(() => setEmailCopied(false), 2000);
+        } catch (error) {
+            console.error('Failed to copy email:', error);
         }
     };
 
@@ -717,6 +735,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                         <p className="text-sm text-gray-500">{auth?.userEmail || '-'}</p>
                                     </div>
                                 </div>
+                                {/* 复制按钮 */}
+                                {auth?.userEmail && (
+                                    <button
+                                        onClick={handleCopyEmail}
+                                        className="w-10 h-10 rounded-full hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center transition-colors"
+                                        aria-label="Copy email"
+                                    >
+                                        {emailCopied ? (
+                                            <i className="fa-solid fa-check text-green-500"></i>
+                                        ) : (
+                                            <i className="fa-regular fa-copy text-gray-400"></i>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
 

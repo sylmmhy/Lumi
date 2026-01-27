@@ -136,7 +136,8 @@
       "Bash(source ~/.zshrc)",
       "Bash(source ~/.bashrc)",
       "Bash(gcloud auth:*)",
-      "mcp__vertex-ai__get_doc_snippets"
+      "mcp__vertex-ai__get_doc_snippets",
+      "Bash(npx commitlint)"
     ],
     "deny": [],
     "ask": []
@@ -150,6 +151,17 @@
     "notion"
   ],
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run lint --silent 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash(git push*)",

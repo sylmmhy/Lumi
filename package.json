@@ -25,7 +25,8 @@
     "supabase:restore": "bash scripts/supabase-restore.sh",
     "supabase:reset": "supabase db reset",
     "supabase:verify": "bash scripts/verify-local-supabase.sh",
-    "supabase:functions": "supabase functions serve --env-file supabase/.env.local --no-verify-jwt"
+    "supabase:functions": "supabase functions serve --env-file supabase/.env.local --no-verify-jwt",
+    "prepare": "husky"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.31.3",
@@ -40,6 +41,8 @@
     "react-router-dom": "^7.9.6"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.3.1",
+    "@commitlint/config-conventional": "^20.3.1",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
@@ -51,6 +54,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "husky": "^9.1.7",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.14",
     "typescript": "~5.9.3",

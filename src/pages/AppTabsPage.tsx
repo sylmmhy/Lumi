@@ -128,6 +128,9 @@ export function AppTabsPage() {
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
     const [showTestVersionModal, setShowTestVersionModal] = useState(false);
 
+    // 结束通话中状态（用于乐观 UI 更新，点击后立即隐藏通话界面）
+    const [isEndingCall, setIsEndingCall] = useState(false);
+
     // 庆祝流程相关状态
     const [showCelebration, setShowCelebration] = useState(false);
     const [celebrationFlow, setCelebrationFlow] = useState<CelebrationFlow>('confirm');
@@ -1024,17 +1027,28 @@ export function AppTabsPage() {
      * - 保存会话记忆到 Mem0（标记为未完成）
      * - 结束当前 AI 会话
      * - 返回主界面
+     *
+     * 优化：使用乐观 UI 更新，先立即隐藏通话界面，再后台保存记忆
+     * 这样用户点击后立即看到挂断效果，不需要等待 2 秒
      */
-    const handleEndCall = useCallback(async () => {
-        // 🐛 修复：必须等待 saveSessionMemory 完成后再调用 endSession
-        // 否则 endSession 会触发 cleanup，可能中断正在进行的网络请求
-        // 详见 docs/implementation-log/20260120-memory-save-race-condition-fix.md
-        await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
-        aiCoach.endSession();
-
-        // 重置状态，返回主界面
+    const handleEndCall = useCallback(() => {
+        // 1. 立即更新 UI，让用户看到"已挂断"（乐观更新）
+        setIsEndingCall(true);
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+
+        // 2. 后台保存记忆并清理资源（不阻塞 UI）
+        // 注意：saveSessionMemory 内部会复制 messages 快照，所以在 endSession 之前调用是安全的
+        void (async () => {
+            try {
+                await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
+            } catch (error) {
+                console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
+            } finally {
+                aiCoach.endSession();
+                setIsEndingCall(false);
+            }
+        })();
     }, [aiCoach]);
 
     /**
@@ -1043,28 +1057,42 @@ export function AppTabsPage() {
      * - 结束当前 AI 会话
      * - 直接显示庆祝页面（跳过确认页面）
      * - 标记任务为已完成
+     *
+     * 优化：使用乐观 UI 更新，先立即显示庆祝页面，再后台保存记忆
      */
-    const handleEndAICoachSession = useCallback(async () => {
+    const handleEndAICoachSession = useCallback(() => {
         // 计算完成时间（已用时间 = 初始时间 - 剩余时间）
         const usedTime = 300 - aiCoach.state.timeRemaining;
         const actualDurationMinutes = Math.round(usedTime / 60);
 
+        // 1. 立即更新 UI，显示庆祝页面（乐观更新）
         setCompletionTime(usedTime);
         setCurrentTaskDescription(aiCoach.state.taskDescription);
-
-        // 🐛 修复：必须等待 saveSessionMemory 完成后再调用 endSession
-        // 否则 endSession 会触发 cleanup，可能中断正在进行的网络请求
-        // 详见 docs/implementation-log/20260120-memory-save-race-condition-fix.md
-        await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
-        aiCoach.endSession();
-
-        // 标记任务为已完成（后台运行，不阻塞 UI）
-        // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
-        void markTaskAsCompleted(currentTaskId, actualDurationMinutes, currentTaskType);
-
-        // 直接显示庆祝页面（跳过确认页面）
         setCelebrationFlow('success');
         setShowCelebration(true);
+
+        // 保存当前任务信息用于后台操作
+        const taskIdToComplete = currentTaskId;
+        const taskTypeToComplete = currentTaskType;
+
+        // 2. 后台保存记忆并清理资源（不阻塞 UI）
+        void (async () => {
+            try {
+                await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
+            } catch (error) {
+                console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
+            } finally {
+                aiCoach.endSession();
+            }
+        })();
+
+        // 3. 后台标记任务为已完成
+        // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
+        void markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
+
+        // 重置任务状态（已保存到局部变量，可以安全重置）
+        setCurrentTaskId(null);
+        setCurrentTaskType(null);
     }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted]);
 
     /**
@@ -1165,7 +1193,8 @@ export function AppTabsPage() {
             )}
 
             {/* WebView 模式（Gemini Live）：显示摄像头和 AI 状态 */}
-            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && (
+            {/* isEndingCall 时也隐藏，实现乐观 UI 更新（点击 END CALL 后立即隐藏，不等待后台保存） */}
+            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && !isEndingCall && (
                 <>
                     <canvas ref={aiCoach.canvasRef} className="hidden" />
                     <TaskWorkingView

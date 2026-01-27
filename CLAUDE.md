@@ -16,6 +16,7 @@
 
 | Skill | 路径 | 触发场景 |
 |-------|------|---------|
+| **launch** | `.claude/skills/launch/SKILL.md` | 说 `/launch`，将 dev 同步到 master 发布 |
 | **debug-workflow** | `.claude/skills/debug-workflow/SKILL.md` | Bug 排查、调试、遇到错误时 |
 | **tech-research** | `.claude/skills/tech-research/SKILL.md` | 评估新技术/功能可行性时 |
 | **doc-maintenance** | `.claude/skills/doc-maintenance/SKILL.md` | 进行复杂实现、完成功能、更新文档时 |

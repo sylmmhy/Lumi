@@ -1270,7 +1270,8 @@ export function AppTabsPage() {
 
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
             {/* 当 AI 会话激活、LiveKit 模式或显示庆祝页面时隐藏主内容，避免 UrgencyView 的 fixed header 穿透显示 */}
-            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit) ? 'hidden' : ''}`}>
+            {/* 特殊情况：isEndingCall 时虽然 isSessionActive 还是 true，但应该立即显示主内容，避免白屏 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || ((aiCoach.isSessionActive || aiCoach.isConnecting) && !isEndingCall) || usingLiveKit) ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView

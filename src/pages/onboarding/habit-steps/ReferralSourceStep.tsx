@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { REFERRAL_SOURCES, ReferralSourceId } from '../../../types/habit';
+import { REFERRAL_SOURCES, type ReferralSourceId } from '../../../types/habit';
 
 interface ReferralSourceStepProps {
   /** 当前选中的来源 */

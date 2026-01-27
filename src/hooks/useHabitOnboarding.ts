@@ -266,7 +266,7 @@ export function useHabitOnboarding() {
       await generateTodayRoutineInstances(userId);
 
       // 🆕 保存用户来源（如果用户选择了）
-      if (state.referralSource) {
+      if (state.referralSource && supabase) {
         try {
           const { error: referralError } = await supabase
             .from('user_referral_sources')

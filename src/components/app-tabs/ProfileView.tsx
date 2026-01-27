@@ -333,8 +333,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         setShowInterviewModal(false);
         
         // Determine user ID and email to save
-        let userIdToSave = auth?.userId;
-        let emailToSave = email || auth?.userEmail || 'none'; // Fallback to 'none' if no email available
+        const userIdToSave = auth?.userId;
+        const emailToSave = email || auth?.userEmail || 'none'; // Fallback to 'none' if no email available
 
         try {
             const { error } = await supabase!

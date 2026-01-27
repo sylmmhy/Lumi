@@ -8,7 +8,7 @@ function isDifyOutputShape(value: unknown): value is DifyWorkflowOutput {
     && typeof obj.encourage_words === 'string'
 }
 
-function stringifyIfObject(value: unknown): string | null {
+function _stringifyIfObject(value: unknown): string | null {
   if (typeof value === 'string') return value
   if (value && typeof value === 'object') return JSON.stringify(value)
   return null

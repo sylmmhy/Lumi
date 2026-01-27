@@ -40,7 +40,7 @@ Deno.serve(async (req)=>{
     let requestData;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch {
       return new Response(JSON.stringify({
         error: 'Invalid JSON payload'
       }), {

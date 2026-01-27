@@ -51,7 +51,7 @@ export async function handleRequest(req) {
     let requestData;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch {
       return new Response(JSON.stringify({
         error: 'Invalid JSON payload'
       }), {
@@ -127,7 +127,7 @@ export async function handleRequest(req) {
       console.error('Error fetching drift events:', driftError);
     }
     // Step 3: Calculate statistics
-    let totalDuration = Number(sessionData?.duration_seconds) || 0;
+    const totalDuration = Number(sessionData?.duration_seconds) || 0;
     let sailingDuration = Number(sessionData?.focus_seconds) || 0;
     let driftingDuration = Number(sessionData?.drift_seconds) || 0;
     let distractionCount = Number(sessionData?.drift_count) || 0;
@@ -179,13 +179,13 @@ export async function handleRequest(req) {
           )
         )
       `).eq('id', sessionId).single();
-    let taskTitle = 'your task';
-    let userId = 'anonymous';
+    let _taskTitle = 'your task';
+    let _userId = 'anonymous';
     if (sessionInfo && !sessionInfoError) {
       const joined = Array.isArray(sessionInfo.sailing_session_tasks) ? sessionInfo.sailing_session_tasks : [];
       const first = joined.find((row)=>row && row.tasks)?.tasks;
-      taskTitle = first?.title || 'your task';
-      userId = sessionInfo.users?.id || 'anonymous';
+      _taskTitle = first?.title || 'your task';
+      _userId = sessionInfo.users?.id || 'anonymous';
     }
     // Step 5: Generate basic session summary (DIFY integration moved to sailing-summary function)
     const summary = `Session completed successfully. Duration: ${Math.round(totalDuration / 60)} minutes, Focus: ${focusPercentage}%`;

@@ -48,6 +48,7 @@ export const CheckInToast: React.FC<CheckInToastProps> = ({
     const [visible, setVisible] = useState(false);
     const [displayMessage, setDisplayMessage] = useState<string | null>(null);
 
+    /* eslint-disable react-hooks/set-state-in-effect -- Toast 显示逻辑需要同步外部 message */
     useEffect(() => {
         if (message) {
             setDisplayMessage(message);
@@ -64,6 +65,7 @@ export const CheckInToast: React.FC<CheckInToastProps> = ({
             return () => clearTimeout(timer);
         }
     }, [message, duration, onClose]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     if (!displayMessage) return null;
 
@@ -91,6 +93,7 @@ export const CheckInToast: React.FC<CheckInToastProps> = ({
  * 获取随机激励文案
  * @returns 随机选取的激励文案
  */
+// eslint-disable-next-line react-refresh/only-export-components -- 工具函数与组件紧密相关
 export function getRandomToastMessage(): string {
     return TOAST_MESSAGES[Math.floor(Math.random() * TOAST_MESSAGES.length)];
 }
@@ -104,6 +107,7 @@ export function getRandomToastMessage(): string {
  * showToast(); // 显示随机文案
  * showToast("Custom message"); // 显示自定义文案
  */
+// eslint-disable-next-line react-refresh/only-export-components -- Hook 与组件配套使用
 export function useCheckInToast() {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 

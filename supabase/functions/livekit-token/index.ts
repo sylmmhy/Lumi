@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// createClient 暂未使用，保留以备将来使用
+// import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { AccessToken, RoomServiceClient } from 'npm:livekit-server-sdk@2.0.0'
 
 const corsHeaders = {
@@ -69,7 +70,7 @@ serve(async (req) => {
       })
 
       console.log(`✅ Room created/updated: ${roomName} with task: ${taskDescription}`)
-    } catch (error) {
+    } catch {
       // Room might already exist - that's OK, continue
       console.log(`ℹ️ Room may already exist: ${roomName}`)
     }

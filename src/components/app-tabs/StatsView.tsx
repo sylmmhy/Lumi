@@ -264,7 +264,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     /**
      * 打卡成功回调（联动能量球和 Toast）
      */
-    const handleCheckIn = (_habitId: string) => {
+    const handleCheckIn = () => {
         // 1. 能量球 +1（乐观更新）
         setMonthlyCount(prev => prev + 1);
 

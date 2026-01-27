@@ -43,6 +43,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
     });
 
     // 监听 triggerRise 触发缩放效果
+    /* eslint-disable react-hooks/set-state-in-effect -- 需要响应外部 prop 变化触发动画 */
     useEffect(() => {
         if (triggerRise) {
             setIsRising(true);
@@ -50,6 +51,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
             return () => clearTimeout(timer);
         }
     }, [triggerRise]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     // 监听 current 变化，触发波浪动画
     useEffect(() => {

@@ -596,6 +596,7 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
     useEffect(() => {
         if (!use24Hour) {
             const parsed = parseTime12(timeValue);
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- 需要同步父组件的 timeValue 到内部状态
             setTimeState12((prev) => (prev.h === parsed.h && prev.m === parsed.m && prev.p === parsed.p ? prev : parsed));
         }
     }, [timeValue, use24Hour]);
@@ -604,6 +605,7 @@ export const TimePicker = ({ timeValue, onTimeChange, dateValue, onDateChange, o
     useEffect(() => {
         if (use24Hour) {
             const parsed = parseTime24(timeValue);
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- 需要同步父组件的 timeValue 到内部状态
             setTimeState24((prev) => (prev.h === parsed.h && prev.m === parsed.m ? prev : parsed));
         }
     }, [timeValue, use24Hour]);

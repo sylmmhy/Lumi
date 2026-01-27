@@ -4,6 +4,7 @@
  */
 
 import type { Task } from '../../remindMe/types';
+import { getTimeIcon } from '../../utils/timeUtils';
 
 /**
  * 习惯卡片的主题颜色
@@ -112,7 +113,6 @@ export const themeColorMap = {
  * @returns Habit 对象
  */
 export const taskToHabit = (task: Task, completions: Set<string>): Habit => {
-    const { getTimeIcon } = require('../../utils/timeUtils');
 
     // 将 Set 转换为 history 对象
     const history: { [key: string]: boolean } = {};

@@ -531,7 +531,7 @@ async function saveOrMergeMemories(
         const targetMemory = similarMemories[0]
         const mergedFromIds = similarMemories.map(m => m.id)
 
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from('user_memories')
           .update({
             content: merged.content,
@@ -803,7 +803,7 @@ async function consolidateMemories(
               processed.add(other.id)
               console.log(`  Embedding match: "${memory.content.substring(0, 30)}..." ~ "${other.content.substring(0, 30)}..." (${(similarity * 100).toFixed(1)}%)`)
             }
-          } catch (err) {
+          } catch {
             console.warn('Failed to parse embeddings, falling back to text similarity')
             similarity = textSimilarity(memory.content, other.content)
             if (similarity >= TEXT_SIMILARITY_THRESHOLD) {

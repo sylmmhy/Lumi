@@ -6,6 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
  * emoji: 显示的表情符号
  * key: i18n 翻译键
  */
+// eslint-disable-next-line react-refresh/only-export-components -- 常量与组件紧密相关，放在同一文件便于维护
 export const QUICK_TAG_KEYS = [
     { emoji: '💪', key: 'urgency.workout' },
     { emoji: '🛏️', key: 'urgency.getOutOfBed' },
@@ -24,6 +25,7 @@ export const QUICK_TAG_KEYS = [
  * - gray: 灰色背景，用于白色背景页面（如 UrgencyView）
  * - blue: 蓝色背景，用于蓝色背景区域（如 HomeView 的输入区）
  */
+ 
 export type QuickTagVariant = 'gray' | 'blue';
 
 interface QuickTagProps {

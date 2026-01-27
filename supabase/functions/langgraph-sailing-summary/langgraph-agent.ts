@@ -287,7 +287,7 @@ function generateFallbackDescription(period: ActivityPeriod): string {
 // Node 3: Generate task breakdown
 async function generateTaskBreakdown(
   periods: ActivityPeriod[],
-  geminiApiKey: string | undefined
+  _geminiApiKey: string | undefined
 ): Promise<string> {
   const workPeriods = periods.filter(p => !p.isIdle)
 

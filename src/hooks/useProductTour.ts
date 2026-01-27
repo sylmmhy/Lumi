@@ -76,8 +76,9 @@ export function useProductTour(): UseProductTourReturn {
    * 恢复方法：移除下面的 `false &&` 条件
    */
   const isActive = useMemo(() => {
-    // TODO: 恢复 Tour 功能时，移除 `false &&`
-    return false && stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
+    // TODO: 恢复 Tour 功能时，将 TOUR_ENABLED 改为 true
+    const TOUR_ENABLED = false;
+    return TOUR_ENABLED && stepNumber >= 1 && stepNumber <= TOUR_TOTAL_STEPS && !hasCompleted;
   }, [stepNumber, hasCompleted]);
 
   /**

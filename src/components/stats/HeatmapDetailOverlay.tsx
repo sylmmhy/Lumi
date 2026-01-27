@@ -57,10 +57,12 @@ export const HeatmapDetailOverlay: React.FC<HeatmapDetailOverlayProps> = ({
     }, []);
 
     // 当 habit 变化时同步编辑状态
+    /* eslint-disable react-hooks/set-state-in-effect -- 需要同步外部 prop 到内部编辑状态 */
     useEffect(() => {
         setEditTime(habit.time || '09:00');
         setEditName(habit.title);
     }, [habit.time, habit.title]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     // 主题颜色映射
     const themeColors = {

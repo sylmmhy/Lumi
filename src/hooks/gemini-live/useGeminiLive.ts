@@ -316,6 +316,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * 注意：使用 session.isConnected 和 session.sendRealtimeInput 作为依赖
    * 而不是整个 session 对象，避免因对象引用变化导致函数频繁重建
    */
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
   const sendTextMessage = useCallback((text: string) => {
     if (session.isConnected) {
       session.sendRealtimeInput({ text });

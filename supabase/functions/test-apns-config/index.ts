@@ -51,7 +51,7 @@ serve(async (req) => {
       };
 
       // 尝试解析私钥
-      let pemKey = APNS_AUTH_KEY.replace(/\\n/g, "\n");
+      const pemKey = APNS_AUTH_KEY.replace(/\\n/g, "\n");
       const pemContents = pemKey
         .replace("-----BEGIN PRIVATE KEY-----", "")
         .replace("-----END PRIVATE KEY-----", "")
@@ -112,7 +112,7 @@ serve(async (req) => {
       const fakeToken = "0000000000000000000000000000000000000000000000000000000000000000";
 
       // 生成 JWT
-      let pemKey = APNS_AUTH_KEY.replace(/\\n/g, "\n");
+      const pemKey = APNS_AUTH_KEY.replace(/\\n/g, "\n");
       const pemContents = pemKey
         .replace("-----BEGIN PRIVATE KEY-----", "")
         .replace("-----END PRIVATE KEY-----", "")

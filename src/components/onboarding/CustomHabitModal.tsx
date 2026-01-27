@@ -22,9 +22,10 @@ export function CustomHabitModal({
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 打开时聚焦输入框
+  // 打开时重置值并聚焦输入框
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 需要同步外部 prop 到内部 state
       setValue(initialValue);
       setTimeout(() => inputRef.current?.focus(), 100);
     }

@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
         let body: LogPassiveSpeechRequest
         try {
             body = await req.json()
-        } catch (error) {
+        } catch {
             return new Response(
                 JSON.stringify({ error: 'Invalid JSON payload' }),
                 {

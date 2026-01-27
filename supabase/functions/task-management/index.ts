@@ -101,7 +101,7 @@ async function handleListTasks(req, supabase, userId) {
     throw new Error(`Failed to fetch tasks: ${error.message}`);
   }
   const tasksResult = sessionId ? (tasks || []).map((t)=>{
-    const { sailing_session_tasks, ...rest } = t;
+    const { sailing_session_tasks: _sailing_session_tasks, ...rest } = t;
     return rest;
   }) : tasks || [];
   return new Response(JSON.stringify({

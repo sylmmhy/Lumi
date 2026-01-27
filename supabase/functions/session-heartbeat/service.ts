@@ -3,7 +3,8 @@ import { createRepo } from './supabase-repo.ts'
 import { uploadImages, buildWorkflowInputs, runWorkflow } from './dify-client.ts'
 import { parseDifyResult } from './parser.ts'
 import { HeartbeatRequestBody, AnalysisResult, HeartbeatResponseBody, UpdateEventRequestBody, UpdateEventResponseBody } from './types.ts'
-import type { Repo } from './supabase-repo.ts'
+// Repo 类型用于类型注解，暂时保留以备将来使用
+// import type { Repo } from './supabase-repo.ts'
 
 const HEARTBEAT_INTERVAL_SECONDS = 30
 

@@ -23,7 +23,7 @@ const corsHeaders = {
 
 // 支持的声音列表
 const SUPPORTED_VOICES = ['Puck', 'Kore', 'Zephyr'] as const;
-type VoiceName = typeof SUPPORTED_VOICES[number];
+type _VoiceName = typeof SUPPORTED_VOICES[number];
 
 // 支持的语言及其试听文本
 const PREVIEW_TEXTS: Record<string, string> = {

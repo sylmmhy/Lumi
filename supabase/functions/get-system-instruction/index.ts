@@ -43,7 +43,7 @@ function extractKeywords(taskDescription: string): string[] {
   const keywords: string[] = []
 
   // 检查任务描述包含哪些关键词类别
-  for (const [category, words] of Object.entries(keywordMap)) {
+  for (const [_category, words] of Object.entries(keywordMap)) {
     if (words.some(word => lowerTask.includes(word))) {
       keywords.push(...words)
     }
@@ -497,7 +497,7 @@ Use this knowledge naturally when relevant, but do not explicitly mention "I rem
 Just incorporate this knowledge as if you naturally know them.
 
 What you know about this user:
-${userMemories.map((m, i) => `- ${m}`).join('\n')}
+${userMemories.map((m) => `- ${m}`).join('\n')}
 
 Examples of how to use this:
 - If you know they like coffee, you might say "Grabbed your coffee yet?"

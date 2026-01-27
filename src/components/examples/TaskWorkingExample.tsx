@@ -44,7 +44,7 @@ export function AICoachTaskExample() {
     try {
       await aiCoach.startSession('Get out of bed');
       setStep('working');
-    } catch (error) {
+    } catch {
       alert('连接失败，请重试');
     }
   }, [aiCoach]);

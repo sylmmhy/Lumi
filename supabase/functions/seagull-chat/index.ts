@@ -190,8 +190,8 @@ Deno.serve(async (req)=>{
     checkAborted();
     console.log("💾 Storing conversation to database...");
     // Extract user_id and session_id from intervention context or headers
-    let userId = parsedInterventionContext?.userId || userIdFromForm || req.headers.get("x-user-id");
-    let sessionId = parsedInterventionContext?.sessionId || sessionIdFromForm || req.headers.get("x-session-id");
+    const userId = parsedInterventionContext?.userId || userIdFromForm || req.headers.get("x-user-id");
+    const sessionId = parsedInterventionContext?.sessionId || sessionIdFromForm || req.headers.get("x-session-id");
     // If still no user ID, this is an error - we need proper user tracking
     if (!userId) {
       console.error("❌ No user ID provided - cannot store conversation");

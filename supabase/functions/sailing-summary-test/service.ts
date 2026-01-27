@@ -1,5 +1,6 @@
 import { createRepo } from './supabase-repo.ts'
-import { requestDifySummary } from './ai.ts'
+// requestDifySummary 暂未使用，保留以备将来使用
+// import { requestDifySummary } from './ai.ts'
 import { chooseCategoryConfig, pickRandomImage, pickTemplate } from './category.ts'
 import { collectSessionData, computeDriftMinutes, computeDurationHours, extractSessionMetrics, formatMetricsForLogging } from './utils.ts'
 import type { SailingSummaryRequest, SailingSummaryResponse, TaskSnapshot, DifyWorkflowOutput } from './types.ts'

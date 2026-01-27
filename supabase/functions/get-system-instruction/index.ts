@@ -6,6 +6,46 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// =====================================================
+// Tolan 级别记忆系统配置
+// =====================================================
+
+// 功能开关：是否启用 Tolan 级别 Multi-Query RAG
+const ENABLE_TOLAN_MEMORY = Deno.env.get('ENABLE_TOLAN_MEMORY') === 'true'
+
+// Azure AI 配置（用于 Question Synthesis）
+const AZURE_ENDPOINT = Deno.env.get('AZURE_AI_ENDPOINT') || 'https://conta-mcvprtb1-eastus2.openai.azure.com'
+const AZURE_API_KEY = Deno.env.get('AZURE_AI_API_KEY')
+const MODEL_NAME = Deno.env.get('MEMORY_EXTRACTOR_MODEL') || 'gpt-5.1-chat'
+
+// Embedding 配置
+const EMBEDDING_ENDPOINT = Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || AZURE_ENDPOINT
+const EMBEDDING_API_KEY = Deno.env.get('AZURE_EMBEDDING_API_KEY') || AZURE_API_KEY
+const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embedding-3-large'
+
+// 记忆检索配置
+const MEMORY_SIMILARITY_THRESHOLD = 0.6
+const MEMORY_LIMIT_PER_QUERY = 5
+const MAX_FINAL_MEMORIES = 10
+
+// 记忆缓存（5分钟 TTL）
+const memoryCache = new Map<string, { data: string[]; expires: number }>()
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+/**
+ * Multi-Query RAG 搜索结果
+ */
+interface MultiQueryResult {
+  query_index: number
+  memory_id: string
+  content: string
+  tag: string
+  confidence: number
+  importance_score: number
+  similarity: number
+  rank: number
+}
+
 /**
  * 用户成功记录的结构
  */
@@ -23,6 +63,262 @@ interface SuccessRecord {
     completion_mood: string | null
     difficulty_perception: string | null
   }>
+}
+
+// =====================================================
+// Tolan 级别 Multi-Query RAG 核心函数
+// =====================================================
+
+/**
+ * Question Synthesis: 使用 LLM 为给定的任务描述生成多个检索问题
+ * 这些问题将用于多路向量搜索，以获得更全面的记忆覆盖
+ */
+async function synthesizeQuestions(taskDescription: string): Promise<string[]> {
+  if (!AZURE_API_KEY) {
+    console.warn('⚠️ AZURE_API_KEY 未设置，跳过 Question Synthesis')
+    return [taskDescription] // 回退到直接使用任务描述
+  }
+
+  const prompt = `Based on the user's current task, generate 3-5 search queries to retrieve relevant memories from their history.
+
+Current task: "${taskDescription}"
+
+Generate queries that would help find:
+1. Past experiences with similar tasks
+2. User's preferences and habits related to this task
+3. Emotional patterns or resistance triggers
+4. What motivation techniques worked before
+5. Any relevant context or circumstances
+
+Output ONLY a JSON array of strings, no explanation:
+["query1", "query2", "query3"]`
+
+  try {
+    const apiUrl = `${AZURE_ENDPOINT}/openai/v1/chat/completions`
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AZURE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [
+          { role: 'system', content: 'You are a search query generator. Output only valid JSON arrays.' },
+          { role: 'user', content: prompt }
+        ],
+        max_completion_tokens: 300,
+        temperature: 0.3, // 低温度确保稳定输出
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('Question Synthesis API error:', response.status)
+      return [taskDescription]
+    }
+
+    const result = await response.json()
+    const content = result.choices?.[0]?.message?.content?.trim()
+
+    if (!content) {
+      return [taskDescription]
+    }
+
+    // 解析 JSON 数组
+    const queries = JSON.parse(content)
+    if (Array.isArray(queries) && queries.length > 0) {
+      console.log(`🔍 Question Synthesis 生成 ${queries.length} 个检索问题:`, queries)
+      return queries.slice(0, 5) // 最多 5 个问题
+    }
+
+    return [taskDescription]
+  } catch (error) {
+    console.error('Question Synthesis 失败:', error)
+    return [taskDescription]
+  }
+}
+
+/**
+ * 批量生成 Embeddings
+ * 使用 OpenAI 兼容的 API 格式，支持批量输入
+ */
+async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  if (!EMBEDDING_API_KEY || texts.length === 0) {
+    return []
+  }
+
+  try {
+    const baseUrl = EMBEDDING_ENDPOINT.replace(/\/+$/, '')
+    const apiUrl = `${baseUrl}/embeddings`
+
+    console.log(`📊 正在为 ${texts.length} 个文本生成 embeddings...`)
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${EMBEDDING_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        input: texts,
+        dimensions: 1536,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('Embedding API error:', response.status, error)
+      return []
+    }
+
+    const result = await response.json()
+    const embeddings = result.data?.map((d: { embedding: number[] }) => d.embedding) || []
+
+    console.log(`📊 成功生成 ${embeddings.length} 个 embeddings`)
+    return embeddings
+  } catch (error) {
+    console.error('generateEmbeddings 失败:', error)
+    return []
+  }
+}
+
+/**
+ * Mean Reciprocal Rank (MRR) 融合算法
+ * 将多个查询的搜索结果合并，根据排名计算综合分数
+ *
+ * MRR 公式: score = sum(1/rank) 对于每个出现的查询
+ *
+ * 例如: Memory A 在 Query1 排第1, Query3 排第2
+ *       score = 1/1 + 1/2 = 1.5
+ */
+function mergeWithMRR(resultSets: MultiQueryResult[]): Array<{ memory_id: string; content: string; tag: string; mrrScore: number; importance: number }> {
+  const scores = new Map<string, {
+    mrrScore: number
+    content: string
+    tag: string
+    importance: number
+    queryHits: number
+  }>()
+
+  // 计算每个记忆的 MRR 分数
+  for (const result of resultSets) {
+    const existing = scores.get(result.memory_id)
+    const reciprocalRank = 1 / result.rank // 排名的倒数
+
+    if (existing) {
+      existing.mrrScore += reciprocalRank
+      existing.queryHits += 1
+      // 取最高的 importance
+      existing.importance = Math.max(existing.importance, result.importance_score)
+    } else {
+      scores.set(result.memory_id, {
+        mrrScore: reciprocalRank,
+        content: result.content,
+        tag: result.tag,
+        importance: result.importance_score,
+        queryHits: 1,
+      })
+    }
+  }
+
+  // 按 MRR 分数排序（考虑 importance 作为次要排序）
+  const sorted = [...scores.entries()]
+    .map(([memory_id, data]) => ({
+      memory_id,
+      content: data.content,
+      tag: data.tag,
+      mrrScore: data.mrrScore,
+      importance: data.importance,
+    }))
+    .sort((a, b) => {
+      // 主排序: MRR 分数
+      const scoreDiff = b.mrrScore - a.mrrScore
+      if (Math.abs(scoreDiff) > 0.01) return scoreDiff
+      // 次排序: importance
+      return b.importance - a.importance
+    })
+
+  console.log(`🔀 MRR 融合: ${resultSets.length} 条结果 → ${sorted.length} 条去重结果`)
+  if (sorted.length > 0) {
+    console.log(`🔀 Top 3 MRR scores:`, sorted.slice(0, 3).map(m => ({ tag: m.tag, score: m.mrrScore.toFixed(2) })))
+  }
+
+  return sorted
+}
+
+/**
+ * Tolan 级别 Multi-Query RAG 主函数
+ * 完整流程: Question Synthesis → Batch Embedding → Parallel Search → MRR Fusion
+ */
+async function multiQueryRAG(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskDescription: string
+): Promise<string[]> {
+  const startTime = Date.now()
+
+  try {
+    // 1. Question Synthesis: LLM 生成检索问题
+    const questions = await synthesizeQuestions(taskDescription)
+
+    // 2. Batch Embedding Generation: 并行生成所有问题的 embedding
+    const embeddings = await generateEmbeddings(questions)
+
+    if (embeddings.length === 0) {
+      console.warn('⚠️ Embedding 生成失败，回退到传统检索')
+      return []
+    }
+
+    // 3. Multi-Query Vector Search: 调用数据库 RPC
+    const embeddingStrings = embeddings.map(e => JSON.stringify(e))
+
+    const { data: searchResults, error } = await supabase.rpc('multi_query_search_memories', {
+      p_user_id: userId,
+      p_embeddings: embeddingStrings,
+      p_threshold: MEMORY_SIMILARITY_THRESHOLD,
+      p_limit_per_query: MEMORY_LIMIT_PER_QUERY,
+    })
+
+    if (error) {
+      console.error('multi_query_search_memories RPC 错误:', error)
+      return []
+    }
+
+    if (!searchResults || searchResults.length === 0) {
+      console.log('🔍 Multi-Query RAG 未找到相关记忆')
+      return []
+    }
+
+    // 4. MRR Fusion: 合并并排序结果
+    const fusedResults = mergeWithMRR(searchResults as MultiQueryResult[])
+
+    // 5. 格式化输出（取 top N）
+    const tagContext: Record<string, string> = {
+      'PREF': '(AI 交互偏好)',
+      'PROC': '(拖延模式)',
+      'SOMA': '(身心反应)',
+      'EMO': '(情绪模式)',
+      'SAB': '(自我妨碍)',
+      'EFFECTIVE': '(有效激励方式)',
+    }
+
+    const topMemories = fusedResults
+      .slice(0, MAX_FINAL_MEMORIES)
+      .map(m => {
+        const context = tagContext[m.tag] || ''
+        return `${m.content} ${context}`.trim()
+      })
+
+    const elapsedMs = Date.now() - startTime
+    console.log(`✅ Multi-Query RAG 完成: ${topMemories.length} 条记忆, 耗时 ${elapsedMs}ms`)
+
+    return topMemories
+  } catch (error) {
+    console.error('Multi-Query RAG 执行失败:', error)
+    return []
+  }
 }
 
 /**
@@ -330,12 +626,12 @@ function calculateStreakFromDates(dates: string[]): number {
 }
 
 /**
- * 从 Supabase user_memories 表获取用户记忆
+ * 从 Supabase user_memories 表获取用户记忆（传统模式）
  * 混合策略：
  * 1. PREF 类型记忆（通用 AI 交互偏好）- 始终获取
  * 2. 与当前任务相关的记忆 - 按 task_name 精确匹配或关键词匹配
  */
-async function getUserMemories(
+async function getUserMemoriesLegacy(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   taskDescription: string,
@@ -441,6 +737,133 @@ async function getUserMemories(
   } catch (error) {
     console.warn('获取用户记忆出错:', error)
     return []
+  }
+}
+
+/**
+ * Tolan 级别记忆获取（Multi-Query RAG + 传统记忆混合）
+ *
+ * 策略：
+ * 1. PREF 记忆 - 始终全量加载（通用偏好）
+ * 2. EFFECTIVE 记忆 - 始终加载 5 条（有效激励方式）
+ * 3. 其他记忆 - 使用 Multi-Query RAG 智能检索
+ */
+async function getUserMemoriesTolan(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskDescription: string
+): Promise<string[]> {
+  const cacheKey = `${userId}:${taskDescription}`
+
+  // 检查缓存
+  const cached = memoryCache.get(cacheKey)
+  if (cached && cached.expires > Date.now()) {
+    console.log('📦 使用缓存的记忆')
+    return cached.data
+  }
+
+  try {
+    const allMemories: string[] = []
+    const seenContent = new Set<string>()
+
+    const tagContext: Record<string, string> = {
+      'PREF': '(AI 交互偏好)',
+      'PROC': '(拖延模式)',
+      'SOMA': '(身心反应)',
+      'EMO': '(情绪模式)',
+      'SAB': '(自我妨碍)',
+      'EFFECTIVE': '(有效激励方式)',
+    }
+
+    // 1. 获取 PREF 记忆（始终全量加载）
+    const { data: prefMemories, error: prefError } = await supabase
+      .from('user_memories')
+      .select('content, tag')
+      .eq('user_id', userId)
+      .eq('tag', 'PREF')
+      .eq('compression_status', 'active')
+      .gte('confidence', 0.5)
+      .order('importance_score', { ascending: false, nullsFirst: false })
+      .order('confidence', { ascending: false })
+
+    if (!prefError && prefMemories) {
+      for (const m of prefMemories) {
+        if (!seenContent.has(m.content)) {
+          seenContent.add(m.content)
+          allMemories.push(`${m.content} ${tagContext[m.tag] || ''}`.trim())
+        }
+      }
+      console.log(`🧠 [Tolan] PREF 记忆: ${prefMemories.length} 条`)
+    }
+
+    // 2. 获取 EFFECTIVE 记忆（始终加载）
+    const { data: effectiveMemories, error: effectiveError } = await supabase
+      .from('user_memories')
+      .select('content, tag')
+      .eq('user_id', userId)
+      .eq('tag', 'EFFECTIVE')
+      .eq('compression_status', 'active')
+      .gte('confidence', 0.5)
+      .order('importance_score', { ascending: false, nullsFirst: false })
+      .order('confidence', { ascending: false })
+      .limit(5)
+
+    if (!effectiveError && effectiveMemories) {
+      for (const m of effectiveMemories) {
+        if (!seenContent.has(m.content)) {
+          seenContent.add(m.content)
+          allMemories.push(`${m.content} ${tagContext[m.tag] || ''}`.trim())
+        }
+      }
+      console.log(`🧠 [Tolan] EFFECTIVE 记忆: ${effectiveMemories.length} 条`)
+    }
+
+    // 3. Multi-Query RAG 获取任务相关记忆
+    const ragMemories = await multiQueryRAG(supabase, userId, taskDescription)
+
+    for (const memory of ragMemories) {
+      // 去除已有的标签后缀来检查重复
+      const cleanContent = memory.replace(/\s*\([^)]+\)\s*$/, '').trim()
+      if (!seenContent.has(cleanContent)) {
+        seenContent.add(cleanContent)
+        allMemories.push(memory)
+      }
+    }
+    console.log(`🧠 [Tolan] RAG 记忆: ${ragMemories.length} 条 (去重后新增)`)
+
+    // 限制总数
+    const finalMemories = allMemories.slice(0, MAX_FINAL_MEMORIES)
+
+    // 更新缓存
+    memoryCache.set(cacheKey, {
+      data: finalMemories,
+      expires: Date.now() + CACHE_TTL_MS,
+    })
+
+    console.log(`🧠 [Tolan] 最终记忆总数: ${finalMemories.length} 条`)
+    return finalMemories
+  } catch (error) {
+    console.error('[Tolan] 记忆获取失败，回退到传统模式:', error)
+    return getUserMemoriesLegacy(supabase, userId, taskDescription)
+  }
+}
+
+/**
+ * 获取用户记忆的统一入口
+ * 根据 ENABLE_TOLAN_MEMORY 开关选择 Tolan 或传统模式
+ */
+async function getUserMemories(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  taskDescription: string,
+  limit = 5
+): Promise<string[]> {
+  if (ENABLE_TOLAN_MEMORY) {
+    console.log('🚀 使用 Tolan 级别 Multi-Query RAG 记忆系统')
+    return getUserMemoriesTolan(supabase, userId, taskDescription)
+  } else {
+    console.log('📚 使用传统记忆检索系统')
+    return getUserMemoriesLegacy(supabase, userId, taskDescription, limit)
   }
 }
 

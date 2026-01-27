@@ -20,6 +20,56 @@ const EMBEDDING_MODEL = Deno.env.get('MEMORY_EMBEDDING_MODEL') || 'text-embeddin
 // 记忆整合配置
 const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
 
+/**
+ * 计算记忆的初始重要性评分
+ * 基于标签类型、置信度和内容特征
+ *
+ * 评分规则：
+ * - PREF（偏好）: 基础 0.7，用户偏好通常很重要
+ * - EFFECTIVE（有效激励）: 基础 0.8，成功的激励方式非常重要
+ * - PROC/EMO/SAB: 基础 0.5，行为模式记忆
+ * - SOMA: 基础 0.4，身心反应相对次要
+ *
+ * 调整因素：
+ * - 置信度高于 0.8 → +0.1
+ * - 内容包含具体细节（数字、名词）→ +0.1
+ * - 内容较长（超过 100 字符）→ +0.05
+ */
+function calculateImportanceScore(memory: ExtractedMemory): number {
+  // 基础分数（按标签类型）
+  const baseScores: Record<string, number> = {
+    'PREF': 0.7,       // AI 交互偏好
+    'EFFECTIVE': 0.8,  // 有效激励方式（最重要）
+    'PROC': 0.5,       // 拖延原因
+    'EMO': 0.5,        // 情绪触发
+    'SAB': 0.5,        // 自我妨碍
+    'SOMA': 0.4,       // 身心反应
+  }
+
+  let score = baseScores[memory.tag] || 0.5
+
+  // 置信度调整
+  if (memory.confidence >= 0.8) {
+    score += 0.1
+  } else if (memory.confidence >= 0.7) {
+    score += 0.05
+  }
+
+  // 内容具体性调整（包含数字或特定名词）
+  const hasSpecificDetails = /\d+|specific|always|never|every time|每次|总是|从不/i.test(memory.content)
+  if (hasSpecificDetails) {
+    score += 0.1
+  }
+
+  // 内容长度调整
+  if (memory.content.length > 100) {
+    score += 0.05
+  }
+
+  // 确保在 0-1 范围内
+  return Math.min(1, Math.max(0, score))
+}
+
 // 记忆提取的系统提示词
 // 注意：SUCCESS 记录已从 tasks 表获取，不再在此提取
 const EXTRACTION_PROMPT = `You are an AI Coach behavioral pattern extractor. Your job is to identify PATTERNS, PREFERENCES, and INSIGHTS from user conversations.
@@ -487,6 +537,10 @@ async function saveOrMergeMemories(
       console.log(`Generating embedding for: ${memory.content.substring(0, 50)}...`)
       const embedding = await generateEmbedding(memory.content)
 
+      // 计算初始重要性评分
+      const importanceScore = calculateImportanceScore(memory)
+      console.log(`📊 Importance score for "${memory.tag}": ${importanceScore.toFixed(2)}`)
+
       if (embedding.length === 0) {
         console.warn('Failed to generate embedding, saving without dedup')
         // 回退到简单插入
@@ -497,6 +551,7 @@ async function saveOrMergeMemories(
             content: memory.content,
             tag: memory.tag,
             confidence: memory.confidence,
+            importance_score: importanceScore,
             task_name: taskDescription || null,
             metadata: metadata || {},
           })
@@ -531,14 +586,19 @@ async function saveOrMergeMemories(
         const targetMemory = similarMemories[0]
         const mergedFromIds = similarMemories.map(m => m.id)
 
+        // 合并后重要性提升（多次出现说明更重要）
+        const mergedImportance = Math.min(1, importanceScore + 0.1 * (similarMemories.length - 1))
+
         const { data: _data, error } = await supabase
           .from('user_memories')
           .update({
             content: merged.content,
             confidence: merged.confidence,
+            importance_score: mergedImportance,
             embedding: JSON.stringify(mergedEmbedding),
             task_name: taskDescription || null,
             merged_from: mergedFromIds,
+            version: (targetMemory as unknown as { version?: number }).version ? (targetMemory as unknown as { version: number }).version + 1 : 2,
             metadata: {
               ...metadata,
               lastMergedAt: new Date().toISOString(),
@@ -581,6 +641,7 @@ async function saveOrMergeMemories(
             content: memory.content,
             tag: memory.tag,
             confidence: memory.confidence,
+            importance_score: importanceScore,
             embedding: JSON.stringify(embedding),
             task_name: taskDescription || null,
             metadata: metadata || {},
@@ -603,6 +664,7 @@ async function saveOrMergeMemories(
       // Fallback：即使 embedding 失败，也尝试保存记忆（不做去重）
       try {
         console.log('Attempting fallback save without embedding...')
+        const fallbackImportance = calculateImportanceScore(memory)
         const { data, error } = await supabase
           .from('user_memories')
           .insert({
@@ -610,6 +672,7 @@ async function saveOrMergeMemories(
             content: memory.content,
             tag: memory.tag,
             confidence: memory.confidence,
+            importance_score: fallbackImportance,
             task_name: taskDescription || null,
             metadata: {
               ...metadata,

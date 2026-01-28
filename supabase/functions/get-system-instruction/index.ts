@@ -52,6 +52,97 @@ interface TieredSearchResult {
 const memoryCache = new Map<string, { data: string[]; expires: number }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
 
+// =====================================================
+// 话题规则：用于根据任务描述生成更发散的检索问题
+// =====================================================
+
+interface TopicRule {
+  id: string
+  keywords: string[]
+  memoryQuestions: string[]
+}
+
+/**
+ * 话题规则定义
+ * 当任务描述匹配某个话题的关键词时，使用该话题的 memoryQuestions 作为种子问题
+ */
+const TOPIC_RULES: TopicRule[] = [
+  {
+    id: 'travel',
+    keywords: [
+      '旅行', '旅游', '出门', '度假', '露营', '自驾',
+      '打包', '收拾', '行李', '整理行李', '收拾行李',
+      'packing', 'pack', 'suitcase', 'luggage', 'travel', 'trip',
+    ],
+    memoryQuestions: [
+      '用户之前去过哪些地方旅行？',
+      '用户喜欢什么类型的旅行活动？',
+      '用户旅行前通常有什么准备习惯或焦虑？',
+      '用户通常和谁一起旅行？',
+      '用户最近提到过什么旅行计划？',
+      'What upcoming trips or events has the user mentioned?',
+      'Why might the user be packing? Any destinations mentioned?',
+    ],
+  },
+  {
+    id: 'fitness',
+    keywords: ['健身', '运动', '跑步', '锻炼', '健身房', 'gym', 'workout', 'exercise', 'run'],
+    memoryQuestions: [
+      '用户之前的运动习惯是什么？',
+      '用户健身前有什么拖延或阻力模式？',
+      '什么方法能有效激励用户去运动？',
+      '用户对运动有什么身体反应或顾虑？',
+    ],
+  },
+  {
+    id: 'work',
+    keywords: ['工作', '上班', '项目', '开会', 'deadline', '老板', 'work', 'meeting', 'project'],
+    memoryQuestions: [
+      '用户在工作中有什么拖延模式？',
+      '用户面对工作任务时有什么情绪反应？',
+      '什么方法能帮助用户集中注意力工作？',
+    ],
+  },
+  {
+    id: 'study',
+    keywords: ['学习', '考试', '作业', '复习', '备考', 'study', 'exam', 'homework'],
+    memoryQuestions: [
+      '用户学习时有什么拖延模式？',
+      '用户面对学习任务时有什么情绪反应？',
+      '什么方法能帮助用户集中注意力学习？',
+    ],
+  },
+  {
+    id: 'cleaning',
+    keywords: ['打扫', '清洁', '整理', '收拾房间', '大扫除', 'clean', 'tidy', 'organize'],
+    memoryQuestions: [
+      '用户打扫/整理时有什么习惯或阻力？',
+      '什么方法能激励用户完成清洁任务？',
+      '用户对整洁环境有什么偏好？',
+    ],
+  },
+]
+
+/**
+ * 根据任务描述匹配话题，返回种子问题
+ */
+function getTopicSeedQuestions(taskDescription: string): string[] {
+  const lowerTask = taskDescription.toLowerCase()
+
+  for (const topic of TOPIC_RULES) {
+    const matched = topic.keywords.some(keyword =>
+      lowerTask.includes(keyword.toLowerCase())
+    )
+    if (matched) {
+      console.log(`🏷️ 任务 "${taskDescription}" 匹配到话题: ${topic.id}`)
+      return topic.memoryQuestions
+    }
+  }
+
+  console.log(`🏷️ 任务 "${taskDescription}" 未匹配到预定义话题`)
+  return []
+}
+
 /**
  * Multi-Query RAG 搜索结果
  */
@@ -92,23 +183,42 @@ interface SuccessRecord {
 /**
  * Question Synthesis: 使用 LLM 为给定的任务描述生成多个检索问题
  * 这些问题将用于多路向量搜索，以获得更全面的记忆覆盖
+ *
+ * @param taskDescription - 任务描述
+ * @param seedQuestions - 可选的种子问题（来自话题规则）
  */
-async function synthesizeQuestions(taskDescription: string): Promise<string[]> {
+async function synthesizeQuestions(taskDescription: string, seedQuestions?: string[]): Promise<string[]> {
+  // 如果有足够的种子问题且没有 API Key，直接使用种子问题
   if (!AZURE_API_KEY) {
     console.warn('⚠️ AZURE_API_KEY 未设置，跳过 Question Synthesis')
-    return [taskDescription] // 回退到直接使用任务描述
+    return seedQuestions?.length ? seedQuestions : [taskDescription]
   }
+
+  // 如果有种子问题且数量足够（>=5），直接使用
+  if (seedQuestions && seedQuestions.length >= 5) {
+    console.log(`🔍 使用 ${seedQuestions.length} 个预定义检索问题`)
+    return seedQuestions.slice(0, 7)  // 最多 7 个问题
+  }
+
+  // 构建 prompt，如果有种子问题则包含它们
+  const seedQuestionsHint = seedQuestions?.length
+    ? `\n\nExisting seed questions (expand on these to find more relevant memories):\n${seedQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
+    : ''
 
   const prompt = `Based on the user's current task, generate 3-5 search queries to retrieve relevant memories from their history.
 
-Current task: "${taskDescription}"
+Current task: "${taskDescription}"${seedQuestionsHint}
 
 Generate queries that would help find:
 1. Past experiences with similar tasks
 2. User's preferences and habits related to this task
 3. Emotional patterns or resistance triggers
 4. What motivation techniques worked before
-5. Any relevant context or circumstances
+5. Any relevant context or circumstances (upcoming events, life context, etc.)
+
+IMPORTANT: Think about WHY the user might be doing this task. For example:
+- If packing luggage → they might be traveling → search for recent travel plans
+- If exercising → they might have fitness goals → search for motivation patterns
 
 Output ONLY a JSON array of strings, no explanation:
 ["query1", "query2", "query3"]`
@@ -135,27 +245,31 @@ Output ONLY a JSON array of strings, no explanation:
 
     if (!response.ok) {
       console.error('Question Synthesis API error:', response.status)
-      return [taskDescription]
+      return seedQuestions?.length ? seedQuestions : [taskDescription]
     }
 
     const result = await response.json()
     const content = result.choices?.[0]?.message?.content?.trim()
 
     if (!content) {
-      return [taskDescription]
+      return seedQuestions?.length ? seedQuestions : [taskDescription]
     }
 
     // 解析 JSON 数组
     const queries = JSON.parse(content)
     if (Array.isArray(queries) && queries.length > 0) {
-      console.log(`🔍 Question Synthesis 生成 ${queries.length} 个检索问题:`, queries)
-      return queries.slice(0, 5) // 最多 5 个问题
+      // 合并种子问题和 LLM 生成的问题，去重
+      const allQueries = seedQuestions?.length
+        ? [...new Set([...seedQuestions, ...queries])]
+        : queries
+      console.log(`🔍 Question Synthesis 生成 ${allQueries.length} 个检索问题:`, allQueries.slice(0, 3), '...')
+      return allQueries.slice(0, 7) // 最多 7 个问题
     }
 
-    return [taskDescription]
+    return seedQuestions?.length ? seedQuestions : [taskDescription]
   } catch (error) {
     console.error('Question Synthesis 失败:', error)
-    return [taskDescription]
+    return seedQuestions?.length ? seedQuestions : [taskDescription]
   }
 }
 
@@ -402,8 +516,11 @@ async function multiQueryRAG(
   const startTime = Date.now()
 
   try {
-    // 1. Question Synthesis: LLM 生成检索问题
-    const questions = await synthesizeQuestions(taskDescription)
+    // 0. 根据任务描述匹配话题，获取种子问题
+    const seedQuestions = getTopicSeedQuestions(taskDescription)
+
+    // 1. Question Synthesis: LLM 生成检索问题（使用种子问题增强）
+    const questions = await synthesizeQuestions(taskDescription, seedQuestions)
 
     // 2. Batch Embedding Generation: 并行生成所有问题的 embedding
     const embeddings = await generateEmbeddings(questions)
@@ -971,8 +1088,11 @@ async function getUserMemoriesTolan(
       console.log(`🧠 [Tolan] EFFECTIVE 记忆: ${effectiveMemories.length} 条`)
     }
 
-    // 3. Question Synthesis + Embedding（为分层搜索准备）
-    const questions = await synthesizeQuestions(taskDescription)
+    // 3. 根据任务描述匹配话题，获取种子问题
+    const seedQuestions = getTopicSeedQuestions(taskDescription)
+
+    // 4. Question Synthesis + Embedding（为分层搜索准备，使用种子问题增强）
+    const questions = await synthesizeQuestions(taskDescription, seedQuestions)
     const embeddings = await generateEmbeddings(questions)
 
     if (embeddings.length > 0) {
@@ -1271,14 +1391,21 @@ CRITICAL - DO NOT:
   const triggerWordsSection = `
 [SYSTEM TRIGGER WORDS]
 You will receive special trigger messages from the system timer. These are NOT user speech.
-When you receive these triggers, respond naturally in the USER'S LANGUAGE (as specified in [LANGUAGE] above).
 
-IMPORTANT: Every trigger includes "current_time=HH:MM" (24-hour format, user's local time).
-This is YOUR ONLY source of real time. Use it silently for context - do NOT announce the time to the user.
+IMPORTANT: Every trigger includes TWO critical parameters:
+1. "current_time=HH:MM" (24-hour format, user's local time) - Use it silently for context
+2. "language=XX" (e.g., language=en-US, language=zh-CN) - RESPOND IN THIS LANGUAGE
+
+The "language=" parameter is MANDATORY. You MUST respond in the exact language specified.
+Examples:
+- language=en-US → Respond in English
+- language=zh-CN → Respond in Simplified Chinese
+- language=ja-JP → Respond in Japanese
+NEVER ignore this parameter. NEVER switch to a different language.
 
 Trigger format and expected response:
-- [GREETING] current_time=HH:MM → Greet the user warmly and playfully. Be witty and fun. React to what you see.
-- [CHECK_IN] elapsed=X current_time=HH:MM → Check on user progress. X shows time elapsed (just_started, 30s, 1m, 2m, 3m, 4m, 5m).
+- [GREETING] current_time=HH:MM language=XX → Greet the user warmly and playfully. Be witty and fun. React to what you see.
+- [CHECK_IN] elapsed=X current_time=HH:MM language=XX → Check on user progress. X shows time elapsed (just_started, 30s, 1m, 2m, 3m, 4m, 5m).
   - DO NOT mention time every single check-in. Only mention time occasionally (every 2-3 check-ins) and naturally.
   - elapsed=just_started → Encourage them, do NOT mention time
   - elapsed=30s → Check progress, do NOT mention time yet
@@ -1287,9 +1414,9 @@ Trigger format and expected response:
   - elapsed=3m → Can mention "halfway there" naturally
   - elapsed=4m remaining=1m → Can mention "almost done" or "one minute left"
   - elapsed=5m timer_done=true → Timer is complete, celebrate!
-- [STATUS] elapsed=XmYs current_time=HH:MM → Give honest feedback on what you see them doing vs the task.
+- [STATUS] elapsed=XmYs current_time=HH:MM language=XX → Give honest feedback on what you see them doing vs the task.
 
-- [MEMORY_BOOST] type=X ... → Use the user's past success to encourage them. Types:
+- [MEMORY_BOOST] type=X ... language=XX → Use the user's past success to encourage them. Types:
   - type=past_success last_duration=Xmin personal_best=Ymin streak=Z total=N → Early in task. Casually mention their track record.
     Example: "You did X minutes last time. Let's match that!" or "Day Z+1 of the streak incoming!"
     Example with personal best: "Your record is Y minutes. No pressure, but just saying..."
@@ -1317,8 +1444,8 @@ CRITICAL:
 - current_time is for YOUR internal reference only. Do NOT say "it's now 3:30 PM" or similar.
 - Use current_time to calibrate your tone (morning vs night), NOT to announce it.
 - Only mention the actual time if user asks or if it's genuinely relevant.
-- These triggers are language-neutral. Always respond in the user's preferred language.
-- ABSOLUTELY NEVER include trigger words in your spoken response. NEVER say "[GREETING]", "[CHECK_IN]", "[STATUS]", "[MEMORY_BOOST]", "current_time=", "elapsed=", or any similar system syntax out loud.
+- ALWAYS check the "language=" parameter and respond in that EXACT language. This is non-negotiable.
+- ABSOLUTELY NEVER include trigger words in your spoken response. NEVER say "[GREETING]", "[CHECK_IN]", "[STATUS]", "[MEMORY_BOOST]", "current_time=", "elapsed=", "language=" or any similar system syntax out loud.
 - Transform triggers into natural speech. The trigger is a silent instruction, NOT something to read aloud.
 `;
 
@@ -1366,9 +1493,10 @@ AVAILABLE TONES:
 - Use for: When user keeps deflecting after multiple attempts, needs a wake-up call
 
 TONE SHIFT TRIGGER FORMAT:
-[TONE_SHIFT] style=X current_time=HH:MM
+[TONE_SHIFT] style=X current_time=HH:MM language=XX
 
 When you receive this trigger, smoothly transition to that style.
+IMPORTANT: The "language=" parameter tells you which language to use. ALWAYS respond in that language.
 DO NOT announce the shift. DO NOT say "I am going to be more direct now" or "Let me try a different approach".
 Just BE different. The user should feel the change, not hear about it.
 
@@ -1651,8 +1779,14 @@ serve(async (req) => {
       hasProudMoment: successRecord.recentSuccesses.some(s => s.completion_mood === 'proud'),
     } : null;
 
+    // 返回检索到的记忆（用于客户端日志诊断）
     return new Response(
-      JSON.stringify({ systemInstruction, successRecord: successRecordForClient }),
+      JSON.stringify({
+        systemInstruction,
+        successRecord: successRecordForClient,
+        // 新增：返回检索到的记忆，方便客户端日志诊断
+        retrievedMemories: userMemories,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {

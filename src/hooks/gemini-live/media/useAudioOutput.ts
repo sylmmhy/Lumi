@@ -53,6 +53,8 @@ export function useAudioOutput(
    * 必须在用户交互上下文中调用
    */
   const ensureReady = useCallback(async (): Promise<AudioContext> => {
+    const startTime = performance.now();
+
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       audioContextRef.current = new AudioContext({ sampleRate });
       streamerRef.current = new AudioStreamer(audioContextRef.current);
@@ -65,8 +67,18 @@ export function useAudioOutput(
     }
 
     if (audioContextRef.current.state === 'suspended') {
+      const resumeStart = performance.now();
       await audioContextRef.current.resume();
-      devLog('🔊 AudioContext resumed:', audioContextRef.current.state);
+      if (import.meta.env.DEV) {
+        console.log(`🔊 AudioContext resumed - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms`);
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      const elapsed = performance.now() - startTime;
+      if (elapsed > 10) {
+        console.log(`⚠️ ensureReady 耗时较长: ${elapsed.toFixed(1)}ms`);
+      }
     }
 
     return audioContextRef.current;

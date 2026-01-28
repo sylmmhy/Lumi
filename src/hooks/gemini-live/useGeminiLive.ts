@@ -110,6 +110,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           },
           onTurnComplete: () => {
             audioOutput.markTurnComplete();  // 重置 isSpeaking 状态
+            lastTurnCompleteTimeRef.current = Date.now();  // 记录 turnComplete 时间，用于安全注入窗口
             onTurnCompleteRef.current?.();
           },
           onInputTranscription: (text: string) => {
@@ -328,6 +329,79 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
   }, [session.isConnected, session.sendRealtimeInput]);
 
+  // 追踪最后一次 turnComplete 的时间，用于判断安全注入窗口
+  const lastTurnCompleteTimeRef = useRef<number>(0);
+  // 追踪 AI 是否正在说话
+  const isSpeakingRef = useRef<boolean>(false);
+
+  // 同步 isSpeaking 状态到 ref
+  useEffect(() => {
+    isSpeakingRef.current = audioOutput.isSpeaking;
+  }, [audioOutput.isSpeaking]);
+
+  /**
+   * 静默注入上下文到对话中（不触发 AI 响应）
+   *
+   * 这是方案 A 的核心实现：
+   * - 使用 sendClientContent + turn_complete=false 静默注入
+   * - 只在安全窗口期（AI 说完话后、用户开始说话前）注入
+   * - 注入的内容会被 AI 记住，在下次回复时自然引用
+   *
+   * @param content - 要注入的上下文内容（如 [CONTEXT] 消息）
+   * @param options - 配置选项
+   * @returns boolean - 是否成功注入
+   */
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
+  const injectContextSilently = useCallback((
+    content: string,
+    options: {
+      /** 是否强制注入（忽略安全窗口检查） */
+      force?: boolean;
+      /** 安全窗口期（毫秒），AI 说完话后多久内可以注入，默认 5000ms */
+      safeWindowMs?: number;
+    } = {}
+  ): boolean => {
+    const { force = false, safeWindowMs = 5000 } = options;
+
+    if (!session.isConnected) {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ [GeminiLive] 静默注入失败: 连接已断开');
+      }
+      return false;
+    }
+
+    // 检查是否在安全窗口期
+    if (!force) {
+      const now = Date.now();
+      const timeSinceTurnComplete = now - lastTurnCompleteTimeRef.current;
+
+      // 如果 AI 正在说话，不注入
+      if (isSpeakingRef.current) {
+        if (import.meta.env.DEV) {
+          console.log('⏸️ [GeminiLive] 静默注入延迟: AI 正在说话');
+        }
+        return false;
+      }
+
+      // 如果距离上次 turnComplete 太久，可能用户已经在说话了，不注入
+      if (lastTurnCompleteTimeRef.current > 0 && timeSinceTurnComplete > safeWindowMs) {
+        if (import.meta.env.DEV) {
+          console.log(`⏸️ [GeminiLive] 静默注入延迟: 超出安全窗口 (${timeSinceTurnComplete}ms > ${safeWindowMs}ms)`);
+        }
+        return false;
+      }
+    }
+
+    // 执行静默注入
+    session.sendClientContent(content, false);
+
+    if (import.meta.env.DEV) {
+      console.log('🔇 [GeminiLive] 静默注入上下文:', content.substring(0, 80) + (content.length > 80 ? '...' : ''));
+    }
+
+    return true;
+  }, [session.isConnected, session.sendClientContent]);
+
   /**
    * 设置 onTurnComplete 回调
    */
@@ -390,6 +464,10 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     toggleCamera,
     sendTextMessage,
     setOnTurnComplete,
+
+    // Context injection (方案 A: turnComplete 后静默注入)
+    injectContextSilently,
+    sendClientContent: session.sendClientContent,
 
     // Refs for UI
     videoRef,

@@ -1,7 +1,7 @@
 ---
 title: "动态虚拟消息系统"
 created: 2026-01-27
-updated: 2026-01-28 09:30
+updated: 2026-01-28 11:00
 stage: "🔨 实现中"
 due: 2026-02-10
 issue: ""
@@ -17,8 +17,22 @@ issue: ""
   - [x] 创建 `retrieve-memories` Edge Function
   - [x] 创建前端 `virtual-messages` hooks
   - [ ] 修改 `get-system-instruction` 使用共享模块（可选）
-- [ ] 阶段 4：测试验证
-- [ ] 阶段 5：文档更新
+- [x] 阶段 3.5：语言一致性修复 ✅ 2026-01-27
+  - [x] 修复触发词语言污染问题（所有触发词携带 `language=` 参数）
+  - [x] 修复 ToneManager 语气切换时的语言污染
+  - [x] 更新系统指令，强制 AI 遵循 `language=` 参数
+- [x] 阶段 3.6：方案 A 静默注入实现 ✅ 2026-01-28
+  - [x] 在 `useGeminiSession` 添加 `sendClientContent` 方法
+  - [x] 在 `useGeminiLive` 添加 `injectContextSilently` 方法
+  - [x] 创建 `useVirtualMessageQueue.ts` 消息队列
+  - [x] 创建 `useVirtualMessageOrchestrator.ts` 核心调度器
+- [x] 阶段 4：集成到 useAICoachSession ✅ 2026-01-28
+  - [x] 初始化 `useVirtualMessageOrchestrator` 调度器
+  - [x] 在 `onTranscriptUpdate` 中调用 `onUserSpeech` 和 `onAISpeech`
+  - [x] 在 `setOnTurnComplete` 中调用 `onTurnComplete`
+  - [x] 暴露调试方法：`orchestratorQueueSize`、`triggerMemoryRetrieval`
+- [ ] 阶段 5：测试验证
+- [ ] 阶段 6：文档更新
 
 ---
 
@@ -1461,8 +1475,400 @@ const fetchMemoriesForTopic = useCallback(async (...) => {
 | 消息冲突 | AI 被打断 | 状态机 + VAD 检测 + 冷却时间 |
 | 记忆检索失败 | 无法个性化 | 降级到固定模板、错误重试 |
 | 上下文过期 | 信息不准确 | 实时更新、时间戳检查 |
+| **语言污染** ✅ 已修复 | AI 突然切换语言 | 所有触发词携带 `language=` 参数（见 10.1） |
+
+### 10.1 语言一致性方案（已实现）
+
+#### 问题背景
+
+用户设置了英文作为首选语言，但当 AI 检测到用户抗拒并触发语气切换（`[TONE_SHIFT]`）时，AI 突然切换到中文回复。
+
+**根本原因**：
+1. 触发词（如 `[TONE_SHIFT]`、`[CHECK_IN]`）没有携带语言信息
+2. 系统指令中的示例使用中文，可能影响 AI 的语言选择
+3. AI 在语气切换时"忘记"了用户的语言偏好
+
+**2026-01-28 补充修复**：
+4. `useToneManager.ts` 生成的触发词格式不正确，包含冗长的英文解释文本，导致 `language=` 参数被淹没
+5. `useAICoachSession.ts` 在末尾追加 `language=` 而不是放在正确位置
+
+#### 解决方案
+
+**核心思路**：所有触发词都携带 `language=` 参数，明确告诉 AI 应该用什么语言回复。
+
+**修改的文件**：
+
+| 文件 | 修改内容 |
+|------|---------|
+| `src/hooks/useToneManager.ts` | 🔧 **2026-01-28**：触发词格式改为 `[TONE_SHIFT] style=X current_time=HH:MM language={LANG}`，使用占位符 |
+| `src/hooks/useAICoachSession.ts` | 保存 `preferredLanguages`，🔧 **2026-01-28**：替换 `{LANG}` 占位符而非末尾追加 |
+| `src/hooks/useVirtualMessages.ts` | 接收 `preferredLanguage` 参数，所有触发词携带 `language=` |
+| `supabase/functions/get-system-instruction/index.ts` | 更新触发词格式说明，强调 AI 必须遵循 `language=` 参数 |
+
+#### 触发词格式变化
+
+**最初**（无语言信息）：
+```
+[GREETING] current_time=17:34
+[CHECK_IN] elapsed=2m current_time=17:36
+[TONE_SHIFT] style=sneaky_friend current_time=17:38
+[MEMORY_BOOST] type=past_success total=5 current_time=17:40
+```
+
+**第一次修复**（末尾追加，但 ToneManager 格式错误）：
+```
+[TONE_SHIFT] style=sneaky_friend current_time=17:38. This is a system directive... language=en-US
+                                                      ↑ 冗长文本淹没了 language 参数
+```
+
+**最终修复 (2026-01-28)**（正确格式）：
+```
+[GREETING] current_time=17:34 language=en-US
+[CHECK_IN] elapsed=2m current_time=17:36 language=en-US
+[TONE_SHIFT] style=sneaky_friend current_time=17:38 language=en-US  ← 简洁、符合系统指令期望
+[MEMORY_BOOST] type=past_success total=5 current_time=17:40 language=en-US
+```
+
+#### 系统指令更新
+
+在 `get-system-instruction` 中添加了强制说明：
+
+```
+IMPORTANT: Every trigger includes TWO critical parameters:
+1. "current_time=HH:MM" (24-hour format, user's local time)
+2. "language=XX" (e.g., language=en-US, language=zh-CN) - RESPOND IN THIS LANGUAGE
+
+The "language=" parameter is MANDATORY. You MUST respond in the exact language specified.
+NEVER ignore this parameter. NEVER switch to a different language.
+```
+
+#### 数据流
+
+```
+用户设置首选语言: en-US
+        │
+        ▼
+startSession({ preferredLanguages: ['en-US'] })
+        │
+        ├──► preferredLanguagesRef.current = ['en-US']
+        │
+        ├──► useVirtualMessages 收到 preferredLanguage='en-US'
+        │    │
+        │    └──► generateTimeAwareMessage('opening')
+        │         返回: "[GREETING] current_time=17:34 language=en-US"
+        │
+        └──► 用户抗拒，触发语气切换
+             │
+             └──► sendToneTriggerRef 追加语言信息
+                  发送: "[TONE_SHIFT] style=sneaky_friend current_time=17:38 language=en-US"
+```
+
+#### 验证方法
+
+1. 设置首选语言为英文
+2. 与 AI 对话，用英文表达抗拒（如 "I don't want to do it"）
+3. 观察 AI 是否保持英文回复（即使触发了语气切换）
+4. 检查控制台日志，确认触发词包含 `language=en-US`
 
 ---
 
-## 11. 相关 commit
+## 11. 方案 A：turnComplete 后静默注入
+
+### 11.1 背景问题
+
+Gemini Live API 在对话中间注入上下文有两个核心挑战：
+
+1. **打断问题**：`sendClientContent` 会打断当前正在生成的内容
+2. **响应问题**：`sendRealtimeInput` 会触发 AI 响应，可能打断用户
+
+### 11.2 官方 API 分析
+
+根据 [Google 官方文档](https://ai.google.dev/gemini-api/docs/live-guide)：
+
+| 方法 | 会打断 AI 吗？ | 会触发响应吗？ |
+|------|-------------|--------------|
+| `send_realtime_input` | ❌ 不会 | ✅ 会（VAD 检测后） |
+| `send_client_content` + `turn_complete=true` | ✅ 会 | ✅ 会 |
+| `send_client_content` + `turn_complete=false` | ✅ 会 | ❌ 不会（静默注入） |
+
+**关键发现**：`turn_complete=false` 可以添加内容到上下文但**不触发 AI 响应**。
+
+### 11.3 方案设计
+
+```
+时间线:
+─────────────────────────────────────────────────────
+AI 说话中 ──► turnComplete 事件 ──► 安全窗口期 ──► 用户开始说话
+                    │                    │
+                    ▼                    ▼
+              记录时间戳          sendClientContent
+              开始安全窗口        + turn_complete=false
+```
+
+**安全窗口期**：AI 说完话后、用户开始说话前的时间段（默认 5000ms）。
+
+### 11.4 代码实现
+
+#### 11.4.1 底层 API（useGeminiSession.ts）
+
+```typescript
+/**
+ * 发送客户端内容（支持静默注入上下文）
+ *
+ * @param content - 要注入的文本内容
+ * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
+ */
+const sendClientContent = useCallback((content: string, turnComplete = false) => {
+  if (sessionRef.current) {
+    (sessionRef.current as unknown as {
+      send: (message: unknown) => void;
+    }).send({
+      client_content: {
+        turns: [
+          {
+            role: 'user',
+            parts: [{ text: content }],
+          },
+        ],
+        turn_complete: turnComplete,
+      },
+    });
+  }
+}, []);
+```
+
+#### 11.4.2 安全注入方法（useGeminiLive.ts）
+
+```typescript
+/**
+ * 静默注入上下文到对话中（不触发 AI 响应）
+ *
+ * @param content - 要注入的上下文内容
+ * @param options - 配置选项
+ * @returns boolean - 是否成功注入
+ */
+const injectContextSilently = useCallback((
+  content: string,
+  options: {
+    force?: boolean;
+    safeWindowMs?: number;
+  } = {}
+): boolean => {
+  const { force = false, safeWindowMs = 5000 } = options;
+
+  // 检查是否在安全窗口期
+  if (!force) {
+    const timeSinceTurnComplete = Date.now() - lastTurnCompleteTimeRef.current;
+
+    // AI 正在说话，不注入
+    if (isSpeakingRef.current) return false;
+
+    // 超出安全窗口，不注入
+    if (timeSinceTurnComplete > safeWindowMs) return false;
+  }
+
+  // 执行静默注入
+  session.sendClientContent(content, false);
+  return true;
+}, [session]);
+```
+
+#### 11.4.3 消息队列（useVirtualMessageQueue.ts）
+
+- **优先级排序**：EMPATHY > DIRECTIVE > CHECKPOINT > CONTEXT
+- **冷却期控制**：默认 5 秒
+- **过期清理**：默认 60 秒后自动丢弃
+
+#### 11.4.4 核心调度器（useVirtualMessageOrchestrator.ts）
+
+```typescript
+// 核心流程
+const onTurnComplete = useCallback(() => {
+  // AI 说完话后，尝试发送队列中的消息
+  messageQueue.tryFlush();  // 内部调用 injectContextSilently
+}, [messageQueue]);
+```
+
+### 11.5 数据流
+
+```
+话题检测                           消息队列                      注入时机
+─────────────────────────────────────────────────────────────────────────
+
+用户说: "我失恋了"
+        │
+        ├──► TopicDetector 检测到话题 "失恋"
+        │    情绪: sad, 强度: 0.8
+        │
+        ├──► 生成 [EMPATHY] 消息，入队（urgent 优先级）
+        │
+        └──► 触发异步记忆检索（不阻塞）
+             │
+             ▼
+        记忆检索完成
+             │
+             ├──► 生成 [CONTEXT] 消息，入队（normal 优先级）
+             │
+             ▼
+        AI 回复中...
+             │
+             ▼
+        turnComplete 事件
+             │
+             ├──► 进入安全窗口期
+             │
+             └──► messageQueue.tryFlush()
+                  │
+                  └──► injectContextSilently([EMPATHY] ...)
+                       成功！记忆已静默注入上下文
+```
+
+### 11.6 使用示例
+
+```typescript
+// 在 useAICoachSession 中集成
+const orchestrator = useVirtualMessageOrchestrator({
+  userId,
+  taskDescription,
+  initialDuration,
+  taskStartTime,
+  injectContextSilently: geminiLive.injectContextSilently,
+  isSpeaking: geminiLive.isSpeaking,
+});
+
+// 当用户说话时（从转录中获取）
+orchestrator.onUserSpeech(userTranscript);
+
+// 当 AI 说话时
+orchestrator.onAISpeech(aiTranscript);
+
+// 当 AI 说完话时
+geminiLive.setOnTurnComplete(() => {
+  orchestrator.onTurnComplete();
+});
+```
+
+### 11.7 集成到 useAICoachSession
+
+**修改的文件**：`src/hooks/useAICoachSession.ts`
+
+#### 11.7.1 初始化调度器
+
+```typescript
+import { useVirtualMessageOrchestrator } from './virtual-messages';
+
+// 在 hook 内部
+const messageOrchestrator = useVirtualMessageOrchestrator({
+  userId: currentUserIdRef.current,
+  taskDescription: currentTaskDescriptionRef.current,
+  initialDuration: initialTime,
+  taskStartTime,
+  injectContextSilently: geminiLive.injectContextSilently,
+  isSpeaking: geminiLive.isSpeaking,
+  onSendMessage: (message) => geminiLive.sendTextMessage(message),
+  enabled: isSessionActive && geminiLive.isConnected,
+  enableMemoryRetrieval: true,
+  cooldownMs: 5000,
+  preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
+});
+```
+
+#### 11.7.2 连接转录更新
+
+```typescript
+// 在 onTranscriptUpdate 回调中
+if (lastMessage.role === 'assistant') {
+  // ... 其他处理 ...
+  orchestratorRef.current.onAISpeech(displayText);
+}
+
+if (lastMessage.role === 'user') {
+  if (isValidUserSpeech(lastMessage.text)) {
+    userSpeechBufferRef.current += lastMessage.text;
+    orchestratorRef.current.onUserSpeech(lastMessage.text);
+  }
+}
+```
+
+#### 11.7.3 连接 turnComplete 事件
+
+```typescript
+useEffect(() => {
+  setOnTurnComplete(() => {
+    recordTurnComplete(false);
+    // 方案 A：在 turnComplete 后尝试静默注入队列中的记忆
+    orchestratorRef.current.onTurnComplete();
+  });
+  return () => setOnTurnComplete(null);
+}, [recordTurnComplete, setOnTurnComplete]);
+```
+
+#### 11.7.4 暴露调试方法
+
+```typescript
+return {
+  // ... 其他返回值 ...
+
+  // 动态虚拟消息调度器
+  orchestratorQueueSize: messageOrchestrator.getQueueSize,
+  orchestratorContext: messageOrchestrator.getContext,
+  triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval,
+};
+```
+
+### 11.8 测试验证
+
+#### 开发环境测试
+
+```bash
+# 启动开发服务器
+npm run dev
+```
+
+#### 测试用例
+
+1. **基础功能测试**：
+   - 启动任务，等待 AI 说完话
+   - 检查控制台是否有以下日志：
+     - `📥 [MessageQueue] 入队` - 消息入队
+     - `📤 [MessageQueue] 发送成功` - 消息发送成功
+     - `🔇 [GeminiLive] 静默注入上下文` - 上下文注入成功
+
+2. **话题检测测试**：
+   - 用户说"我失恋了"或"I broke up with my girlfriend"
+   - 检查控制台是否有：
+     - `🏷️ [Orchestrator] 话题变化: 失恋` - 话题检测成功
+     - `💗 [Orchestrator] 检测到强烈情绪，已入队 EMPATHY 消息` - 情绪响应
+     - `🧠 [MemoryPipeline] 开始检索` - 记忆检索开始
+     - `🧠 [Orchestrator] 记忆检索完成，已入队 CONTEXT 消息` - 记忆入队
+
+3. **安全窗口测试**：
+   - 在 AI 正在说话时观察控制台
+   - 应该看到 `⏸️ [GeminiLive] 静默注入延迟: AI 正在说话` 日志
+   - turnComplete 后应该看到消息被发送
+
+4. **冷却期测试**：
+   - 连续快速说话触发多条消息
+   - 应该看到 `⏳ [MessageQueue] 冷却中` 日志
+   - 消息不会在冷却期内连发
+
+5. **手动触发测试**（开发者工具控制台）：
+   ```javascript
+   // 获取 hook 返回值（需要在 React DevTools 中找到组件）
+   // 或者在组件内部暴露到 window 对象进行调试
+   triggerMemoryRetrieval('旅行', ['露营', '自驾'])
+   ```
+
+#### 预期行为
+
+| 用户说话 | 预期系统行为 |
+|---------|------------|
+| "我失恋了" | 检测话题"失恋" → 入队 EMPATHY → 检索记忆 → 入队 CONTEXT → turnComplete 后注入 |
+| "I'm stressed" | 检测话题"压力" → 入队 EMPATHY → 检索记忆 → 入队 CONTEXT |
+| "想去旅行" | 检测话题"旅行" → 检索记忆 → 入队 CONTEXT |
+| 普通对话 | 仅追踪上下文，不触发记忆检索 |
+
+---
+
+## 12. 相关 commit
 ...

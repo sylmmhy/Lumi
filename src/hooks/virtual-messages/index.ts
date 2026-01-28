@@ -112,6 +112,16 @@ export {
   type AsyncMemoryPipeline,
 } from './useAsyncMemoryPipeline'
 
+export {
+  useVirtualMessageQueue,
+  type VirtualMessageQueueResult,
+} from './useVirtualMessageQueue'
+
+export {
+  useVirtualMessageOrchestrator,
+  type VirtualMessageOrchestratorResult,
+} from './useVirtualMessageOrchestrator'
+
 // 常量导出
 export {
   TOPIC_RULES,

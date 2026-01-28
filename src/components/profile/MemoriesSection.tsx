@@ -85,12 +85,13 @@ export function MemoriesSection() {
     }
   }, [auth?.userId]);
 
-  // Load memories when expanded
+  // Load memories on mount (to show count) and when expanded
   useEffect(() => {
-    if (isExpanded && memories.length === 0) {
+    // 组件挂载时就加载记忆，以便在折叠状态下显示正确的数量
+    if (memories.length === 0) {
       fetchMemories();
     }
-  }, [isExpanded, fetchMemories, memories.length]);
+  }, [fetchMemories, memories.length]);
 
   // Delete a memory
   const handleDelete = async (memoryId: string) => {

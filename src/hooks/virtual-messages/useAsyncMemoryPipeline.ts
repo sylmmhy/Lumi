@@ -22,7 +22,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '../../lib/supabase'
 import type {
   MemoryRetrievalResult,
   MemoryRetrievalRequest,
@@ -101,6 +101,11 @@ export function useAsyncMemoryPipeline(
   ): Promise<MemoryRetrievalResult[]> => {
     if (!userId) {
       console.log('🧠 [MemoryPipeline] 未登录，跳过记忆检索')
+      return []
+    }
+
+    if (!supabase) {
+      console.log('🧠 [MemoryPipeline] Supabase 未初始化，跳过记忆检索')
       return []
     }
 

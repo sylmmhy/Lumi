@@ -5,6 +5,7 @@ import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
 import { useToneManager } from './useToneManager';
+import { useVirtualMessageOrchestrator } from './virtual-messages';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
 import { getVoiceName } from '../lib/voiceSettings';
@@ -170,6 +171,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
   const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
 
+  // 用于调用 messageOrchestrator 方法的 ref（避免循环依赖）
+  const orchestratorRef = useRef<{
+    onUserSpeech: (text: string) => void;
+    onAISpeech: (text: string) => void;
+    onTurnComplete: () => void;
+  }>({
+    onUserSpeech: () => {},
+    onAISpeech: () => {},
+    onTurnComplete: () => {},
+  });
+
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
   // ==========================================
@@ -272,6 +284,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           console.log('🤖 AI 说:', displayText);
         }
 
+        // 🆕 通知动态虚拟消息调度器（用于上下文追踪）
+        orchestratorRef.current.onAISpeech(displayText);
+
         // 更新角色跟踪
         lastProcessedRoleRef.current = 'assistant';
       }
@@ -280,6 +295,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         // 累积用户语音碎片，不立即存储
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
+
+          // 🆕 通知动态虚拟消息调度器（用于话题检测和记忆检索）
+          orchestratorRef.current.onUserSpeech(lastMessage.text);
         }
 
         // 更新角色跟踪
@@ -289,13 +307,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
-  // 🔧 修复语言污染：在触发词中携带当前用户语言设置
+  // 🔧 修复语言污染：替换触发词中的 {LANG} 占位符为实际语言代码
   useEffect(() => {
     sendToneTriggerRef.current = (trigger: string) => {
       if (geminiLive.isConnected && isSessionActive) {
-        // 在触发词末尾追加语言信息，确保 AI 用正确的语言回复
+        // 替换 {LANG} 占位符为实际语言代码
         const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-        const triggerWithLanguage = `${trigger} language=${lang}`;
+        const triggerWithLanguage = trigger.replace('{LANG}', lang);
         geminiLive.sendTextMessage(triggerWithLanguage);
         if (import.meta.env.DEV) {
           console.log('📤 发送语气切换触发词:', triggerWithLanguage);
@@ -323,7 +341,33 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // ==========================================
-  // 虚拟消息
+  // 动态虚拟消息调度器（方案 A：turnComplete 后静默注入记忆）
+  // ==========================================
+  const messageOrchestrator = useVirtualMessageOrchestrator({
+    userId: currentUserIdRef.current,
+    taskDescription: currentTaskDescriptionRef.current,
+    initialDuration: initialTime,
+    taskStartTime,
+    injectContextSilently: geminiLive.injectContextSilently,
+    isSpeaking: geminiLive.isSpeaking,
+    onSendMessage: (message) => geminiLive.sendTextMessage(message),
+    enabled: isSessionActive && geminiLive.isConnected,
+    enableMemoryRetrieval: true,
+    cooldownMs: 5000,
+    preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
+  });
+
+  // 更新 orchestratorRef，避免 onTranscriptUpdate 闭包问题
+  useEffect(() => {
+    orchestratorRef.current = {
+      onUserSpeech: messageOrchestrator.onUserSpeech,
+      onAISpeech: messageOrchestrator.onAISpeech,
+      onTurnComplete: messageOrchestrator.onTurnComplete,
+    };
+  }, [messageOrchestrator.onUserSpeech, messageOrchestrator.onAISpeech, messageOrchestrator.onTurnComplete]);
+
+  // ==========================================
+  // 虚拟消息（原有的定时触发系统）
   // ==========================================
   const virtualMessages = useVirtualMessages({
     enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected,
@@ -343,8 +387,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const { setOnTurnComplete } = geminiLive;
   const { recordTurnComplete } = virtualMessages;
 
+  // 当 AI 说完话时（turnComplete），同时通知：
+  // 1. virtualMessages 系统（用于冷却期控制）
+  // 2. messageOrchestrator 系统（用于在安全窗口期注入记忆）
   useEffect(() => {
-    setOnTurnComplete(() => recordTurnComplete(false));
+    setOnTurnComplete(() => {
+      recordTurnComplete(false);
+      // 🆕 方案 A：在 turnComplete 后尝试静默注入队列中的记忆
+      orchestratorRef.current.onTurnComplete();
+    });
     return () => setOnTurnComplete(null);
   }, [recordTurnComplete, setOnTurnComplete]);
 
@@ -979,6 +1030,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 语气管理操作（高级用法，通常不需要手动调用）
     forceToneChange: toneManager.forceToneChange,
+
+    // 动态虚拟消息调度器（方案 A：turnComplete 后静默注入）
+    orchestratorQueueSize: messageOrchestrator.getQueueSize,
+    orchestratorContext: messageOrchestrator.getContext,
+    triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval, // 手动触发记忆检索（调试用）
 
     // Refs（用于 UI）
     videoRef: geminiLive.videoRef,

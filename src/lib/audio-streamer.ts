@@ -59,6 +59,10 @@ export class AudioStreamer {
     if (!this.isPlaying) {
       this.isPlaying = true;
       this.scheduledTime = this.context.currentTime + this.initialBufferTime;
+      // 🔍 调试：记录首次播放的时间差
+      if (import.meta.env?.DEV) {
+        console.log(`🎵 AudioStreamer 开始播放 - initialBufferTime=${this.initialBufferTime}s, queueLength=${this.audioQueue.length}`);
+      }
       this.scheduleNextBuffer();
     }
   }
@@ -127,6 +131,10 @@ export class AudioStreamer {
           this.checkInterval = null;
         }
       } else {
+        // 🔍 调试：队列为空但流未完成，可能导致短暂静音
+        if (import.meta.env?.DEV && !this.checkInterval) {
+          console.log(`⚠️ AudioStreamer 队列为空，等待更多数据 - scheduledTime=${this.scheduledTime.toFixed(3)}, currentTime=${this.context.currentTime.toFixed(3)}`);
+        }
         if (!this.checkInterval) {
           this.checkInterval = window.setInterval(() => {
             if (this.audioQueue.length > 0) {

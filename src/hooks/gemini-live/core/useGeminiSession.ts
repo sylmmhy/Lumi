@@ -96,6 +96,18 @@ interface UseGeminiSessionReturn {
       response: Record<string, unknown>;
     }>;
   }) => void;
+  /**
+   * 发送客户端内容（支持静默注入上下文）
+   *
+   * 与 sendRealtimeInput 的区别：
+   * - sendRealtimeInput: 不会打断 AI，但会触发 AI 响应（VAD 检测后）
+   * - sendClientContent + turnComplete=true: 会打断当前生成，会触发响应
+   * - sendClientContent + turnComplete=false: 会打断当前生成，但不触发响应（静默注入）
+   *
+   * @param content - 要注入的文本内容
+   * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
+   */
+  sendClientContent: (content: string, turnComplete?: boolean) => void;
 }
 
 // ============================================================================
@@ -251,6 +263,43 @@ export function useGeminiSession(
     }
   }, []);
 
+  /**
+   * 发送客户端内容（支持静默注入上下文）
+   *
+   * 使用 client_content 消息类型，可以：
+   * - turnComplete=false: 添加内容到上下文，但不触发 AI 生成（静默注入）
+   * - turnComplete=true: 添加内容并触发 AI 响应
+   *
+   * 注意：client_content 会打断当前正在生成的内容，
+   * 因此应该在 AI 说完话后（turnComplete 事件后）再调用
+   */
+  const sendClientContent = useCallback((content: string, turnComplete = false) => {
+    if (sessionRef.current) {
+      // 使用底层 send 方法发送 client_content 消息
+      // @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
+      (sessionRef.current as unknown as {
+        send: (message: unknown) => void;
+      }).send({
+        client_content: {
+          turns: [
+            {
+              role: 'user',
+              parts: [{ text: content }],
+            },
+          ],
+          turn_complete: turnComplete,
+        },
+      });
+
+      if (import.meta.env.DEV) {
+        console.log(
+          `📥 [GeminiSession] sendClientContent (turnComplete=${turnComplete}):`,
+          content.substring(0, 60) + (content.length > 60 ? '...' : '')
+        );
+      }
+    }
+  }, []);
+
   return {
     // State
     isConnected,
@@ -264,6 +313,7 @@ export function useGeminiSession(
     // Methods
     sendRealtimeInput,
     sendToolResponse,
+    sendClientContent,
   };
 }
 

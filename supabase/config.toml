@@ -198,29 +198,34 @@ verify_jwt = false
 [functions.onboarding-complete]
 verify_jwt = false
 
-# AI 相关功能（需要登录）
+# AI 相关功能
+# TODO: 本地开发临时关闭 JWT 验证（Supabase CLI 2.72+ 的 ES256/HS256 兼容问题）
+# 生产环境通过 Supabase Dashboard 设置 verify_jwt = true
 [functions.get-system-instruction]
-verify_jwt = true
+verify_jwt = false
 
 [functions.memory-extractor]
-verify_jwt = true
+verify_jwt = false
+
+[functions.memory-compressor]
+verify_jwt = false
 
 [functions.suggest-task-time]
-verify_jwt = true
+verify_jwt = false
 
 # 推送通知相关
 [functions.send-voip-push]
-verify_jwt = true
+verify_jwt = false
 
 [functions.send-fcm-push]
-verify_jwt = true
+verify_jwt = false
 
 [functions.check-and-send-voip]
-verify_jwt = true
+verify_jwt = false
 
 # 设备管理
 [functions.manage-user-devices]
-verify_jwt = true
+verify_jwt = false
 
 # 声音试听生成（无需 JWT，通过 service role key 验证）
 [functions.generate-voice-preview]

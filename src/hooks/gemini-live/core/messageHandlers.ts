@@ -21,6 +21,7 @@ export function handleServerContent(
 
   // Handle interruption - 用户打断 AI 说话
   if ('interrupted' in serverContent) {
+    console.log('⚠️ [Gemini] 收到 interrupted 信号，停止音频播放');
     context.onInterrupt();
     return;
   }

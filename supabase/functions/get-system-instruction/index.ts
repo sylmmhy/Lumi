@@ -28,6 +28,26 @@ const MEMORY_SIMILARITY_THRESHOLD = 0.6
 const MEMORY_LIMIT_PER_QUERY = 5
 const MAX_FINAL_MEMORIES = 10
 
+// 分层检索配置
+const HOT_TIER_DAYS = 7          // 热层：最近 7 天访问过的记忆
+const WARM_TIER_DAYS = 30        // 温层：7-30 天未访问的记忆
+const MIN_HOT_RESULTS = 3        // 热层至少需要 3 条结果才算"够用"
+const MIN_SIMILARITY_FOR_ENOUGH = 0.7  // 如果有一条相似度 >= 0.7，也算"够用"
+const MIN_TAG_DIVERSITY = 2      // 至少 2 种不同标签才算"够用"
+
+/**
+ * 分层检索结果
+ */
+interface TieredSearchResult {
+  memory_id: string
+  content: string
+  tag: string
+  confidence: number
+  importance_score: number
+  similarity: number
+  last_accessed_at: string | null
+}
+
 // 记忆缓存（5分钟 TTL）
 const memoryCache = new Map<string, { data: string[]; expires: number }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -248,6 +268,128 @@ function mergeWithMRR(resultSets: MultiQueryResult[]): Array<{ memory_id: string
   return sorted
 }
 
+// =====================================================
+// 记忆分层检索（Tiered Memory Retrieval）
+// =====================================================
+
+/**
+ * 在指定层级搜索记忆
+ * @param tier - 'hot' | 'warm' | 'cold'
+ * @param embeddings - 查询向量数组
+ */
+async function searchMemoriesInTier(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  embeddings: number[][],
+  tier: 'hot' | 'warm' | 'cold'
+): Promise<TieredSearchResult[]> {
+  // 计算时间边界
+  const now = new Date()
+  const hotBoundary = new Date(now.getTime() - HOT_TIER_DAYS * 24 * 60 * 60 * 1000)
+  const warmBoundary = new Date(now.getTime() - WARM_TIER_DAYS * 24 * 60 * 60 * 1000)
+
+  // 构建时间范围条件
+  let timeCondition: string
+  switch (tier) {
+    case 'hot':
+      // 热层：最近访问 OR 从未访问但是新创建的 OR 特殊标签（PREF/EFFECTIVE）
+      timeCondition = `(last_accessed_at >= '${hotBoundary.toISOString()}' OR last_accessed_at IS NULL OR tag IN ('PREF', 'EFFECTIVE'))`
+      break
+    case 'warm':
+      // 温层：访问时间在 7-30 天之间，排除特殊标签
+      timeCondition = `(last_accessed_at < '${hotBoundary.toISOString()}' AND last_accessed_at >= '${warmBoundary.toISOString()}' AND tag NOT IN ('PREF', 'EFFECTIVE'))`
+      break
+    case 'cold':
+      // 冷层：超过 30 天未访问，排除特殊标签
+      timeCondition = `(last_accessed_at < '${warmBoundary.toISOString()}' AND tag NOT IN ('PREF', 'EFFECTIVE'))`
+      break
+  }
+
+  console.log(`🔍 [Tiered] 搜索 ${tier} 层记忆...`)
+
+  // 使用 RPC 调用搜索，附带时间过滤
+  const embeddingStrings = embeddings.map(e => JSON.stringify(e))
+
+  const { data, error } = await supabase.rpc('tiered_search_memories', {
+    p_user_id: userId,
+    p_embeddings: embeddingStrings,
+    p_threshold: MEMORY_SIMILARITY_THRESHOLD,
+    p_limit_per_query: MEMORY_LIMIT_PER_QUERY,
+    p_tier: tier,
+    p_hot_days: HOT_TIER_DAYS,
+    p_warm_days: WARM_TIER_DAYS,
+  })
+
+  if (error) {
+    console.error(`[Tiered] ${tier} 层搜索错误:`, error)
+    return []
+  }
+
+  console.log(`🔍 [Tiered] ${tier} 层返回 ${data?.length || 0} 条结果`)
+  return data || []
+}
+
+/**
+ * 判断搜索结果是否"够用"
+ * 满足以下任一条件即为"够用"：
+ * 1. 结果数量 >= MIN_HOT_RESULTS
+ * 2. 有任意一条结果相似度 >= MIN_SIMILARITY_FOR_ENOUGH
+ * 3. 结果覆盖 >= MIN_TAG_DIVERSITY 种不同标签
+ */
+function isResultsEnough(results: TieredSearchResult[]): boolean {
+  if (results.length === 0) {
+    return false
+  }
+
+  // 条件 1: 数量足够
+  if (results.length >= MIN_HOT_RESULTS) {
+    console.log(`✅ [Tiered] 够用：数量 ${results.length} >= ${MIN_HOT_RESULTS}`)
+    return true
+  }
+
+  // 条件 2: 高相似度命中
+  const highSimilarity = results.some(r => r.similarity >= MIN_SIMILARITY_FOR_ENOUGH)
+  if (highSimilarity) {
+    console.log(`✅ [Tiered] 够用：有高相似度结果 >= ${MIN_SIMILARITY_FOR_ENOUGH}`)
+    return true
+  }
+
+  // 条件 3: 标签多样性
+  const uniqueTags = new Set(results.map(r => r.tag))
+  if (uniqueTags.size >= MIN_TAG_DIVERSITY) {
+    console.log(`✅ [Tiered] 够用：标签多样性 ${uniqueTags.size} >= ${MIN_TAG_DIVERSITY}`)
+    return true
+  }
+
+  console.log(`⚠️ [Tiered] 不够用：数量=${results.length}, 无高相似度, 标签种类=${uniqueTags.size}`)
+  return false
+}
+
+/**
+ * 更新记忆的访问时间和访问次数
+ * 在记忆被检索后调用，用于维护热/温/冷分层
+ */
+async function updateMemoryAccessTime(
+  supabase: ReturnType<typeof createClient>,
+  memoryIds: string[]
+): Promise<void> {
+  if (memoryIds.length === 0) return
+
+  try {
+    const { error } = await supabase.rpc('update_memory_access', {
+      p_memory_ids: memoryIds,
+    })
+
+    if (error) {
+      console.warn('[Tiered] 更新访问时间失败:', error)
+    } else {
+      console.log(`📝 [Tiered] 已更新 ${memoryIds.length} 条记忆的访问时间`)
+    }
+  } catch (e) {
+    console.warn('[Tiered] 更新访问时间异常:', e)
+  }
+}
+
 /**
  * Tolan 级别 Multi-Query RAG 主函数
  * 完整流程: Question Synthesis → Batch Embedding → Parallel Search → MRR Fusion
@@ -302,6 +444,7 @@ async function multiQueryRAG(
       'EMO': '(情绪模式)',
       'SAB': '(自我妨碍)',
       'EFFECTIVE': '(有效激励方式)',
+      'CONTEXT': '(生活背景)',
     }
 
     const topMemories = fusedResults
@@ -728,6 +871,7 @@ async function getUserMemoriesLegacy(
       'EMO': '(情绪模式)',
       'SAB': '(自我妨碍)',
       'EFFECTIVE': '(有效激励方式)',
+      'CONTEXT': '(生活背景)',
     }
 
     return memories.slice(0, limit).map(m => {
@@ -741,12 +885,15 @@ async function getUserMemoriesLegacy(
 }
 
 /**
- * Tolan 级别记忆获取（Multi-Query RAG + 传统记忆混合）
+ * Tolan 级别记忆获取（分层检索 + Multi-Query RAG）
  *
- * 策略：
- * 1. PREF 记忆 - 始终全量加载（通用偏好）
- * 2. EFFECTIVE 记忆 - 始终加载 5 条（有效激励方式）
- * 3. 其他记忆 - 使用 Multi-Query RAG 智能检索
+ * 分层策略：
+ * 1. PREF/EFFECTIVE 记忆 - 始终加载（属于热层）
+ * 2. 热层搜索 - 最近 7 天访问过的记忆
+ * 3. 如果热层不够用 → 扩展到温层（7-30 天）
+ * 4. 冷层（30+ 天）暂不搜索，避免延迟
+ *
+ * "够用"判断：≥3 条 OR 相似度≥0.7 OR ≥2 种标签
  */
 async function getUserMemoriesTolan(
   supabase: ReturnType<typeof createClient>,
@@ -762,9 +909,12 @@ async function getUserMemoriesTolan(
     return cached.data
   }
 
+  const startTime = Date.now()
+
   try {
     const allMemories: string[] = []
     const seenContent = new Set<string>()
+    const retrievedMemoryIds: string[] = []
 
     const tagContext: Record<string, string> = {
       'PREF': '(AI 交互偏好)',
@@ -773,12 +923,13 @@ async function getUserMemoriesTolan(
       'EMO': '(情绪模式)',
       'SAB': '(自我妨碍)',
       'EFFECTIVE': '(有效激励方式)',
+      'CONTEXT': '(生活背景)',
     }
 
-    // 1. 获取 PREF 记忆（始终全量加载）
+    // 1. 获取 PREF 记忆（始终全量加载 - 属于热层）
     const { data: prefMemories, error: prefError } = await supabase
       .from('user_memories')
-      .select('content, tag')
+      .select('id, content, tag')
       .eq('user_id', userId)
       .eq('tag', 'PREF')
       .eq('compression_status', 'active')
@@ -791,15 +942,16 @@ async function getUserMemoriesTolan(
         if (!seenContent.has(m.content)) {
           seenContent.add(m.content)
           allMemories.push(`${m.content} ${tagContext[m.tag] || ''}`.trim())
+          retrievedMemoryIds.push(m.id)
         }
       }
       console.log(`🧠 [Tolan] PREF 记忆: ${prefMemories.length} 条`)
     }
 
-    // 2. 获取 EFFECTIVE 记忆（始终加载）
+    // 2. 获取 EFFECTIVE 记忆（始终加载 - 属于热层）
     const { data: effectiveMemories, error: effectiveError } = await supabase
       .from('user_memories')
-      .select('content, tag')
+      .select('id, content, tag')
       .eq('user_id', userId)
       .eq('tag', 'EFFECTIVE')
       .eq('compression_status', 'active')
@@ -813,26 +965,80 @@ async function getUserMemoriesTolan(
         if (!seenContent.has(m.content)) {
           seenContent.add(m.content)
           allMemories.push(`${m.content} ${tagContext[m.tag] || ''}`.trim())
+          retrievedMemoryIds.push(m.id)
         }
       }
       console.log(`🧠 [Tolan] EFFECTIVE 记忆: ${effectiveMemories.length} 条`)
     }
 
-    // 3. Multi-Query RAG 获取任务相关记忆
-    const ragMemories = await multiQueryRAG(supabase, userId, taskDescription)
+    // 3. Question Synthesis + Embedding（为分层搜索准备）
+    const questions = await synthesizeQuestions(taskDescription)
+    const embeddings = await generateEmbeddings(questions)
 
-    for (const memory of ragMemories) {
-      // 去除已有的标签后缀来检查重复
-      const cleanContent = memory.replace(/\s*\([^)]+\)\s*$/, '').trim()
-      if (!seenContent.has(cleanContent)) {
-        seenContent.add(cleanContent)
-        allMemories.push(memory)
+    if (embeddings.length > 0) {
+      // 4. 分层检索：先热层
+      console.log('🔥 [Tiered] 开始热层搜索...')
+      let tieredResults = await searchMemoriesInTier(supabase, userId, embeddings, 'hot')
+
+      // 5. 检查热层是否"够用"
+      if (!isResultsEnough(tieredResults)) {
+        // 热层不够用，扩展到温层
+        console.log('🌡️ [Tiered] 热层不够用，扩展到温层...')
+        const warmResults = await searchMemoriesInTier(supabase, userId, embeddings, 'warm')
+        tieredResults = [...tieredResults, ...warmResults]
+      }
+
+      // 6. MRR 融合分层结果
+      if (tieredResults.length > 0) {
+        // 转换为 MultiQueryResult 格式用于 MRR
+        const multiQueryResults: MultiQueryResult[] = tieredResults.map((r, idx) => ({
+          query_index: 0,
+          memory_id: r.memory_id,
+          content: r.content,
+          tag: r.tag,
+          confidence: r.confidence,
+          importance_score: r.importance_score,
+          similarity: r.similarity,
+          rank: idx + 1,
+        }))
+
+        const fusedResults = mergeWithMRR(multiQueryResults)
+
+        // 添加到结果（去重）
+        for (const m of fusedResults) {
+          if (!seenContent.has(m.content)) {
+            seenContent.add(m.content)
+            const context = tagContext[m.tag] || ''
+            allMemories.push(`${m.content} ${context}`.trim())
+            retrievedMemoryIds.push(m.memory_id)
+          }
+        }
+
+        console.log(`🧠 [Tiered] 分层检索新增: ${fusedResults.length} 条`)
+      }
+    } else {
+      // Embedding 失败，回退到传统 Multi-Query RAG
+      console.log('⚠️ [Tiered] Embedding 失败，回退到传统 RAG')
+      const ragMemories = await multiQueryRAG(supabase, userId, taskDescription)
+
+      for (const memory of ragMemories) {
+        const cleanContent = memory.replace(/\s*\([^)]+\)\s*$/, '').trim()
+        if (!seenContent.has(cleanContent)) {
+          seenContent.add(cleanContent)
+          allMemories.push(memory)
+        }
       }
     }
-    console.log(`🧠 [Tolan] RAG 记忆: ${ragMemories.length} 条 (去重后新增)`)
 
     // 限制总数
     const finalMemories = allMemories.slice(0, MAX_FINAL_MEMORIES)
+
+    // 更新访问时间（异步，不阻塞返回）
+    if (retrievedMemoryIds.length > 0) {
+      updateMemoryAccessTime(supabase, retrievedMemoryIds).catch(e => {
+        console.warn('[Tiered] 更新访问时间失败:', e)
+      })
+    }
 
     // 更新缓存
     memoryCache.set(cacheKey, {
@@ -840,7 +1046,8 @@ async function getUserMemoriesTolan(
       expires: Date.now() + CACHE_TTL_MS,
     })
 
-    console.log(`🧠 [Tolan] 最终记忆总数: ${finalMemories.length} 条`)
+    const elapsedMs = Date.now() - startTime
+    console.log(`🧠 [Tolan] 最终记忆总数: ${finalMemories.length} 条, 耗时 ${elapsedMs}ms`)
     return finalMemories
   } catch (error) {
     console.error('[Tolan] 记忆获取失败，回退到传统模式:', error)
@@ -926,6 +1133,14 @@ Examples of how to use this:
 - If you know they like coffee, you might say "Grabbed your coffee yet?"
 - If you know they struggle with mornings, acknowledge it naturally
 - If you know their pet's name, you can mention it casually
+
+SPECIAL - Life Context (生活背景):
+If you see memories tagged with "(生活背景)" or "(CONTEXT)", these are personal details about the user's life!
+- Upcoming trips, events, or plans they mentioned
+- People in their life (partner, family, friends)
+- Hobbies, interests, or recent life changes
+- Use these naturally to show you remember and care about their life
+- Examples: "Ready for that Disneyland trip?" / "How's the new apartment?" / "Guitar practice going well?"
 
 SPECIAL - Effective Encouragement Techniques (有效激励方式):
 If you see memories tagged with "(有效激励方式)" or "(EFFECTIVE)", these are techniques that WORKED before!

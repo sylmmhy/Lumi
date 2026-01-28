@@ -29,6 +29,7 @@ const SIMILARITY_THRESHOLD = 0.85  // 相似度阈值，高于此值视为重复
  * - EFFECTIVE（有效激励）: 基础 0.8，成功的激励方式非常重要
  * - PROC/EMO/SAB: 基础 0.5，行为模式记忆
  * - SOMA: 基础 0.4，身心反应相对次要
+ * - CONTEXT: 基础 0.6，生活事件/计划有一定参考价值
  *
  * 调整因素：
  * - 置信度高于 0.8 → +0.1
@@ -44,6 +45,7 @@ function calculateImportanceScore(memory: ExtractedMemory): number {
     'EMO': 0.5,        // 情绪触发
     'SAB': 0.5,        // 自我妨碍
     'SOMA': 0.4,       // 身心反应
+    'CONTEXT': 0.6,    // 生活事件/计划
   }
 
   let score = baseScores[memory.tag] || 0.5
@@ -141,6 +143,25 @@ ONLY extract EFFECTIVE when:
 - task_completed metadata is TRUE
 - You can identify a specific AI technique that preceded user action
 - User showed positive response or agreement before/after taking action
+
+**8. LIFE CONTEXT & PLANS** [Tag: CONTEXT] 🌟 NEW
+User's life events, upcoming plans, or personal context that may be relevant for future conversations.
+Extract when user mentions:
+- Upcoming events or trips (vacation, travel, celebrations)
+- Important life changes (moving, new job, relationship changes)
+- Hobbies, interests, or activities they enjoy
+- People important to them (family members, partners, friends by name)
+- Personal goals or aspirations
+
+Examples:
+- "User is planning a trip to Disneyland"
+- "User has a boyfriend who may join them on the trip"
+- "User is preparing for a job interview next week"
+- "User recently started learning guitar"
+- "User's cat is named Luna"
+- "User is moving to a new apartment this month"
+
+CONTEXT memories help AI feel more personal and connected by remembering user's life details.
 
 ## OUTPUT FORMAT
 
@@ -255,7 +276,7 @@ type MemoryRequest = ExtractMemoryRequest | SearchMemoryRequest | GetMemoriesReq
 
 interface ExtractedMemory {
   content: string
-  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'EFFECTIVE'
+  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'EFFECTIVE' | 'CONTEXT'
   confidence: number
 }
 
@@ -774,8 +795,8 @@ async function consolidateMemories(
   userId: string,
   targetTag?: string
 ): Promise<{ processed: number; merged: number; deleted: number }> {
-  // 整合行为模式记忆，包括 EFFECTIVE（有效激励方式）
-  const tags = targetTag ? [targetTag] : ['PREF', 'PROC', 'SOMA', 'EMO', 'SAB', 'EFFECTIVE']
+  // 整合行为模式记忆，包括 EFFECTIVE（有效激励方式）和 CONTEXT（生活事件）
+  const tags = targetTag ? [targetTag] : ['PREF', 'PROC', 'SOMA', 'EMO', 'SAB', 'EFFECTIVE', 'CONTEXT']
 
   let totalProcessed = 0
   let totalMerged = 0

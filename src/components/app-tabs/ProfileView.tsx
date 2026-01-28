@@ -13,6 +13,7 @@ import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName
 import { getRingtoneType, setRingtoneType, type RingtoneType } from '../../lib/ringtoneSettings';
 import { getVoiceMode, setVoiceMode, isLiveKitAvailable, type VoiceMode } from '../../lib/liveKitSettings';
 import { getVoiceName, setVoiceName, getVoicesByGender, getVoicePreviewUrl, mapUILanguageToPreviewLanguage, type VoiceName } from '../../lib/voiceSettings';
+import { getAITone, setAITone, getAvailableAITones, type AITone } from '../../lib/aiToneSettings';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ProfileViewProps {
@@ -70,6 +71,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [playingVoice, setPlayingVoice] = useState<VoiceName | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    // AI Tone state
+    const [currentAITone, setCurrentAITone] = useState<AITone>(getAITone());
+    const [showAIToneModal, setShowAIToneModal] = useState(false);
+    const availableAITones = getAvailableAITones();
+
     // 获取按性别分组的声音列表
     const maleVoices = getVoicesByGender('male');
     const femaleVoices = getVoicesByGender('female');
@@ -104,6 +110,52 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         setVoiceName(voiceName);
         setCurrentVoiceName(voiceName);
         setShowVoiceSelectionModal(false);
+    };
+
+    /**
+     * 处理 AI 语气选择
+     * @param tone - 选择的语气类型
+     */
+    const handleAIToneSelect = async (tone: AITone) => {
+        setCurrentAITone(tone);
+        await setAITone(tone, auth?.userId);
+        setShowAIToneModal(false);
+    };
+
+    /**
+     * 获取 AI 语气的显示名称
+     */
+    const getAIToneDisplayName = (tone: AITone): string => {
+        switch (tone) {
+            case 'gentle':
+                return t('profile.aiToneGentle');
+            case 'direct':
+                return t('profile.aiToneDirect');
+            case 'humorous':
+                return t('profile.aiToneHumorous');
+            case 'tough_love':
+                return t('profile.aiToneToughLove');
+            default:
+                return t('profile.aiToneGentle');
+        }
+    };
+
+    /**
+     * 获取 AI 语气的描述
+     */
+    const getAIToneDescription = (tone: AITone): string => {
+        switch (tone) {
+            case 'gentle':
+                return t('profile.aiToneGentleDesc');
+            case 'direct':
+                return t('profile.aiToneDirectDesc');
+            case 'humorous':
+                return t('profile.aiToneHumorousDesc');
+            case 'tough_love':
+                return t('profile.aiToneToughLoveDesc');
+            default:
+                return t('profile.aiToneGentleDesc');
+        }
     };
 
     /**
@@ -529,7 +581,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* AI Voice Gender Setting */}
                     <button
                         onClick={() => setShowVoiceSelectionModal(true)}
-                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
@@ -543,6 +595,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-500">
                                 {currentVoiceName}
+                            </span>
+                            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                        </div>
+                    </button>
+
+                    {/* AI Tone Setting */}
+                    <button
+                        onClick={() => setShowAIToneModal(true)}
+                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-masks-theater text-purple-500"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">{t('profile.aiTone')}</p>
+                                <p className="text-sm text-gray-400">{t('profile.aiToneHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                                {getAIToneDisplayName(currentAITone)}
                             </span>
                             <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
                         </div>
@@ -880,6 +954,64 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Tone Selection Modal */}
+            {showAIToneModal && (
+                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
+                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
+                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
+                        <button
+                            onClick={() => setShowAIToneModal(false)}
+                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                        >
+                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
+                        </button>
+                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
+                            {t('profile.aiToneTitle')}
+                        </h2>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <p className="text-gray-500 text-sm mb-4 text-center">
+                            {t('profile.aiToneDescription')}
+                        </p>
+
+                        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                            {availableAITones.map((toneConfig, index) => (
+                                <button
+                                    key={toneConfig.id}
+                                    onClick={() => handleAIToneSelect(toneConfig.id)}
+                                    className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < availableAITones.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                >
+                                    {/* 左侧：图标 + 名称 + 描述 */}
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${toneConfig.colorClass.split(' ')[1]}`}>
+                                            <i className={`fa-solid ${toneConfig.icon} ${toneConfig.colorClass.split(' ')[0]}`}></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-medium text-gray-800">{getAIToneDisplayName(toneConfig.id)}</p>
+                                            <p className="text-sm text-gray-400">{getAIToneDescription(toneConfig.id)}</p>
+                                        </div>
+                                    </div>
+                                    {/* 右侧：选择指示器 */}
+                                    <div
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                            currentAITone === toneConfig.id
+                                                ? 'bg-brand-blue'
+                                                : 'border-2 border-gray-300'
+                                        }`}
+                                    >
+                                        {currentAITone === toneConfig.id && (
+                                            <i className="fa-solid fa-check text-white text-xs"></i>
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>

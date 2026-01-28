@@ -1192,6 +1192,16 @@ export function AppTabsPage() {
                 />
             )}
 
+            {/* 挂断中加载弹窗 - 在声音完全停止前显示，避免用户困惑 */}
+            {isEndingCall && (
+                <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                        <p className="text-white text-lg font-medium">Ending call...</p>
+                    </div>
+                </div>
+            )}
+
             {/* WebView 模式（Gemini Live）：显示摄像头和 AI 状态 */}
             {/* isEndingCall 时也隐藏，实现乐观 UI 更新（点击 END CALL 后立即隐藏，不等待后台保存） */}
             {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && !isEndingCall && (
@@ -1269,9 +1279,9 @@ export function AppTabsPage() {
             )}
 
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
-            {/* 当 AI 会话激活、LiveKit 模式或显示庆祝页面时隐藏主内容，避免 UrgencyView 的 fixed header 穿透显示 */}
-            {/* 特殊情况：isEndingCall 时虽然 isSessionActive 还是 true，但应该立即显示主内容，避免白屏 */}
-            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || ((aiCoach.isSessionActive || aiCoach.isConnecting) && !isEndingCall) || usingLiveKit) ? 'hidden' : ''}`}>
+            {/* 当 AI 会话激活、LiveKit 模式、显示庆祝页面或正在挂断时隐藏主内容 */}
+            {/* isEndingCall 时显示加载弹窗，等待声音完全停止后再显示主页面 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit || isEndingCall) ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView

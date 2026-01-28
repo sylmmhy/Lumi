@@ -95,6 +95,7 @@ data.retrievedMemories   // 检索到的记忆列表（调试用）
 | 函数名 | 文件 | 用途 |
 |--------|------|------|
 | `tiered_search_memories` | `migrations/20260128111500_fix_tiered_search.sql` | 分层向量搜索 |
+| `search_similar_memories_cross_tag` | `migrations/20260128120000_multi_tag_memory.sql` | **跨 tag 搜索**（用于合并去重） |
 | `update_memory_access` | `migrations/20260127120000_tiered_memory_search.sql` | 更新访问时间 |
 | `multi_query_search_memories` | `migrations/20260127100000_tolan_memory_system.sql` | 多查询并行搜索 |
 
@@ -154,7 +155,7 @@ data.retrievedMemories   // 检索到的记忆列表（调试用）
 | **扩展层数量** | 5 条 | 最多取 5 条扩展层记忆 |
 | **任务历史数量** | 3 条 | 最多取 3 条任务历史记忆 |
 | **最终返回数量** | 20 条 | 总共最多返回 20 条记忆给 AI |
-| **去重阈值** | 0.85 | 相似度 > 0.85 视为重复，会合并 |
+| **合并阈值** | 0.75 | 相似度 > 0.75 视为重复，会跨 tag 合并 |
 | **向量维度** | 1536 | 使用 OpenAI text-embedding-3-large |
 | **缓存时间** | 5 分钟 | 同一任务 5 分钟内复用缓存 |
 
@@ -225,13 +226,16 @@ pg_cron 触发 → 调用 memory-compressor
 | `id` | 主键 UUID |
 | `user_id` | 用户 ID |
 | `content` | 记忆内容 |
-| `tag` | 标签（PREF/PROC/SOMA/EMO/SAB/EFFECTIVE） |
+| `tag` | 主标签（PREF/PROC/SOMA/EMO/SAB/EFFECTIVE/CONTEXT） |
+| `tags` | **多标签数组**（跨 tag 合并时保留所有标签） |
 | `confidence` | 置信度 (0-1) |
 | `importance_score` | 重要性评分 (0-1)，用于压缩决策 |
 | `task_name` | 产生该记忆的任务名称 |
 | `embedding` | 向量嵌入 (1536 维) |
 | `last_accessed_at` | 最后访问时间（用于热/温/冷分层） |
 | `compression_status` | 压缩状态：active/compressed/deleted |
+
+**多标签说明**：当跨 tag 合并记忆时（如 EMO + PROC），`tags` 数组会保留所有标签，`tag` 字段保留优先级最高的标签。
 
 ---
 

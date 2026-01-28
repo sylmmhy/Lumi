@@ -92,20 +92,20 @@ const TONE_ROTATION: ToneStyle[] = ['friendly', 'sneaky_friend', 'humorous', 'di
 
 /** 语气描述（用于调试） */
 const TONE_DESCRIPTIONS: Record<ToneStyle, string> = {
-  friendly: '温暖鼓励',
-  sneaky_friend: '损友调侃',
-  humorous: '幽默荒诞',
-  direct: '直接坦率',
+  friendly: 'Warm & Encouraging',
+  sneaky_friend: 'Teasing Friend',
+  humorous: 'Absurd Humor',
+  direct: 'Direct & Frank',
 };
 
 /** 抗拒信号描述（用于调试） */
 const SIGNAL_DESCRIPTIONS: Record<ResistanceSignal, string> = {
-  ai_detected: 'AI检测到抗拒',
-  explicit_refusal: '明确拒绝',
-  excuse: '找借口',
-  silence: '沉默',
-  topic_change: '转移话题',
-  negative_sentiment: '负面情绪',
+  ai_detected: 'AI detected resistance',
+  explicit_refusal: 'Explicit refusal',
+  excuse: 'Making excuses',
+  silence: 'Silence',
+  topic_change: 'Topic change',
+  negative_sentiment: 'Negative sentiment',
 };
 
 // ============================================
@@ -200,7 +200,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
     setToneState(prev => {
       const newRejectionCount = prev.consecutiveRejections + 1;
 
-      log('🚫', `用户抗拒信号: ${SIGNAL_DESCRIPTIONS[signal]} (连续 ${newRejectionCount} 次)`);
+      log('🚫', `User resistance signal: ${SIGNAL_DESCRIPTIONS[signal]} (consecutive: ${newRejectionCount})`);
 
       // 检查是否应该切换语气
       if (newRejectionCount >= rejectionThreshold) {
@@ -210,20 +210,20 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
         // 冷却期检查
         if (timeSinceLastChange < minToneChangeInterval && prev.lastToneChangeTime > 0) {
           const remaining = Math.round((minToneChangeInterval - timeSinceLastChange) / 1000);
-          log('⏳', `语气切换冷却中 (${remaining}秒后可切换)`);
+          log('⏳', `Tone switch cooling down (${remaining}s remaining)`);
           return { ...prev, consecutiveRejections: newRejectionCount };
         }
 
         // 选择下一个语气
         const nextTone = selectNextTone(prev.currentTone, prev.usedTones);
 
-        log('🔄', `语气切换: ${TONE_DESCRIPTIONS[prev.currentTone]} → ${TONE_DESCRIPTIONS[nextTone]}`);
+        log('🔄', `Tone switch: ${TONE_DESCRIPTIONS[prev.currentTone]} → ${TONE_DESCRIPTIONS[nextTone]}`);
 
         // 直接生成触发词字符串（避免闭包过期）
         // 格式：[TONE_SHIFT] style=X current_time=HH:MM language={LANG}
         // 注意：{LANG} 占位符会被 useAICoachSession 替换为实际语言代码
         triggerString = `[TONE_SHIFT] style=${nextTone} current_time=${getCurrentTimeString()} language={LANG}`;
-        log('📤', `生成触发词: ${triggerString}`);
+        log('📤', `Generated trigger: ${triggerString}`);
 
         return {
           currentTone: nextTone,
@@ -244,7 +244,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
   const recordAcceptance = useCallback(() => {
     setToneState(prev => {
       if (prev.consecutiveRejections > 0) {
-        log('✅', '用户配合，重置抗拒计数');
+        log('✅', 'User cooperating, resetting resistance count');
         return { ...prev, consecutiveRejections: 0 };
       }
       return prev;
@@ -264,7 +264,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
         currentTime: getCurrentTimeString(),
       };
 
-      log('📤', `生成触发词: ${trigger.trigger}`);
+      log('📤', `Generated trigger: ${trigger.trigger}`);
       return trigger;
     }
 
@@ -273,7 +273,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
 
   // ====== 强制切换语气（手动触发） ======
   const forceToneChange = useCallback((targetTone: ToneStyle): ToneTrigger => {
-    log('🎯', `手动切换语气: → ${TONE_DESCRIPTIONS[targetTone]}`);
+    log('🎯', `Manual tone switch: → ${TONE_DESCRIPTIONS[targetTone]}`);
 
     setToneState(prev => ({
       ...prev,
@@ -293,7 +293,7 @@ export function useToneManager(options: UseToneManagerOptions = {}) {
 
   // ====== 重置状态（新会话开始时） ======
   const resetToneState = useCallback(() => {
-    log('🔄', '重置语气状态');
+    log('🔄', 'Resetting tone state');
     setToneState({
       currentTone: 'friendly',
       consecutiveRejections: 0,

@@ -1729,36 +1729,40 @@ CRITICAL RULES:
 3. When in doubt, use [RESIST] - false positives are better than missing resistance
 4. This works in ALL languages - detect the MEANING, not specific words
 5. NEVER say "[RESIST]" as part of your actual speech - it's only a silent marker
-6. After the marker, respond in the USER'S LANGUAGE as usual
+6. LANGUAGE RULE (CRITICAL): After the marker, respond in the SAME language as the user's MOST RECENT message.
+   - If user just said "Yeah" (English) → respond in English, even if task description is in Chinese
+   - If user just said "不想" (Chinese) → respond in Chinese
+   - IGNORE the task description language. ONLY follow the user's spoken language.
+   - This is NON-NEGOTIABLE. Never switch languages based on memories or task description.
 `;
 
   // 语言一致性强调（放在 toneShiftSection 最后）
   const languageConsistencySection = `
 ------------------------------------------------------------
-LANGUAGE CONSISTENCY (CRITICAL)
+LANGUAGE CONSISTENCY (CRITICAL - HIGHEST PRIORITY)
 ------------------------------------------------------------
-RULE: ALWAYS reply in the SAME language the user is speaking.
+RULE: ALWAYS reply in the SAME language as the user's MOST RECENT spoken message.
+
+⚠️ IMPORTANT: The user's spoken language OVERRIDES everything else:
+- IGNORE the task description language (even if it's in Chinese)
+- IGNORE the memory content language (even if memories are in Chinese)
+- ONLY follow what the user JUST SAID
 
 This applies to ALL situations:
 - Normal conversation
+- After detecting [RESIST]
 - After [TONE_SHIFT] triggers
 - After [CHECK_IN] triggers
 - After [MEMORY_BOOST] triggers
-- After calling reportUserState tool
 
-If user speaks Chinese → Reply in Chinese
-If user speaks English → Reply in English
-If user speaks Spanish → Reply in Spanish
-If user mixes languages → Reply in the same mixed style
-
-WRONG: User says "不想去" → You reply in English "I hear you, but..."
-RIGHT: User says "不想去" → You reply in Chinese "我懂，但是..."
-
-WRONG: User says "太累了" → You reply "Tired, huh? Let us try..."
-RIGHT: User says "太累了" → You reply "累了啊？那我们..."
+EXAMPLES:
+✅ User says "Yeah" (English) + Task is "打包行李" (Chinese) → Reply in ENGLISH
+✅ User says "不想" (Chinese) + Task is "Start reading" (English) → Reply in CHINESE
+❌ User says "Yeah" → You reply "哎呀，看来是..." (WRONG - switched to Chinese)
+❌ User says "不想" → You reply "Come on, just try..." (WRONG - switched to English)
 
 The ONLY exception is your VERY FIRST message, which uses preferredLanguages.
-After that, ALWAYS mirror the user's language.
+After that, ALWAYS mirror the user's SPOKEN language, regardless of task or memory language.
 `;
 
   return `You are Lumi, helping the user complete this 5-minute task:

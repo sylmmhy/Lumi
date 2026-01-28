@@ -96,6 +96,12 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     onToolCallRef.current = onToolCall ?? null;
   }, [onToolCall]);
 
+  // 追踪最后一次 turnComplete 的时间，用于判断安全注入窗口
+  // 必须在 useGeminiSession 之前定义，因为 onTurnComplete 回调需要访问这些 refs
+  const lastTurnCompleteTimeRef = useRef<number>(0);
+  // 追踪 AI 是否正在说话（同步版，用于安全窗口判断）
+  const isSpeakingRef = useRef<boolean>(false);
+
   // Session management (core)
   const session = useGeminiSession({
     onMessage: (message: LiveServerMessage) => {
@@ -109,7 +115,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
             audioOutput.stop();
           },
           onTurnComplete: () => {
-            audioOutput.markTurnComplete();  // 重置 isSpeaking 状态
+            audioOutput.markTurnComplete();  // 重置 isSpeaking 状态（异步）
+            isSpeakingRef.current = false;  // 立即同步更新 ref，确保安全窗口判断正确
             lastTurnCompleteTimeRef.current = Date.now();  // 记录 turnComplete 时间，用于安全注入窗口
             onTurnCompleteRef.current?.();
           },
@@ -329,14 +336,12 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
   }, [session.isConnected, session.sendRealtimeInput]);
 
-  // 追踪最后一次 turnComplete 的时间，用于判断安全注入窗口
-  const lastTurnCompleteTimeRef = useRef<number>(0);
-  // 追踪 AI 是否正在说话
-  const isSpeakingRef = useRef<boolean>(false);
-
-  // 同步 isSpeaking 状态到 ref
+  // 同步 isSpeaking 状态到 ref（当 AI 开始说话时更新）
   useEffect(() => {
-    isSpeakingRef.current = audioOutput.isSpeaking;
+    if (audioOutput.isSpeaking) {
+      isSpeakingRef.current = true;
+    }
+    // 注意：isSpeaking = false 的情况在 onTurnComplete 回调中立即处理，不依赖这个 effect
   }, [audioOutput.isSpeaking]);
 
   /**

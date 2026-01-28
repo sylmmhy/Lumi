@@ -233,6 +233,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             console.log('🎤 用户说:', fullUserMessage);
           }
           addMessageRef.current('user', fullUserMessage, false);
+
+          // 🆕 用完整的用户消息进行话题检测和记忆检索
+          // 必须在清空 buffer 之前调用，且使用完整句子而非碎片
+          orchestratorRef.current.onUserSpeech(fullUserMessage);
+
           userSpeechBufferRef.current = '';
         }
 
@@ -270,9 +275,19 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             }
 
             // 如果触发了语气切换，稍后发送触发词
+            // 注意：立即替换语言，避免 setTimeout 闭包问题
             if (triggerString) {
+              const lang = preferredLanguagesRef.current?.[0] || 'en-US';
+              const triggerWithLanguage = triggerString.replace('{LANG}', lang);
               setTimeout(() => {
-                sendToneTriggerRef.current(triggerString);
+                if (geminiLive.isConnected) {
+                  geminiLive.sendTextMessage(triggerWithLanguage);
+                  if (import.meta.env.DEV) {
+                    console.log('📤 发送语气切换触发词:', triggerWithLanguage);
+                  }
+                } else if (import.meta.env.DEV) {
+                  console.log('⏸️ 跳过语气切换触发词: Gemini 已断开');
+                }
               }, TONE_TRIGGER_DELAY_MS);
             }
           }
@@ -293,11 +308,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       if (lastMessage.role === 'user') {
         // 累积用户语音碎片，不立即存储
+        // 话题检测在用户说完整句话后进行（AI 开始说话前），见上方代码
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
-
-          // 🆕 通知动态虚拟消息调度器（用于话题检测和记忆检索）
-          orchestratorRef.current.onUserSpeech(lastMessage.text);
         }
 
         // 更新角色跟踪
@@ -318,6 +331,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         if (import.meta.env.DEV) {
           console.log('📤 发送语气切换触发词:', triggerWithLanguage);
         }
+      } else if (import.meta.env.DEV) {
+        console.log('⏸️ 跳过语气切换触发词:', {
+          isConnected: geminiLive.isConnected,
+          isSessionActive,
+          trigger,
+        });
       }
     };
   }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);

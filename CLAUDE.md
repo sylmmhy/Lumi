@@ -111,6 +111,25 @@ npm run lint     # 代码检查
 
 ## 🗄️ Supabase 本地开发
 
+### ⛔ 云端部署安全规则（强制）
+
+| 规则 | 说明 |
+|------|------|
+| **默认本地开发** | 所有 Supabase 代码（迁移、Edge Functions、RPC）默认在本地环境开发和测试 |
+| **禁止未授权部署** | **严禁**在未经用户明确授权的情况下，将代码部署到云端 Supabase |
+| **本地测试优先** | 必须先在本地验证通过后，再请求用户授权部署到云端 |
+
+**禁止的操作**（除非用户明确要求）：
+- `npx supabase db push`（不带 `--local`）→ 会推送到云端
+- `npx supabase functions deploy` → 会部署到云端
+- `npx supabase migrations push` → 会推送到云端
+
+**正确流程**：
+1. 在本地开发和测试（使用 `--local` 标志）
+2. 验证功能正常
+3. **询问用户**是否要部署到云端
+4. 获得授权后才能执行云端部署命令
+
 ### 本地数据库更改必须持久化
 
 **重要**：直接在本地数据库执行的 SQL（如 `docker exec` 或 Supabase Studio）在 `supabase db reset` 后会丢失！

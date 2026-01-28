@@ -48,6 +48,8 @@ export interface UseVirtualMessagesOptions {
   successRecord?: SuccessRecordForVM | null;
   /** 任务初始时长（秒），用于计算剩余时间 */
   initialDuration?: number;
+  /** 用户首选语言，用于触发词中携带语言信息，确保 AI 回复使用正确语言 */
+  preferredLanguage?: string;
 }
 
 // 冷却时间：15秒
@@ -68,6 +70,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     onAddMessage,
     successRecord,
     initialDuration = 300, // 默认5分钟
+    preferredLanguage = 'en-US', // 默认英文，确保触发词携带语言信息
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -183,28 +186,32 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   }, []);
 
   /**
-   * 生成语言无关的触发词消息
+   * 生成带语言标记的触发词消息
    * 使用触发词格式，让 AI 根据 System Prompt 中的定义用用户语言回复
-   * 这样无论虚拟消息是什么语言，AI 都会用用户选择的语言回复
    *
-   * 每次触发消息都附带 current_time=HH:MM，让 AI 知道真实的用户本地时间
-   * 这样 AI 就不会使用服务器时间（UTC）来判断时间
+   * 🔧 修复语言污染：每个触发词都携带 language= 参数，确保 AI 回复使用正确语言
+   * 之前的问题：触发词没有语言信息，AI 可能根据系统指令中的中文示例切换到中文
+   *
+   * 每次触发消息都附带：
+   * - current_time=HH:MM：让 AI 知道真实的用户本地时间
+   * - language=XX：确保 AI 用正确的语言回复
    */
   const generateTimeAwareMessage = useCallback(async (category: VirtualMessageCategory): Promise<string> => {
     const currentTime = getCurrentLocalTime();
+    const lang = preferredLanguage; // 🔧 携带语言信息
 
-    // 开场白消息 - 使用触发词，附带当前时间
+    // 开场白消息 - 使用触发词，附带当前时间和语言
     if (category === 'opening') {
-      return `[GREETING] current_time=${currentTime}`;
+      return `[GREETING] current_time=${currentTime} language=${lang}`;
     }
 
     const elapsedMs = Date.now() - taskStartTime;
     const elapsedSeconds = Math.floor(elapsedMs / 1000);
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
 
-    // 状态检查消息 - 包含精确时间
+    // 状态检查消息 - 包含精确时间和语言
     if (category === 'status_check') {
-      return `[STATUS] elapsed=${elapsedMinutes}m${elapsedSeconds % 60}s current_time=${currentTime}`;
+      return `[STATUS] elapsed=${elapsedMinutes}m${elapsedSeconds % 60}s current_time=${currentTime} language=${lang}`;
     }
 
     // 记忆增强消息 - 在关键时刻注入用户成功记录
@@ -227,54 +234,55 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         }
         parts.push(`total=${successRecord.totalCompletions}`);
         parts.push(`current_time=${currentTime}`);
+        parts.push(`language=${lang}`); // 🔧 携带语言
         return parts.join(' ');
       } else if (elapsedMinutes >= 2 && elapsedMinutes <= 3) {
         // 中间阶段（2-3分钟）：如果用户上次也在这个时候坚持下来了
         if (successRecord.hasOvercomeResistance) {
-          return `[MEMORY_BOOST] type=overcame_before elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+          return `[MEMORY_BOOST] type=overcame_before elapsed=${elapsedMinutes}m current_time=${currentTime} language=${lang}`;
         }
         // 如果用户上次感到骄傲，提醒这种感觉
         if (successRecord.hasProudMoment) {
-          return `[MEMORY_BOOST] type=proud_feeling elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+          return `[MEMORY_BOOST] type=proud_feeling elapsed=${elapsedMinutes}m current_time=${currentTime} language=${lang}`;
         }
         // 如果接近上次的记录时长
         if (successRecord.lastDuration && elapsedMinutes >= successRecord.lastDuration - 1) {
-          return `[MEMORY_BOOST] type=approaching_record approaching=${successRecord.lastDuration}min elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+          return `[MEMORY_BOOST] type=approaching_record approaching=${successRecord.lastDuration}min elapsed=${elapsedMinutes}m current_time=${currentTime} language=${lang}`;
         }
         // 如果接近个人最佳
         if (successRecord.personalBest && elapsedMinutes >= successRecord.personalBest - 1) {
-          return `[MEMORY_BOOST] type=near_personal_best personal_best=${successRecord.personalBest}min elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+          return `[MEMORY_BOOST] type=near_personal_best personal_best=${successRecord.personalBest}min elapsed=${elapsedMinutes}m current_time=${currentTime} language=${lang}`;
         }
         // 默认：提醒他们做过很多次了
-        return `[MEMORY_BOOST] type=experience total=${successRecord.totalCompletions} elapsed=${elapsedMinutes}m current_time=${currentTime}`;
+        return `[MEMORY_BOOST] type=experience total=${successRecord.totalCompletions} elapsed=${elapsedMinutes}m current_time=${currentTime} language=${lang}`;
       } else if (remainingMinutes <= 1) {
         // 接近结束（剩余1分钟以内）：庆祝即将到来的连胜
         const newStreak = successRecord.currentStreak + 1;
-        return `[MEMORY_BOOST] type=streak_building new_streak=${newStreak} remaining=${remainingSeconds}s current_time=${currentTime}`;
+        return `[MEMORY_BOOST] type=streak_building new_streak=${newStreak} remaining=${remainingSeconds}s current_time=${currentTime} language=${lang}`;
       }
 
       // 默认 memory_boost：提供总体鼓励
-      return `[MEMORY_BOOST] type=general total=${successRecord.totalCompletions} streak=${successRecord.currentStreak} current_time=${currentTime}`;
+      return `[MEMORY_BOOST] type=general total=${successRecord.totalCompletions} streak=${successRecord.currentStreak} current_time=${currentTime} language=${lang}`;
     }
 
     // encouragement_focused - 默认类型
-    // 触发词包含详细时间信息和当前本地时间，AI 会根据 System Prompt 用用户语言回复
+    // 触发词包含详细时间信息、当前本地时间和语言
     if (elapsedSeconds < 30) {
-      return `[CHECK_IN] elapsed=just_started current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=just_started current_time=${currentTime} language=${lang}`;
     } else if (elapsedMinutes === 0) {
-      return `[CHECK_IN] elapsed=30s current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=30s current_time=${currentTime} language=${lang}`;
     } else if (elapsedMinutes === 1) {
-      return `[CHECK_IN] elapsed=1m current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=1m current_time=${currentTime} language=${lang}`;
     } else if (elapsedMinutes === 2) {
-      return `[CHECK_IN] elapsed=2m current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=2m current_time=${currentTime} language=${lang}`;
     } else if (elapsedMinutes === 3) {
-      return `[CHECK_IN] elapsed=3m current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=3m current_time=${currentTime} language=${lang}`;
     } else if (elapsedMinutes === 4) {
-      return `[CHECK_IN] elapsed=4m remaining=1m current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=4m remaining=1m current_time=${currentTime} language=${lang}`;
     } else {
-      return `[CHECK_IN] elapsed=5m timer_done=true current_time=${currentTime}`;
+      return `[CHECK_IN] elapsed=5m timer_done=true current_time=${currentTime} language=${lang}`;
     }
-  }, [taskStartTime, getCurrentLocalTime, successRecord, initialDuration]);
+  }, [taskStartTime, getCurrentLocalTime, successRecord, initialDuration, preferredLanguage]);
 
   // 使用 ref 存储回调函数，避免 useEffect 依赖变化导致的循环
   const onSendMessageRef = useRef(onSendMessage);

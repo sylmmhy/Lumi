@@ -155,6 +155,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
+  // 保存用户首选语言，用于语气切换和虚拟消息时保持语言一致性
+  const preferredLanguagesRef = useRef<string[] | null>(null);
+
   // ==========================================
   // 动态语气管理（Tone Manager）
   // ==========================================
@@ -286,12 +289,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
+  // 🔧 修复语言污染：在触发词中携带当前用户语言设置
   useEffect(() => {
     sendToneTriggerRef.current = (trigger: string) => {
       if (geminiLive.isConnected && isSessionActive) {
-        geminiLive.sendTextMessage(trigger);
+        // 在触发词末尾追加语言信息，确保 AI 用正确的语言回复
+        const lang = preferredLanguagesRef.current?.[0] || 'en-US';
+        const triggerWithLanguage = `${trigger} language=${lang}`;
+        geminiLive.sendTextMessage(triggerWithLanguage);
         if (import.meta.env.DEV) {
-          console.log('📤 发送语气切换触发词:', trigger);
+          console.log('📤 发送语气切换触发词:', triggerWithLanguage);
         }
       }
     };
@@ -329,6 +336,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // Phase 3: Memory Boost - 传入成功记录用于动态记忆注入
     successRecord: successRecordRef.current,
     initialDuration: initialTime,
+    // 🔧 修复语言污染：传入用户首选语言，确保虚拟消息触发词携带正确语言
+    preferredLanguage: preferredLanguagesRef.current?.[0],
   });
 
   const { setOnTurnComplete } = geminiLive;
@@ -478,6 +487,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
+    // 保存首选语言，用于触发词生成时保持语言一致性
+    preferredLanguagesRef.current = preferredLanguages || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 
@@ -614,6 +625,22 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           throw new Error(`获取系统指令失败: ${instructionResult.error.message}`);
         }
         systemInstruction = instructionResult.data.systemInstruction;
+
+        // 🔍 日志：显示检索到的记忆（方便诊断）
+        if (import.meta.env.DEV) {
+          const retrievedMemories = instructionResult.data.retrievedMemories as string[] | undefined;
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('🧠 [记忆检索] 本次会话取到的记忆:');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          if (retrievedMemories && retrievedMemories.length > 0) {
+            retrievedMemories.forEach((memory, index) => {
+              console.log(`  ${index + 1}. ${memory}`);
+            });
+          } else {
+            console.log('  (无记忆 - 这可能是新用户或没有相关记忆)');
+          }
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        }
 
         // Phase 3: 提取成功记录，用于虚拟消息系统的 memory boost
         if (instructionResult.data.successRecord) {
@@ -825,8 +852,25 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         throw new Error(`保存记忆失败: ${error.message}`);
       }
 
+      // 🔍 日志：显示保存的记忆（方便诊断）
       if (import.meta.env.DEV) {
-        console.log('✅ 会话记忆已保存:', data);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('💾 [记忆保存] 本次会话存的记忆:');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        const savedMemories = data?.memories as Array<{ content: string; tag: string }> | undefined;
+        if (savedMemories && savedMemories.length > 0) {
+          savedMemories.forEach((memory, index) => {
+            console.log(`  ${index + 1}. [${memory.tag}] ${memory.content}`);
+          });
+        } else {
+          console.log('  (无新记忆被提取)');
+        }
+        console.log('📊 保存统计:', {
+          extracted: data?.extracted,
+          saved: data?.saved,
+          merged: data?.merged,
+        });
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       }
 
       // 🆕 如果任务完成且有 taskId，保存 actualDurationMinutes 到 tasks 表

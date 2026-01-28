@@ -109,6 +109,48 @@ npm run lint     # 代码检查
 
 ---
 
+## 🗄️ Supabase 本地开发
+
+### 本地数据库更改必须持久化
+
+**重要**：直接在本地数据库执行的 SQL（如 `docker exec` 或 Supabase Studio）在 `supabase db reset` 后会丢失！
+
+| 更改类型 | 必须创建迁移文件 | 示例 |
+|---------|----------------|------|
+| 新增/修改表结构 | ✅ 是 | `ALTER TABLE`, `CREATE TABLE` |
+| 新增/修改 RPC 函数 | ✅ 是 | `CREATE FUNCTION` |
+| 新增/修改索引 | ✅ 是 | `CREATE INDEX` |
+| 新增/修改约束 | ✅ 是 | `ALTER TABLE ADD CONSTRAINT` |
+| 插入测试数据 | ❌ 否 | `INSERT INTO` |
+
+### 正确流程
+
+```bash
+# 1. 创建迁移文件（文件名格式：YYYYMMDDHHMMSS_描述.sql）
+touch supabase/migrations/20260127100000_add_new_feature.sql
+
+# 2. 编写 SQL 并应用到本地
+npx supabase db push --local
+
+# 3. 验证更改
+docker exec supabase_db_firego-local psql -U postgres -d postgres -c "你的查询"
+```
+
+### 常用本地数据库命令
+
+```bash
+# 查看本地数据库
+docker exec supabase_db_firego-local psql -U postgres -d postgres -c "SELECT * FROM your_table LIMIT 10;"
+
+# 重启 Edge Functions（代码更改后）
+npx supabase functions serve --env-file supabase/.env.local
+
+# 重置本地数据库（会重新应用所有迁移）
+npx supabase db reset --local
+```
+
+---
+
 ## ⚠️ 重要规则
 
 ### Bug 排查原则（严禁猜测）

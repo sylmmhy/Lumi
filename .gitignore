@@ -32,3 +32,4 @@ supabase/.branches
 *.njsproj
 *.sln
 *.sw?
+.mcp.json

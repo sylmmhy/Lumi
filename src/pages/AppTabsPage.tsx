@@ -1046,17 +1046,26 @@ export function AppTabsPage() {
         // 4. 后台保存记忆（完全不阻塞 UI，使用快照数据）
         void (async () => {
             try {
+                console.log('🧠 [记忆保存] 开始后台保存记忆...');
+                console.log('🧠 [记忆保存] 消息快照数量:', messagesSnapshot.length);
+                console.log('🧠 [记忆保存] 用户ID:', auth.userId);
+
                 // 直接调用 Supabase 保存记忆，不依赖 aiCoach 状态
                 if (messagesSnapshot.length > 0 && auth.userId) {
                     const supabaseClient = getSupabaseClient();
+                    console.log('🧠 [记忆保存] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
+
                     if (supabaseClient) {
                         const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
+                        console.log('🧠 [记忆保存] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
+
                         if (realMessages.length > 0) {
                             const mem0Messages = realMessages.map(msg => ({
                                 role: msg.role === 'ai' ? 'assistant' : 'user',
                                 content: msg.content,
                             }));
-                            await supabaseClient.functions.invoke('memory-extractor', {
+                            console.log('🧠 [记忆保存] 调用 memory-extractor...');
+                            const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
                                 body: {
                                     action: 'extract',
                                     userId: auth.userId,
@@ -1068,8 +1077,28 @@ export function AppTabsPage() {
                                     },
                                 },
                             });
+                            if (error) {
+                                console.error('🧠 [记忆保存] memory-extractor 返回错误:', error);
+                            } else {
+                                console.log('✅ [记忆保存] 记忆提取成功:', data);
+                                // 显示具体保存了哪些记忆
+                                if (data?.memories && Array.isArray(data.memories)) {
+                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    console.log('📝 [记忆保存] 保存的记忆内容:');
+                                    data.memories.forEach((mem: { content?: string; tag?: string }, idx: number) => {
+                                        console.log(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
+                                    });
+                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                }
+                            }
+                        } else {
+                            console.log('⚠️ [记忆保存] 跳过：没有真实消息（所有消息都是虚拟消息）');
                         }
+                    } else {
+                        console.log('⚠️ [记忆保存] 跳过：Supabase 客户端为空');
                     }
+                } else {
+                    console.log('⚠️ [记忆保存] 跳过：消息为空或用户ID为空');
                 }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
@@ -1119,10 +1148,19 @@ export function AppTabsPage() {
         // 4. 后台保存记忆（完全不阻塞 UI）
         void (async () => {
             try {
+                console.log('🧠 [记忆保存-完成] 开始后台保存记忆（任务完成）...');
+                console.log('🧠 [记忆保存-完成] 消息快照数量:', messagesSnapshot.length);
+                console.log('🧠 [记忆保存-完成] 用户ID:', auth.userId);
+                console.log('🧠 [记忆保存-完成] 任务描述:', taskDescriptionSnapshot);
+
                 if (messagesSnapshot.length > 0 && auth.userId) {
                     const supabaseClient = getSupabaseClient();
+                    console.log('🧠 [记忆保存-完成] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
+
                     if (supabaseClient) {
                         const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
+                        console.log('🧠 [记忆保存-完成] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
+
                         if (realMessages.length > 0) {
                             const mem0Messages = realMessages.map(msg => ({
                                 role: msg.role === 'ai' ? 'assistant' : 'user',
@@ -1132,7 +1170,8 @@ export function AppTabsPage() {
                                 role: 'system',
                                 content: `User was working on task: "${taskDescriptionSnapshot}"`,
                             });
-                            await supabaseClient.functions.invoke('memory-extractor', {
+                            console.log('🧠 [记忆保存-完成] 调用 memory-extractor...');
+                            const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
                                 body: {
                                     action: 'extract',
                                     userId: auth.userId,
@@ -1147,8 +1186,28 @@ export function AppTabsPage() {
                                     },
                                 },
                             });
+                            if (error) {
+                                console.error('🧠 [记忆保存-完成] memory-extractor 返回错误:', error);
+                            } else {
+                                console.log('✅ [记忆保存-完成] 记忆提取成功:', data);
+                                // 显示具体保存了哪些记忆
+                                if (data?.memories && Array.isArray(data.memories)) {
+                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    console.log('📝 [记忆保存-完成] 保存的记忆内容:');
+                                    data.memories.forEach((mem: { content?: string; tag?: string }, idx: number) => {
+                                        console.log(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
+                                    });
+                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                }
+                            }
+                        } else {
+                            console.log('⚠️ [记忆保存-完成] 跳过：没有真实消息');
                         }
+                    } else {
+                        console.log('⚠️ [记忆保存-完成] 跳过：Supabase 客户端为空');
                     }
+                } else {
+                    console.log('⚠️ [记忆保存-完成] 跳过：消息为空或用户ID为空');
                 }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);

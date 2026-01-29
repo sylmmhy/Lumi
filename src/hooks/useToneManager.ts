@@ -84,6 +84,46 @@ export interface ToneTrigger {
 }
 
 // ============================================
+// 抗拒分析类型（新增）
+// ============================================
+
+/**
+ * 抗拒类型
+ *
+ * emotional: 情感相关的抗拒（分手、压力、孤独等）
+ * explicit_stop: 明确表示不想做
+ * task_resistance: 普通任务抗拒（借口、拖延）
+ */
+export type ResistanceType = 'emotional' | 'explicit_stop' | 'task_resistance';
+
+/**
+ * 建议的响应动作
+ *
+ * empathy: 高强度情感 → 优先共情安慰
+ * listen: 低强度情感 → 先倾听再引导
+ * accept_stop: 明确拒绝 → 优雅接受
+ * tiny_step: 普通抗拒 → 推进更小步骤
+ * tone_shift: 连续抗拒 → 切换语气风格
+ */
+export type SuggestedAction = 'empathy' | 'listen' | 'accept_stop' | 'tiny_step' | 'tone_shift';
+
+/**
+ * 抗拒分析结果
+ */
+export interface ResistanceAnalysis {
+  /** 抗拒类型 */
+  type: ResistanceType;
+  /** 建议的响应动作 */
+  suggestedAction: SuggestedAction;
+  /** 情绪强度（0-1，仅当 type=emotional 时有意义） */
+  emotionIntensity?: number;
+  /** 检测到的情绪类型 */
+  emotion?: 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral';
+  /** 分析依据 */
+  reason: string;
+}
+
+// ============================================
 // 常量
 // ============================================
 
@@ -107,6 +147,120 @@ const SIGNAL_DESCRIPTIONS: Record<ResistanceSignal, string> = {
   topic_change: 'Topic change',
   negative_sentiment: 'Negative sentiment',
 };
+
+/**
+ * 明确拒绝的关键词（多语言）
+ * 用于检测用户是否明确表示不想做任务
+ */
+const EXPLICIT_STOP_KEYWORDS = [
+  // 英文
+  "don't want to", "i don't want", "not doing", "i'm not doing", "i won't",
+  "forget it", "never mind", "skip", "give up", "quit", "stop",
+  // 中文
+  '不想', '不做了', '算了', '放弃', '不干了', '别做了', '不要做',
+  // 中文口语
+  '懒得', '不管了', '随便了',
+];
+
+// ============================================
+// 抗拒分析函数（新增）
+// ============================================
+
+/**
+ * 话题检测结果接口（从 types.ts 简化）
+ * 用于类型检查，避免循环依赖
+ */
+interface TopicResultForAnalysis {
+  topic: { id: string; name: string } | null;
+  emotion?: 'happy' | 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral';
+  emotionIntensity?: number;
+  confidence?: number;
+}
+
+/**
+ * 分析用户抗拒的类型和建议动作
+ *
+ * 决策逻辑：
+ * 1. 检测到情感话题（relationship, breakup, stress 等） → type: 'emotional'
+ *    - 高强度（≥0.7）→ suggestedAction: 'empathy'
+ *    - 低强度（<0.7）→ suggestedAction: 'listen'
+ * 2. 明确说"不想做"、"算了" → type: 'explicit_stop', suggestedAction: 'accept_stop'
+ * 3. 其他借口 → type: 'task_resistance'
+ *    - 根据连续抗拒次数决定 suggestedAction: 'tiny_step' 或 'tone_shift'
+ *
+ * @param userMessage - 用户说的话
+ * @param topicResult - 话题检测结果（可选，来自 Semantic Router）
+ * @param consecutiveRejections - 连续抗拒次数（用于判断是否需要 tone_shift）
+ * @returns 抗拒分析结果
+ */
+export function analyzeResistance(
+  userMessage: string,
+  topicResult?: TopicResultForAnalysis | null,
+  consecutiveRejections: number = 0
+): ResistanceAnalysis {
+  const lowerMessage = userMessage.toLowerCase();
+
+  // ====== 情感类话题检测 ======
+  // 优先判断：如果 Semantic Router 检测到情感类话题
+  const emotionalTopicIds = [
+    'relationship_issue',
+    'breakup',
+    'stress',
+    'loneliness',
+  ];
+
+  if (topicResult?.topic && emotionalTopicIds.includes(topicResult.topic.id)) {
+    const intensity = topicResult.emotionIntensity ?? 0.6;
+    const emotion = topicResult.emotion ?? 'sad';
+
+    if (intensity >= 0.7) {
+      return {
+        type: 'emotional',
+        suggestedAction: 'empathy',
+        emotionIntensity: intensity,
+        emotion,
+        reason: `检测到强烈情感话题: ${topicResult.topic.name} (强度: ${(intensity * 100).toFixed(0)}%)`,
+      };
+    } else {
+      return {
+        type: 'emotional',
+        suggestedAction: 'listen',
+        emotionIntensity: intensity,
+        emotion,
+        reason: `检测到情感话题: ${topicResult.topic.name} (强度: ${(intensity * 100).toFixed(0)}%)，先倾听`,
+      };
+    }
+  }
+
+  // ====== 明确拒绝检测 ======
+  const hasExplicitStop = EXPLICIT_STOP_KEYWORDS.some(keyword =>
+    lowerMessage.includes(keyword.toLowerCase())
+  );
+
+  if (hasExplicitStop) {
+    return {
+      type: 'explicit_stop',
+      suggestedAction: 'accept_stop',
+      reason: `用户明确表示不想做: "${userMessage.substring(0, 50)}..."`,
+    };
+  }
+
+  // ====== 普通任务抗拒 ======
+  // 根据连续抗拒次数决定策略
+  if (consecutiveRejections >= 2) {
+    return {
+      type: 'task_resistance',
+      suggestedAction: 'tone_shift',
+      reason: `连续抗拒 ${consecutiveRejections} 次，建议切换语气`,
+    };
+  }
+
+  return {
+    type: 'task_resistance',
+    suggestedAction: 'tiny_step',
+    reason: `普通抗拒，建议推进更小的步骤`,
+  };
+}
 
 // ============================================
 // 辅助函数

@@ -47,10 +47,12 @@ import { useAsyncMemoryPipeline, generateContextMessage } from './useAsyncMemory
 import { useVirtualMessageQueue } from './useVirtualMessageQueue'
 import type {
   VirtualMessageOrchestratorOptions,
+  VirtualMessageType,
   TopicInfo,
   EmotionalState,
 } from './types'
 import { EMOTION_RESPONSE_THRESHOLD } from './constants'
+import type { SuggestedAction } from '../useToneManager'
 
 /**
  * 调度器配置（扩展基础配置）
@@ -77,11 +79,21 @@ interface UseVirtualMessageOrchestratorOptions extends VirtualMessageOrchestrato
 }
 
 /**
+ * 话题检测结果（用于抗拒分析）
+ */
+export interface TopicResultForResistance {
+  topic: { id: string; name: string } | null
+  emotion?: 'happy' | 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral'
+  emotionIntensity?: number
+  confidence?: number
+}
+
+/**
  * 调度器返回值
  */
 interface VirtualMessageOrchestratorResult {
-  /** 处理用户说话事件（异步，调用 Semantic Router API） */
-  onUserSpeech: (text: string) => Promise<void>
+  /** 处理用户说话事件（异步，调用 Semantic Router API），返回话题检测结果 */
+  onUserSpeech: (text: string) => Promise<TopicResultForResistance | null>
   /** 处理 AI 说话事件 */
   onAISpeech: (text: string) => void
   /** 处理 AI 说完话事件（turnComplete） */
@@ -96,6 +108,16 @@ interface VirtualMessageOrchestratorResult {
   reset: () => void
   /** 话题检测器是否正在加载 */
   isDetecting: boolean
+  /**
+   * 根据抗拒分析结果发送对应的虚拟消息
+   * @param suggestedAction - 来自 analyzeResistance 的建议动作
+   * @returns 是否成功入队
+   */
+  sendMessageForAction: (suggestedAction: SuggestedAction) => boolean
+  /**
+   * 发送温柔引导消息（用于情绪稳定后引导回任务）
+   */
+  sendGentleRedirect: () => boolean
 }
 
 /**
@@ -183,6 +205,93 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
   }, [contextTracker, preferredLanguage])
 
   /**
+   * 生成倾听模式消息 [LISTEN_FIRST]
+   * 用于情感话题，AI 应该进入倾听模式，暂时不推任务
+   */
+  const generateListenFirstMessage = useCallback((): string => {
+    const context = contextTracker.getVirtualMessageContext()
+
+    return `[LISTEN_FIRST] language=${preferredLanguage}
+user_context: "${context.recentUserSpeech?.substring(0, 100) || '(无)'}"
+topic: ${context.currentTopic || '未知'}
+action: 进入倾听模式。用户在分享情感内容，暂停任务相关话题。用开放式问题引导他们倾诉，不要提任务。`
+  }, [contextTracker, preferredLanguage])
+
+  /**
+   * 生成温柔引导消息 [GENTLE_REDIRECT]
+   * 用于情绪稳定后，轻柔引导回任务
+   */
+  const generateGentleRedirectMessage = useCallback((): string => {
+    const elapsedMinutes = Math.floor((Date.now() - taskStartTime) / 60000)
+
+    return `[GENTLE_REDIRECT] elapsed=${elapsedMinutes}m language=${preferredLanguage}
+action: 用户情绪看起来稳定了。轻柔地问他们是否想做点什么转移注意力，把任务作为"小事"提出，压力要小。`
+  }, [taskStartTime, preferredLanguage])
+
+  /**
+   * 生成接受停止消息 [ACCEPT_STOP]
+   * 用于用户明确表示不想做时，优雅接受
+   */
+  const generateAcceptStopMessage = useCallback((): string => {
+    return `[ACCEPT_STOP] language=${preferredLanguage}
+action: 用户明确表示不想继续。优雅接受他们的选择，不要试图说服或提供替代方案。让他们知道你随时在这里。`
+  }, [preferredLanguage])
+
+  /**
+   * 生成推进小步骤消息 [PUSH_TINY_STEP]
+   * 用于普通任务抗拒（非情感），推进更小的步骤
+   */
+  const generatePushTinyStepMessage = useCallback((): string => {
+    const context = contextTracker.getVirtualMessageContext()
+
+    return `[PUSH_TINY_STEP] language=${preferredLanguage}
+user_said: "${context.recentUserSpeech?.substring(0, 80) || '(无)'}"
+task: ${taskDescription}
+action: 用户在找借口（不是情感困扰）。简短承认他们的借口，然后提供一个更小的步骤。保持轻松的坚持。`
+  }, [contextTracker, taskDescription, preferredLanguage])
+
+  /**
+   * 根据建议动作生成对应的虚拟消息
+   *
+   * @param suggestedAction - 来自 analyzeResistance 的建议动作
+   * @returns 消息内容和类型
+   */
+  const generateMessageForAction = useCallback((
+    suggestedAction: SuggestedAction
+  ): { content: string; type: VirtualMessageType } | null => {
+    switch (suggestedAction) {
+      case 'empathy':
+        // 高强度情感 → EMPATHY 消息（已有逻辑处理）
+        return null // 由现有 EMPATHY 逻辑处理
+
+      case 'listen':
+        return {
+          content: generateListenFirstMessage(),
+          type: 'LISTEN_FIRST',
+        }
+
+      case 'accept_stop':
+        return {
+          content: generateAcceptStopMessage(),
+          type: 'ACCEPT_STOP',
+        }
+
+      case 'tiny_step':
+        return {
+          content: generatePushTinyStepMessage(),
+          type: 'PUSH_TINY_STEP',
+        }
+
+      case 'tone_shift':
+        // TONE_SHIFT 由 ToneManager 直接处理
+        return null
+
+      default:
+        return null
+    }
+  }, [generateListenFirstMessage, generateAcceptStopMessage, generatePushTinyStepMessage])
+
+  /**
    * 处理话题变化，触发记忆检索
    *
    * @param topic - 检测到的话题
@@ -249,9 +358,10 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
 
   /**
    * 处理用户说话事件（使用 Semantic Router 异步检测）
+   * 返回话题检测结果，供抗拒分析使用
    */
-  const onUserSpeech = useCallback(async (text: string) => {
-    if (!enabled) return
+  const onUserSpeech = useCallback(async (text: string): Promise<TopicResultForResistance | null> => {
+    if (!enabled) return null
 
     // 更新上下文
     contextTracker.addUserMessage(text)
@@ -309,6 +419,14 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
           handleTopicChange(result.topic, result.emotionalState, result.memoryQuestions)
         }
       }
+    }
+
+    // 返回话题检测结果（用于抗拒分析）
+    return {
+      topic: result.topic ? { id: result.topic.id, name: result.topic.name } : null,
+      emotion: result.emotionalState.primary,
+      emotionIntensity: result.emotionalState.intensity,
+      confidence: result.confidence,
     }
   }, [
     enabled,
@@ -409,6 +527,58 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
     }
   }, [contextTracker, messageQueue])
 
+  /**
+   * 根据抗拒分析结果发送对应的虚拟消息
+   *
+   * @param suggestedAction - 来自 analyzeResistance 的建议动作
+   * @returns 是否成功入队
+   */
+  const sendMessageForAction = useCallback((suggestedAction: SuggestedAction): boolean => {
+    const messageData = generateMessageForAction(suggestedAction)
+
+    if (!messageData) {
+      // empathy 和 tone_shift 由其他逻辑处理
+      return false
+    }
+
+    // 根据消息类型设置优先级
+    const priority = messageData.type === 'LISTEN_FIRST' ? 'urgent' as const
+      : messageData.type === 'ACCEPT_STOP' ? 'high' as const
+      : 'high' as const
+
+    messageQueue.enqueue({
+      type: messageData.type,
+      priority,
+      content: messageData.content,
+    })
+
+    if (import.meta.env.DEV) {
+      console.log(`📤 [Orchestrator] 入队 ${messageData.type} 消息 (action: ${suggestedAction})`)
+    }
+
+    return true
+  }, [generateMessageForAction, messageQueue])
+
+  /**
+   * 发送温柔引导消息
+   * 用于情绪稳定后引导回任务
+   */
+  const sendGentleRedirect = useCallback((): boolean => {
+    const content = generateGentleRedirectMessage()
+
+    messageQueue.enqueue({
+      type: 'GENTLE_REDIRECT',
+      priority: 'normal',
+      content,
+    })
+
+    if (import.meta.env.DEV) {
+      console.log(`📤 [Orchestrator] 入队 GENTLE_REDIRECT 消息`)
+    }
+
+    return true
+  }, [generateGentleRedirectMessage, messageQueue])
+
   return {
     onUserSpeech,
     onAISpeech,
@@ -418,6 +588,8 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
     getContext,
     reset,
     isDetecting: topicDetector.isLoading,
+    sendMessageForAction,
+    sendGentleRedirect,
   }
 }
 

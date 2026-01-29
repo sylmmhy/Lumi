@@ -198,6 +198,8 @@ export function TaskFlowController({
         liveKitTimerRef.current = null;
       }
     } else {
+      // 立即停止音频播放，让 AI 马上静音
+      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
     }
     setStep('simpleExecution');
@@ -217,6 +219,8 @@ export function TaskFlowController({
         liveKitTimerRef.current = null;
       }
     } else {
+      // 立即停止音频播放，让 AI 马上静音
+      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
     }
     setCelebrationFlow('success');

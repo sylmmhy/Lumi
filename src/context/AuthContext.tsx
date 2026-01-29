@@ -113,6 +113,11 @@ declare global {
         onboardingCompleted?: { postMessage: (message: Record<string, never>) => void };
         // Ringtone settings
         setRingtoneType?: { postMessage: (message: { type: string }) => void };
+        // Urge Block handlers (iOS WebView)
+        urgeBlockOpenShortcuts?: { postMessage: (message: unknown) => void };
+        urgeBlockOpenApp?: { postMessage: (message: unknown) => void };
+        urgeBlockSetCooldown?: { postMessage: (message: unknown) => void };
+        urgeBlockSetBypassClipboard?: { postMessage: (message: { appName: string }) => void };
       };
     };
   }
@@ -373,9 +378,14 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           // Token 无效，清除 localStorage（以 Supabase 为准）
           clearAuthStorage();
           // 在 WebView 环境中通知 Native 端 session 失效
-          if (isInNativeWebView()) {
+          // 重要：如果 Native 正在注入新 token（MindBoatNativeAuth 存在），跳过 logout 通知
+          // 这是为了避免从后台恢复时的竞态条件：validateSessionWithSupabase 可能在
+          // Native 注入完成之前就运行，导致用旧 token 验证失败而错误触发 logout
+          if (isInNativeWebView() && !window.MindBoatNativeAuth) {
             console.log('📱 Session 验证失败，通知 Native 端');
             notifyNativeLogout();
+          } else if (window.MindBoatNativeAuth) {
+            console.log('📱 检测到 Native 正在注入 token，跳过 logout 通知');
           }
           return {
             isLoggedIn: false,
@@ -465,9 +475,12 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
     console.warn('⚠️ 多次尝试后仍无法恢复 session，清除本地认证状态');
     clearAuthStorage();
     // 在 WebView 环境中通知 Native 端
-    if (isInNativeWebView()) {
+    // 重要：如果 Native 正在注入新 token（MindBoatNativeAuth 存在），跳过 logout 通知
+    if (isInNativeWebView() && !window.MindBoatNativeAuth) {
       console.log('📱 Session 恢复失败，通知 Native 端');
       notifyNativeLogout();
+    } else if (window.MindBoatNativeAuth) {
+      console.log('📱 检测到 Native 正在注入 token，跳过 logout 通知');
     }
   }
 
@@ -1553,19 +1566,16 @@ export function AuthProvider({
     const finalUserName = localStorage.getItem('user_name') || userName;
     const finalPictureUrl = localStorage.getItem('user_picture') || pictureUrl;
 
-    // 如果 setSession 成功，onAuthStateChange 会触发并处理 hasCompletedHabitOnboarding 查询
-    // 我们给它一点时间（短暂等待），如果 onAuthStateChange 已经在处理，就让它来设置最终状态
+    // setSession 成功后，立即通知 iOS 停止重试（不需要等待后续数据库查询）
+    // 原因：authConfirmed 的目的是告诉 iOS "session 已建立"，与 hasCompletedHabitOnboarding 无关
     if (setSessionSucceeded) {
-      // 短暂等待，让 onAuthStateChange 有机会开始处理
-      await new Promise(resolve => setTimeout(resolve, 100));
+      notifyAuthConfirmed('session_set');
+      console.log('🔐 applyNativeLogin: setSession 成功，已通知 iOS 停止重试');
 
-      // 检查 onAuthStateChange 是否已经完成处理
-      // 如果 setSessionTriggeredAuthChangeRef 被 onAuthStateChange 设置为 true，说明它已经接管
+      // 如果 onAuthStateChange 已经接管状态处理，跳过重复查询
       if (setSessionTriggeredAuthChangeRef.current) {
         console.log('🔐 applyNativeLogin: onAuthStateChange 已接管状态处理，跳过重复查询');
         isApplyingNativeLoginRef.current = false;
-        // 不清除 isOnAuthStateChangeProcessingRef，让 onAuthStateChange 来清除
-        notifyAuthConfirmed('session_set');
         return;
       }
     }
@@ -1622,7 +1632,12 @@ export function AuthProvider({
     isOnAuthStateChangeProcessingRef.current = false;
     isApplyingNativeLoginRef.current = false;
 
-    notifyAuthConfirmed('session_set');
+    // 如果 setSession 失败，这里作为兜底发送 authConfirmed
+    // （setSession 成功的情况已经在上面提前发送了）
+    if (!setSessionSucceeded) {
+      notifyAuthConfirmed('session_fallback');
+      console.log('🔐 applyNativeLogin: setSession 失败，兜底通知 iOS 停止重试');
+    }
     console.log('🔐 applyNativeLogin: 完成, userId:', userId, 'hasCompletedHabitOnboarding:', hasCompletedHabitOnboarding);
   }, []);
 

@@ -521,6 +521,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   const aiCoach = useAICoachSession({
     initialTime: 60, // 测试用 1 分钟
     onCountdownComplete: () => {
+      // 立即停止音频播放，让 AI 马上静音
+      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
       setCelebrationFlow('confirm');
       setStep('celebration');
@@ -542,6 +544,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }, [aiCoach]);
 
   const handleComplete = useCallback(() => {
+    // 立即停止音频播放，让 AI 马上静音
+    aiCoach.stopAudioImmediately();
     aiCoach.endSession();
     setCelebrationFlow('success');
     setStep('celebration');
@@ -604,6 +608,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
             label: 'BACK',
             emoji: '←',
             onClick: () => {
+              // 立即停止音频播放，让 AI 马上静音
+              aiCoach.stopAudioImmediately();
               aiCoach.endSession();
               onBack();
             },

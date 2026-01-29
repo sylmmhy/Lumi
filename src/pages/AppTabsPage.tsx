@@ -24,7 +24,7 @@ import {
 } from '../remindMe/services/reminderService';
 import { isNativeApp, syncAllTasksToNative, registerNativeRefreshTasks } from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
-import { supabase } from '../lib/supabase';
+import { supabase, getSupabaseClient } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
 import {
     isLiveKitMode,
@@ -127,9 +127,6 @@ export function AppTabsPage() {
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
     const [showTestVersionModal, setShowTestVersionModal] = useState(false);
-
-    // 结束通话中状态（用于乐观 UI 更新，点击后立即隐藏通话界面）
-    const [isEndingCall, setIsEndingCall] = useState(false);
 
     // 庆祝流程相关状态
     const [showCelebration, setShowCelebration] = useState(false);
@@ -1028,28 +1025,57 @@ export function AppTabsPage() {
      * - 结束当前 AI 会话
      * - 返回主界面
      *
-     * 优化：使用乐观 UI 更新，先立即隐藏通话界面，再后台保存记忆
-     * 这样用户点击后立即看到挂断效果，不需要等待 2 秒
+     * 优化：
+     * 1. 立即停止音频播放（用户体验优先）
+     * 2. 立即结束会话，返回主页面
+     * 3. 后台保存记忆（完全不阻塞 UI）
      */
     const handleEndCall = useCallback(() => {
-        // 1. 立即更新 UI，让用户看到"已挂断"（乐观更新）
-        setIsEndingCall(true);
+        // 1. 立即停止音频播放，让 AI 马上静音
+        aiCoach.stopAudioImmediately();
+
+        // 2. 立即结束会话（释放摄像头、麦克风等资源）
+        // 注意：先复制 messages 快照用于后台保存
+        const messagesSnapshot = [...aiCoach.state.messages];
+        aiCoach.endSession();
+
+        // 3. 重置任务状态，UI 立即切换回主页面
         setCurrentTaskId(null);
         setCurrentTaskType(null);
 
-        // 2. 后台保存记忆并清理资源（不阻塞 UI）
-        // 注意：saveSessionMemory 内部会复制 messages 快照，所以在 endSession 之前调用是安全的
+        // 4. 后台保存记忆（完全不阻塞 UI，使用快照数据）
         void (async () => {
             try {
-                await aiCoach.saveSessionMemory({ forceTaskCompleted: false });
+                // 直接调用 Supabase 保存记忆，不依赖 aiCoach 状态
+                if (messagesSnapshot.length > 0 && auth.userId) {
+                    const supabaseClient = getSupabaseClient();
+                    if (supabaseClient) {
+                        const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
+                        if (realMessages.length > 0) {
+                            const mem0Messages = realMessages.map(msg => ({
+                                role: msg.role === 'ai' ? 'assistant' : 'user',
+                                content: msg.content,
+                            }));
+                            await supabaseClient.functions.invoke('memory-extractor', {
+                                body: {
+                                    action: 'extract',
+                                    userId: auth.userId,
+                                    messages: mem0Messages,
+                                    metadata: {
+                                        source: 'ai_coach_session',
+                                        timestamp: new Date().toISOString(),
+                                        task_completed: false,
+                                    },
+                                },
+                            });
+                        }
+                    }
+                }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
-            } finally {
-                aiCoach.endSession();
-                setIsEndingCall(false);
             }
         })();
-    }, [aiCoach]);
+    }, [aiCoach, auth.userId]);
 
     /**
      * 用户在任务执行视图中点击「I'M DOING IT!」
@@ -1058,42 +1084,80 @@ export function AppTabsPage() {
      * - 直接显示庆祝页面（跳过确认页面）
      * - 标记任务为已完成
      *
-     * 优化：使用乐观 UI 更新，先立即显示庆祝页面，再后台保存记忆
+     * 优化：
+     * 1. 立即停止音频播放（用户体验优先）
+     * 2. 立即结束会话，显示庆祝页面
+     * 3. 后台保存记忆（完全不阻塞 UI）
      */
     const handleEndAICoachSession = useCallback(() => {
+        // 1. 立即停止音频播放，让 AI 马上静音
+        aiCoach.stopAudioImmediately();
+
         // 计算完成时间（已用时间 = 初始时间 - 剩余时间）
         const usedTime = 300 - aiCoach.state.timeRemaining;
         const actualDurationMinutes = Math.round(usedTime / 60);
 
-        // 1. 立即更新 UI，显示庆祝页面（乐观更新）
-        setCompletionTime(usedTime);
-        setCurrentTaskDescription(aiCoach.state.taskDescription);
-        setCelebrationFlow('success');
-        setShowCelebration(true);
-
-        // 保存当前任务信息用于后台操作
+        // 保存当前状态用于后台操作
+        const messagesSnapshot = [...aiCoach.state.messages];
+        const taskDescriptionSnapshot = aiCoach.state.taskDescription;
         const taskIdToComplete = currentTaskId;
         const taskTypeToComplete = currentTaskType;
 
-        // 2. 后台保存记忆并清理资源（不阻塞 UI）
+        // 2. 立即结束会话（释放摄像头、麦克风等资源）
+        aiCoach.endSession();
+
+        // 3. 立即更新 UI，显示庆祝页面
+        setCompletionTime(usedTime);
+        setCurrentTaskDescription(taskDescriptionSnapshot);
+        setCelebrationFlow('success');
+        setShowCelebration(true);
+
+        // 重置任务状态
+        setCurrentTaskId(null);
+        setCurrentTaskType(null);
+
+        // 4. 后台保存记忆（完全不阻塞 UI）
         void (async () => {
             try {
-                await aiCoach.saveSessionMemory({ forceTaskCompleted: true });
+                if (messagesSnapshot.length > 0 && auth.userId) {
+                    const supabaseClient = getSupabaseClient();
+                    if (supabaseClient) {
+                        const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
+                        if (realMessages.length > 0) {
+                            const mem0Messages = realMessages.map(msg => ({
+                                role: msg.role === 'ai' ? 'assistant' : 'user',
+                                content: msg.content,
+                            }));
+                            mem0Messages.unshift({
+                                role: 'system',
+                                content: `User was working on task: "${taskDescriptionSnapshot}"`,
+                            });
+                            await supabaseClient.functions.invoke('memory-extractor', {
+                                body: {
+                                    action: 'extract',
+                                    userId: auth.userId,
+                                    messages: mem0Messages,
+                                    taskDescription: taskDescriptionSnapshot,
+                                    metadata: {
+                                        source: 'ai_coach_session',
+                                        sessionDuration: usedTime,
+                                        timestamp: new Date().toISOString(),
+                                        task_completed: true,
+                                        actual_duration_minutes: actualDurationMinutes,
+                                    },
+                                },
+                            });
+                        }
+                    }
+                }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
-            } finally {
-                aiCoach.endSession();
             }
         })();
 
-        // 3. 后台标记任务为已完成
-        // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
+        // 5. 后台标记任务为已完成
         void markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-
-        // 重置任务状态（已保存到局部变量，可以安全重置）
-        setCurrentTaskId(null);
-        setCurrentTaskType(null);
-    }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted]);
+    }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted, auth.userId]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -1192,19 +1256,8 @@ export function AppTabsPage() {
                 />
             )}
 
-            {/* 挂断中加载弹窗 - 在声音完全停止前显示，避免用户困惑 */}
-            {isEndingCall && (
-                <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                        <p className="text-white text-lg font-medium">Ending call...</p>
-                    </div>
-                </div>
-            )}
-
             {/* WebView 模式（Gemini Live）：显示摄像头和 AI 状态 */}
-            {/* isEndingCall 时也隐藏，实现乐观 UI 更新（点击 END CALL 后立即隐藏，不等待后台保存） */}
-            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && !isEndingCall && (
+            {(aiCoach.isSessionActive || aiCoach.isConnecting) && !showCelebration && !usingLiveKit && (
                 <>
                     <canvas ref={aiCoach.canvasRef} className="hidden" />
                     <TaskWorkingView
@@ -1279,9 +1332,8 @@ export function AppTabsPage() {
             )}
 
             {/* Main App Shell: 使用 fixed inset-0 确保移动端全屏适配，桌面端显示为手机壳样式 */}
-            {/* 当 AI 会话激活、LiveKit 模式、显示庆祝页面或正在挂断时隐藏主内容 */}
-            {/* isEndingCall 时显示加载弹窗，等待声音完全停止后再显示主页面 */}
-            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit || isEndingCall) ? 'hidden' : ''}`}>
+            {/* 当 AI 会话激活、LiveKit 模式、显示庆祝页面时隐藏主内容 */}
+            <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(showCelebration || aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit) ? 'hidden' : ''}`}>
 
                 {currentView === 'home' && (
                     <HomeView

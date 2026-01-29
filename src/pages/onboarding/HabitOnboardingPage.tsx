@@ -54,6 +54,9 @@ export function HabitOnboardingPage() {
 
   // 结束通话
   const handleEndCall = useCallback(() => {
+    // 立即停止音频播放，让 AI 马上静音（用户体验优先）
+    aiCoach.stopAudioImmediately();
+
     // 使用 useAICoachSession 的 endSession
     aiCoach.endSession();
 

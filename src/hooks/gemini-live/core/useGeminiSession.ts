@@ -107,7 +107,7 @@ interface UseGeminiSessionReturn {
    * @param content - 要注入的文本内容
    * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
    */
-  sendClientContent: (content: string, turnComplete?: boolean) => void;
+  sendClientContent: (content: string, turnComplete?: boolean) => boolean;
 }
 
 // ============================================================================
@@ -273,13 +273,16 @@ export function useGeminiSession(
    * 注意：client_content 会打断当前正在生成的内容，
    * 因此应该在 AI 说完话后（turnComplete 事件后）再调用
    */
-  const sendClientContent = useCallback((content: string, turnComplete = false) => {
-    if (sessionRef.current) {
+  const sendClientContent = useCallback((content: string, turnComplete = false): boolean => {
+    // 检查 session 和 send 方法是否都可用
+    const session = sessionRef.current as unknown as {
+      send?: (message: unknown) => void;
+    } | null;
+
+    if (session && typeof session.send === 'function') {
       // 使用底层 send 方法发送 client_content 消息
       // @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
-      (sessionRef.current as unknown as {
-        send: (message: unknown) => void;
-      }).send({
+      session.send({
         client_content: {
           turns: [
             {
@@ -297,7 +300,13 @@ export function useGeminiSession(
           content.substring(0, 60) + (content.length > 60 ? '...' : '')
         );
       }
+      return true;
     }
+
+    if (import.meta.env.DEV) {
+      console.warn('⚠️ [GeminiSession] sendClientContent 失败: session.send 不可用');
+    }
+    return false;
   }, []);
 
   return {

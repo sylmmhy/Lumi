@@ -222,12 +222,22 @@ export interface SemanticRouterResponse {
 
 /**
  * 虚拟消息类型
+ *
+ * 消息类型按用途分为三类：
+ * 1. 情绪响应类：EMPATHY, LISTEN_FIRST, GENTLE_REDIRECT
+ * 2. 任务引导类：PUSH_TINY_STEP, ACCEPT_STOP, TONE_SHIFT
+ * 3. 系统控制类：DIRECTIVE, CONTEXT, CHECKPOINT
  */
 export type VirtualMessageType =
-  | 'EMPATHY'     // 情绪响应（最高优先级）
-  | 'DIRECTIVE'   // 行为指令
-  | 'CONTEXT'     // 记忆注入
-  | 'CHECKPOINT'  // 定时检查
+  | 'EMPATHY'         // 情绪响应（最高优先级，用于强烈情绪）
+  | 'LISTEN_FIRST'    // 进入倾听模式（用户想聊情感，暂时不推任务）
+  | 'GENTLE_REDIRECT' // 情绪稳定后轻柔引导回任务
+  | 'ACCEPT_STOP'     // 用户明确不想做，优雅接受
+  | 'PUSH_TINY_STEP'  // 非情感抗拒，推进小步骤
+  | 'TONE_SHIFT'      // 语气切换（从 ToneManager 触发）
+  | 'DIRECTIVE'       // 行为指令
+  | 'CONTEXT'         // 记忆注入
+  | 'CHECKPOINT'      // 定时检查
 
 /**
  * 虚拟消息优先级

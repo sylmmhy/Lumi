@@ -122,7 +122,10 @@ a {
 
 button {
   font-family: inherit;
+  /* 禁用 iOS 默认的点击高亮 */
+  -webkit-tap-highlight-color: transparent;
 }
+
 
 /* Utility classes shared with the Remind Me experience */
 .no-scrollbar::-webkit-scrollbar {

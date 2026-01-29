@@ -80,8 +80,8 @@ interface UseVirtualMessageOrchestratorOptions extends VirtualMessageOrchestrato
  * 调度器返回值
  */
 interface VirtualMessageOrchestratorResult {
-  /** 处理用户说话事件 */
-  onUserSpeech: (text: string) => void
+  /** 处理用户说话事件（异步，调用 Semantic Router API） */
+  onUserSpeech: (text: string) => Promise<void>
   /** 处理 AI 说话事件 */
   onAISpeech: (text: string) => void
   /** 处理 AI 说完话事件（turnComplete） */
@@ -94,6 +94,8 @@ interface VirtualMessageOrchestratorResult {
   getContext: () => ReturnType<ReturnType<typeof useConversationContextTracker>['getContext']>
   /** 重置调度器状态 */
   reset: () => void
+  /** 话题检测器是否正在加载 */
+  isDetecting: boolean
 }
 
 /**
@@ -182,10 +184,15 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
 
   /**
    * 处理话题变化，触发记忆检索
+   *
+   * @param topic - 检测到的话题
+   * @param emotionalState - 检测到的情绪
+   * @param memoryQuestions - Semantic Router 返回的记忆检索问题（可选）
    */
   const handleTopicChange = useCallback(async (
     topic: TopicInfo,
-    emotionalState: EmotionalState
+    emotionalState: EmotionalState,
+    memoryQuestions?: string[]
   ) => {
     if (!enableMemoryRetrieval || !userId) {
       return
@@ -194,8 +201,8 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
     // 标记有待处理的记忆
     pendingMemoryRef.current = true
 
-    // 获取话题相关的记忆检索问题
-    const seedQuestions = topicDetector.getMemoryQuestionsForTopic(topic.id)
+    // 使用 Semantic Router 返回的记忆检索问题作为种子
+    const seedQuestions = memoryQuestions || []
 
     // 异步检索记忆
     const memories = await memoryPipeline.fetchMemoriesForTopic(
@@ -235,23 +242,22 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
   }, [
     enableMemoryRetrieval,
     userId,
-    topicDetector,
     memoryPipeline,
     contextTracker,
     messageQueue,
   ])
 
   /**
-   * 处理用户说话事件
+   * 处理用户说话事件（使用 Semantic Router 异步检测）
    */
-  const onUserSpeech = useCallback((text: string) => {
+  const onUserSpeech = useCallback(async (text: string) => {
     if (!enabled) return
 
     // 更新上下文
     contextTracker.addUserMessage(text)
 
-    // 检测话题和情绪（函数内部已追踪话题变化）
-    const result = topicDetector.detectFromMessage(text)
+    // 异步检测话题和情绪（调用 Semantic Router API）
+    const result = await topicDetector.detectFromMessageAsync(text)
 
     // 更新情绪状态
     if (result.emotionalState.primary !== 'neutral') {
@@ -293,12 +299,15 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
 
         if (import.meta.env.DEV) {
           console.log(`🏷️ [Orchestrator] 话题变化: ${result.topic.name}`, {
-            keywords: result.matchedKeywords,
+            confidence: result.confidence ? `${(result.confidence * 100).toFixed(1)}%` : 'N/A',
+            shouldRetrieveMemory: result.shouldRetrieveMemory,
           })
         }
 
-        // 触发异步记忆检索
-        handleTopicChange(result.topic, result.emotionalState)
+        // 如果 Semantic Router 建议检索记忆，触发异步记忆检索
+        if (result.shouldRetrieveMemory) {
+          handleTopicChange(result.topic, result.emotionalState, result.memoryQuestions)
+        }
       }
     }
   }, [
@@ -408,6 +417,7 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
     getQueueSize,
     getContext,
     reset,
+    isDetecting: topicDetector.isLoading,
   }
 }
 

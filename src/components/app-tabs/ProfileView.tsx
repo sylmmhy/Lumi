@@ -7,6 +7,7 @@ import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { PermissionsSection } from '../profile/PermissionsSection';
 import { MemoriesSection } from '../profile/MemoriesSection';
+import { UrgeBlockSettings } from '../profile/UrgeBlockSettings';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
@@ -672,6 +673,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* Device Permissions Section */}
                 <PermissionsSection />
+
+                {/* Urge Block Settings Section */}
+                <UrgeBlockSettings />
 
                 {/* AI Memories Section */}
                 <MemoriesSection />

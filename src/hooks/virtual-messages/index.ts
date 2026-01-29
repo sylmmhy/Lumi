@@ -3,7 +3,7 @@
  *
  * 本模块提供动态虚拟消息系统的核心 Hooks，用于：
  * - 追踪对话上下文
- * - 检测话题和情绪变化
+ * - 检测话题和情绪变化（使用 Semantic Router）
  * - 异步检索相关记忆
  * - 生成动态虚拟消息
  *
@@ -24,26 +24,30 @@
  *     taskStartTime: Date.now(),
  *   })
  *
- *   const { detectFromMessage, getMemoryQuestionsForTopic } = useTopicDetector()
+ *   // Semantic Router 版本的话题检测器（异步 API）
+ *   const { detectFromMessageAsync, isLoading } = useTopicDetector()
  *   const { fetchMemoriesForTopic } = useAsyncMemoryPipeline(userId)
  *
  *   // 当用户说话时
  *   const handleUserSpeech = async (text: string) => {
  *     tracker.addUserMessage(text)
  *
- *     const { topic, emotionalState, isTopicChanged } = detectFromMessage(text)
+ *     // 异步调用 Semantic Router API 检测话题
+ *     const { topic, emotionalState, isTopicChanged, memoryQuestions, shouldRetrieveMemory } =
+ *       await detectFromMessageAsync(text)
  *
  *     if (topic) {
  *       tracker.updateTopic(topic)
  *       tracker.updateEmotionalState(emotionalState)
  *
- *       if (isTopicChanged) {
- *         const questions = getMemoryQuestionsForTopic(topic.id)
+ *       // Semantic Router 返回 shouldRetrieveMemory 指示是否需要检索记忆
+ *       if (isTopicChanged && shouldRetrieveMemory) {
+ *         // 使用 API 返回的 memoryQuestions 作为检索问题
  *         const memories = await fetchMemoriesForTopic(
  *           topic.name,
  *           topic.keywords,
  *           undefined,
- *           questions
+ *           memoryQuestions
  *         )
  *
  *         if (memories.length > 0) {
@@ -62,7 +66,7 @@
  * }
  * ```
  *
- * @see docs/in-progress/20260127-dynamic-virtual-messages.md
+ * @see docs/in-progress/20260127-dynamic-virtual-messages-progress.md
  */
 
 // 类型导出
@@ -78,6 +82,7 @@ export type {
   // 话题检测类型
   TopicRule,
   TopicDetectionResult,
+  SemanticRouterResponse,
 
   // 虚拟消息类型
   VirtualMessageType,

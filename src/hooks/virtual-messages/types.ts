@@ -179,6 +179,41 @@ export interface TopicDetectionResult {
   isTopicChanged: boolean
   /** 匹配到的关键词 */
   matchedKeywords: string[]
+  /** 匹配置信度 (Semantic Router) */
+  confidence?: number
+  /** 是否应该检索记忆 */
+  shouldRetrieveMemory?: boolean
+  /** 记忆检索问题（Semantic Router 返回） */
+  memoryQuestions?: string[]
+}
+
+// =====================================================
+// Semantic Router 类型
+// =====================================================
+
+/**
+ * Semantic Router API 响应
+ */
+export interface SemanticRouterResponse {
+  /** 是否匹配到话题 */
+  matched: boolean
+  /** 匹配到的话题信息 */
+  topic: {
+    id: string
+    name: string
+  } | null
+  /** 匹配置信度 (0-1) */
+  confidence: number
+  /** 是否应该检索记忆 */
+  shouldRetrieveMemory: boolean
+  /** 检测到的情绪 */
+  emotion: EmotionalState['primary']
+  /** 情绪强度 (0-1) */
+  emotionIntensity: number
+  /** 记忆检索问题 */
+  memoryQuestions: string[]
+  /** 处理耗时 (ms) */
+  durationMs: number
 }
 
 // =====================================================

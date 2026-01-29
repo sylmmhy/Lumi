@@ -101,6 +101,11 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
   });
   const pendingPermissionRef = useRef<PermissionType | null>(null);
 
+  /** 防抖：上次检查权限的时间戳 */
+  const lastCheckTimeRef = useRef<number>(0);
+  /** 防抖间隔（毫秒）- 在此时间内不重复检查 */
+  const CHECK_DEBOUNCE_MS = 500;
+
   /**
    * 获取睡眠模式的显示状态
    * 由于 iOS 没有 API 检测睡眠模式免打扰状态，
@@ -118,8 +123,17 @@ export function PermissionProvider({ children }: PermissionProviderProps) {
 
   /**
    * 检查所有权限状态
+   * 内置防抖逻辑，避免短时间内重复查询原生端
    */
   const checkAllPermissions = useCallback(async () => {
+    // 防抖检查：如果距离上次检查不足 500ms，跳过
+    const now = Date.now();
+    if (now - lastCheckTimeRef.current < CHECK_DEBOUNCE_MS) {
+      console.debug('[PermissionContext] 跳过权限检查（防抖）');
+      return;
+    }
+    lastCheckTimeRef.current = now;
+
     // Android WebView - 直接调用同步方法
     if (isAndroidWebView()) {
       const notifGranted = window.AndroidBridge?.hasNotificationPermission?.();

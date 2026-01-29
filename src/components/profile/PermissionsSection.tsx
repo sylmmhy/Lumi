@@ -83,6 +83,10 @@ export function PermissionsSection() {
   });
   const [isRequesting, setIsRequesting] = useState<PermissionType | 'all' | null>(null);
   const pendingPermissionRef = useRef<PermissionType | null>(null);
+  /** 防抖：上次检查权限的时间戳 */
+  const lastCheckTimeRef = useRef<number>(0);
+  /** 防抖间隔（毫秒）- 在此时间内不重复检查 */
+  const CHECK_DEBOUNCE_MS = 500;
   // 追踪用户是否已看过睡眠模式教程（用于触发重新渲染隐藏红点）
   const [sleepFocusSeen, setSleepFocusSeen] = useState<boolean>(() => {
     return localStorage.getItem(SLEEP_FOCUS_CONFIGURED_KEY) === 'true';
@@ -141,8 +145,17 @@ export function PermissionsSection() {
 
   /**
    * Check all permission statuses
+   * 内置防抖逻辑，避免短时间内重复查询原生端
    */
   const checkAllPermissions = useCallback(async () => {
+    // 防抖检查：如果距离上次检查不足 500ms，跳过
+    const now = Date.now();
+    if (now - lastCheckTimeRef.current < CHECK_DEBOUNCE_MS) {
+      console.debug('[PermissionsSection] 跳过权限检查（防抖）');
+      return;
+    }
+    lastCheckTimeRef.current = now;
+
     // Check notification permission
     if (isAndroidWebView()) {
       const notifGranted = window.AndroidBridge?.hasNotificationPermission?.();

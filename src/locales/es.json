@@ -343,6 +343,7 @@
   "profile.permissions.enableAll": "Habilitar todos los permisos",
   "profile.permissions.requesting": "Solicitando...",
   "profile.permissions.allEnabledMessage": "¡Todos los permisos habilitados! AI está lista para llamarte.",
+  "profile.permissions.privacyNote": "Los datos de audio y video se procesan en tiempo real y no se almacenan en nuestros servidores. Cumplimos con GDPR y otras regulaciones internacionales de privacidad.",
   "profile.permissions.sleepFocus": "Modo Sueño",
   "profile.permissions.sleepFocusDesc": "Necesario para recordatorios de dormir/despertar",
   "profile.permissions.sleepFocusLong": "El modo Sueño de iOS bloquea todas las notificaciones por defecto. Sin esta configuración, Lumi no puede recordarte ir a dormir o despertarte a tiempo.",

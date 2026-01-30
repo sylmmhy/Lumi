@@ -363,6 +363,7 @@
   "profile.permissions.enableAll": "Enable All Permissions",
   "profile.permissions.requesting": "Requesting...",
   "profile.permissions.allEnabledMessage": "All permissions enabled! AI is ready to video call you.",
+  "profile.permissions.privacyNote": "Audio and video data are processed in real-time and are not stored on our servers. We comply with GDPR and other international privacy regulations.",
   "profile.permissions.sleepFocus": "Sleep Focus",
   "profile.permissions.sleepFocusDesc": "Required for bedtime & wake-up reminders",
   "profile.permissions.sleepFocusLong": "iOS Sleep Focus blocks all notifications by default. Without this, Lumi cannot remind you to go to bed or wake up on time.",

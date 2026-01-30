@@ -365,6 +365,7 @@
   "profile.permissions.enableAll": "开启全部权限",
   "profile.permissions.requesting": "请求中...",
   "profile.permissions.allEnabledMessage": "所有权限已开启！AI 已准备好给你打视频电话。",
+  "profile.permissions.privacyNote": "音频和视频数据会实时处理，不会存储在我们的服务器上。我们严格遵守 GDPR 等国际隐私法规。",
   "profile.permissions.sleepFocus": "睡眠专注模式",
   "profile.permissions.sleepFocusDesc": "睡觉/起床提醒必需",
   "profile.permissions.sleepFocusLong": "iOS 睡眠模式会默认屏蔽所有通知。如果不设置，Lumi 无法在睡眠时间提醒你按时睡觉或起床。",

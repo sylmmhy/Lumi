@@ -343,6 +343,7 @@
   "profile.permissions.enableAll": "Attiva tutti i permessi",
   "profile.permissions.requesting": "Richiesta in corso...",
   "profile.permissions.allEnabledMessage": "Tutti i permessi attivi! L'AI è pronta a chiamarti.",
+  "profile.permissions.privacyNote": "I dati audio e video vengono elaborati in tempo reale e non vengono memorizzati sui nostri server. Rispettiamo il GDPR e altre normative internazionali sulla privacy.",
   "profile.permissions.sleepFocus": "Modalità Sonno",
   "profile.permissions.sleepFocusDesc": "Necessario per promemoria sonno/sveglia",
   "profile.permissions.sleepFocusLong": "La modalità Sonno di iOS blocca tutte le notifiche per impostazione predefinita. Senza questa impostazione, Lumi non può ricordarti di andare a dormire o svegliarti in orario.",

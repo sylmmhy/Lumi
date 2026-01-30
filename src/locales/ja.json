@@ -343,6 +343,7 @@
   "profile.permissions.enableAll": "すべての権限を有効にする",
   "profile.permissions.requesting": "リクエスト中...",
   "profile.permissions.allEnabledMessage": "すべての権限が有効になりました！AIはビデオ通話の準備ができています。",
+  "profile.permissions.privacyNote": "音声とビデオデータはリアルタイムで処理され、サーバーには保存されません。GDPRなどの国際プライバシー規制に準拠しています。",
   "profile.permissions.sleepFocus": "睡眠集中モード",
   "profile.permissions.sleepFocusDesc": "就寝/起床リマインダーに必要",
   "profile.permissions.sleepFocusLong": "iOSの睡眠モードはデフォルトですべての通知をブロックします。設定しないと、Lumiは就寝時間や起床時間にリマインドできません。",

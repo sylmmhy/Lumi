@@ -360,6 +360,10 @@
   "profile.accountManagementHint": "アカウント情報の確認と管理",
   "profile.email": "メールアドレス",
 
+  "profile.community": "Lumi ADHDコミュニティに参加",
+  "profile.communityHint": "友達を作って、一緒に頑張って、楽しもう！",
+  "profile.communityButton": "参加",
+
   "tour.step1.title": "やることを入力",
   "tour.step1.content": "まず、ここにやりたいことを入力するか、下のクイックタグから選んでね。",
   "tour.step2.title": "リマインダー時間を設定",

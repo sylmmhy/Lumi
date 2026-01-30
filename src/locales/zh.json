@@ -382,6 +382,10 @@
   "profile.accountManagementHint": "查看和管理账户信息",
   "profile.email": "邮箱",
 
+  "profile.community": "加入 Lumi ADHD 社区",
+  "profile.communityHint": "交朋友、结伴打卡、线下聚会、一起玩耍！",
+  "profile.communityButton": "加入",
+
   "tour.step1.title": "输入你的任务",
   "tour.step1.content": "首先，你可以在这里输入你想设定的任务，或者从下面选择一个快捷标签。",
   "tour.step2.title": "设置提醒时间",

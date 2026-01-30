@@ -380,6 +380,10 @@
   "profile.accountManagementHint": "View and manage account info",
   "profile.email": "Email",
 
+  "profile.community": "Join Lumi ADHD Community",
+  "profile.communityHint": "Make friends, body double, meet up, have fun!",
+  "profile.communityButton": "Join",
+
   "tour.step1.title": "Enter your task",
   "tour.step1.content": "First, you can enter your task here, or pick a quick tag from below.",
   "tour.step2.title": "Set reminder time",

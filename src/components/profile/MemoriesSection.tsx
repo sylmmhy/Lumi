@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
@@ -7,7 +8,7 @@ import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 interface Memory {
   id: string;
   content: string;
-  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB';
+  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'CONTEXT' | 'EFFECTIVE';
   confidence: number;
   task_name: string | null;
   created_at: string;
@@ -48,6 +49,20 @@ const TAG_CONFIG: Record<string, { label: string; labelZh: string; icon: string;
     icon: 'fa-ban',
     bgColor: 'bg-gray-100',
     textColor: 'text-gray-500'
+  },
+  'CONTEXT': {
+    label: 'Context',
+    labelZh: '背景信息',
+    icon: 'fa-circle-info',
+    bgColor: 'bg-teal-50',
+    textColor: 'text-teal-500'
+  },
+  'EFFECTIVE': {
+    label: 'What Works',
+    labelZh: '有效方法',
+    icon: 'fa-lightbulb',
+    bgColor: 'bg-green-50',
+    textColor: 'text-green-500'
   },
 };
 
@@ -172,9 +187,9 @@ export function MemoriesSection() {
         </button>
       </div>
 
-      {/* Full-screen Memories Page */}
-      {showMemoriesPage && (
-        <div className="fixed inset-0 bg-gray-50 z-[200] flex flex-col">
+      {/* Full-screen Memories Page - 使用 Portal 渲染到 body，避免 stacking context 问题 */}
+      {showMemoriesPage && createPortal(
+        <div className="fixed inset-0 bg-gray-50 z-[9999] flex flex-col">
           <SecondaryPageHeader
             title={isZh ? 'AI 记忆' : 'AI Memories'}
             onBack={() => setShowMemoriesPage(false)}
@@ -230,7 +245,7 @@ export function MemoriesSection() {
                 )}
 
                 {/* Other memories by tag */}
-                {(['EMO', 'PROC', 'SOMA', 'SAB'] as const).map(tag => {
+                {(['EMO', 'PROC', 'SOMA', 'SAB', 'CONTEXT', 'EFFECTIVE'] as const).map(tag => {
                   const tagMemories = groupedMemories[tag];
                   if (!tagMemories || tagMemories.length === 0) return null;
 
@@ -272,7 +287,8 @@ export function MemoriesSection() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

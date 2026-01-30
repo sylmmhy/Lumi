@@ -12,6 +12,9 @@ import {
   endLiveKitRoom,
   onLiveKitEvent,
 } from '../../lib/liveKitSettings';
+import { ReflectionLockScreen } from '../reflection';
+import { useAuth } from '../../hooks/useAuth';
+
 
 type FlowStep = 'idle' | 'working' | 'startCelebration' | 'simpleExecution' | 'finish';
 
@@ -43,6 +46,24 @@ export function TaskFlowController({
   const [step, setStep] = useState<FlowStep>('idle');
   const [completionTime, setCompletionTime] = useState(0);
   const [celebrationFlow, setCelebrationFlow] = useState<CelebrationFlow>('success');
+
+  // 反思系统状态集成
+  const { userId } = useAuth();
+  const [showReflection, setShowReflection] = useState(false);
+
+  // SimpleTaskExecutionView 放弃拦截
+  const handleSimpleExecutionClose = useCallback(() => {
+    setShowReflection(true);
+  }, []);
+
+  // 重置回初始状态 (Forward declaration for handleReflectionUnlock)
+  // 由于 handleRestart 定义在后面，我们不能在这里直接调用它（如果它是用const定义）。
+  // 为了避免循环依赖或 hoisting 问题，我们可以把 handleReflectionUnlock 放在 handleRestart 后面，或者把 handler 逻辑放在 useEffect。
+  // 但最简单的是：先定义 handleRestart。
+  // 可是 TaskFlowController 很长。
+  // 实际上 const handleRestart = ... 会被 hoist 吗？不会。
+  // 所以我得把 handleReflectionUnlock 放在 handleRestart 之后。
+
 
   // LiveKit 模式状态
   const [usingLiveKit, setUsingLiveKit] = useState(false);
@@ -175,6 +196,14 @@ export function TaskFlowController({
       await aiCoach.startSession(taskName);
       setStep('working');
     } catch (error) {
+      if (import.meta.env.DEV) {
+        // 开发模式下允许绕过 AI 连接进行 UI 测试
+        if (window.confirm(`AI 连接失败 (${(error as Error).message})。\n是否进入模拟模式继续测试 UI流程？`)) {
+          console.warn('⚠️ 进入模拟模式 (Mock Mode)');
+          setStep('working');
+          return;
+        }
+      }
       alert('AI 连接失败，请重试：' + (error as Error).message);
     }
   }, [aiCoach, taskName, initialCountdown]);
@@ -243,10 +272,20 @@ export function TaskFlowController({
     } else {
       aiCoach.resetSession();
     }
-    setStep('idle');
-    setCompletionTime(0);
     setCelebrationFlow('success');
   }, [aiCoach, usingLiveKit, initialCountdown]);
+
+  // 反思解锁回调
+  const handleReflectionUnlock = useCallback((outcome: 'skip' | 'action' | 'timeout') => {
+    setShowReflection(false);
+    if (outcome === 'skip' || outcome === 'timeout') {
+      // 用户确认放弃 或 超时，执行原来的关闭逻辑
+      handleRestart();
+    } else if (outcome === 'action') {
+      // 用户被劝回来了，什么都不用做，只需关闭反思
+      // 保持当前 step === 'simpleExecution'
+    }
+  }, [handleRestart]);
 
   if (step === 'working') {
     // LiveKit 模式：使用原生音频，不需要摄像头和 canvas
@@ -326,19 +365,28 @@ export function TaskFlowController({
 
   if (step === 'simpleExecution') {
     return (
-      <SimpleTaskExecutionView
-        taskName={taskName}
-        initialSeconds={completionTime || computeCompletionTime()}
-        onClose={handleRestart}
-        onFinish={() => {
-          setCompletionTime(prev => (prev > 0 ? prev : computeCompletionTime()));
-          setCelebrationFlow('success');
-          setStep('finish');
-        }}
-        onRest={() => {
-          // 保留扩展点，后续可以在此写入休息逻辑
-        }}
-      />
+      <>
+        <SimpleTaskExecutionView
+          taskName={taskName}
+          initialSeconds={completionTime || computeCompletionTime()}
+          onClose={handleSimpleExecutionClose}
+          onFinish={() => {
+            setCompletionTime(prev => (prev > 0 ? prev : computeCompletionTime()));
+            setCelebrationFlow('success');
+            setStep('finish');
+          }}
+          onRest={() => {
+            // 保留扩展点，后续可以在此写入休息逻辑
+          }}
+        />
+        <ReflectionLockScreen
+          isOpen={showReflection}
+          userId={userId || 'anon'}
+          triggerType="task_skipped"
+          taskName={taskName}
+          onUnlock={handleReflectionUnlock}
+        />
+      </>
     );
   }
 

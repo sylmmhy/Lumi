@@ -272,26 +272,26 @@ export function useGeminiSession(
    *
    * 注意：client_content 会打断当前正在生成的内容，
    * 因此应该在 AI 说完话后（turnComplete 事件后）再调用
+   *
+   * @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
    */
   const sendClientContent = useCallback((content: string, turnComplete = false): boolean => {
-    // 检查 session 和 send 方法是否都可用
-    const session = sessionRef.current as unknown as {
-      send?: (message: unknown) => void;
-    } | null;
+    // 检查 session 是否可用
+    const session = sessionRef.current;
 
-    if (session && typeof session.send === 'function') {
-      // 使用底层 send 方法发送 client_content 消息
-      // @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
-      session.send({
-        client_content: {
-          turns: [
-            {
-              role: 'user',
-              parts: [{ text: content }],
-            },
-          ],
-          turn_complete: turnComplete,
-        },
+    if (!session) {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ [GeminiSession] sendClientContent 失败: session 为 null');
+      }
+      return false;
+    }
+
+    try {
+      // 使用 SDK 提供的 sendClientContent 方法
+      // 参数格式: { turns?: Content[], turnComplete?: boolean }
+      session.sendClientContent({
+        turns: [{ role: 'user', parts: [{ text: content }] }],
+        turnComplete,
       });
 
       if (import.meta.env.DEV) {
@@ -301,12 +301,12 @@ export function useGeminiSession(
         );
       }
       return true;
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ [GeminiSession] sendClientContent 失败:', error);
+      }
+      return false;
     }
-
-    if (import.meta.env.DEV) {
-      console.warn('⚠️ [GeminiSession] sendClientContent 失败: session.send 不可用');
-    }
-    return false;
   }, []);
 
   return {

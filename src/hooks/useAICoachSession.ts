@@ -994,6 +994,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userId,
           messages: mem0Messages,
           taskDescription,
+          // 新增：传入用户本地日期，用于将相对时间（明天、下周）转换为绝对日期
+          localDate: new Date().toISOString().split('T')[0], // 格式: YYYY-MM-DD
           metadata: {
             source: 'ai_coach_session',
             sessionDuration: initialTime - state.timeRemaining,

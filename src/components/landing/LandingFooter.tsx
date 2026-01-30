@@ -50,7 +50,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) =
                             <ul className="space-y-3 text-gray-400">
                                 <li><a href="https://meetlumi.org/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Privacy Policy</a></li>
                                 <li><a href="https://meetlumi.org/terms" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Terms of Use</a></li>
-                                <li><a href="mailto:support@getlumi.app" className="hover:text-white transition-colors">Contact</a></li>
+                                <li><a href="mailto:yilun@meetlumi.org" className="hover:text-white transition-colors">Contact</a></li>
                             </ul>
                         </div>
 
@@ -58,9 +58,8 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) =
                         <div>
                             <h4 className="font-semibold mb-4">Connect</h4>
                             <ul className="space-y-3 text-gray-400">
-                                <li><a href="#" className="hover:text-white transition-colors">Twitter</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Instagram</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Discord</a></li>
+                                <li><a href="https://www.tiktok.com/@meet_lumi_ai" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">TikTok</a></li>
+                                <li><a href="https://www.linkedin.com/company/meetlumi-ai/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">LinkedIn</a></li>
                             </ul>
                         </div>
                     </div>

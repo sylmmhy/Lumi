@@ -505,6 +505,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </button>
                 )}
                 {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">{t('profile.premiumActive')}</p>}
+
+                {/* Email Display for Bug Reports */}
+                {!isGuest && auth?.userEmail && (
+                    <button
+                        onClick={handleCopyEmail}
+                        className="mt-3 flex items-center gap-2 text-gray-400 text-sm hover:text-gray-600 transition-colors"
+                    >
+                        <span>{auth.userEmail}</span>
+                        {emailCopied ? (
+                            <i className="fa-solid fa-check text-green-500"></i>
+                        ) : (
+                            <i className="fa-regular fa-copy"></i>
+                        )}
+                    </button>
+                )}
             </div>
 
             <div className="px-6 -mt-4 relative z-20">
@@ -684,17 +699,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     rel="noopener noreferrer"
                     className="block bg-gradient-to-r from-[#5865F2] to-[#7289DA] rounded-2xl shadow-sm overflow-hidden mb-4 hover:shadow-md active:scale-[0.99] transition-all"
                 >
-                    <div className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                                <i className="fa-brands fa-discord text-white text-2xl"></i>
+                    <div className="flex items-center justify-between p-4 gap-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-11 h-11 bg-[#4752C4] rounded-full flex items-center justify-center flex-shrink-0">
+                                <i className="fa-brands fa-discord text-white text-xl"></i>
                             </div>
-                            <div className="text-left">
+                            <div className="text-left min-w-0">
                                 <p className="font-medium text-white">{t('profile.community')}</p>
-                                <p className="text-sm text-white/80">{t('profile.communityHint')}</p>
+                                <p className="text-sm text-white/80 truncate">{t('profile.communityHint')}</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
+                        <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full flex-shrink-0 whitespace-nowrap">
                             <span className="text-sm font-medium text-white">{t('profile.communityButton')}</span>
                             <i className="fa-solid fa-arrow-right text-white text-xs"></i>
                         </div>

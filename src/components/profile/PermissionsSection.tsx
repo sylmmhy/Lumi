@@ -101,14 +101,6 @@ export function PermissionsSection() {
     return 'prompt';
   }, []);
 
-  // Check current permission status on mount
-  useEffect(() => {
-    console.log('[PermissionsSection] Mount - isAndroidWebView:', isAndroidWebView(), 'isIOSWebView:', isIOSWebView());
-    console.log('[PermissionsSection] window.webkit:', !!window.webkit);
-    console.log('[PermissionsSection] window.webkit.messageHandlers:', !!window.webkit?.messageHandlers);
-    checkAllPermissions();
-  }, []);
-
   // Listen for native permission results (Android and iOS)
   useEffect(() => {
     if (!isAndroidWebView() && !isIOSWebView()) return;
@@ -223,6 +215,14 @@ export function PermissionsSection() {
 
     setPermissions(newPermissions);
   }, [getSleepFocusStatus]);
+
+  // Check current permission status on mount
+  useEffect(() => {
+    console.log('[PermissionsSection] Mount - isAndroidWebView:', isAndroidWebView(), 'isIOSWebView:', isIOSWebView());
+    console.log('[PermissionsSection] window.webkit:', !!window.webkit);
+    console.log('[PermissionsSection] window.webkit.messageHandlers:', !!window.webkit?.messageHandlers);
+    checkAllPermissions();
+  }, [checkAllPermissions]);
 
   /**
    * Open app settings to let user manually enable permissions

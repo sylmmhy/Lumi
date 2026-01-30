@@ -716,7 +716,7 @@ export function AuthProvider({
       const totalDuration = Date.now() - checkStartTime;
       console.warn(`⚠️ 定期检查：获取会话状态失败 (耗时 ${totalDuration}ms):`, err);
     }
-  }, [supabase]);
+  }, []);
 
   /**
    * 缓存最新的会话检查函数，避免回调闭包引用旧的 Supabase 实例。
@@ -2028,7 +2028,7 @@ export function AuthProvider({
       clearInterval(intervalId);
       clearTimeout(initialCheckTimeoutId);
     };
-  }, [supabase, triggerSessionCheckNow]);
+  }, [triggerSessionCheckNow]);
 
   // ==========================================
   // Context Value

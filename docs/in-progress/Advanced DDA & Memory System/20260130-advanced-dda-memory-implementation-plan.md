@@ -15,6 +15,21 @@ Implement the remaining TODO items from 记忆和动态难度Leo+gxm with SOTA a
 
 ---
 
+## Team Notes (Do Not Forget)
+
+1. **Feature Flags Location**
+   - Local Edge Functions read from `Lumi-supabase/supabase/.env.local`.
+   - Cloud/Prod flags are configured in Supabase Dashboard:
+     Project Settings → Edge Functions → Environment Variables.
+   - Flags used in this plan:
+     `FF_COMFORT_ZONE`, `FF_DYNAMIC_ADJ`, `FF_MORNING_FORECAST`, `FF_DETECTIVE_MODE`, `FF_TWO_MINUTE`.
+
+2. **Final Report**
+   - A final implementation report must be written (pending).
+   - Suggested location: `Lumi/docs/implementation-log/` with date prefix.
+
+---
+
 ## Current State vs Target State
 
 | Aspect | Current | Target |

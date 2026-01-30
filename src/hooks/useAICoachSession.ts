@@ -238,11 +238,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     minToneChangeInterval: 30000,    // 30秒内不重复切换
     enableDebugLog: import.meta.env.DEV,
   });
+  const { currentTone, consecutiveRejections, totalToneChanges } = toneManager.toneState;
 
   // 同步 Tone Manager 状态到会话分析
   useEffect(() => {
     if (!enableToneManager) return;
-    const { currentTone, consecutiveRejections, totalToneChanges } = toneManager.toneState;
     const stressLevel = computeStressLevel(
       sessionAnalyticsRef.current.resistanceCount,
       consecutiveRejections,
@@ -258,9 +258,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }
   }, [
     enableToneManager,
-    toneManager.toneState.currentTone,
-    toneManager.toneState.consecutiveRejections,
-    toneManager.toneState.totalToneChanges,
+    currentTone,
+    consecutiveRejections,
+    totalToneChanges,
   ]);
 
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
@@ -423,28 +423,29 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
     },
   });
+  const { isConnected: isGeminiConnected, sendTextMessage: sendGeminiText } = geminiLive;
 
   // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
   // 🔧 修复语言污染：替换触发词中的 {LANG} 占位符为实际语言代码
   useEffect(() => {
     sendToneTriggerRef.current = (trigger: string) => {
-      if (geminiLive.isConnected && isSessionActive) {
+      if (isGeminiConnected && isSessionActive) {
         // 替换 {LANG} 占位符为实际语言代码
         const lang = preferredLanguagesRef.current?.[0] || 'en-US';
         const triggerWithLanguage = trigger.replace('{LANG}', lang);
-        geminiLive.sendTextMessage(triggerWithLanguage);
+        sendGeminiText(triggerWithLanguage);
         if (import.meta.env.DEV) {
           console.log('📤 发送语气切换触发词:', triggerWithLanguage);
         }
       } else if (import.meta.env.DEV) {
         console.log('⏸️ 跳过语气切换触发词:', {
-          isConnected: geminiLive.isConnected,
+          isConnected: isGeminiConnected,
           isSessionActive,
           trigger,
         });
       }
     };
-  }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);
+  }, [isGeminiConnected, sendGeminiText, isSessionActive]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -532,15 +533,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
     }
   }, [geminiLive.isSpeaking, isObserving]);
-
-  // 监听 Gemini Live 错误，标记为 error 终止
-  useEffect(() => {
-    if (!geminiLive.error || !isSessionActive) return;
-    if (import.meta.env.DEV) {
-      console.log('❌ Gemini Live error detected, ending session:', geminiLive.error);
-    }
-    endSession('error');
-  }, [geminiLive.error, isSessionActive, endSession]);
 
   // ==========================================
   // 倒计时
@@ -944,7 +936,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       throw error;
     }
-  }, [initialTime, geminiLive, startCountdown, cleanup]);
+  }, [initialTime, geminiLive, startCountdown, cleanup, enableToneManager, toneManager]);
 
   /**
    * 结束 AI 教练会话
@@ -1029,6 +1021,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       console.log('✅ AI 教练会话已结束');
     }
   }, [cleanup, initialTime, reportSessionAnalytics, state.timeRemaining]);
+
+  // 监听 Gemini Live 错误，标记为 error 终止
+  useEffect(() => {
+    if (!geminiLive.error || !isSessionActive) return;
+    if (import.meta.env.DEV) {
+      console.log('❌ Gemini Live error detected, ending session:', geminiLive.error);
+    }
+    endSession('error');
+  }, [geminiLive.error, isSessionActive, endSession]);
 
   /**
    * 保存会话记忆到 Mem0

@@ -244,6 +244,7 @@ export function useVideoInput(
   // P0 修复：完整清理资源 on unmount
   // 防止摄像头资源泄漏，确保浏览器释放设备
   useEffect(() => {
+    const videoElement = videoRef.current;
     return () => {
       // 1. 清理帧捕获定时器
       if (captureTimeoutRef.current !== -1) {
@@ -262,8 +263,8 @@ export function useVideoInput(
       }
 
       // 3. 清空 video 元素的 srcObject（关键：防止浏览器继续占用摄像头）
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+      if (videoElement) {
+        videoElement.srcObject = null;
         devLog('📹 Cleanup: cleared videoRef.srcObject');
       }
 

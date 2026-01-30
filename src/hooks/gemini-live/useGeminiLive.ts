@@ -178,6 +178,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     },
   });
 
+  const { isConnected, sendRealtimeInput, sendClientContent } = session;
+
   // Audio input (microphone)
   // 解构出稳定的字段，避免依赖整个对象导致 useCallback/useEffect 重复触发
   const audioInput = useAudioInput({
@@ -324,17 +326,16 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * 注意：使用 session.isConnected 和 session.sendRealtimeInput 作为依赖
    * 而不是整个 session 对象，避免因对象引用变化导致函数频繁重建
    */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
   const sendTextMessage = useCallback((text: string) => {
-    if (session.isConnected) {
-      session.sendRealtimeInput({ text });
+    if (isConnected) {
+      sendRealtimeInput({ text });
       if (import.meta.env.DEV) {
         console.log('📤 [GeminiLive] 发送文本:', text.substring(0, 60) + (text.length > 60 ? '...' : ''));
       }
     } else if (import.meta.env.DEV) {
       console.warn('⚠️ [GeminiLive] 发送失败: 连接已断开');
     }
-  }, [session.isConnected, session.sendRealtimeInput]);
+  }, [isConnected, sendRealtimeInput]);
 
   // 同步 isSpeaking 状态到 ref（当 AI 开始说话时更新）
   useEffect(() => {
@@ -356,7 +357,6 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * @param options - 配置选项
    * @returns boolean - 是否成功注入
    */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
   const injectContextSilently = useCallback((
     content: string,
     options: {
@@ -368,7 +368,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   ): boolean => {
     const { force = false, safeWindowMs = 5000 } = options;
 
-    if (!session.isConnected) {
+    if (!isConnected) {
       if (import.meta.env.DEV) {
         console.warn('⚠️ [GeminiLive] 静默注入失败: 连接已断开');
       }
@@ -398,14 +398,14 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
 
     // 执行静默注入
-    session.sendClientContent(content, false);
+    sendClientContent(content, false);
 
     if (import.meta.env.DEV) {
       console.log('🔇 [GeminiLive] 静默注入上下文:', content.substring(0, 80) + (content.length > 80 ? '...' : ''));
     }
 
     return true;
-  }, [session.isConnected, session.sendClientContent]);
+  }, [isConnected, sendClientContent]);
 
   /**
    * 设置 onTurnComplete 回调

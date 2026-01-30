@@ -21,6 +21,7 @@ dist-ssr
 supabase/.env.local
 supabase/.branches
 .supabase
+.env.supabase-local
 
 # Editor directories and files
 .vscode/*

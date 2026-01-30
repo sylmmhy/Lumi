@@ -24,7 +24,7 @@ import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
-import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
+import { HabitStackingTest, DailyReportTest, VoiceChatTest } from '../components/dev/BackendApiTest';
 
 type TestMode =
   | 'menu'
@@ -36,6 +36,7 @@ type TestMode =
   | 'effects'
   | 'habit-stacking'
   | 'daily-report'
+  | 'voice-chat'
   | 'example-simple-timer'
   | 'example-checkin'
   | 'example-failure'
@@ -383,6 +384,20 @@ export function DevTestPage() {
             </div>
           </button>
 
+          {/* AI 语音对话测试 */}
+          <button
+            onClick={() => setMode('voice-chat')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🎤 AI 语音对话 (start-voice-chat)
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              Gemini Live API 制定睡眠计划
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 functions/start-voice-chat
+            </div>
+          </button>
+
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">任务卡片动画</p>
@@ -473,6 +488,7 @@ export function DevTestPage() {
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
+      {mode === 'voice-chat' && <VoiceChatTest onBack={backToMenu} />}
     </>
   );
 }

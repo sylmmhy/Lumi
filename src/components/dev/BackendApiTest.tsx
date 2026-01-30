@@ -1,9 +1,10 @@
 /**
  * 后端 API 测试组件
- * 
+ *
  * 用于测试：
  * 1. 习惯叠加 (Habit Stacking) API
  * 2. AI 每日报告生成 API
+ * 3. AI 语音对话 (Start Voice Chat) API
  */
 
 import { useState } from 'react';
@@ -578,6 +579,116 @@ export function DailyReportTest({ onBack }: { onBack: () => void }) {
         >
           ← 返回菜单
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// AI 语音对话测试组件 (Start Voice Chat API)
+// ============================================================================
+
+type ChatType = 'intention_compile' | 'daily_chat' | 'habit_checkin' | 'goal_review';
+type Phase = 'onboarding' | 'goal' | 'routines' | 'confirm' | 'daily';
+type AiTone = 'gentle' | 'direct' | 'humorous' | 'tough_love';
+
+interface VoiceChatResponse {
+  success: boolean;
+  sessionId?: string;
+  geminiConfig?: {
+    apiKey: string;
+    model: string;
+    systemPrompt: string;
+    voiceConfig: { voiceName: string };
+    tools?: unknown[];
+  };
+  error?: string;
+}
+
+export function VoiceChatTest({ onBack }: { onBack: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [response, setResponse] = useState<VoiceChatResponse | null>(null);
+  const [chatType, setChatType] = useState<ChatType>('intention_compile');
+  const [phase, setPhase] = useState<Phase>('onboarding');
+  const [aiTone, setAiTone] = useState<AiTone>('gentle');
+  const [goalName, setGoalName] = useState('早睡');
+  const [currentTargetTime, setCurrentTargetTime] = useState('01:00');
+
+  const addLog = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+
+  const callVoiceChatApi = async () => {
+    setLoading(true); setError(null); setResponse(null);
+    addLog(`正在调用 start-voice-chat API... 类型:${chatType} 阶段:${phase}`);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('用户未登录');
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start-voice-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ userId: session.user.id, chatType, context: { phase, goalName, currentTargetTime }, aiTone }),
+      });
+      const result: VoiceChatResponse = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || `HTTP ${res.status}`);
+      setResponse(result);
+      addLog(`✅ 成功! 模型:${result.geminiConfig?.model} Prompt长度:${result.geminiConfig?.systemPrompt?.length}`);
+    } catch (err) { setError(err instanceof Error ? err.message : '未知错误'); addLog(`❌ ${err}`); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#1e1e1e] p-6 overflow-y-auto">
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-2xl font-bold text-yellow-400 mb-2">🎤 AI 语音对话测试</h2>
+        <p className="text-gray-400 text-sm mb-6">测试 start-voice-chat API</p>
+        <div className="bg-[#2a2a2a] rounded-xl p-4 mb-4 space-y-4">
+          <div><label className="text-gray-400 text-sm block mb-2">对话类型</label>
+            <select value={chatType} onChange={e => setChatType(e.target.value as ChatType)} className="w-full bg-[#1e1e1e] text-white px-4 py-2 rounded-lg border border-gray-700">
+              <option value="intention_compile">intention_compile - AI制定计划</option>
+              <option value="daily_chat">daily_chat - 日常聊天</option>
+              <option value="habit_checkin">habit_checkin - 习惯打卡</option>
+              <option value="goal_review">goal_review - 目标回顾</option>
+            </select></div>
+          {chatType === 'intention_compile' && <div><label className="text-gray-400 text-sm block mb-2">阶段</label>
+            <select value={phase} onChange={e => setPhase(e.target.value as Phase)} className="w-full bg-[#1e1e1e] text-white px-4 py-2 rounded-lg border border-gray-700">
+              <option value="onboarding">onboarding - 首次使用</option>
+              <option value="goal">goal - 收集目标</option>
+              <option value="routines">routines - 收集习惯</option>
+              <option value="confirm">confirm - 确认</option>
+              <option value="daily">daily - 日常</option>
+            </select></div>}
+          <div><label className="text-gray-400 text-sm block mb-2">AI语气</label>
+            <select value={aiTone} onChange={e => setAiTone(e.target.value as AiTone)} className="w-full bg-[#1e1e1e] text-white px-4 py-2 rounded-lg border border-gray-700">
+              <option value="gentle">gentle - 温柔</option><option value="direct">direct - 直接</option>
+              <option value="humorous">humorous - 幽默</option><option value="tough_love">tough_love - 毒舌</option>
+            </select></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="text-gray-400 text-sm block mb-2">目标名称</label>
+              <input value={goalName} onChange={e => setGoalName(e.target.value)} className="w-full bg-[#1e1e1e] text-white px-4 py-2 rounded-lg border border-gray-700"/></div>
+            <div><label className="text-gray-400 text-sm block mb-2">目标时间</label>
+              <input value={currentTargetTime} onChange={e => setCurrentTargetTime(e.target.value)} className="w-full bg-[#1e1e1e] text-white px-4 py-2 rounded-lg border border-gray-700"/></div>
+          </div>
+          <button onClick={callVoiceChatApi} disabled={loading} className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg disabled:opacity-50">
+            {loading ? '调用中...' : '🚀 调用 API'}</button>
+        </div>
+        {response?.geminiConfig?.systemPrompt && <div className="bg-[#2a2a2a] rounded-xl p-4 mb-4">
+          <h3 className="text-white font-bold mb-3">📝 System Prompt</h3>
+          <pre className="bg-[#1e1e1e] rounded-lg p-4 max-h-96 overflow-y-auto text-green-300 text-sm whitespace-pre-wrap font-mono">{response.geminiConfig.systemPrompt}</pre>
+        </div>}
+        {response?.geminiConfig?.tools?.length ? <div className="bg-[#2a2a2a] rounded-xl p-4 mb-4">
+          <h3 className="text-white font-bold mb-3">🔧 可用工具</h3>
+          {response.geminiConfig.tools.map((t: unknown, i) => {
+            const tool = t as {name?: string; description?: string};
+            return <div key={i} className="bg-[#1e1e1e] rounded p-2 mb-2"><span className="text-yellow-400 font-mono text-sm">{tool.name}</span></div>;
+          })}
+        </div> : null}
+        {error && <div className="bg-red-900/30 border border-red-500 text-red-400 p-4 rounded-xl mb-4">❌ {error}</div>}
+        <div className="bg-[#2a2a2a] rounded-xl p-4 mb-4">
+          <div className="flex justify-between mb-2"><h3 className="text-white font-bold">📋 日志</h3><button onClick={() => setLogs([])} className="text-gray-500 text-sm">清空</button></div>
+          <div className="bg-[#1e1e1e] rounded-lg p-3 h-40 overflow-y-auto font-mono text-xs">{logs.length ? logs.map((l,i) => <div key={i} className="text-gray-300">{l}</div>) : <p className="text-gray-500">暂无</p>}</div>
+        </div>
+        <button onClick={onBack} className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl">← 返回菜单</button>
       </div>
     </div>
   );

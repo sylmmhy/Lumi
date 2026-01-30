@@ -113,7 +113,7 @@ export function TaskFlowController({
   const aiCoach = useAICoachSession({
     initialTime: initialCountdown,
     onCountdownComplete: () => {
-      aiCoach.endSession();
+      aiCoach.endSession('completed');
       setCompletionTime(initialCountdown);
       setCelebrationFlow('confirm');
       setStep('finish');
@@ -198,7 +198,7 @@ export function TaskFlowController({
         liveKitTimerRef.current = null;
       }
     } else {
-      aiCoach.endSession();
+      aiCoach.endSession('user_quit');
     }
     setStep('simpleExecution');
   }, [aiCoach, computeCompletionTime, usingLiveKit, initialCountdown, liveKitTimeRemaining]);
@@ -217,7 +217,7 @@ export function TaskFlowController({
         liveKitTimerRef.current = null;
       }
     } else {
-      aiCoach.endSession();
+      aiCoach.endSession('completed');
     }
     setCelebrationFlow('success');
     setStep('finish');

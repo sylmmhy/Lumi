@@ -558,7 +558,7 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   const aiCoach = useAICoachSession({
     initialTime: 60, // 测试用 1 分钟
     onCountdownComplete: () => {
-      aiCoach.endSession();
+      aiCoach.endSession('completed');
       setCelebrationFlow('confirm');
       setStep('celebration');
     },
@@ -579,7 +579,7 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }, [aiCoach]);
 
   const handleComplete = useCallback(() => {
-    aiCoach.endSession();
+    aiCoach.endSession('completed');
     setCelebrationFlow('success');
     setStep('celebration');
   }, [aiCoach]);
@@ -641,7 +641,7 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
             label: 'BACK',
             emoji: '←',
             onClick: () => {
-              aiCoach.endSession();
+              aiCoach.endSession('user_quit');
               onBack();
             },
           }}

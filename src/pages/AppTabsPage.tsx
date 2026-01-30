@@ -288,7 +288,7 @@ export function AppTabsPage() {
         if (!auth.isLoggedIn && (aiCoach.isSessionActive || aiCoach.isConnecting)) {
             console.log('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
             // 结束 AI 教练会话（内部会断开 Gemini 连接、释放麦克风/摄像头）
-            aiCoach.endSession();
+            aiCoach.endSession('external_interruption');
             // 确保摄像头关闭
             if (aiCoach.cameraEnabled) {
                 aiCoach.toggleCamera();
@@ -1045,7 +1045,7 @@ export function AppTabsPage() {
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
             } finally {
-                aiCoach.endSession();
+                aiCoach.endSession('user_quit');
                 setIsEndingCall(false);
             }
         })();
@@ -1082,7 +1082,7 @@ export function AppTabsPage() {
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
             } finally {
-                aiCoach.endSession();
+                aiCoach.endSession('completed');
             }
         })();
 

@@ -4,7 +4,7 @@ import { useVirtualMessages } from './useVirtualMessages';
 import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
-import { useToneManager } from './useToneManager';
+import { useToneManager, type ToneStyle } from './useToneManager';
 import { useVirtualMessageOrchestrator } from './virtual-messages';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
@@ -47,6 +47,57 @@ function withTimeout<T>(
       setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
     ),
   ]);
+}
+
+/**
+ * 会话终止原因类型
+ */
+export type TerminationReason =
+  | 'completed'
+  | 'user_quit'
+  | 'timeout'
+  | 'user_frustrated'
+  | 'external_interruption'
+  | 'error';
+
+/**
+ * 会话分析指标（用于 session-analytics 上报）
+ */
+interface SessionAnalytics {
+  terminationReason: TerminationReason | null;
+  stressLevel: number;
+  initialStress: number;
+  peakStress: number;
+  resistanceCount: number;
+  toneHistory: ToneStyle[];
+  breakthroughMoment: number | null;
+  timeToFirstAction: number | null;
+}
+
+/**
+ * 将秒数格式化为 MM:SS
+ * @param seconds 秒数
+ */
+function formatSecondsToClock(seconds: number | null): string | null {
+  if (seconds === null) return null;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * 根据抗拒与语气切换强度计算压力值（0-1）
+ * @param resistanceCount 抗拒次数
+ * @param consecutiveRejections 连续抗拒次数
+ * @param toneChanges 语气切换次数
+ */
+function computeStressLevel(
+  resistanceCount: number,
+  consecutiveRejections: number,
+  toneChanges: number
+): number {
+  const raw = resistanceCount * 0.12 + consecutiveRejections * 0.18 + toneChanges * 0.05;
+  return Math.min(1, Math.max(0, Number(raw.toFixed(2))));
 }
 
 /**
@@ -143,6 +194,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const currentTaskDescriptionRef = useRef<string>('');
   const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
 
+  // 当前会话 ID（用于 session-analytics 上报）
+  const currentSessionIdRef = useRef<string | null>(null);
+
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
@@ -159,6 +213,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 保存用户首选语言，用于语气切换和虚拟消息时保持语言一致性
   const preferredLanguagesRef = useRef<string[] | null>(null);
 
+  // 会话分析时间戳
+  const sessionStartAtRef = useRef<number | null>(null);
+  const firstUserActionAtRef = useRef<number | null>(null);
+  const hasReportedTerminationRef = useRef(false);
+
+  // 会话分析指标（用于 session-analytics）
+  const sessionAnalyticsRef = useRef<SessionAnalytics>({
+    terminationReason: null,
+    stressLevel: 0,
+    initialStress: 0,
+    peakStress: 0,
+    resistanceCount: 0,
+    toneHistory: ['friendly'],
+    breakthroughMoment: null,
+    timeToFirstAction: null,
+  });
+
   // ==========================================
   // 动态语气管理（Tone Manager）
   // ==========================================
@@ -167,6 +238,30 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     minToneChangeInterval: 30000,    // 30秒内不重复切换
     enableDebugLog: import.meta.env.DEV,
   });
+
+  // 同步 Tone Manager 状态到会话分析
+  useEffect(() => {
+    if (!enableToneManager) return;
+    const { currentTone, consecutiveRejections, totalToneChanges } = toneManager.toneState;
+    const stressLevel = computeStressLevel(
+      sessionAnalyticsRef.current.resistanceCount,
+      consecutiveRejections,
+      totalToneChanges
+    );
+
+    sessionAnalyticsRef.current.stressLevel = stressLevel;
+    sessionAnalyticsRef.current.peakStress = Math.max(sessionAnalyticsRef.current.peakStress, stressLevel);
+
+    const history = sessionAnalyticsRef.current.toneHistory;
+    if (history[history.length - 1] !== currentTone) {
+      sessionAnalyticsRef.current.toneHistory = [...history, currentTone];
+    }
+  }, [
+    enableToneManager,
+    toneManager.toneState.currentTone,
+    toneManager.toneState.consecutiveRejections,
+    toneManager.toneState.totalToneChanges,
+  ]);
 
   // 用于发送 tone 切换触发词的 ref（避免循环依赖）
   const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
@@ -234,6 +329,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           }
           addMessageRef.current('user', fullUserMessage, false);
 
+          if (!firstUserActionAtRef.current && sessionStartAtRef.current) {
+            const elapsedSeconds = Math.round((Date.now() - sessionStartAtRef.current) / 1000);
+            firstUserActionAtRef.current = Date.now();
+            sessionAnalyticsRef.current.timeToFirstAction = elapsedSeconds;
+            if (sessionAnalyticsRef.current.breakthroughMoment === null) {
+              sessionAnalyticsRef.current.breakthroughMoment = elapsedSeconds;
+            }
+          }
+
           // 🆕 用完整的用户消息进行话题检测和记忆检索
           // 必须在清空 buffer 之前调用，且使用完整句子而非碎片
           orchestratorRef.current.onUserSpeech(fullUserMessage);
@@ -269,6 +373,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             // 记录抗拒（AI 检测到用户在抗拒）
             // 返回值是触发词字符串（如果发生了语气切换），避免闭包过期问题
             const triggerString = toneManager.recordResistance('ai_detected');
+            sessionAnalyticsRef.current.resistanceCount += 1;
 
             if (import.meta.env.DEV) {
               console.log('🚫 [ToneManager] AI 检测到用户抗拒');
@@ -428,12 +533,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }
   }, [geminiLive.isSpeaking, isObserving]);
 
+  // 监听 Gemini Live 错误，标记为 error 终止
+  useEffect(() => {
+    if (!geminiLive.error || !isSessionActive) return;
+    if (import.meta.env.DEV) {
+      console.log('❌ Gemini Live error detected, ending session:', geminiLive.error);
+    }
+    endSession('error');
+  }, [geminiLive.error, isSessionActive, endSession]);
+
   // ==========================================
   // 倒计时
   // ==========================================
   const startCountdown = useCallback(() => {
     setState(prev => ({ ...prev, isTimerRunning: true }));
     setTaskStartTime(Date.now());
+    sessionStartAtRef.current = Date.now();
+    sessionAnalyticsRef.current.initialStress = sessionAnalyticsRef.current.stressLevel;
   }, []);
 
   const stopCountdown = useCallback(() => {
@@ -483,6 +599,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * 保存最新的 cleanup 引用，避免倒计时 effect 依赖变化导致 interval 重建
    */
   const cleanupRef = useRef(cleanup);
+  const reportSessionAnalyticsRef = useRef<(reason: TerminationReason) => void>(() => {});
 
   useEffect(() => {
     cleanupRef.current = cleanup;
@@ -504,6 +621,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             // 使用 ref 调用回调，避免闭包问题
             // 使用 setTimeout 确保在 setState 完成后调用
             setTimeout(() => {
+              reportSessionAnalyticsRef.current('completed');
               void saveSessionMemoryRef.current();
               cleanupRef.current();
               onCountdownCompleteRef.current?.();
@@ -544,21 +662,43 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
    * @param options.taskId 任务 ID（用于保存 actual_duration_minutes 到 tasks 表）
+   * @param options.chatType 会话类型（写入 chat_sessions，用于分析）
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string }
+    options?: {
+      userId?: string;
+      customSystemInstruction?: string;
+      userName?: string;
+      preferredLanguages?: string[];
+      taskId?: string;
+      chatType?: 'intention_compile' | 'daily_chat' | 'habit_checkin' | 'profile_update' | 'goal_review';
+    }
   ) => {
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId } = options || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, chatType = 'habit_checkin' } = options || {};
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
+    currentSessionIdRef.current = null;
     // 🔧 重置流式响应相关的 refs
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
     // 保存首选语言，用于触发词生成时保持语言一致性
     preferredLanguagesRef.current = preferredLanguages || null;
+    sessionStartAtRef.current = null;
+    firstUserActionAtRef.current = null;
+    hasReportedTerminationRef.current = false;
+    sessionAnalyticsRef.current = {
+      terminationReason: null,
+      stressLevel: 0,
+      initialStress: 0,
+      peakStress: 0,
+      resistanceCount: 0,
+      toneHistory: ['friendly'],
+      breakthroughMoment: null,
+      timeToFirstAction: null,
+    };
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
 
@@ -751,6 +891,37 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       setIsSessionActive(true);
       setIsObserving(true); // AI 开始观察用户
 
+      // 创建 chat_sessions 记录（用于后续 session-analytics 归因）
+      if (userId && supabaseClient) {
+        try {
+          const { data: sessionData, error: sessionError } = await supabaseClient
+            .from('chat_sessions')
+            .insert({
+              user_id: userId,
+              chat_type: chatType,
+              channel: 'voice',
+              status: 'active',
+              messages: [],
+              metadata: {
+                source: 'ai_coach_session',
+                task_description: taskDescription,
+              },
+            })
+            .select('id')
+            .single();
+
+          if (!sessionError && sessionData?.id) {
+            currentSessionIdRef.current = sessionData.id;
+          } else if (import.meta.env.DEV) {
+            console.warn('⚠️ 创建 chat_sessions 失败:', sessionError);
+          }
+        } catch (sessionError) {
+          if (import.meta.env.DEV) {
+            console.warn('⚠️ 创建 chat_sessions 异常:', sessionError);
+          }
+        }
+      }
+
       // 开始倒计时
       startCountdown();
 
@@ -779,10 +950,77 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * 结束 AI 教练会话
    * 使用统一的 cleanup 函数确保资源正确释放
    */
-  const endSession = useCallback(() => {
+  /**
+   * 上报会话分析（fire-and-forget）
+   * @param reason 终止原因
+   */
+  const reportSessionAnalytics = useCallback((reason: TerminationReason) => {
+    if (hasReportedTerminationRef.current) return;
+    hasReportedTerminationRef.current = true;
+    sessionAnalyticsRef.current.terminationReason = reason;
+
+    const sessionId = currentSessionIdRef.current;
+    const userId = currentUserIdRef.current;
+
+    if (!sessionId || !userId) {
+      if (import.meta.env.DEV) {
+        console.log('⚠️ [Session Analytics] 缺少 sessionId 或 userId，跳过上报');
+      }
+      return;
+    }
+
+    const supabaseClient = getSupabaseClient();
+    if (!supabaseClient) {
+      if (import.meta.env.DEV) {
+        console.log('⚠️ [Session Analytics] Supabase 未配置，跳过上报');
+      }
+      return;
+    }
+
+    const stressIndicators = {
+      initial_stress: sessionAnalyticsRef.current.initialStress,
+      peak_stress: sessionAnalyticsRef.current.peakStress,
+      final_stress: sessionAnalyticsRef.current.stressLevel,
+      resistance_count: sessionAnalyticsRef.current.resistanceCount,
+      tone_switches: sessionAnalyticsRef.current.toneHistory,
+    };
+
+    const processMetrics = {
+      turn_count: state.messages.length,
+      time_to_first_action: sessionAnalyticsRef.current.timeToFirstAction,
+      breakthrough_moment: formatSecondsToClock(sessionAnalyticsRef.current.breakthroughMoment),
+    };
+
+    void supabaseClient.functions.invoke('session-analytics', {
+      body: {
+        sessionId,
+        userId,
+        terminationReason: reason,
+        stressIndicators,
+        processMetrics,
+      },
+    });
+  }, [state.messages.length]);
+
+  useEffect(() => {
+    reportSessionAnalyticsRef.current = reportSessionAnalytics;
+  }, [reportSessionAnalytics]);
+
+  /**
+   * 结束 AI 教练会话
+   * 使用统一的 cleanup 函数确保资源正确释放
+   * @param reason 终止原因（不传则自动推断）
+   */
+  const endSession = useCallback((reason?: TerminationReason) => {
     if (import.meta.env.DEV) {
       console.log('🔌 结束 AI 教练会话...');
     }
+
+    const highResistance = sessionAnalyticsRef.current.resistanceCount >= 3;
+    const earlyExit = state.timeRemaining > initialTime * 0.7;
+    const resolvedReason = reason || (highResistance && earlyExit ? 'user_frustrated' : 'user_quit');
+
+    reportSessionAnalytics(resolvedReason);
 
     // 使用统一的清理函数
     cleanup();
@@ -790,7 +1028,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     if (import.meta.env.DEV) {
       console.log('✅ AI 教练会话已结束');
     }
-  }, [cleanup]);
+  }, [cleanup, initialTime, reportSessionAnalytics, state.timeRemaining]);
 
   /**
    * 保存会话记忆到 Mem0
@@ -979,7 +1217,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * 重置会话
    */
   const resetSession = useCallback(() => {
-    endSession();
+    endSession('user_quit');
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
     // 🔧 重置流式响应相关的 refs

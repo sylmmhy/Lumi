@@ -28,7 +28,7 @@ export function AICoachTaskExample() {
     initialTime: 300, // 5 分钟
     onCountdownComplete: () => {
       // 倒计时结束，进入庆祝页面
-      aiCoach.endSession();
+      aiCoach.endSession('completed');
       setStep('celebration');
     },
   });
@@ -51,7 +51,7 @@ export function AICoachTaskExample() {
 
   // 完成任务
   const handleComplete = useCallback(() => {
-    aiCoach.endSession();
+    aiCoach.endSession('completed');
     setCelebrationFlow('success');
     setStep('celebration');
   }, [aiCoach]);

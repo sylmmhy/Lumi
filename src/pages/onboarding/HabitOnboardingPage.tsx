@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OnboardingLayout } from '../../components/onboarding/OnboardingLayout';
 import { useHabitOnboarding } from '../../hooks/useHabitOnboarding';
-import { useAICoachSession } from '../../hooks/useAICoachSession';
+import { useAICoachSession, type TerminationReason } from '../../hooks/useAICoachSession';
 import { useAuth } from '../../hooks/useAuth';
 import { TaskWorkingView } from '../../components/task/TaskWorkingView';
 import { getPreferredLanguages } from '../../lib/language';
@@ -39,7 +39,7 @@ export function HabitOnboardingPage() {
   const [isInCall, setIsInCall] = useState(false);
 
   // 使用 ref 来存储 handleEndCall，解决循环依赖问题
-  const handleEndCallRef = useRef<() => void>(() => {});
+  const handleEndCallRef = useRef<(reason?: TerminationReason) => void>(() => {});
 
   // AI Coach Session - 必须在所有条件返回之前调用，遵循 React Hooks 规则
   const aiCoach = useAICoachSession({
@@ -48,14 +48,14 @@ export function HabitOnboardingPage() {
     enableVAD: true, // 启用语音活动检测
     onCountdownComplete: () => {
       // 倒计时结束，自动结束通话
-      handleEndCallRef.current();
+      handleEndCallRef.current('completed');
     },
   });
 
   // 结束通话
-  const handleEndCall = useCallback(() => {
+  const handleEndCall = useCallback((reason: TerminationReason = 'user_quit') => {
     // 使用 useAICoachSession 的 endSession
-    aiCoach.endSession();
+    aiCoach.endSession(reason);
 
     // 标记完成
     onboarding.completeTrialCall();

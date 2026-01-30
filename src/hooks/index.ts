@@ -41,8 +41,13 @@ export { useAICoachSession } from './useAICoachSession';
 export type { 
   UseAICoachSessionOptions, 
   AICoachSessionState, 
-  AICoachMessage 
+  AICoachMessage,
+  TerminationReason,
 } from './useAICoachSession';
+
+// 舒适区与两分钟规则
+export { useComfortZone } from './useComfortZone';
+export { useTwoMinuteRule } from './useTwoMinuteRule';
 
 // 语气管理（动态Tone切换）
 export { useToneManager } from './useToneManager';

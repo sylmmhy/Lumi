@@ -747,11 +747,14 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
                     // 24小时制更清晰，不会有 AM/PM 误解
                     return `${hours}:${minutes} (24-hour format)`;
                   })(),
+                  // 人类可读的日期，显示给 AI 用于自然对话
                   localDate: new Date().toLocaleDateString('en-US', {
                     weekday: 'long',
                     month: 'short',
                     day: 'numeric'
-                  })
+                  }),
+                  // ISO 格式日期 (YYYY-MM-DD)，用于记忆系统处理 event_date
+                  localDateISO: new Date().toISOString().split('T')[0]
                 }
               })
             : Promise.resolve(null),

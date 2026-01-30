@@ -360,6 +360,10 @@
   "profile.accountManagementHint": "Ver y gestionar información de la cuenta",
   "profile.email": "Correo electrónico",
 
+  "profile.community": "Únete a la comunidad ADHD de Lumi",
+  "profile.communityHint": "¡Haz amigos, trabaja en equipo, queda y diviértete!",
+  "profile.communityButton": "Unirse",
+
   "tour.step1.title": "Escribe tu tarea",
   "tour.step1.content": "Primero, escribe aquí lo que quieres hacer, o elige una etiqueta rápida abajo.",
   "tour.step2.title": "Establece la hora del recordatorio",

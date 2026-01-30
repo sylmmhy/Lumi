@@ -677,6 +677,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 {/* AI Memories Section */}
                 <MemoriesSection />
 
+                {/* Discord Community Section */}
+                <a
+                    href="https://discord.gg/tJt8XUttK9"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-gradient-to-r from-[#5865F2] to-[#7289DA] rounded-2xl shadow-sm overflow-hidden mb-4 hover:shadow-md active:scale-[0.99] transition-all"
+                >
+                    <div className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                <i className="fa-brands fa-discord text-white text-2xl"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-white">{t('profile.community')}</p>
+                                <p className="text-sm text-white/80">{t('profile.communityHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
+                            <span className="text-sm font-medium text-white">{t('profile.communityButton')}</span>
+                            <i className="fa-solid fa-arrow-right text-white text-xs"></i>
+                        </div>
+                    </div>
+                </a>
+
                 {/* Login/Logout Button - Below Language Settings */}
                 <button
                     onClick={handleAuthAction}

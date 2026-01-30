@@ -178,7 +178,7 @@ export async function handleCreateHabitStack(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  const { userId: _userId, supabaseUrl: _supabaseUrl, supabaseAnonKey: _supabaseAnonKey, preferredLanguage } = context;
   const anchorTaskId = args.anchor_task_id as string;
   const newHabitTitle = args.new_habit_title as string;
   const position = args.position as string;

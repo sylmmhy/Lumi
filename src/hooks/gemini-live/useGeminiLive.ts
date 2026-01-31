@@ -265,6 +265,15 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   }, [systemInstruction, tools, session, audioOutput, analytics]);
 
   /**
+   * 立即停止音频播放（不断开连接）
+   * 用于快速响应用户挂断操作，立即静音 AI
+   */
+  const stopAudio = useCallback(() => {
+    devLog('🔇 Stopping audio playback immediately...');
+    audioOutput.stop();
+  }, [audioOutput]);
+
+  /**
    * 断开连接并清理所有资源
    */
   const disconnect = useCallback(() => {
@@ -398,7 +407,14 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
 
     // 执行静默注入
-    session.sendClientContent(content, false);
+    const success = session.sendClientContent(content, false);
+
+    if (!success) {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ [GeminiLive] 静默注入失败: sendClientContent 返回 false');
+      }
+      return false;
+    }
 
     if (import.meta.env.DEV) {
       console.log('🔇 [GeminiLive] 静默注入上下文:', content.substring(0, 80) + (content.length > 80 ? '...' : ''));
@@ -465,6 +481,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     // Actions
     connect,
     disconnect,
+    stopAudio,
     toggleMicrophone,
     toggleCamera,
     sendTextMessage,

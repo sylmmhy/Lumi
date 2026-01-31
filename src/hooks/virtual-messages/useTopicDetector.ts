@@ -51,7 +51,7 @@ import {
 // =====================================================
 
 /** 默认匹配阈值 */
-const DEFAULT_THRESHOLD = 0.65
+const DEFAULT_THRESHOLD = 0.55
 
 /** API 超时时间（毫秒） */
 const API_TIMEOUT_MS = 5000

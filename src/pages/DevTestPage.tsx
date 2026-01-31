@@ -24,6 +24,7 @@ import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
+import { HabitStackingTest, DailyReportTest, VoiceChatTest } from '../components/dev/BackendApiTest';
 
 type TestMode =
   | 'menu'
@@ -33,6 +34,9 @@ type TestMode =
   | 'failure'
   | 'confirm'
   | 'effects'
+  | 'habit-stacking'
+  | 'daily-report'
+  | 'voice-chat'
   | 'example-simple-timer'
   | 'example-checkin'
   | 'example-failure'
@@ -350,6 +354,52 @@ export function DevTestPage() {
 
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🔧 后端 API 测试 (Gemini 3 Flash)</p>
+
+          {/* 习惯叠加测试 */}
+          <button
+            onClick={() => setMode('habit-stacking')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🔗 习惯叠加 (Habit Stacking)
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              锚点识别 + AI 推荐挂载方案
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 functions/suggest-habit-stack
+            </div>
+          </button>
+
+          {/* AI 每日报告测试 */}
+          <button
+            onClick={() => setMode('daily-report')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            📊 AI 每日报告
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              Gemini 3 Flash 生成目标完成报告
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 functions/generate-daily-report
+            </div>
+          </button>
+
+          {/* AI 语音对话测试 */}
+          <button
+            onClick={() => setMode('voice-chat')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🎤 AI 语音对话 (start-voice-chat)
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              Gemini Live API 制定睡眠计划
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 functions/start-voice-chat
+            </div>
+          </button>
+
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">任务卡片动画</p>
 
           {/* 任务完成动画 */}
@@ -436,6 +486,9 @@ export function DevTestPage() {
       {mode === 'fire-from-figma' && <FireFromFigmaTest onBack={backToMenu} />}
       {mode === 'task-complete-animation' && <TaskCompleteAnimationTest onBack={backToMenu} />}
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
+      {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
+      {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
+      {mode === 'voice-chat' && <VoiceChatTest onBack={backToMenu} />}
     </>
   );
 }
@@ -521,6 +574,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   const aiCoach = useAICoachSession({
     initialTime: 60, // 测试用 1 分钟
     onCountdownComplete: () => {
+      // 立即停止音频播放，让 AI 马上静音
+      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
       setCelebrationFlow('confirm');
       setStep('celebration');
@@ -542,6 +597,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }, [aiCoach]);
 
   const handleComplete = useCallback(() => {
+    // 立即停止音频播放，让 AI 马上静音
+    aiCoach.stopAudioImmediately();
     aiCoach.endSession();
     setCelebrationFlow('success');
     setStep('celebration');
@@ -604,6 +661,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
             label: 'BACK',
             emoji: '←',
             onClick: () => {
+              // 立即停止音频播放，让 AI 马上静音
+              aiCoach.stopAudioImmediately();
               aiCoach.endSession();
               onBack();
             },

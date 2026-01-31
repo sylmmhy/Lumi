@@ -445,7 +445,7 @@ export function PermissionsSection() {
       {/* Main Row - Clickable to expand */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
@@ -492,7 +492,7 @@ export function PermissionsSection() {
                 requestPermission(item.type);
               }}
               disabled={isDisabled}
-              className={`w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:hover:bg-white
+              className={`w-full flex items-center justify-between p-4 pl-6 hover:bg-gray-50 transition-colors disabled:hover:bg-white
                 ${index < permissionItems.length - 1 ? 'border-b border-gray-100' : ''}`}
             >
               <div className="flex items-center gap-3">
@@ -590,6 +590,16 @@ export function PermissionsSection() {
             </div>
           </div>
         )}
+
+        {/* Privacy Note */}
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+          <div className="flex items-start gap-2">
+            <i className="fa-solid fa-lock text-gray-400 mt-0.5 text-xs"></i>
+            <p className="text-xs text-gray-500">
+              {t('profile.permissions.privacyNote')}
+            </p>
+          </div>
+        </div>
 
       </div>
     </div>

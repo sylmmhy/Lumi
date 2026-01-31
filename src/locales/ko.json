@@ -343,6 +343,7 @@
   "profile.permissions.enableAll": "모든 권한 허용하기",
   "profile.permissions.requesting": "요청 중...",
   "profile.permissions.allEnabledMessage": "모든 권한이 활성화됐어요! AI가 영상 통화할 준비 완료!",
+  "profile.permissions.privacyNote": "오디오 및 비디오 데이터는 실시간으로 처리되며 서버에 저장되지 않습니다. GDPR 등 국제 개인정보 보호 규정을 준수합니다.",
   "profile.permissions.sleepFocus": "수면 집중 모드",
   "profile.permissions.sleepFocusDesc": "취침/기상 알림에 필수",
   "profile.permissions.sleepFocusLong": "iOS 수면 모드는 기본적으로 모든 알림을 차단합니다. 설정하지 않으면 Lumi가 취침이나 기상 시간에 알림을 보낼 수 없어요.",
@@ -358,6 +359,10 @@
   "profile.accountManagement": "계정 관리",
   "profile.accountManagementHint": "계정 정보 보기 및 관리",
   "profile.email": "이메일",
+
+  "profile.community": "Lumi ADHD 커뮤니티 가입",
+  "profile.communityHint": "친구를 사귀고, 함께 도전하세요!",
+  "profile.communityButton": "가입",
 
   "tour.step1.title": "할 일 입력",
   "tour.step1.content": "먼저, 여기에 할 일을 입력하거나 아래 퀵 태그에서 선택해봐.",

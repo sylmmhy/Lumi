@@ -1,12 +1,14 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
+import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 
 interface Memory {
   id: string;
   content: string;
-  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB';
+  tag: 'PREF' | 'PROC' | 'SOMA' | 'EMO' | 'SAB' | 'CONTEXT' | 'EFFECTIVE';
   confidence: number;
   task_name: string | null;
   created_at: string;
@@ -48,16 +50,30 @@ const TAG_CONFIG: Record<string, { label: string; labelZh: string; icon: string;
     bgColor: 'bg-gray-100',
     textColor: 'text-gray-500'
   },
+  'CONTEXT': {
+    label: 'Context',
+    labelZh: '背景信息',
+    icon: 'fa-circle-info',
+    bgColor: 'bg-teal-50',
+    textColor: 'text-teal-500'
+  },
+  'EFFECTIVE': {
+    label: 'What Works',
+    labelZh: '有效方法',
+    icon: 'fa-lightbulb',
+    bgColor: 'bg-green-50',
+    textColor: 'text-green-500'
+  },
 };
 
 /**
  * MemoriesSection - Display and manage user memories in profile
- * Collapsible design - shows as a single row, expands to show memory list
+ * 点击后打开全屏二级页面展示记忆列表
  */
 export function MemoriesSection() {
   const { uiLanguage } = useTranslation();
   const auth = useContext(AuthContext);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [showMemoriesPage, setShowMemoriesPage] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -85,13 +101,19 @@ export function MemoriesSection() {
     }
   }, [auth?.userId]);
 
-  // Load memories on mount (to show count) and when expanded
+  // 组件挂载时加载记忆数量
   useEffect(() => {
-    // 组件挂载时就加载记忆，以便在折叠状态下显示正确的数量
     if (memories.length === 0) {
       fetchMemories();
     }
   }, [fetchMemories, memories.length]);
+
+  // 打开全屏页面时刷新数据
+  useEffect(() => {
+    if (showMemoriesPage) {
+      fetchMemories();
+    }
+  }, [showMemoriesPage, fetchMemories]);
 
   // Delete a memory
   const handleDelete = async (memoryId: string) => {
@@ -128,140 +150,147 @@ export function MemoriesSection() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
-      {/* Main Row - Clickable to expand */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center">
-            <i className="fa-solid fa-brain text-indigo-500"></i>
-          </div>
-          <div className="text-left">
-            <p className="font-medium text-gray-800">
-              {isZh ? 'AI 记忆' : 'AI Memories'}
-            </p>
-            <p className="text-xs text-gray-400">
-              {isZh ? 'Lumi 了解的关于你的信息' : 'What Lumi knows about you'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isLoading ? (
-            <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
-          ) : (
-            <span className="text-xs text-gray-500">
-              {memories.length > 0 ? (
-                isZh ? `${memories.length} 条记忆` : `${memories.length} memories`
-              ) : (
-                isZh ? '暂无记忆' : 'No memories'
-              )}
-            </span>
-          )}
-          <i className={`fa-solid fa-chevron-right text-gray-300 text-sm transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}></i>
-        </div>
-      </button>
-
-      {/* Expandable Content */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
-        {/* Divider */}
-        <div className="border-t border-gray-100"></div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="p-8 flex items-center justify-center">
-            <i className="fa-solid fa-spinner fa-spin text-gray-400 text-xl"></i>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && memories.length === 0 && (
-          <div className="p-6 text-center">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <i className="fa-solid fa-brain text-gray-400"></i>
+    <>
+      {/* Entry Row in Profile */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <button
+          onClick={() => setShowMemoriesPage(true)}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center">
+              <i className="fa-solid fa-brain text-indigo-500"></i>
             </div>
-            <p className="text-sm text-gray-500">
-              {isZh
-                ? 'Lumi 还没有记住关于你的信息。和 Lumi 多聊聊，它会逐渐了解你！'
-                : "Lumi hasn't learned anything about you yet. Chat more with Lumi and it will remember!"}
-            </p>
-          </div>
-        )}
-
-        {/* Memory List by Tag */}
-        {!isLoading && memories.length > 0 && (
-          <div className="max-h-[500px] overflow-y-auto">
-            {/* PREF memories first (AI preferences - always loaded) */}
-            {groupedMemories['PREF'] && groupedMemories['PREF'].length > 0 && (
-              <div className="border-b border-gray-100">
-                <div className="px-4 py-2 bg-purple-50 flex items-center gap-2">
-                  <i className={`fa-solid ${TAG_CONFIG['PREF'].icon} ${TAG_CONFIG['PREF'].textColor} text-xs`}></i>
-                  <span className="text-xs font-medium text-purple-700">
-                    {isZh ? TAG_CONFIG['PREF'].labelZh : TAG_CONFIG['PREF'].label}
-                    <span className="text-purple-400 ml-1">({groupedMemories['PREF'].length})</span>
-                  </span>
-                  <span className="text-xs text-purple-400 ml-auto">
-                    {isZh ? '通用 - 始终加载' : 'Universal - Always loaded'}
-                  </span>
-                </div>
-                {groupedMemories['PREF'].map(memory => (
-                  <MemoryItem
-                    key={memory.id}
-                    memory={memory}
-                    onDelete={handleDelete}
-                    isDeleting={deletingId === memory.id}
-                    isZh={isZh}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Other memories by tag */}
-            {(['EMO', 'PROC', 'SOMA', 'SAB'] as const).map(tag => {
-              const tagMemories = groupedMemories[tag];
-              if (!tagMemories || tagMemories.length === 0) return null;
-
-              const config = TAG_CONFIG[tag];
-              return (
-                <div key={tag} className="border-b border-gray-100 last:border-b-0">
-                  <div className={`px-4 py-2 ${config.bgColor} flex items-center gap-2`}>
-                    <i className={`fa-solid ${config.icon} ${config.textColor} text-xs`}></i>
-                    <span className={`text-xs font-medium ${config.textColor.replace('text-', 'text-').replace('500', '700')}`}>
-                      {isZh ? config.labelZh : config.label}
-                      <span className="opacity-60 ml-1">({tagMemories.length})</span>
-                    </span>
-                  </div>
-                  {tagMemories.map(memory => (
-                    <MemoryItem
-                      key={memory.id}
-                      memory={memory}
-                      onDelete={handleDelete}
-                      isDeleting={deletingId === memory.id}
-                      isZh={isZh}
-                    />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Info Footer */}
-        {!isLoading && memories.length > 0 && (
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-            <div className="flex items-start gap-2">
-              <i className="fa-solid fa-circle-info text-gray-400 mt-0.5 text-xs"></i>
-              <p className="text-xs text-gray-500">
-                {isZh
-                  ? '这些记忆帮助 Lumi 更好地理解你。你可以删除任何不想让 Lumi 记住的内容。'
-                  : 'These memories help Lumi understand you better. You can delete anything you don\'t want Lumi to remember.'}
+            <div className="text-left">
+              <p className="font-medium text-gray-800">
+                {isZh ? 'AI 记忆' : 'AI Memories'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {isZh ? 'Lumi 了解的关于你的信息' : 'What Lumi knows about you'}
               </p>
             </div>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            {isLoading ? (
+              <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
+            ) : (
+              <span className="text-sm text-gray-500">
+                {memories.length > 0 ? (
+                  isZh ? `${memories.length} 条记忆` : `${memories.length} memories`
+                ) : (
+                  isZh ? '暂无记忆' : 'No memories'
+                )}
+              </span>
+            )}
+            <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+          </div>
+        </button>
       </div>
-    </div>
+
+      {/* Full-screen Memories Page - 使用 Portal 渲染到 body，避免 stacking context 问题 */}
+      {showMemoriesPage && createPortal(
+        <div className="fixed inset-0 bg-gray-50 z-[9999] flex flex-col">
+          <SecondaryPageHeader
+            title={isZh ? 'AI 记忆' : 'AI Memories'}
+            onBack={() => setShowMemoriesPage(false)}
+          />
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {/* Loading State */}
+            {isLoading && (
+              <div className="flex items-center justify-center py-12">
+                <i className="fa-solid fa-spinner fa-spin text-gray-400 text-2xl"></i>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoading && memories.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <i className="fa-solid fa-brain text-gray-300 text-2xl"></i>
+                </div>
+                <p className="text-gray-500 text-center leading-relaxed">
+                  {isZh
+                    ? 'Lumi 还没有记住关于你的信息。\n和 Lumi 多聊聊，它会逐渐了解你！'
+                    : "Lumi hasn't learned anything about you yet.\nChat more with Lumi and it will remember!"}
+                </p>
+              </div>
+            )}
+
+            {/* Memory List by Tag */}
+            {!isLoading && memories.length > 0 && (
+              <>
+                {/* PREF memories first (AI preferences - always loaded) */}
+                {groupedMemories['PREF'] && groupedMemories['PREF'].length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+                    <div className="px-4 py-3 bg-purple-50 flex items-center gap-2">
+                      <i className={`fa-solid ${TAG_CONFIG['PREF'].icon} ${TAG_CONFIG['PREF'].textColor} text-sm`}></i>
+                      <span className="text-sm font-medium text-purple-700">
+                        {isZh ? TAG_CONFIG['PREF'].labelZh : TAG_CONFIG['PREF'].label}
+                        <span className="text-purple-400 ml-1">({groupedMemories['PREF'].length})</span>
+                      </span>
+                    </div>
+                    {groupedMemories['PREF'].map((memory, index) => (
+                      <MemoryItem
+                        key={memory.id}
+                        memory={memory}
+                        onDelete={handleDelete}
+                        isDeleting={deletingId === memory.id}
+                        isZh={isZh}
+                        isLast={index === groupedMemories['PREF'].length - 1}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Other memories by tag */}
+                {(['EMO', 'PROC', 'SOMA', 'SAB', 'CONTEXT', 'EFFECTIVE'] as const).map(tag => {
+                  const tagMemories = groupedMemories[tag];
+                  if (!tagMemories || tagMemories.length === 0) return null;
+
+                  const config = TAG_CONFIG[tag];
+                  return (
+                    <div key={tag} className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+                      <div className={`px-4 py-3 ${config.bgColor} flex items-center gap-2`}>
+                        <i className={`fa-solid ${config.icon} ${config.textColor} text-sm`}></i>
+                        <span className={`text-sm font-medium ${config.textColor.replace('500', '700')}`}>
+                          {isZh ? config.labelZh : config.label}
+                          <span className="opacity-60 ml-1">({tagMemories.length})</span>
+                        </span>
+                      </div>
+                      {tagMemories.map((memory, index) => (
+                        <MemoryItem
+                          key={memory.id}
+                          memory={memory}
+                          onDelete={handleDelete}
+                          isDeleting={deletingId === memory.id}
+                          isZh={isZh}
+                          isLast={index === tagMemories.length - 1}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Info Footer */}
+                <div className="px-4 py-3 bg-white rounded-2xl shadow-sm">
+                  <div className="flex items-start gap-2">
+                    <i className="fa-solid fa-circle-info text-gray-400 mt-0.5 text-sm"></i>
+                    <p className="text-sm text-gray-500">
+                      {isZh
+                        ? '这些记忆帮助 Lumi 更好地理解你。你可以删除任何不想让 Lumi 记住的内容。'
+                        : 'These memories help Lumi understand you better. You can delete anything you don\'t want Lumi to remember.'}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -272,12 +301,14 @@ function MemoryItem({
   memory,
   onDelete,
   isDeleting,
-  isZh
+  isZh,
+  isLast = false
 }: {
   memory: Memory;
   onDelete: (id: string) => void;
   isDeleting: boolean;
   isZh: boolean;
+  isLast?: boolean;
 }) {
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -293,7 +324,7 @@ function MemoryItem({
   };
 
   return (
-    <div className="px-4 py-3 hover:bg-gray-50 transition-colors group">
+    <div className={`px-4 py-3 hover:bg-gray-50 transition-colors group ${!isLast ? 'border-b border-gray-100' : ''}`}>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-700 leading-relaxed">
@@ -309,20 +340,20 @@ function MemoryItem({
         <button
           onClick={handleDeleteClick}
           disabled={isDeleting}
-          className={`flex-none p-1.5 rounded-lg transition-all ${
+          className={`flex-none p-2 rounded-lg transition-all ${
             showConfirm
               ? 'bg-red-100 text-red-600'
-              : 'opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50'
+              : 'text-gray-300 hover:text-red-500 hover:bg-red-50'
           }`}
         >
           {isDeleting ? (
-            <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+            <i className="fa-solid fa-spinner fa-spin text-sm"></i>
           ) : showConfirm ? (
             <span className="text-xs font-medium px-1">
               {isZh ? '确认?' : 'Sure?'}
             </span>
           ) : (
-            <i className="fa-solid fa-trash text-xs"></i>
+            <i className="fa-solid fa-trash text-sm"></i>
           )}
         </button>
       </div>

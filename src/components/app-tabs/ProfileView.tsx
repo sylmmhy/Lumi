@@ -7,6 +7,7 @@ import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { PermissionsSection } from '../profile/PermissionsSection';
 import { MemoriesSection } from '../profile/MemoriesSection';
+import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
 import { getPreferredLanguages, getLanguagesDisplayText, getUILanguageNativeName } from '../../lib/language';
@@ -406,13 +407,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
     return (
         <div className="flex-1 bg-gray-50 flex flex-col h-full relative overflow-y-auto no-scrollbar overscroll-none">
-            {/* Sticky Top Bar - 始终固定在顶部，59pt 适配 iPhone 刘海 */}
-            <div className="fixed top-0 left-0 right-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm">
+            {/* Sticky Top Bar - 使用 sticky 定位，在容器内滚动时固定 */}
+            <div className="sticky top-0 bg-white z-50 flex items-end justify-start px-6 pb-3 pt-[59px] shadow-sm">
                 <span className="text-[24px] text-gray-900" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>{t('profile.title')}</span>
             </div>
 
-            {/* Header Profile Section - mt-[95px] 为固定 header 留出空间，pt-[30px] 头像安全距离 */}
-            <div className="bg-white mt-[95px] pt-[30px] px-4 pb-6 flex flex-col items-center shadow-sm rounded-b-[40px] z-10 relative flex-none">
+            {/* Header Profile Section - pt-[30px] 头像安全距离 */}
+            <div className="bg-white pt-[30px] px-4 pb-6 flex flex-col items-center shadow-sm rounded-b-[40px] z-10 relative flex-none">
                 <input
                     type="file"
                     ref={fileInputRef}
@@ -504,6 +505,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </button>
                 )}
                 {isPremium && <p className="text-yellow-600 font-bold text-xs mt-1 bg-yellow-100 px-3 py-1 rounded-full">{t('profile.premiumActive')}</p>}
+
+                {/* Email Display for Bug Reports */}
+                {!isGuest && auth?.userEmail && (
+                    <button
+                        onClick={handleCopyEmail}
+                        className="mt-3 flex items-center gap-2 text-gray-400 text-sm hover:text-gray-600 transition-colors"
+                    >
+                        <span>{auth.userEmail}</span>
+                        {emailCopied ? (
+                            <i className="fa-solid fa-check text-green-500"></i>
+                        ) : (
+                            <i className="fa-regular fa-copy"></i>
+                        )}
+                    </button>
+                )}
             </div>
 
             <div className="px-6 -mt-4 relative z-20">
@@ -513,7 +529,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* UI Language Setting */}
                     <button
                         onClick={() => setShowUILanguageModal(true)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center">
@@ -535,7 +551,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Lumi Voice Language Setting */}
                     <button
                         onClick={() => setShowLanguageModal(true)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
@@ -557,7 +573,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* Ringtone Type Setting */}
                     <button
                         onClick={handleRingtoneTypeToggle}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center">
@@ -581,7 +597,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* AI Voice Gender Setting */}
                     <button
                         onClick={() => setShowVoiceSelectionModal(true)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100"
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
@@ -603,7 +619,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {/* AI Tone Setting */}
                     <button
                         onClick={() => setShowAIToneModal(true)}
-                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
+                        className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${showLiveKitOption ? 'border-b border-gray-100' : ''}`}
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center">
@@ -626,7 +642,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {showLiveKitOption && (
                         <button
                             onClick={handleVoiceModeToggle}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center">
@@ -654,7 +670,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
                         <button
                             onClick={() => setShowAccountManageModal(true)}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
@@ -676,10 +692,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 {/* AI Memories Section */}
                 <MemoriesSection />
 
+                {/* Discord Community Section */}
+                <a
+                    href="https://discord.gg/tJt8XUttK9"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-gradient-to-r from-[#5865F2] to-[#7289DA] rounded-2xl shadow-sm overflow-hidden mb-4 hover:shadow-md active:scale-[0.99] transition-all"
+                >
+                    <div className="flex items-center justify-between p-4 gap-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-11 h-11 bg-[#4752C4] rounded-full flex items-center justify-center flex-shrink-0">
+                                <i className="fa-brands fa-discord text-white text-xl"></i>
+                            </div>
+                            <div className="text-left min-w-0">
+                                <p className="font-medium text-white">{t('profile.community')}</p>
+                                <p className="text-sm text-white/80 truncate">{t('profile.communityHint')}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full flex-shrink-0 whitespace-nowrap">
+                            <span className="text-sm font-medium text-white">{t('profile.communityButton')}</span>
+                            <i className="fa-solid fa-arrow-right text-white text-xs"></i>
+                        </div>
+                    </div>
+                </a>
+
                 {/* Login/Logout Button - Below Language Settings */}
                 <button
                     onClick={handleAuthAction}
-                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2 mb-3"
+                    className="w-full py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 mb-3"
                 >
                     <i className={`fa-solid ${isGuest ? 'fa-right-to-bracket' : 'fa-right-from-bracket'}`}></i>
                     <span>{isGuest ? t('profile.loginSignup') : t('profile.logout')}</span>
@@ -781,19 +821,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
             {/* Account Management Modal */}
             {showAccountManageModal && (
-                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
-                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
-                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
-                        <button
-                            onClick={() => setShowAccountManageModal(false)}
-                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
-                        </button>
-                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
-                            {t('profile.accountManagement')}
-                        </h2>
-                    </div>
+                <div className="fixed inset-0 bg-gray-50 z-[200] flex flex-col">
+                    <SecondaryPageHeader
+                        title={t('profile.accountManagement')}
+                        onBack={() => setShowAccountManageModal(false)}
+                    />
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto p-4">
@@ -829,7 +861,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         {/* Delete Account Button */}
                         <button
                             onClick={() => setShowDeleteAccountModal(true)}
-                            className="w-full mt-4 py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                            className="w-full mt-4 py-3 text-red-500 font-medium bg-white rounded-xl shadow-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                         >
                             <i className="fa-solid fa-trash-can"></i>
                             <span>{t('profile.deleteAccount')}</span>
@@ -840,19 +872,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
             {/* AI Voice Selection Modal */}
             {showVoiceSelectionModal && (
-                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
-                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
-                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
-                        <button
-                            onClick={() => setShowVoiceSelectionModal(false)}
-                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
-                        </button>
-                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
-                            {t('profile.aiVoiceTitle')}
-                        </h2>
-                    </div>
+                <div className="fixed inset-0 bg-gray-50 z-[200] flex flex-col">
+                    <SecondaryPageHeader
+                        title={t('profile.aiVoiceTitle')}
+                        onBack={() => setShowVoiceSelectionModal(false)}
+                    />
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto p-4">
@@ -961,19 +985,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
             {/* AI Tone Selection Modal */}
             {showAIToneModal && (
-                <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
-                    {/* Header - pt-[59px] 适配 iPhone 灵动岛/刘海安全区域 */}
-                    <div className="bg-white shadow-sm px-4 pt-[59px] pb-4 flex items-center">
-                        <button
-                            onClick={() => setShowAIToneModal(false)}
-                            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            <i className="fa-solid fa-arrow-left text-gray-600"></i>
-                        </button>
-                        <h2 className="flex-1 text-center font-bold text-lg text-gray-800 mr-10">
-                            {t('profile.aiToneTitle')}
-                        </h2>
-                    </div>
+                <div className="fixed inset-0 bg-gray-50 z-[200] flex flex-col">
+                    <SecondaryPageHeader
+                        title={t('profile.aiToneTitle')}
+                        onBack={() => setShowAIToneModal(false)}
+                    />
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto p-4">
@@ -986,7 +1002,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 <button
                                     key={toneConfig.id}
                                     onClick={() => handleAIToneSelect(toneConfig.id)}
-                                    className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${index < availableAITones.length - 1 ? 'border-b border-gray-100' : ''}`}
+                                    className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${index < availableAITones.length - 1 ? 'border-b border-gray-100' : ''}`}
                                 >
                                     {/* 左侧：图标 + 名称 + 描述 */}
                                     <div className="flex items-center gap-3">

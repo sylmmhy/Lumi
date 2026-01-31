@@ -1,6 +1,6 @@
 # 记忆系统架构
 
-> 最后更新：2026-01-27
+> 最后更新：2026-01-29
 
 ---
 
@@ -39,6 +39,7 @@ await supabase.functions.invoke('memory-extractor', {
       { role: 'assistant', content: '我理解...' },
     ],
     taskDescription: '健身',      // 可选
+    localDate: '2026-01-29',     // 可选：用户本地日期，用于转换相对时间
     metadata: { source: 'ai_coach_session' }  // 可选
   }
 })
@@ -60,8 +61,9 @@ const { data } = await supabase.functions.invoke('get-system-instruction', {
     userId: 'uuid-xxx',          // 必填
     userName: '小明',             // 可选
     preferredLanguages: ['zh-CN'], // 可选
-    localTime: '14:30',          // 可选
-    localDate: '2026-01-27'      // 可选
+    localTime: '14:30',          // 可选：给 AI 看的时间
+    localDate: 'Wednesday, Jan 29', // 可选：给 AI 看的日期（人类可读）
+    localDateISO: '2026-01-29'   // 可选：用于处理 event_date（ISO 格式）
   }
 })
 
@@ -101,16 +103,19 @@ data.retrievedMemories   // 检索到的记忆列表（调试用）
 
 ---
 
-## 记忆的 6 种标签
+## 记忆的 7 种标签
 
 | 标签 | 含义 | 加载策略 | 举例 |
 |------|------|---------|------|
 | **PREF** | AI 交互偏好 | **始终加载** | "用户不喜欢被催促" |
 | **EFFECTIVE** | 有效激励方式 | **始终加载** | "倒数 3-2-1 对用户有效" |
+| **CONTEXT** | 生活背景/计划 | 按任务匹配 | "用户计划1月30日去迪士尼" |
 | **PROC** | 拖延原因 | 按任务匹配 | "用户觉得运动太累" |
 | **EMO** | 情绪模式 | 按任务匹配 | "用户面对 deadline 会焦虑" |
 | **SOMA** | 身心反应 | 按任务匹配 | "用户运动前会头疼" |
 | **SAB** | 自我妨碍 | 按任务匹配 | "用户开始工作前会先刷手机" |
+
+**CONTEXT 标签特殊说明**：用于存储用户的生活事件、旅行计划、人际关系等背景信息。部分 CONTEXT 记忆带有 `event_date` 字段，用于时间感知处理（详见下方）。
 
 ---
 
@@ -175,6 +180,61 @@ data.retrievedMemories   // 检索到的记忆列表（调试用）
 
 ---
 
+## 时间感知功能（CONTEXT 记忆专属）
+
+### 问题背景
+
+用户说"我明天要去迪士尼"时，如果系统只存储"用户要去迪士尼"，第二天 AI 还会说"你明天要去迪士尼哦"——这不对，因为"明天"已经变成"今天"了。
+
+### 解决方案
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  存储时（memory-extractor）                                      │
+│  用户说 "明天去迪士尼"（1月29日）                                  │
+│                    ↓                                             │
+│  AI 提取时转换为绝对日期：                                        │
+│  content: "用户计划1月30日去迪士尼"                               │
+│  event_date: "2026-01-30"  ← 存入 metadata                       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  检索时（get-system-instruction）                                │
+│  每次用户开始新会话，都会重新计算 diffDays：                        │
+│                                                                  │
+│  diffDays = 今天日期 - event_date                                │
+│                                                                  │
+│  • diffDays = 0（今天）  → 原样返回                               │
+│  • diffDays = 1-3（刚过去）→ 添加"（已过去）"标注                  │
+│  • diffDays > 3（过去太久）→ 过滤掉，不给 AI 看                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 具体例子
+
+| 日期 | 用户开新会话 | AI 看到的记忆 | AI 行为 |
+|------|------------|--------------|--------|
+| 1月29日 | ✓ | "用户计划1月30日去迪士尼" | "明天就去迪士尼啦！" |
+| 1月30日 | ✓ | "用户计划1月30日去迪士尼" | "今天是迪士尼的日子！" |
+| 1月31日 | ✓ | "用户去迪士尼（已过去，发生于 2026-01-30）" | "迪士尼玩得怎么样？" |
+| 2月3日 | ✓ | （记忆被过滤，AI 看不到） | 不提这个旧事件 |
+
+### 关键点
+
+1. **数据库只存一次**：`event_date: "2026-01-30"` 永久存在 `metadata` 里
+2. **每次检索都重新计算**：`diffDays` 不是存储的，是实时算的
+3. **标注是临时的**："（已过去）"标注不存数据库，只在返回给 AI 时临时加上
+
+### 涉及的代码位置
+
+| 步骤 | 文件 | 函数/位置 |
+|------|------|---------|
+| 存储 event_date | `memory-extractor/index.ts` | `saveOrMergeMemories()` 中的 metadata |
+| 计算 diffDays | `get-system-instruction/index.ts` | `processMemoriesWithEventDate()` |
+| AI 理解"已过去" | `_shared/prompts/lumi-system.ts` | memoriesSection 中的说明 |
+
+---
+
 ## 核心流程
 
 ### 1. 记忆提取（会话结束时）
@@ -227,6 +287,7 @@ pg_cron 触发 → 调用 memory-compressor
 | `user_id` | 用户 ID |
 | `content` | 记忆内容 |
 | `tag` | 主标签（PREF/PROC/SOMA/EMO/SAB/EFFECTIVE/CONTEXT） |
+| `metadata.event_date` | （可选）事件日期 YYYY-MM-DD，仅 CONTEXT 标签使用 |
 | `tags` | **多标签数组**（跨 tag 合并时保留所有标签） |
 | `confidence` | 置信度 (0-1) |
 | `importance_score` | 重要性评分 (0-1)，用于压缩决策 |
@@ -319,6 +380,7 @@ MEMORY_EMBEDDING_MODEL=text-embedding-3-large
 |------|------|------|
 | `getUserMemoriesTolan()` | ~1042 | **主入口**，执行四层检索 |
 | `getUserMemoriesLegacy()` | ~930 | 传统检索（回退用） |
+| `processMemoriesWithEventDate()` | ~613 | **时间感知**，处理带 event_date 的记忆 |
 | `synthesizeQuestions()` | ~190 | LLM 生成检索问题 |
 | `generateEmbeddings()` | ~280 | 批量生成向量嵌入 |
 | `searchMemoriesInTier()` | ~430 | 在指定层级搜索记忆 |
@@ -626,5 +688,8 @@ async function getUserMemoriesTolan(supabase, userId, taskDescription) {
 🧠 [Tolan] 扩展层: 4 条 (0.3-0.5 相似度)
 🔍 [Tiered] 任务历史搜索，关键词: 行李
 🧠 [Tolan] 任务历史: 2 条 (task_name 匹配 "行李")
-🧠 [记忆检索] 偏好: 3, 核心: 8, 扩展: 4, 任务历史: 2, 总计: 17, 耗时: 180ms
+📅 查询 2 条 CONTEXT 记忆的 event_date...
+📅 [event_date] 记忆 "用户计划1月30日去迪士尼..." 已过去 1 天，添加标注
+📅 [event_date] 过滤了 1 条已过期超过 3 天的记忆
+🧠 [记忆检索] 偏好: 3, 核心: 8, 扩展: 4, 任务历史: 2, 总计: 16, 耗时: 180ms
 ```

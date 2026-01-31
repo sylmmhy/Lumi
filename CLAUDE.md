@@ -17,6 +17,7 @@
 
 | Skill | 路径 | 触发场景 |
 |-------|------|---------|
+| **commit** | `.claude/skills/commit/SKILL.md` | 说 `/commit`，自动修复 lint 并提交代码 |
 | **launch** | `.claude/skills/launch/SKILL.md` | 说 `/launch`，将 dev 同步到 master 发布 |
 | **debug-workflow** | `.claude/skills/debug-workflow/SKILL.md` | Bug 排查、调试、遇到错误时 |
 | **tech-research** | `.claude/skills/tech-research/SKILL.md` | 评估新技术/功能可行性时 |

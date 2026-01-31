@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface LandingFooterProps {
     /** 点击"Download"按钮的回调 - 跳转 App Store */
@@ -6,6 +6,8 @@ interface LandingFooterProps {
 }
 
 export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) => {
+    const [showContactModal, setShowContactModal] = useState(false);
+
     return (
         <footer style={{ fontFamily: 'Nunito, sans-serif' }}>
             {/* Yellow wave top */}
@@ -50,7 +52,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) =
                             <ul className="space-y-3 text-gray-400">
                                 <li><a href="https://meetlumi.org/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Privacy Policy</a></li>
                                 <li><a href="https://meetlumi.org/terms" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Terms of Use</a></li>
-                                <li><a href="mailto:support@getlumi.app" className="hover:text-white transition-colors">Contact</a></li>
+                                <li><button onClick={() => setShowContactModal(true)} className="hover:text-white transition-colors">Contact</button></li>
                             </ul>
                         </div>
 
@@ -58,9 +60,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) =
                         <div>
                             <h4 className="font-semibold mb-4">Connect</h4>
                             <ul className="space-y-3 text-gray-400">
-                                <li><a href="#" className="hover:text-white transition-colors">Twitter</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Instagram</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Discord</a></li>
+                                <li><a href="https://www.tiktok.com/@meet_lumi_ai" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">TikTok</a></li>
+                                <li><a href="https://www.linkedin.com/company/meetlumi-ai/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">LinkedIn</a></li>
+                                <li><a href="https://discord.gg/tJt8XUttK9" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Discord</a></li>
                             </ul>
                         </div>
                     </div>
@@ -76,6 +78,34 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({ onDownloadiOS }) =
                     </div>
                 </div>
             </div>
+
+            {/* Contact Modal */}
+            {showContactModal && (
+                <div
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+                    onClick={() => setShowContactModal(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl p-8 max-w-sm mx-4 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">Contact Us</h3>
+                        <p className="text-gray-600 mb-4">CEO Email</p>
+                        <a
+                            href="mailto:yilun@meetlumi.org"
+                            className="text-[#2545BD] font-semibold text-lg hover:underline"
+                        >
+                            yilun@meetlumi.org
+                        </a>
+                        <button
+                            onClick={() => setShowContactModal(false)}
+                            className="mt-6 w-full py-3 bg-gray-100 text-gray-700 font-semibold rounded-full hover:bg-gray-200 transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </footer>
     );
 };

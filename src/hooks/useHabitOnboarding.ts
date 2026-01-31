@@ -265,18 +265,16 @@ export function useHabitOnboarding() {
       // generateTodayRoutineInstances 内部会检查 isTimeInFuture，跳过已过时间的任务
       await generateTodayRoutineInstances(userId);
 
-      // 🆕 保存用户来源（如果用户选择了）
+      // 🆕 保存用户来源到 users 表（如果用户选择了）
       if (state.referralSource && supabase) {
         try {
           const { error: referralError } = await supabase
-            .from('user_referral_sources')
-            .upsert({
-              user_id: userId,
-              source: state.referralSource,
-              other_source: state.referralSource === 'other' ? state.otherSourceText : null,
-            }, {
-              onConflict: 'user_id',  // 如果已存在则更新
-            });
+            .from('users')
+            .update({
+              referral_source: state.referralSource,
+              referral_other_source: state.referralSource === 'other' ? state.otherSourceText : null,
+            })
+            .eq('id', userId);
 
           if (referralError) {
             console.error('❌ [useHabitOnboarding] 保存用户来源失败:', referralError);

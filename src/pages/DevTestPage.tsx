@@ -25,6 +25,7 @@ import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
 import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
+import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 
 type TestMode =
   | 'menu'
@@ -46,7 +47,8 @@ type TestMode =
   | 'talking-fire'
   | 'fire-from-figma'
   | 'task-complete-animation'
-  | 'feedback-card';
+  | 'feedback-card'
+  | 'voice-chat-test';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -385,6 +387,24 @@ export function DevTestPage() {
 
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🎤 语音对话测试 (三层 AI 架构)</p>
+
+          {/* 语音对话测试 */}
+          <button
+            onClick={() => setMode('voice-chat-test')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🎤 语音对话测试
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              Gemini Live + 意图检测 + 工具调用
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 三层 AI 架构完整测试
+            </div>
+          </button>
+
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">任务卡片动画</p>
 
           {/* 任务完成动画 */}
@@ -473,6 +493,7 @@ export function DevTestPage() {
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
+      {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
     </>
   );
 }

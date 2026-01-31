@@ -1,0 +1,269 @@
+/**
+ * useIntentDetection - 意图检测 Hook
+ * 
+ * 三层 AI 架构中的 "AI #2 检测层" 前端集成
+ * 
+ * 功能：
+ * 1. 收集对话历史（用户说的话 + AI 说的话）
+ * 2. 调用 detect-intent Edge Function 判断意图
+ * 3. 如果检测到工具调用，执行对应的工具处理器
+ * 4. 把结果注入回对话 AI
+ * 
+ * 使用方式：
+ * ```tsx
+ * const { processAIResponse } = useIntentDetection({
+ *   userId: 'xxx',
+ *   chatType: 'intention_compile',
+ *   onToolResult: (result) => {
+ *     // 把结果注入给对话 AI
+ *     injectContextSilently(result.responseHint);
+ *   },
+ * });
+ * 
+ * // 在 AI 说完话后调用
+ * onOutputTranscription: (text) => {
+ *   processAIResponse(text);
+ * }
+ * ```
+ */
+
+import { useRef, useCallback } from 'react';
+import { handleToolCall, type ToolCallContext, type ToolCallResult } from './toolHandlers';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface UseIntentDetectionOptions {
+  // 用户 ID
+  userId: string;
+  // 对话类型
+  chatType: 'intention_compile' | 'daily_chat' | 'habit_checkin' | 'goal_review';
+  // 用户首选语言
+  preferredLanguage?: string;
+  // 工具执行结果回调
+  onToolResult?: (result: ToolCallResult & { tool: string }) => void;
+  // 检测完成回调（无论是否有工具调用）
+  onDetectionComplete?: (result: DetectIntentResult) => void;
+  // 是否启用（可以临时禁用）
+  enabled?: boolean;
+  // 防抖时间（毫秒），避免频繁检测
+  debounceMs?: number;
+}
+
+interface DetectIntentResult {
+  success: boolean;
+  tool: string | null;
+  args: Record<string, unknown>;
+  confidence: number;
+  reasoning?: string;
+  error?: string;
+}
+
+interface LastSuggestion {
+  anchor_task_id: string;
+  anchor_title: string;
+  new_habit: string;
+  position: 'before' | 'after';
+  reminder_text: string;
+}
+
+// ============================================================================
+// Hook
+// ============================================================================
+
+export function useIntentDetection(options: UseIntentDetectionOptions) {
+  const {
+    userId,
+    chatType,
+    preferredLanguage = 'zh',
+    onToolResult,
+    onDetectionComplete,
+    enabled = true,
+    debounceMs = 500,
+  } = options;
+
+  // 对话历史
+  const userMessagesRef = useRef<string[]>([]);
+  const lastSuggestionRef = useRef<LastSuggestion | null>(null);
+  
+  // 防抖定时器
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 正在处理中
+  const isProcessingRef = useRef(false);
+
+  // Supabase 配置
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  /**
+   * 添加用户消息到历史
+   */
+  const addUserMessage = useCallback((message: string) => {
+    userMessagesRef.current.push(message);
+    // 只保留最近 5 条
+    if (userMessagesRef.current.length > 5) {
+      userMessagesRef.current = userMessagesRef.current.slice(-5);
+    }
+  }, []);
+
+  /**
+   * 清空对话历史
+   */
+  const clearHistory = useCallback(() => {
+    userMessagesRef.current = [];
+    lastSuggestionRef.current = null;
+  }, []);
+
+  /**
+   * 调用 detect-intent API
+   */
+  const detectIntent = useCallback(async (aiResponse: string): Promise<DetectIntentResult> => {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/detect-intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          userMessages: userMessagesRef.current,
+          aiResponse,
+          chatType,
+          lastSuggestion: lastSuggestionRef.current,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Detection failed');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ [IntentDetection] API 调用失败:', error);
+      return {
+        success: false,
+        tool: null,
+        args: {},
+        confidence: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }, [supabaseUrl, supabaseAnonKey, chatType]);
+
+  /**
+   * 执行工具调用
+   */
+  const executeToolCall = useCallback(async (
+    tool: string,
+    args: Record<string, unknown>
+  ): Promise<ToolCallResult> => {
+    const context: ToolCallContext = {
+      userId,
+      supabaseUrl,
+      supabaseAnonKey,
+      preferredLanguage,
+    };
+
+    console.log(`🔧 [IntentDetection] 执行工具: ${tool}`, args);
+    
+    const result = await handleToolCall(tool, args, context);
+
+    // 如果是 suggest_habit_stack 成功，保存推荐结果
+    if (tool === 'suggest_habit_stack' && result.success && result.data?.recommended) {
+      const rec = result.data.recommended;
+      lastSuggestionRef.current = {
+        anchor_task_id: rec.anchor_task_id,
+        anchor_title: rec.anchor_title,
+        new_habit: args.new_habit as string,
+        position: rec.position,
+        reminder_text: rec.reminder_text,
+      };
+      console.log('💾 [IntentDetection] 保存推荐结果:', lastSuggestionRef.current);
+    }
+
+    // 如果是 create_habit_stack 成功，清空推荐
+    if (tool === 'create_habit_stack' && result.success) {
+      lastSuggestionRef.current = null;
+      console.log('🗑️ [IntentDetection] 清空推荐结果');
+    }
+
+    return result;
+  }, [userId, supabaseUrl, supabaseAnonKey, preferredLanguage]);
+
+  /**
+   * 处理 AI 回复（主入口）
+   * 
+   * 在 AI 说完一段话后调用此函数
+   * 会自动检测意图并执行工具（如果需要）
+   */
+  const processAIResponse = useCallback((aiResponse: string) => {
+    if (!enabled) {
+      console.log('⏸️ [IntentDetection] 已禁用');
+      return;
+    }
+
+    // 清除之前的防抖定时器
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // 防抖处理
+    debounceTimerRef.current = setTimeout(async () => {
+      // 避免重复处理
+      if (isProcessingRef.current) {
+        console.log('⏳ [IntentDetection] 正在处理中，跳过');
+        return;
+      }
+
+      isProcessingRef.current = true;
+
+      try {
+        console.log('🔍 [IntentDetection] 开始检测意图...');
+        
+        // 1. 调用检测 API
+        const detection = await detectIntent(aiResponse);
+        
+        console.log('🔍 [IntentDetection] 检测结果:', detection);
+
+        // 通知检测完成
+        onDetectionComplete?.(detection);
+
+        // 2. 如果检测到工具，执行它
+        if (detection.success && detection.tool && detection.confidence >= 0.6) {
+          console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
+          
+          const toolResult = await executeToolCall(detection.tool, detection.args);
+          
+          // 通知工具结果
+          onToolResult?.({
+            ...toolResult,
+            tool: detection.tool,
+          });
+        } else if (detection.tool) {
+          console.log(`⚠️ [IntentDetection] 置信度不足，跳过: ${detection.tool} (${detection.confidence})`);
+        }
+
+      } catch (error) {
+        console.error('❌ [IntentDetection] 处理失败:', error);
+      } finally {
+        isProcessingRef.current = false;
+      }
+    }, debounceMs);
+  }, [enabled, debounceMs, detectIntent, executeToolCall, onToolResult, onDetectionComplete]);
+
+  return {
+    // 主入口：处理 AI 回复
+    processAIResponse,
+    // 添加用户消息
+    addUserMessage,
+    // 清空历史
+    clearHistory,
+    // 获取当前推荐
+    getLastSuggestion: () => lastSuggestionRef.current,
+  };
+}
+
+export type { DetectIntentResult, LastSuggestion };

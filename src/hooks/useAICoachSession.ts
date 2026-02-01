@@ -544,12 +544,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
    * @param options.taskId 任务 ID（用于保存 actual_duration_minutes 到 tasks 表）
+   * @param options.callRecordId 来电记录 ID（用于追踪麦克风连接状态）
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string }
+    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string; callRecordId?: string }
   ) => {
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId } = options || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId } = options || {};
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
@@ -642,6 +643,26 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         console.log('🎤 步骤2: toggleMicrophone() 完成');
       } else {
         console.log('🎤 步骤2: 麦克风已启用，跳过');
+      }
+
+      // 🆕 步骤2.1：如果有 callRecordId，记录麦克风连接成功
+      if (callRecordId) {
+        console.log('📞 记录 mic_connected_at:', callRecordId);
+        const supabaseForMic = getSupabaseClient();
+        if (supabaseForMic) {
+          supabaseForMic.functions.invoke('manage-call-records', {
+            body: {
+              action: 'mark_mic_connected',
+              call_record_id: callRecordId,
+            },
+          }).then(({ error }) => {
+            if (error) {
+              console.error('⚠️ 记录 mic_connected_at 失败:', error);
+            } else {
+              console.log('✅ mic_connected_at 已记录');
+            }
+          });
+        }
       }
 
       // 步骤3：并行获取系统指令和 Gemini token（带超时保护）

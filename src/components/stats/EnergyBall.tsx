@@ -1,217 +1,198 @@
 /**
  * EnergyBall - 存钱罐进度组件
  *
- * 金币使用预计算的物理堆叠位置（Matter.js 模拟后导出）
- * 零运行时性能消耗
+ * 使用 Matter.js 物理引擎实现金币掉落堆叠效果
+ * 优化：
+ * - 随机纹理：10 种不同角度的金币素材
+ * - 锁定旋转：贴图只在 ±15° 内小幅度旋转
+ * - 纵深层级：底层金币暗一些，模拟阴影
+ * - 数字优先：带毛玻璃背景，始终可读
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import Matter from 'matter-js';
 
 interface EnergyBallProps {
-    /** 当前完成数 */
     current: number;
-    /** 目标数 */
     target: number;
-    /** 触发动画（当 checkIn 时设为 true） */
     triggerRise?: boolean;
 }
 
-/**
- * 预计算的金币堆叠位置（基于 Matter.js 物理模拟）
- * 容器尺寸：109px（内径）
- * 金币尺寸：24px
- *
- * 每个位置包含：
- * - x, y（左上角坐标）
- * - rotation（旋转角度，±15° 模拟倒入时的随机倾斜）
- * - layer: 0=后层(暗/小), 1=中层, 2=前层(亮/大) - 视觉深度
- *
- * 位置已考虑：重力、碰撞、圆形边界、摩擦力、安息角（中心高两边低）
- */
-const COIN_POSITIONS: Array<{ x: number; y: number; rotation: number; layer?: number }>[] = [
-    // 0 个金币
-    [],
-    // 1 个金币 - 底部中央
-    [
-        { x: 42, y: 80, rotation: -8, layer: 2 },
-    ],
-    // 2 个金币 - 底部并排，有轻微重叠
-    [
-        { x: 30, y: 78, rotation: -12, layer: 1 },
-        { x: 52, y: 79, rotation: 10, layer: 2 },
-    ],
-    // 3 个金币 - 底部三个，中间稍高（安息角）
-    [
-        { x: 18, y: 77, rotation: -15, layer: 0 },
-        { x: 42, y: 74, rotation: 5, layer: 2 },
-        { x: 64, y: 78, rotation: 14, layer: 1 },
-    ],
-    // 4 个金币 - 底部3个 + 上面1个（中心高）
-    [
-        { x: 16, y: 78, rotation: -14, layer: 0 },
-        { x: 40, y: 76, rotation: 6, layer: 1 },
-        { x: 62, y: 79, rotation: 12, layer: 0 },
-        { x: 42, y: 56, rotation: -8, layer: 2 },
-    ],
-    // 5 个金币 - 底部3个 + 上面2个
-    [
-        { x: 14, y: 79, rotation: -15, layer: 0 },
-        { x: 38, y: 76, rotation: 4, layer: 1 },
-        { x: 60, y: 78, rotation: 13, layer: 0 },
-        { x: 28, y: 55, rotation: -10, layer: 1 },
-        { x: 52, y: 54, rotation: 9, layer: 2 },
-    ],
-    // 6 个金币 - 2层堆叠，山丘形
-    [
-        { x: 10, y: 80, rotation: -14, layer: 0 },
-        { x: 34, y: 77, rotation: 5, layer: 1 },
-        { x: 58, y: 78, rotation: 11, layer: 0 },
-        { x: 22, y: 54, rotation: -12, layer: 1 },
-        { x: 46, y: 52, rotation: 7, layer: 2 },
-        { x: 68, y: 55, rotation: 15, layer: 1 },
-    ],
-    // 7 个金币
-    [
-        { x: 8, y: 81, rotation: -15, layer: 0 },
-        { x: 32, y: 78, rotation: 3, layer: 0 },
-        { x: 56, y: 79, rotation: 12, layer: 0 },
-        { x: 20, y: 54, rotation: -13, layer: 1 },
-        { x: 44, y: 51, rotation: 6, layer: 2 },
-        { x: 66, y: 53, rotation: 14, layer: 1 },
-        { x: 42, y: 32, rotation: -4, layer: 2 },
-    ],
-    // 8 个金币
-    [
-        { x: 6, y: 82, rotation: -14, layer: 0 },
-        { x: 30, y: 79, rotation: 2, layer: 0 },
-        { x: 54, y: 80, rotation: 11, layer: 0 },
-        { x: 18, y: 55, rotation: -12, layer: 1 },
-        { x: 42, y: 52, rotation: 5, layer: 1 },
-        { x: 64, y: 54, rotation: 13, layer: 1 },
-        { x: 30, y: 31, rotation: -8, layer: 2 },
-        { x: 54, y: 30, rotation: 10, layer: 2 },
-    ],
-    // 9 个金币
-    [
-        { x: 4, y: 83, rotation: -15, layer: 0 },
-        { x: 28, y: 80, rotation: 1, layer: 0 },
-        { x: 52, y: 81, rotation: 10, layer: 0 },
-        { x: 74, y: 82, rotation: 15, layer: 0 },
-        { x: 16, y: 56, rotation: -13, layer: 1 },
-        { x: 40, y: 53, rotation: 4, layer: 1 },
-        { x: 62, y: 55, rotation: 12, layer: 1 },
-        { x: 28, y: 32, rotation: -9, layer: 2 },
-        { x: 52, y: 31, rotation: 8, layer: 2 },
-    ],
-    // 10 个金币
-    [
-        { x: 3, y: 84, rotation: -14, layer: 0 },
-        { x: 26, y: 81, rotation: 0, layer: 0 },
-        { x: 50, y: 82, rotation: 9, layer: 0 },
-        { x: 72, y: 83, rotation: 14, layer: 0 },
-        { x: 14, y: 57, rotation: -12, layer: 1 },
-        { x: 38, y: 54, rotation: 3, layer: 1 },
-        { x: 60, y: 56, rotation: 11, layer: 1 },
-        { x: 26, y: 33, rotation: -10, layer: 2 },
-        { x: 50, y: 32, rotation: 7, layer: 2 },
-        { x: 38, y: 12, rotation: 5, layer: 2 },
-    ],
-    // 11 个金币
-    [
-        { x: 2, y: 85, rotation: -15, layer: 0 },
-        { x: 24, y: 82, rotation: -1, layer: 0 },
-        { x: 48, y: 83, rotation: 8, layer: 0 },
-        { x: 70, y: 84, rotation: 13, layer: 0 },
-        { x: 12, y: 58, rotation: -13, layer: 1 },
-        { x: 36, y: 55, rotation: 2, layer: 1 },
-        { x: 58, y: 57, rotation: 10, layer: 1 },
-        { x: 24, y: 34, rotation: -11, layer: 2 },
-        { x: 48, y: 33, rotation: 6, layer: 2 },
-        { x: 70, y: 35, rotation: 14, layer: 1 },
-        { x: 36, y: 13, rotation: 4, layer: 2 },
-    ],
-    // 12 个金币
-    [
-        { x: 1, y: 86, rotation: -14, layer: 0 },
-        { x: 22, y: 83, rotation: -2, layer: 0 },
-        { x: 46, y: 84, rotation: 7, layer: 0 },
-        { x: 68, y: 85, rotation: 12, layer: 0 },
-        { x: 10, y: 59, rotation: -12, layer: 1 },
-        { x: 34, y: 56, rotation: 1, layer: 1 },
-        { x: 56, y: 58, rotation: 9, layer: 1 },
-        { x: 78, y: 60, rotation: 15, layer: 0 },
-        { x: 22, y: 35, rotation: -10, layer: 2 },
-        { x: 46, y: 34, rotation: 5, layer: 2 },
-        { x: 68, y: 36, rotation: 13, layer: 2 },
-        { x: 34, y: 14, rotation: 3, layer: 2 },
-    ],
-    // 13 个金币
-    [
-        { x: 0, y: 87, rotation: -15, layer: 0 },
-        { x: 20, y: 84, rotation: -3, layer: 0 },
-        { x: 44, y: 85, rotation: 6, layer: 0 },
-        { x: 66, y: 86, rotation: 11, layer: 0 },
-        { x: 8, y: 60, rotation: -13, layer: 1 },
-        { x: 32, y: 57, rotation: 0, layer: 1 },
-        { x: 54, y: 59, rotation: 8, layer: 1 },
-        { x: 76, y: 61, rotation: 14, layer: 0 },
-        { x: 20, y: 36, rotation: -11, layer: 2 },
-        { x: 44, y: 35, rotation: 4, layer: 2 },
-        { x: 66, y: 37, rotation: 12, layer: 2 },
-        { x: 32, y: 15, rotation: 2, layer: 2 },
-        { x: 56, y: 14, rotation: 9, layer: 2 },
-    ],
-    // 14 个金币
-    [
-        { x: -1, y: 88, rotation: -14, layer: 0 },
-        { x: 18, y: 85, rotation: -4, layer: 0 },
-        { x: 42, y: 86, rotation: 5, layer: 0 },
-        { x: 64, y: 87, rotation: 10, layer: 0 },
-        { x: 6, y: 61, rotation: -12, layer: 1 },
-        { x: 30, y: 58, rotation: -1, layer: 1 },
-        { x: 52, y: 60, rotation: 7, layer: 1 },
-        { x: 74, y: 62, rotation: 13, layer: 0 },
-        { x: 18, y: 37, rotation: -10, layer: 2 },
-        { x: 42, y: 36, rotation: 3, layer: 2 },
-        { x: 64, y: 38, rotation: 11, layer: 2 },
-        { x: 30, y: 16, rotation: 1, layer: 2 },
-        { x: 54, y: 15, rotation: 8, layer: 2 },
-        { x: 42, y: -2, rotation: 6, layer: 2 },
-    ],
-    // 15 个金币
-    [
-        { x: -2, y: 89, rotation: -15, layer: 0 },
-        { x: 16, y: 86, rotation: -5, layer: 0 },
-        { x: 40, y: 87, rotation: 4, layer: 0 },
-        { x: 62, y: 88, rotation: 9, layer: 0 },
-        { x: 4, y: 62, rotation: -13, layer: 1 },
-        { x: 28, y: 59, rotation: -2, layer: 1 },
-        { x: 50, y: 61, rotation: 6, layer: 1 },
-        { x: 72, y: 63, rotation: 12, layer: 1 },
-        { x: 16, y: 38, rotation: -11, layer: 2 },
-        { x: 40, y: 37, rotation: 2, layer: 2 },
-        { x: 62, y: 39, rotation: 10, layer: 2 },
-        { x: 28, y: 17, rotation: 0, layer: 2 },
-        { x: 52, y: 16, rotation: 7, layer: 2 },
-        { x: 40, y: -3, rotation: 5, layer: 2 },
-        { x: 64, y: -2, rotation: 12, layer: 2 },
-    ],
+interface CoinState {
+    x: number;
+    y: number;
+    rotation: number;      // 物理旋转（用于 ±15° 限制）
+    textureIndex: number;  // 随机纹理索引 0-9
+    spawnOrder: number;    // 生成顺序（用于计算层级）
+}
+
+// 10 种金币纹理（不同角度）
+const COIN_TEXTURES = [
+    '/coins/coin-0.png',
+    '/coins/coin-1.png',
+    '/coins/coin-2.png',
+    '/coins/coin-3.png',
+    '/coins/coin-4.png',
+    '/coins/coin-5.png',
+    '/coins/coin-6.png',
+    '/coins/coin-7.png',
+    '/coins/coin-8.png',
+    '/coins/coin-9.png',
 ];
 
 /**
  * 存钱罐进度组件
  */
-export const EnergyBall: React.FC<EnergyBallProps> = ({
-    current,
-}) => {
-    // 尺寸配置
+export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const size = 125;
     const borderWidth = 8;
     const innerSize = size - borderWidth * 2; // 109px
+    const coinSize = 22;
+    const radius = innerSize / 2;
 
-    // 获取预计算的金币位置
-    const coinCount = Math.min(Math.max(current, 0), 15);
-    const positions = COIN_POSITIONS[coinCount] || [];
+    const [coins, setCoins] = useState<CoinState[]>([]);
+    const engineRef = useRef<Matter.Engine | null>(null);
+    const coinBodiesRef = useRef<Matter.Body[]>([]);
+    const textureMapRef = useRef<Map<string, number>>(new Map()); // body.id -> textureIndex
+
+    useEffect(() => {
+        const coinCount = Math.min(Math.max(current, 0), 20);
+
+        if (coinCount === 0) {
+            setCoins([]);
+            return;
+        }
+
+        // 清理之前的引擎
+        if (engineRef.current) {
+            Matter.World.clear(engineRef.current.world, false);
+            Matter.Engine.clear(engineRef.current);
+        }
+
+        // 创建物理引擎
+        const engine = Matter.Engine.create({
+            gravity: { x: 0, y: 0.8 },
+        });
+        engineRef.current = engine;
+
+        const world = engine.world;
+
+        // 创建圆形边界（用多个小矩形近似圆弧，只需要下半部分）
+        const segments = 24;
+        const wallThickness = 20;
+        for (let i = 0; i < segments; i++) {
+            const angle = (i / segments) * Math.PI;
+            const nextAngle = ((i + 1) / segments) * Math.PI;
+            const midAngle = (angle + nextAngle) / 2;
+
+            const wallRadius = radius - 2;
+            const x = radius + Math.cos(midAngle) * wallRadius;
+            const y = radius + Math.sin(midAngle) * wallRadius;
+
+            const segmentLength = 2 * wallRadius * Math.sin(Math.PI / segments / 2) * 2 + 2;
+
+            const wall = Matter.Bodies.rectangle(x, y, segmentLength, wallThickness, {
+                isStatic: true,
+                angle: midAngle + Math.PI / 2,
+                friction: 1,
+                restitution: 0.05,
+            });
+            Matter.Composite.add(world, wall);
+        }
+
+        // 左右两边的墙
+        Matter.Composite.add(world, Matter.Bodies.rectangle(-5, radius, 10, innerSize, { isStatic: true }));
+        Matter.Composite.add(world, Matter.Bodies.rectangle(innerSize + 5, radius, 10, innerSize, { isStatic: true }));
+
+        // 为每个金币预分配随机纹理
+        const newTextureMap = new Map<string, number>();
+
+        // 创建金币（圆形刚体）
+        const coinBodies: Matter.Body[] = [];
+        for (let i = 0; i < coinCount; i++) {
+            const startX = radius + (Math.random() - 0.5) * 40;
+            const startY = 10 + i * 5;
+
+            const coin = Matter.Bodies.circle(startX, startY, coinSize / 2 - 1, {
+                friction: 0.9,
+                frictionStatic: 1,
+                restitution: 0.1,
+                density: 0.005,
+                label: `coin-${i}`,
+            });
+
+            // 随机分配纹理（在生成时固定）
+            const textureIndex = Math.floor(Math.random() * COIN_TEXTURES.length);
+            newTextureMap.set(coin.id.toString(), textureIndex);
+
+            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.3);
+
+            coinBodies.push(coin);
+            Matter.Composite.add(world, coin);
+        }
+        coinBodiesRef.current = coinBodies;
+        textureMapRef.current = newTextureMap;
+
+        // 手动步进物理引擎
+        let frameCount = 0;
+        let stableFrames = 0;
+        let animationId: number;
+
+        const updateCoins = () => {
+            Matter.Engine.update(engine, 1000 / 60);
+            frameCount++;
+
+            const newCoins = coinBodies.map((body, index) => {
+                // 限制旋转角度在 ±15° 内
+                const rawRotation = (body.angle * 180) / Math.PI;
+                const clampedRotation = Math.max(-15, Math.min(15, (rawRotation % 30) - 15));
+
+                return {
+                    x: body.position.x - coinSize / 2,
+                    y: body.position.y - coinSize / 2,
+                    rotation: clampedRotation,
+                    textureIndex: textureMapRef.current.get(body.id.toString()) || 0,
+                    spawnOrder: index,
+                };
+            });
+
+            setCoins([...newCoins]);
+
+            // 检查是否稳定
+            if (frameCount > 60) {
+                const isStable = coinBodies.every((body) => {
+                    const speed = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
+                    return speed < 0.5;
+                });
+
+                if (isStable) {
+                    stableFrames++;
+                    if (stableFrames > 30) {
+                        return;
+                    }
+                } else {
+                    stableFrames = 0;
+                }
+            }
+
+            if (frameCount < 180) {
+                animationId = requestAnimationFrame(updateCoins);
+            }
+        };
+
+        animationId = requestAnimationFrame(updateCoins);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            if (engineRef.current) {
+                Matter.World.clear(engineRef.current.world, false);
+                Matter.Engine.clear(engineRef.current);
+            }
+        };
+    }, [current]);
+
+    // 按 Y 坐标排序，底部的先渲染（在后面）
+    const sortedCoins = [...coins].sort((a, b) => a.y - b.y);
 
     return (
         <div className="relative">
@@ -234,51 +215,60 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({
                         background: 'linear-gradient(180deg, #FFF8E7 0%, #F5E6C8 100%)',
                     }}
                 >
-                    {/* 金币层 - 按 layer 排序渲染（后层先渲染） */}
+                    {/* 金币层 */}
                     <div className="absolute inset-0">
-                        {[...positions]
-                            .sort((a, b) => (a.layer ?? 1) - (b.layer ?? 1))
-                            .map((coin, index) => {
-                                // 视觉深度：后层(0)暗/小，中层(1)正常，前层(2)亮/大
-                                const layer = coin.layer ?? 1;
-                                const scale = layer === 0 ? 0.85 : layer === 1 ? 0.95 : 1.0;
-                                const brightness = layer === 0 ? 0.75 : layer === 1 ? 0.9 : 1.0;
-                                const zIndex = layer * 10 + index;
+                        {sortedCoins.map((coin, renderIndex) => {
+                            // 计算亮度：底部的金币暗一些（模拟阴影）
+                            // renderIndex 越小 = Y 越小 = 越靠上 = 越早渲染 = 在后面
+                            const depthRatio = renderIndex / Math.max(sortedCoins.length - 1, 1);
+                            const brightness = 0.75 + depthRatio * 0.25; // 0.75 ~ 1.0
 
-                                return (
-                                    <img
-                                        key={index}
-                                        src="/coins.png"
-                                        alt=""
-                                        className="absolute"
-                                        style={{
-                                            width: 24,
-                                            height: 24,
-                                            left: coin.x,
-                                            top: coin.y,
-                                            transform: `rotate(${coin.rotation}deg) scale(${scale})`,
-                                            filter: `brightness(${brightness}) drop-shadow(1px 2px 3px rgba(0,0,0,0.25))`,
-                                            zIndex,
-                                        }}
-                                    />
-                                );
-                            })}
+                            return (
+                                <img
+                                    key={`${coin.spawnOrder}-${coin.textureIndex}`}
+                                    src={COIN_TEXTURES[coin.textureIndex]}
+                                    alt=""
+                                    className="absolute"
+                                    style={{
+                                        width: coinSize,
+                                        height: coinSize,
+                                        left: coin.x,
+                                        top: coin.y,
+                                        transform: `rotate(${coin.rotation}deg)`,
+                                        filter: `brightness(${brightness}) drop-shadow(1px 2px 3px rgba(0,0,0,0.3))`,
+                                        zIndex: renderIndex,
+                                    }}
+                                />
+                            );
+                        })}
                     </div>
                 </div>
             </div>
 
-            {/* 中心文字 */}
-            <div className="absolute inset-0 flex items-center justify-center">
-                <span
-                    className="font-bold text-2xl"
+            {/* 中心文字 - 最顶层，带毛玻璃背景 */}
+            <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ zIndex: 100 }}
+            >
+                <div
+                    className="px-3 py-1 rounded-lg"
                     style={{
-                        fontFamily: "'Quicksand', sans-serif",
-                        color: '#8B5A3C',
-                        textShadow: '0 1px 2px rgba(255,255,255,0.8)',
+                        background: 'rgba(255, 255, 255, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)',
                     }}
                 >
-                    {current}
-                </span>
+                    <span
+                        className="font-bold text-2xl"
+                        style={{
+                            fontFamily: "'Quicksand', sans-serif",
+                            color: '#8B5A3C',
+                            textShadow: '0 1px 2px rgba(255,255,255,0.5)',
+                        }}
+                    >
+                        {current}
+                    </span>
+                </div>
             </div>
         </div>
     );

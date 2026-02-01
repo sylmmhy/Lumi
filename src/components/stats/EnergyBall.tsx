@@ -74,7 +74,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const size = 125;
     const borderWidth = 8;
     const innerSize = size - borderWidth * 2; // 109px
-    const coinSize = 24; // 保持正方形，不拉伸
+    const coinSize = 18; // 保持正方形，不拉伸
     const radius = innerSize / 2;
 
     const [coins, setCoins] = useState<CoinState[]>([]);
@@ -83,7 +83,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const textureMapRef = useRef<Map<string, string>>(new Map());
 
     useEffect(() => {
-        const coinCount = Math.min(Math.max(current, 0), 20);
+        const coinCount = Math.min(Math.max(current, 0), 40);
 
         if (coinCount === 0) {
             setCoins([]);
@@ -104,10 +104,10 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
 
         const world = engine.world;
 
-        // 创建圆形边界（下半圆弧）- 向下移动 15px 扩大容器感
+        // 创建圆形边界（下半圆弧）
         const segments = 20;
         const wallThickness = 15;
-        const containerOffset = 15; // 容器底部向下移动
+        const containerOffset = 0; // 不向下偏移，保持金币在可视区域内
         for (let i = 0; i < segments; i++) {
             const angle = (i / segments) * Math.PI;
             const nextAngle = ((i + 1) / segments) * Math.PI;
@@ -139,9 +139,9 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
         const coinBodies: Matter.Body[] = [];
         const hitboxScale = 0.85; // 碰撞体缩放，让金币视觉上有微小重叠
         for (let i = 0; i < coinCount; i++) {
-            // 随机生成点：x 轴 ±30px 偏移
-            const startX = radius + (Math.random() - 0.5) * 60;
-            const startY = 5 + i * 8;
+            // 随机生成点：x 轴随机分布，y 轴从负数开始（让金币从上方掉入）
+            const startX = radius + (Math.random() - 0.5) * 70;
+            const startY = -coinSize - i * 3; // 从容器上方依次生成，避免重叠
 
             const coin = Matter.Bodies.circle(startX, startY, (coinSize / 2) * hitboxScale, {
                 friction: 0.8,           // 高摩擦
@@ -229,6 +229,9 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const sortedCoins = [...coins].sort((a, b) => a.spawnOrder - b.spawnOrder);
     const totalCoins = sortedCoins.length;
 
+    // 调试日志
+    console.log('[EnergyBall] current:', current, 'coins.length:', coins.length, 'sortedCoins.length:', sortedCoins.length);
+
     return (
         <div className="relative">
             {/* 外层白色圆圈 */}
@@ -287,7 +290,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
 
             {/* 数字层 - 最顶层，轻微磨砂透明背景 */}
             <div
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                className="absolute inset-0 flex items-start justify-center pt-6 pointer-events-none"
                 style={{ zIndex: 999 }}
             >
                 <div

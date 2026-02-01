@@ -382,7 +382,7 @@ export function DevConsole() {
 
   return (
     <>
-      {/* 右上角开关按钮 - 透明的，需要双击才能打开 */}
+      {/* 右上角开关按钮 - 需要快速双击才能打开 */}
       <button
         onClick={() => {
           // 如果已验证，正常操作（单击即可）
@@ -396,7 +396,7 @@ export function DevConsole() {
             return
           }
 
-          // 未验证时，需要双击才能打开密码输入框
+          // 未验证时，需要快速双击才能打开密码输入框
           clickCountRef.current += 1
 
           if (clickTimerRef.current) {
@@ -408,20 +408,20 @@ export function DevConsole() {
             clickCountRef.current = 0
             setShowPasswordInput(true)
           } else {
-            // 等待第二次点击
+            // 等待第二次点击（300ms 内需要完成双击，更短的窗口防止误触）
             clickTimerRef.current = setTimeout(() => {
               clickCountRef.current = 0
-            }, 500) // 500ms 内需要完成双击
+            }, 300)
           }
         }}
-        className="fixed z-[9999] w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 bg-transparent"
+        className="fixed z-[9999] w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 opacity-0"
         style={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 50px)',
+          top: 'calc(env(safe-area-inset-top, 0px) + 130px)',
           right: '12px'
         }}
-        title="Debug Console"
+        title="Debug Console (双击打开)"
       >
-        {/* 透明按钮，不显示图标 */}
+        <span className="text-white/50 text-xs">🐛</span>
       </button>
 
       {/* 复制成功提示 Toast */}

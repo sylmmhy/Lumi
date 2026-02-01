@@ -5,34 +5,55 @@
  * 仅 iOS 支持 HealthKit，Android 和 Web 浏览器不支持
  */
 
-// Extend Window interface for HealthKit message handlers
-declare global {
-  interface Window {
-    webkit?: {
-      messageHandlers?: {
-        // Existing handlers...
-        [key: string]: {
-          postMessage: (message: unknown) => void;
-        };
-        // HealthKit specific handlers
-        isHealthKitAvailable?: {
-          postMessage: (message: unknown) => void;
-        };
-        requestHealthKitPermission?: {
-          postMessage: (message: unknown) => void;
-        };
-        hasHealthKitPermission?: {
-          postMessage: (message: unknown) => void;
-        };
-        syncHealthData?: {
-          postMessage: (message: unknown) => void;
-        };
-      };
-    };
-  }
+/** HealthKit message handler interface */
+interface HealthKitMessageHandler {
+  postMessage: (message: unknown) => void;
 }
 
-export type HealthKitResultType = 'availability' | 'permission' | 'permissionStatus' | 'sync';
+/** WebKit message handlers for HealthKit */
+interface HealthKitWebKitHandlers {
+  isHealthKitAvailable?: HealthKitMessageHandler;
+  requestHealthKitPermission?: HealthKitMessageHandler;
+  hasHealthKitPermission?: HealthKitMessageHandler;
+  syncHealthData?: HealthKitMessageHandler;
+  getAvailableTypes?: HealthKitMessageHandler;
+  getHealthDataByType?: HealthKitMessageHandler;
+}
+
+/** Get HealthKit handlers from window.webkit (type-safe) */
+function getHealthKitHandlers(): HealthKitWebKitHandlers | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).webkit?.messageHandlers;
+}
+
+export type HealthKitResultType = 'availability' | 'permission' | 'permissionStatus' | 'sync' | 'availableTypes' | 'healthDataByType';
+
+/** 健康数据样本接口 */
+export interface HealthSample {
+  data_type: string;
+  value: number | null;
+  unit: string | null;
+  sleep_stage: string | null;
+  start_date: string;
+  end_date: string;
+  source_name: string | null;
+  source_bundle_id: string | null;
+  metadata: string | null;
+}
+
+/** HKObjectType 子类名称 */
+export type HKObjectTypeClass =
+  | 'HKQuantityType'
+  | 'HKCategoryType'
+  | 'HKCharacteristicType'
+  | 'HKCorrelationType'
+  | 'HKWorkoutType'
+  | 'HKActivitySummaryType'
+  | 'HKAudiogramSampleType'
+  | 'HKElectrocardiogramType';
+
+/** 按 HKObjectType 子类分组的数据类型可用性 */
+export type HealthKitAvailableTypes = Partial<Record<HKObjectTypeClass, Record<string, number>>>;
 
 export interface HealthKitResultData {
   available?: boolean;
@@ -40,6 +61,10 @@ export interface HealthKitResultData {
   status?: 'prompt' | 'granted' | 'denied' | 'not_available';
   success?: boolean;
   count?: number;
+  types?: HealthKitAvailableTypes;  // 按类型类别分组：类型类别 -> 数据类型 -> 样本数量
+  dataType?: string;  // 查询的数据类型（用于 healthDataByType）
+  samples?: HealthSample[];  // 健康数据样本（用于 healthDataByType）
+  error?: string;  // 错误信息
 }
 
 export interface HealthKitResultEvent {
@@ -51,7 +76,7 @@ export interface HealthKitResultEvent {
  * 检测是否在 iOS WebView 环境中
  */
 function isIOSWebView(): boolean {
-  const handlers = window.webkit?.messageHandlers;
+  const handlers = getHealthKitHandlers();
   return !!(handlers?.isHealthKitAvailable);
 }
 
@@ -65,7 +90,7 @@ const healthKitBridge = {
   isAvailable: (): void => {
     if (isIOSWebView()) {
       console.log('[HealthKit] Checking availability...');
-      window.webkit?.messageHandlers?.isHealthKitAvailable?.postMessage({});
+      getHealthKitHandlers()?.isHealthKitAvailable?.postMessage({});
     }
   },
 
@@ -75,7 +100,7 @@ const healthKitBridge = {
   requestPermission: (): void => {
     if (isIOSWebView()) {
       console.log('[HealthKit] Requesting permission...');
-      window.webkit?.messageHandlers?.requestHealthKitPermission?.postMessage({});
+      getHealthKitHandlers()?.requestHealthKitPermission?.postMessage({});
     }
   },
 
@@ -85,7 +110,7 @@ const healthKitBridge = {
   hasPermission: (): void => {
     if (isIOSWebView()) {
       console.log('[HealthKit] Checking permission status...');
-      window.webkit?.messageHandlers?.hasHealthKitPermission?.postMessage({});
+      getHealthKitHandlers()?.hasHealthKitPermission?.postMessage({});
     }
   },
 
@@ -96,7 +121,29 @@ const healthKitBridge = {
   syncData: (days: number = 7): void => {
     if (isIOSWebView()) {
       console.log(`[HealthKit] Syncing data for ${days} days...`);
-      window.webkit?.messageHandlers?.syncHealthData?.postMessage({ days });
+      getHealthKitHandlers()?.syncHealthData?.postMessage({ days });
+    }
+  },
+
+  /**
+   * 获取所有数据类型的可用性（过去30天是否有数据）
+   */
+  getAvailableTypes: (): void => {
+    if (isIOSWebView()) {
+      console.log('[HealthKit] Getting available data types...');
+      getHealthKitHandlers()?.getAvailableTypes?.postMessage({});
+    }
+  },
+
+  /**
+   * 获取特定类型的健康数据
+   * @param dataType - 数据类型标识符（如 "stepCount", "heartRate", "sleepAnalysis" 等）
+   * @param days - 查询过去多少天的数据（默认 7 天）
+   */
+  getHealthDataByType: (dataType: string, days: number = 7): void => {
+    if (isIOSWebView()) {
+      console.log(`[HealthKit] Getting ${dataType} data for ${days} days...`);
+      getHealthKitHandlers()?.getHealthDataByType?.postMessage({ dataType, days });
     }
   },
 };
@@ -143,6 +190,34 @@ export function syncHealthKitData(days: number = 7): void {
 }
 
 /**
+ * 获取所有数据类型的可用性
+ * 结果通过 'healthKitResult' 事件返回
+ */
+export function requestAvailableTypes(): void {
+  healthKitBridge.getAvailableTypes();
+}
+
+/**
+ * 获取特定类型的健康数据
+ * @param dataType - 数据类型标识符（如 "stepCount", "heartRate", "sleepAnalysis" 等）
+ * @param days - 查询过去多少天的数据（默认 7 天）
+ * 结果通过 'healthKitResult' 事件返回
+ *
+ * 支持的数据类型：
+ * - 心脏：heartRate, restingHeartRate, walkingHeartRateAverage, heartRateVariabilitySDNN
+ * - 活动：stepCount, distanceWalkingRunning, distanceCycling, activeEnergyBurned, flightsClimbed
+ * - 睡眠：sleepAnalysis
+ * - 身体测量：bodyMass, height, bodyMassIndex, bodyFatPercentage
+ * - 生命体征：bodyTemperature, bloodPressureSystolic, bloodPressureDiastolic, bloodGlucose
+ * - 呼吸：oxygenSaturation, respiratoryRate
+ * - 营养：dietaryEnergyConsumed, dietaryWater, dietaryCaffeine
+ * - 环境：environmentalAudioExposure, headphoneAudioExposure
+ */
+export function requestHealthDataByType(dataType: string, days: number = 7): void {
+  healthKitBridge.getHealthDataByType(dataType, days);
+}
+
+/**
  * 添加 HealthKit 结果监听器
  * @param callback - 回调函数
  * @returns 移除监听器的函数
@@ -163,117 +238,154 @@ export function addHealthKitResultListener(
 }
 
 /**
+ * 通用 HealthKit 异步操作包装函数
+ * 抽象重复的 Promise + 监听器 + 超时逻辑
+ *
+ * @param resultType - 期望的结果类型
+ * @param defaultValue - 非 iOS 环境或超时时的默认返回值
+ * @param timeoutMs - 超时时间（毫秒）
+ * @param bridgeAction - 调用原生 bridge 的函数
+ * @param extractResult - 从 HealthKitResultData 中提取结果的函数
+ * @param matchCondition - 可选的额外匹配条件（用于 getHealthDataByType 等需要匹配参数的场景）
+ */
+function createHealthKitAsyncOperation<T>(
+  resultType: HealthKitResultType,
+  defaultValue: T,
+  timeoutMs: number,
+  bridgeAction: () => void,
+  extractResult: (data: HealthKitResultData) => T,
+  matchCondition?: (data: HealthKitResultData) => boolean
+): Promise<T> {
+  return new Promise((resolve) => {
+    if (!isIOSWebView()) {
+      resolve(defaultValue);
+      return;
+    }
+
+    let resolved = false;
+    const removeListener = addHealthKitResultListener((result) => {
+      if (result.type === resultType) {
+        // 检查额外匹配条件（如果有）
+        if (matchCondition && !matchCondition(result.data)) {
+          return;
+        }
+        if (!resolved) {
+          resolved = true;
+          removeListener();
+          resolve(extractResult(result.data));
+        }
+      }
+    });
+
+    // 超时处理
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        removeListener();
+        resolve(defaultValue);
+      }
+    }, timeoutMs);
+
+    bridgeAction();
+  });
+}
+
+/**
  * Promise 版本的 HealthKit 操作
  */
 export const healthKitAsync = {
   /**
    * 检查可用性
    */
-  isAvailable: (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (!isIOSWebView()) {
-        resolve(false);
-        return;
-      }
-
-      const removeListener = addHealthKitResultListener((result) => {
-        if (result.type === 'availability') {
-          removeListener();
-          resolve(result.data.available ?? false);
-        }
-      });
-
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        removeListener();
-        resolve(false);
-      }, 5000);
-
-      healthKitBridge.isAvailable();
-    });
-  },
+  isAvailable: (): Promise<boolean> =>
+    createHealthKitAsyncOperation(
+      'availability',
+      false,
+      5000,
+      () => healthKitBridge.isAvailable(),
+      (data) => data.available ?? false
+    ),
 
   /**
    * 请求授权
    */
-  requestPermission: (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (!isIOSWebView()) {
-        resolve(false);
-        return;
-      }
-
-      const removeListener = addHealthKitResultListener((result) => {
-        if (result.type === 'permission') {
-          removeListener();
-          resolve(result.data.granted ?? false);
-        }
-      });
-
-      // Timeout after 30 seconds (user interaction)
-      setTimeout(() => {
-        removeListener();
-        resolve(false);
-      }, 30000);
-
-      healthKitBridge.requestPermission();
-    });
-  },
+  requestPermission: (): Promise<boolean> =>
+    createHealthKitAsyncOperation(
+      'permission',
+      false,
+      30000, // 用户交互需要更长时间
+      () => healthKitBridge.requestPermission(),
+      (data) => data.granted ?? false
+    ),
 
   /**
    * 获取授权状态
    */
-  getPermissionStatus: (): Promise<'prompt' | 'granted' | 'denied' | 'not_available'> => {
-    return new Promise((resolve) => {
-      if (!isIOSWebView()) {
-        resolve('not_available');
-        return;
-      }
-
-      const removeListener = addHealthKitResultListener((result) => {
-        if (result.type === 'permissionStatus') {
-          removeListener();
-          resolve(result.data.status ?? 'not_available');
-        }
-      });
-
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        removeListener();
-        resolve('not_available');
-      }, 5000);
-
-      healthKitBridge.hasPermission();
-    });
-  },
+  getPermissionStatus: (): Promise<'prompt' | 'granted' | 'denied' | 'not_available'> =>
+    createHealthKitAsyncOperation(
+      'permissionStatus',
+      'not_available' as const,
+      5000,
+      () => healthKitBridge.hasPermission(),
+      (data) => data.status ?? 'not_available'
+    ),
 
   /**
    * 同步数据
    */
-  syncData: (days: number = 7): Promise<{ success: boolean; count: number }> => {
-    return new Promise((resolve) => {
-      if (!isIOSWebView()) {
-        resolve({ success: false, count: 0 });
-        return;
-      }
+  syncData: (days: number = 7): Promise<{ success: boolean; count: number }> =>
+    createHealthKitAsyncOperation(
+      'sync',
+      { success: false, count: 0 },
+      60000, // 数据同步需要更长时间
+      () => healthKitBridge.syncData(days),
+      (data) => ({ success: data.success ?? false, count: data.count ?? 0 })
+    ),
 
-      const removeListener = addHealthKitResultListener((result) => {
-        if (result.type === 'sync') {
-          removeListener();
-          resolve({
-            success: result.data.success ?? false,
-            count: result.data.count ?? 0,
-          });
+  /**
+   * 获取所有数据类型的可用性，按 HKObjectType 子类分组
+   * @returns 嵌套字典，外层 key 为类型类别名称，内层为数据类型名称 -> 过去30天的样本数量
+   */
+  getAvailableTypes: (): Promise<HealthKitAvailableTypes | null> =>
+    createHealthKitAsyncOperation(
+      'availableTypes',
+      null,
+      120000, // 需要查询 100+ 类型
+      () => healthKitBridge.getAvailableTypes(),
+      (data) => data.types || null
+    ),
+
+  /**
+   * 获取特定类型的健康数据（默认过去7天）
+   * @param dataType - 数据类型标识符（如 "stepCount", "heartRate", "sleepAnalysis" 等）
+   * @param days - 查询过去多少天的数据（默认 7 天）
+   * @returns 健康数据样本数组，如果失败则返回空数组
+   *
+   * 支持的数据类型：
+   * - 心脏：heartRate, restingHeartRate, walkingHeartRateAverage, heartRateVariabilitySDNN
+   * - 活动：stepCount, distanceWalkingRunning, distanceCycling, activeEnergyBurned, flightsClimbed
+   * - 睡眠：sleepAnalysis
+   * - 身体测量：bodyMass, height, bodyMassIndex, bodyFatPercentage
+   * - 生命体征：bodyTemperature, bloodPressureSystolic, bloodPressureDiastolic, bloodGlucose
+   * - 呼吸：oxygenSaturation, respiratoryRate
+   * - 营养：dietaryEnergyConsumed, dietaryWater, dietaryCaffeine
+   * - 环境：environmentalAudioExposure, headphoneAudioExposure
+   */
+  getHealthDataByType: (dataType: string, days: number = 7): Promise<HealthSample[]> =>
+    createHealthKitAsyncOperation(
+      'healthDataByType',
+      [] as HealthSample[],
+      60000,
+      () => healthKitBridge.getHealthDataByType(dataType, days),
+      (data) => {
+        if (data.success && data.samples) {
+          return data.samples;
         }
-      });
-
-      // Timeout after 60 seconds (data sync can take time)
-      setTimeout(() => {
-        removeListener();
-        resolve({ success: false, count: 0 });
-      }, 60000);
-
-      healthKitBridge.syncData(days);
-    });
-  },
+        if (data.error) {
+          console.error('[HealthKit] getHealthDataByType failed:', data.error);
+        }
+        return [];
+      },
+      (data) => data.dataType === dataType // 确保匹配请求的 dataType
+    ),
 };

@@ -4,7 +4,7 @@
  * 新版设计理念（截图版）：
  * - 左侧：习惯名称 + 轻量化启动引导语
  * - 右侧：3D 风格 Start 按钮（黄/橙色，有厚度）
- * - 底部：累计经验进度条 + Level 显示
+ * - 底部：每周打卡进度（周一到周日的7个圆圈，完成显示金币）
  */
 
 import React, { useState } from 'react';
@@ -80,33 +80,30 @@ const getDefaultSubtitle = (title: string): string => {
 };
 
 /**
- * 根据累计次数计算当前等级和下一等级目标
- * 等级里程碑：1, 5, 15, 30, 50, 80, 120, 170, 230, 300...
+ * 获取本周的日期数组（周一到周日）
+ * @returns 本周每天的日期字符串数组（YYYY-MM-DD 格式）
  */
-const getLevelInfo = (totalCompletions: number): { level: number; current: number; target: number } => {
-    // 等级对应的累计次数要求（到达该次数升级）
-    const levelThresholds = [0, 1, 5, 15, 30, 50, 80, 120, 170, 230, 300, 400, 500, 650, 800, 1000];
+const getThisWeekDays = (): string[] => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = 周日, 1 = 周一, ...
+    // 计算本周周一的日期（如果今天是周日，则往前推6天）
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
 
-    let level = 1;
-    for (let i = 1; i < levelThresholds.length; i++) {
-        if (totalCompletions >= levelThresholds[i]) {
-            level = i + 1;
-        } else {
-            break;
-        }
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        days.push(getLocalDateString(date));
     }
-
-    // 当前等级的起始值
-    const currentLevelStart = levelThresholds[level - 1] || 0;
-    // 下一等级的目标值
-    const nextLevelTarget = levelThresholds[level] || currentLevelStart + 100;
-
-    return {
-        level,
-        current: totalCompletions - currentLevelStart,
-        target: nextLevelTarget - currentLevelStart,
-    };
+    return days;
 };
+
+/**
+ * 周几的简称（用于显示）
+ */
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
 /**
  * 能量启动卡片
@@ -126,10 +123,8 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     // 获取引导语
     const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);
 
-    // 获取等级信息（基于累计完成次数）
-    const totalCompletions = habit.totalCompletions || 0;
-    const { level, current, target } = getLevelInfo(totalCompletions);
-    const progress = Math.min(current / target, 1);
+    // 获取本周的打卡进度
+    const thisWeekDays = getThisWeekDays();
 
     // 计算连胜天数（复用 heatmapHelpers 中的统一逻辑）
     const streakDays = calculateCurrentStreak(habit.history);
@@ -234,37 +229,46 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                 </div>
             </div>
 
-            {/* 下半部分：累计经验进度条 + Level */}
-            <div className="flex items-center gap-3">
-                {/* 进度条 */}
-                <div className="flex-1 relative">
-                    <div
-                        className="h-7 rounded-full overflow-hidden"
-                        style={{ backgroundColor: '#F0F0F0' }}
-                    >
-                        {/* 进度填充 */}
-                        <div
-                            className="h-full rounded-full transition-all duration-500 ease-out"
-                            style={{
-                                width: `${progress * 100}%`,
-                                background: 'linear-gradient(90deg, #FFD966 0%, #E6A800 100%)',
-                            }}
-                        />
-                    </div>
-                    {/* 进度文字 */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-gray-600 font-medium text-sm">
-                            {current} / {target}
-                        </span>
-                    </div>
-                </div>
+            {/* 下半部分：每周打卡进度（周一到周日） */}
+            <div className="flex items-center justify-between">
+                {thisWeekDays.map((dateKey, index) => {
+                    const isCompleted = !!habit.history[dateKey];
+                    const isToday = dateKey === todayKey;
 
-                {/* Level 标签 */}
-                <div className="flex-shrink-0">
-                    <span className="text-gray-600 font-semibold text-sm">
-                        Level {level}
-                    </span>
-                </div>
+                    return (
+                        <div
+                            key={dateKey}
+                            className="flex flex-col items-center gap-1"
+                        >
+                            {/* 周几标签 */}
+                            <span
+                                className={`text-xs font-medium ${
+                                    isToday ? 'text-amber-500' : 'text-gray-400'
+                                }`}
+                            >
+                                {WEEKDAY_LABELS[index]}
+                            </span>
+                            {/* 打卡状态圆圈 */}
+                            <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    isCompleted
+                                        ? ''
+                                        : isToday
+                                          ? 'border-2 border-amber-400 bg-amber-50'
+                                          : 'border-2 border-gray-200 bg-gray-50'
+                                }`}
+                            >
+                                {isCompleted ? (
+                                    <img
+                                        src="/coins.png"
+                                        alt="完成"
+                                        className="w-7 h-7 object-contain"
+                                    />
+                                ) : null}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
             {/* CSS 动画 */}

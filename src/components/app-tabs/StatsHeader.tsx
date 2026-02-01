@@ -57,7 +57,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
                     className="text-white italic font-bold whitespace-nowrap"
                     style={{ fontFamily: "'Sansita', sans-serif", fontSize: 'clamp(28px, 10vw, 44px)' }}
                 >
-                    {t('stats.monthlyMission')}
+                    {t('stats.weeklyWins')}
                 </h1>
             </div>
 

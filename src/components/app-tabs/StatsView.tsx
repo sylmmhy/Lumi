@@ -15,7 +15,7 @@ import { StatsHeader } from './StatsHeader';
 import type { Task } from '../../remindMe/types';
 import { fetchRecurringReminders, toggleReminderCompletion, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
-import { getMonthlyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
+import { getWeeklyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
 
 // 从 stats 模块导入组件和类型
 import {
@@ -92,9 +92,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [isLoading, setIsLoading] = useState(true);
     const [scrollTop, setScrollTop] = useState(0);
 
-    // 能量球数据（本月习惯完成总次数）
-    const [monthlyCount, setMonthlyCount] = useState(0);
-    const [monthlyTarget] = useState(20); // 目标固定为 20
+    // 存钱罐数据（本周习惯完成总次数）
+    const [weeklyCount, setWeeklyCount] = useState(0);
+    const [weeklyTarget] = useState(20); // 目标固定为 20
     const [triggerRise, setTriggerRise] = useState(false);
 
     // Toast 状态
@@ -173,9 +173,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 // 2. 获取所有完成历史
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
 
-                // 3. 获取本月完成数（能量球数据）
-                const monthlyProgress = await getMonthlyCompletedCount(auth.userId);
-                setMonthlyCount(monthlyProgress.current);
+                // 3. 获取本周完成数（存钱罐数据）
+                const weeklyProgress = await getWeeklyCompletedCount(auth.userId);
+                setWeeklyCount(weeklyProgress.current);
 
                 // 4. 批量获取累计完成次数（里程碑进度条数据）
                 const habitIds = routineTasks.map(t => t.id);
@@ -266,7 +266,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
      */
     const handleCheckIn = () => {
         // 1. 能量球 +1（乐观更新）
-        setMonthlyCount(prev => prev + 1);
+        setWeeklyCount(prev => prev + 1);
 
         // 2. 触发水位上涨动画
         setTriggerRise(true);
@@ -324,7 +324,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
             if (isInCurrentMonth) {
                 // 更新能量球计数
-                setMonthlyCount(prev => newStatus ? prev + 1 : Math.max(prev - 1, 0));
+                setWeeklyCount(prev => newStatus ? prev + 1 : Math.max(prev - 1, 0));
 
                 // 如果是打卡（非取消打卡），触发水位上涨动画和 Toast
                 if (newStatus) {
@@ -381,8 +381,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 <StatsHeader
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
-                    weeklyCount={monthlyCount}
-                    weeklyTarget={monthlyTarget}
+                    weeklyCount={weeklyCount}
+                    weeklyTarget={weeklyTarget}
                     triggerRise={triggerRise}
                 />
 

@@ -24,7 +24,8 @@ import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
-import { HabitStackingTest, DailyReportTest, VoiceChatTest } from '../components/dev/BackendApiTest';
+import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
+import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 
 type TestMode =
   | 'menu'
@@ -36,7 +37,6 @@ type TestMode =
   | 'effects'
   | 'habit-stacking'
   | 'daily-report'
-  | 'voice-chat'
   | 'example-simple-timer'
   | 'example-checkin'
   | 'example-failure'
@@ -47,7 +47,9 @@ type TestMode =
   | 'talking-fire'
   | 'fire-from-figma'
   | 'task-complete-animation'
-  | 'feedback-card';
+  | 'feedback-card'
+  | 'voice-chat-test'
+  | 'campfire-companion';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -334,6 +336,20 @@ export function DevTestPage() {
             </div>
           </button>
 
+          {/* Campfire Companion Mode */}
+          <button
+            onClick={() => setMode('campfire-companion')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🏕️ 篝火陪伴模式
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              森林夜景背景 + 火焰动画 + 陪伴 UI
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 测试篝火陪伴页面 UI
+            </div>
+          </button>
+
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">反馈组件</p>
@@ -384,17 +400,21 @@ export function DevTestPage() {
             </div>
           </button>
 
-          {/* AI 语音对话测试 */}
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🎤 语音对话测试 (三层 AI 架构)</p>
+
+          {/* 语音对话测试 */}
           <button
-            onClick={() => setMode('voice-chat')}
-            className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl transition-all shadow-lg"
+            onClick={() => setMode('voice-chat-test')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold rounded-xl transition-all shadow-lg"
           >
-            🎤 AI 语音对话 (start-voice-chat)
+            🎤 语音对话测试
             <span className="block text-xs font-normal opacity-70 mt-1">
-              Gemini Live API 制定睡眠计划
+              Gemini Live + 意图检测 + 工具调用
             </span>
             <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
-              📄 functions/start-voice-chat
+              📄 三层 AI 架构完整测试
             </div>
           </button>
 
@@ -484,11 +504,12 @@ export function DevTestPage() {
 
       {mode === 'talking-fire' && <TalkingFireTest onBack={backToMenu} />}
       {mode === 'fire-from-figma' && <FireFromFigmaTest onBack={backToMenu} />}
+      {mode === 'campfire-companion' && <CampfireCompanionTest onBack={backToMenu} />}
       {mode === 'task-complete-animation' && <TaskCompleteAnimationTest onBack={backToMenu} />}
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
-      {mode === 'voice-chat' && <VoiceChatTest onBack={backToMenu} />}
+      {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
     </>
   );
 }
@@ -565,6 +586,61 @@ function FireFromFigmaTest({ onBack }: { onBack: () => void }) {
 }
 
 // ============================================
+// 测试 9: 篝火陪伴模式
+// ============================================
+function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 w-full h-full overflow-hidden"
+      style={{
+        backgroundImage: 'url(/companion-bg.png)',
+        backgroundSize: '100% 100%', // 宽度和高度都拉伸填满屏幕
+        backgroundPosition: 'top center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#1D204A', // 底部填充色（与图片底部颜色一致）
+      }}
+    >
+      {/* 顶部控制区域 */}
+      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between">
+        {/* 返回按钮 */}
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-full hover:bg-black/60 transition-colors text-sm"
+        >
+          ← 返回
+        </button>
+
+        {/* 说话切换按钮（调试用） */}
+        <button
+          onClick={() => setIsSpeaking(!isSpeaking)}
+          className={`px-4 py-2 rounded-full transition-colors text-sm ${
+            isSpeaking
+              ? 'bg-green-500/80 text-white'
+              : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
+          }`}
+        >
+          {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
+        </button>
+      </div>
+
+      {/* 火焰动画 - 位于篝火位置，宽度为屏幕的 50%，底部固定在柴火堆位置 */}
+      <div
+        className="absolute left-1/2 z-20"
+        style={{
+          top: '48%', // 柴火堆在图片约 48% 高度处
+          width: '50vw',
+          transform: 'translateX(-50%) translateY(-100%)', // 水平居中，底部对齐到 top 位置
+        }}
+      >
+        <TalkingFire isSpeaking={isSpeaking} size="100%" />
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // 测试 1: AI 教练任务流程
 // ============================================
 function AICoachTest({ onBack }: { onBack: () => void }) {
@@ -574,8 +650,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   const aiCoach = useAICoachSession({
     initialTime: 60, // 测试用 1 分钟
     onCountdownComplete: () => {
-      // 立即停止音频播放，让 AI 马上静音
-      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
       setCelebrationFlow('confirm');
       setStep('celebration');
@@ -597,8 +671,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }, [aiCoach]);
 
   const handleComplete = useCallback(() => {
-    // 立即停止音频播放，让 AI 马上静音
-    aiCoach.stopAudioImmediately();
     aiCoach.endSession();
     setCelebrationFlow('success');
     setStep('celebration');
@@ -661,8 +733,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
             label: 'BACK',
             emoji: '←',
             onClick: () => {
-              // 立即停止音频播放，让 AI 马上静音
-              aiCoach.stopAudioImmediately();
               aiCoach.endSession();
               onBack();
             },
@@ -1106,7 +1176,7 @@ function ExampleConfirmationWrapper({ onBack }: { onBack: () => void }) {
 }
 
 // ============================================
-// 测试 9: 任务完成动画
+// 测试 10: 任务完成动画
 // ============================================
 interface AnimatedTask {
   id: string;
@@ -1396,7 +1466,7 @@ setTrigger(Date.now());`}</pre>
 }
 
 // ============================================
-// 测试 10: Feedback Card
+// 测试 11: Feedback Card
 // ============================================
 function FeedbackCardTest({ onBack }: { onBack: () => void }) {
   return (

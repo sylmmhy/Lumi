@@ -349,7 +349,7 @@ export interface ConversationContextTrackerOptions {
 }
 
 /**
- * 虚拟消息调度器配置
+ * 虚拟消息调度器配置（方案 2：过渡话注入）
  */
 export interface VirtualMessageOrchestratorOptions {
   /** 用户 ID */
@@ -360,10 +360,6 @@ export interface VirtualMessageOrchestratorOptions {
   initialDuration: number
   /** 任务开始时间 */
   taskStartTime: number
-  /** 发送消息的回调 */
-  onSendMessage: (message: string) => void
-  /** 冷却时间（毫秒） */
-  cooldownMs?: number
   /** 是否启用记忆检索 */
   enableMemoryRetrieval?: boolean
 }

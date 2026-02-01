@@ -249,12 +249,18 @@ export function useVirtualMessageQueue(
         cooldownUntil: Date.now() + cooldownMs,
       }))
 
-      if (import.meta.env.DEV) {
-        console.log(`📤 [MessageQueue] 发送成功: ${first.type}`, {
-          remainingQueue: rest.length,
-          cooldownMs,
-        })
-      }
+      // 输出完整的虚拟消息内容
+      const timestamp = new Date().toLocaleTimeString()
+      console.log(`\n📤 [${timestamp}] ========== 发送虚拟消息 ==========`)
+      console.log(`📤 [MessageQueue] 类型: ${first.type}`)
+      console.log(`📤 [MessageQueue] 优先级: ${first.priority}`)
+      console.log(`📤 [MessageQueue] 相关话题: ${first.relatedTopic || '无'}`)
+      console.log(`📤 [MessageQueue] 剩余队列: ${rest.length}`)
+      console.log(`📤 [MessageQueue] 冷却时间: ${cooldownMs}ms`)
+      console.log(`📤 [MessageQueue] 完整内容:`)
+      console.log(`----------------------------------------`)
+      console.log(first.content)
+      console.log(`----------------------------------------`)
 
       return true
     } else {

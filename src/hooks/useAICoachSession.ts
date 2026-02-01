@@ -177,13 +177,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onAISpeech: (text: string) => void;
     onTurnComplete: () => void;
     sendMessageForAction: (action: import('./useToneManager').SuggestedAction) => boolean;
-    getContext: () => { currentTopic: string | null } | null;
+    getContext: () => { currentTopic: { name: string } | null };
   }>({
     onUserSpeech: async () => null,
     onAISpeech: () => {},
     onTurnComplete: () => {},
     sendMessageForAction: () => false,
-    getContext: () => null,
+    getContext: () => ({ currentTopic: null }),
   });
 
   // 用于存储最近的话题检测结果（用于抗拒分析）
@@ -426,19 +426,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // ==========================================
-  // 动态虚拟消息调度器（方案 A：turnComplete 后静默注入记忆）
+  // 动态虚拟消息调度器（方案 2：过渡话注入）
   // ==========================================
   const messageOrchestrator = useVirtualMessageOrchestrator({
     userId: currentUserIdRef.current,
     taskDescription: currentTaskDescriptionRef.current,
     initialDuration: initialTime,
     taskStartTime,
-    injectContextSilently: geminiLive.injectContextSilently,
+    sendClientContent: geminiLive.sendClientContent,
     isSpeaking: geminiLive.isSpeaking,
-    onSendMessage: (message) => geminiLive.sendTextMessage(message),
     enabled: isSessionActive && geminiLive.isConnected,
     enableMemoryRetrieval: true,
-    cooldownMs: 5000,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
   });
 
@@ -1143,8 +1141,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // 语气管理操作（高级用法，通常不需要手动调用）
     forceToneChange: toneManager.forceToneChange,
 
-    // 动态虚拟消息调度器（方案 A：turnComplete 后静默注入）
-    orchestratorQueueSize: messageOrchestrator.getQueueSize,
+    // 动态虚拟消息调度器（方案 2：过渡话注入）
     orchestratorContext: messageOrchestrator.getContext,
     triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval, // 手动触发记忆检索（调试用）
 

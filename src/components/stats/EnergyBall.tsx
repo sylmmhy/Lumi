@@ -1,12 +1,14 @@
 /**
  * EnergyBall - 存钱罐进度组件
  *
- * 使用 Matter.js 物理引擎实现金币掉落堆叠效果
- * 优化：
- * - 随机纹理：10 种不同角度的金币素材
- * - 锁定旋转：贴图只在 ±15° 内小幅度旋转
- * - 纵深层级：底层金币暗一些，模拟阴影
- * - 数字优先：带毛玻璃背景，始终可读
+ * Matter.js 物理引擎 + 多角度金币素材
+ *
+ * 视觉规格：
+ * 1. 纹理权重：正面/微侧面 80%，全侧面 20%
+ * 2. 旋转限制：±30° 以内，防止"金墩子"
+ * 3. 物理参数：高摩擦 + 轻微弹性
+ * 4. 纵深感：底层 brightness(0.8) contrast(1.1)
+ * 5. 数字置顶：毛玻璃背景 blur(5px)
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,24 +23,49 @@ interface EnergyBallProps {
 interface CoinState {
     x: number;
     y: number;
-    rotation: number;      // 物理旋转（用于 ±15° 限制）
-    textureIndex: number;  // 随机纹理索引 0-9
-    spawnOrder: number;    // 生成顺序（用于计算层级）
+    rotation: number;
+    textureIndex: number;
+    spawnOrder: number;
 }
 
-// 10 种金币纹理（不同角度）
-const COIN_TEXTURES = [
-    '/coins/coin-0.png',
-    '/coins/coin-1.png',
-    '/coins/coin-2.png',
-    '/coins/coin-3.png',
-    '/coins/coin-4.png',
-    '/coins/coin-5.png',
-    '/coins/coin-6.png',
-    '/coins/coin-7.png',
-    '/coins/coin-8.png',
-    '/coins/coin-9.png',
-];
+/**
+ * 金币纹理配置
+ * - 正面/微侧面 (coin-0 ~ coin-3): 权重高，占 80%
+ * - 全侧面 (coin-4 ~ coin-9): 权重低，占 20%
+ */
+const COIN_TEXTURES = {
+    // 正面和微侧面（高权重）
+    front: [
+        '/coins/coin-0.png',
+        '/coins/coin-1.png',
+        '/coins/coin-2.png',
+        '/coins/coin-3.png',
+    ],
+    // 全侧面（低权重）
+    side: [
+        '/coins/coin-4.png',
+        '/coins/coin-5.png',
+        '/coins/coin-6.png',
+        '/coins/coin-7.png',
+        '/coins/coin-8.png',
+        '/coins/coin-9.png',
+    ],
+};
+
+/**
+ * 根据权重随机选择纹理
+ * 80% 概率选正面/微侧面，20% 概率选全侧面
+ */
+function getRandomTexture(): string {
+    const isFront = Math.random() < 0.8;
+    if (isFront) {
+        const idx = Math.floor(Math.random() * COIN_TEXTURES.front.length);
+        return COIN_TEXTURES.front[idx];
+    } else {
+        const idx = Math.floor(Math.random() * COIN_TEXTURES.side.length);
+        return COIN_TEXTURES.side[idx];
+    }
+}
 
 /**
  * 存钱罐进度组件
@@ -47,13 +74,13 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const size = 125;
     const borderWidth = 8;
     const innerSize = size - borderWidth * 2; // 109px
-    const coinSize = 22;
+    const coinSize = 24; // 保持正方形，不拉伸
     const radius = innerSize / 2;
 
     const [coins, setCoins] = useState<CoinState[]>([]);
     const engineRef = useRef<Matter.Engine | null>(null);
     const coinBodiesRef = useRef<Matter.Body[]>([]);
-    const textureMapRef = useRef<Map<string, number>>(new Map()); // body.id -> textureIndex
+    const textureMapRef = useRef<Map<string, string>>(new Map());
 
     useEffect(() => {
         const coinCount = Math.min(Math.max(current, 0), 20);
@@ -69,63 +96,67 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
             Matter.Engine.clear(engineRef.current);
         }
 
-        // 创建物理引擎
+        // 创建物理引擎 - 增加重力感
         const engine = Matter.Engine.create({
-            gravity: { x: 0, y: 0.8 },
+            gravity: { x: 0, y: 1.5 }, // 调高重力，让金币更快沉底
         });
         engineRef.current = engine;
 
         const world = engine.world;
 
-        // 创建圆形边界（用多个小矩形近似圆弧，只需要下半部分）
-        const segments = 24;
-        const wallThickness = 20;
+        // 创建圆形边界（下半圆弧）- 向下移动 15px 扩大容器感
+        const segments = 20;
+        const wallThickness = 15;
+        const containerOffset = 15; // 容器底部向下移动
         for (let i = 0; i < segments; i++) {
             const angle = (i / segments) * Math.PI;
             const nextAngle = ((i + 1) / segments) * Math.PI;
             const midAngle = (angle + nextAngle) / 2;
 
-            const wallRadius = radius - 2;
+            const wallRadius = radius + 5; // 扩大边界半径
             const x = radius + Math.cos(midAngle) * wallRadius;
-            const y = radius + Math.sin(midAngle) * wallRadius;
+            const y = radius + Math.sin(midAngle) * wallRadius + containerOffset;
 
-            const segmentLength = 2 * wallRadius * Math.sin(Math.PI / segments / 2) * 2 + 2;
+            const segmentLength = 2 * wallRadius * Math.sin(Math.PI / segments / 2) * 2 + 4;
 
             const wall = Matter.Bodies.rectangle(x, y, segmentLength, wallThickness, {
                 isStatic: true,
                 angle: midAngle + Math.PI / 2,
-                friction: 1,
-                restitution: 0.05,
+                friction: 0.9,
+                restitution: 0.1,
             });
             Matter.Composite.add(world, wall);
         }
 
-        // 左右两边的墙
-        Matter.Composite.add(world, Matter.Bodies.rectangle(-5, radius, 10, innerSize, { isStatic: true }));
-        Matter.Composite.add(world, Matter.Bodies.rectangle(innerSize + 5, radius, 10, innerSize, { isStatic: true }));
+        // 左右墙壁 - 也向外扩展
+        Matter.Composite.add(world, Matter.Bodies.rectangle(-2, radius + 10, 10, innerSize + 20, { isStatic: true, friction: 0.9 }));
+        Matter.Composite.add(world, Matter.Bodies.rectangle(innerSize + 2, radius + 10, 10, innerSize + 20, { isStatic: true, friction: 0.9 }));
 
-        // 为每个金币预分配随机纹理
-        const newTextureMap = new Map<string, number>();
+        // 为每个金币分配随机纹理
+        const newTextureMap = new Map<string, string>();
 
-        // 创建金币（圆形刚体）
+        // 创建金币刚体 - 碰撞体缩小到 85%，增加随机生成点
         const coinBodies: Matter.Body[] = [];
+        const hitboxScale = 0.85; // 碰撞体缩放，让金币视觉上有微小重叠
         for (let i = 0; i < coinCount; i++) {
-            const startX = radius + (Math.random() - 0.5) * 40;
-            const startY = 10 + i * 5;
+            // 随机生成点：x 轴 ±30px 偏移
+            const startX = radius + (Math.random() - 0.5) * 60;
+            const startY = 5 + i * 8;
 
-            const coin = Matter.Bodies.circle(startX, startY, coinSize / 2 - 1, {
-                friction: 0.9,
-                frictionStatic: 1,
-                restitution: 0.1,
+            const coin = Matter.Bodies.circle(startX, startY, (coinSize / 2) * hitboxScale, {
+                friction: 0.8,           // 高摩擦
+                frictionStatic: 0.9,
+                restitution: 0.2,        // 轻微弹性，快速稳定
                 density: 0.005,
                 label: `coin-${i}`,
             });
 
-            // 随机分配纹理（在生成时固定）
-            const textureIndex = Math.floor(Math.random() * COIN_TEXTURES.length);
-            newTextureMap.set(coin.id.toString(), textureIndex);
+            // 随机纹理（权重分配）
+            const texture = getRandomTexture();
+            newTextureMap.set(coin.id.toString(), texture);
 
-            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.3);
+            // 初始随机角速度
+            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.2);
 
             coinBodies.push(coin);
             Matter.Composite.add(world, coin);
@@ -133,7 +164,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
         coinBodiesRef.current = coinBodies;
         textureMapRef.current = newTextureMap;
 
-        // 手动步进物理引擎
+        // 物理模拟循环
         let frameCount = 0;
         let stableFrames = 0;
         let animationId: number;
@@ -143,39 +174,42 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
             frameCount++;
 
             const newCoins = coinBodies.map((body, index) => {
-                // 限制旋转角度在 ±15° 内
-                const rawRotation = (body.angle * 180) / Math.PI;
-                const clampedRotation = Math.max(-15, Math.min(15, (rawRotation % 30) - 15));
+                // 限制旋转角度在 ±30° 以内
+                let rotation = (body.angle * 180) / Math.PI;
+                rotation = rotation % 360;
+                if (rotation > 180) rotation -= 360;
+                if (rotation < -180) rotation += 360;
+                const clampedRotation = Math.max(-30, Math.min(30, rotation));
 
                 return {
                     x: body.position.x - coinSize / 2,
                     y: body.position.y - coinSize / 2,
                     rotation: clampedRotation,
-                    textureIndex: textureMapRef.current.get(body.id.toString()) || 0,
+                    textureIndex: index, // 用于 key
                     spawnOrder: index,
                 };
             });
 
             setCoins([...newCoins]);
 
-            // 检查是否稳定
-            if (frameCount > 60) {
+            // 稳定性检测
+            if (frameCount > 50) {
                 const isStable = coinBodies.every((body) => {
                     const speed = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
-                    return speed < 0.5;
+                    return speed < 0.3;
                 });
 
                 if (isStable) {
                     stableFrames++;
-                    if (stableFrames > 30) {
-                        return;
+                    if (stableFrames > 25) {
+                        return; // 稳定，停止模拟
                     }
                 } else {
                     stableFrames = 0;
                 }
             }
 
-            if (frameCount < 180) {
+            if (frameCount < 200) {
                 animationId = requestAnimationFrame(updateCoins);
             }
         };
@@ -191,8 +225,9 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
         };
     }, [current]);
 
-    // 按 Y 坐标排序，底部的先渲染（在后面）
-    const sortedCoins = [...coins].sort((a, b) => a.y - b.y);
+    // 按生成顺序排序：越晚生成 z-index 越高
+    const sortedCoins = [...coins].sort((a, b) => a.spawnOrder - b.spawnOrder);
+    const totalCoins = sortedCoins.length;
 
     return (
         <div className="relative">
@@ -218,25 +253,30 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
                     {/* 金币层 */}
                     <div className="absolute inset-0">
                         {sortedCoins.map((coin, renderIndex) => {
-                            // 计算亮度：底部的金币暗一些（模拟阴影）
-                            // renderIndex 越小 = Y 越小 = 越靠上 = 越早渲染 = 在后面
-                            const depthRatio = renderIndex / Math.max(sortedCoins.length - 1, 1);
-                            const brightness = 0.75 + depthRatio * 0.25; // 0.75 ~ 1.0
+                            // 纵深感：底层暗，顶层亮
+                            const depthRatio = renderIndex / Math.max(totalCoins - 1, 1);
+                            const brightness = 0.85 + depthRatio * 0.15; // 0.85 ~ 1.0
+                            const contrast = 1.05 - depthRatio * 0.05;   // 1.05 ~ 1.0
+
+                            const texture = textureMapRef.current.get(
+                                coinBodiesRef.current[coin.spawnOrder]?.id.toString() || ''
+                            ) || COIN_TEXTURES.front[0];
 
                             return (
                                 <img
-                                    key={`${coin.spawnOrder}-${coin.textureIndex}`}
-                                    src={COIN_TEXTURES[coin.textureIndex]}
+                                    key={coin.spawnOrder}
+                                    src={texture}
                                     alt=""
                                     className="absolute"
                                     style={{
                                         width: coinSize,
                                         height: coinSize,
+                                        objectFit: 'contain', // 保持比例，不拉伸
                                         left: coin.x,
                                         top: coin.y,
                                         transform: `rotate(${coin.rotation}deg)`,
-                                        filter: `brightness(${brightness}) drop-shadow(1px 2px 3px rgba(0,0,0,0.3))`,
-                                        zIndex: renderIndex,
+                                        filter: `brightness(${brightness}) contrast(${contrast}) drop-shadow(1px 2px 3px rgba(0,0,0,0.35))`,
+                                        zIndex: renderIndex + 1,
                                     }}
                                 />
                             );
@@ -245,25 +285,25 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
                 </div>
             </div>
 
-            {/* 中心文字 - 最顶层，带毛玻璃背景 */}
+            {/* 数字层 - 最顶层，轻微磨砂透明背景 */}
             <div
                 className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ zIndex: 100 }}
+                style={{ zIndex: 999 }}
             >
                 <div
-                    className="px-3 py-1 rounded-lg"
+                    className="px-2.5 py-1 rounded-full"
                     style={{
-                        background: 'rgba(255, 255, 255, 0.75)',
-                        backdropFilter: 'blur(4px)',
-                        WebkitBackdropFilter: 'blur(4px)',
+                        background: 'rgba(255, 248, 235, 0.2)',
+                        backdropFilter: 'blur(2px)',
+                        WebkitBackdropFilter: 'blur(2px)',
                     }}
                 >
                     <span
-                        className="font-bold text-2xl"
+                        className="font-bold text-xl"
                         style={{
                             fontFamily: "'Quicksand', sans-serif",
-                            color: '#8B5A3C',
-                            textShadow: '0 1px 2px rgba(255,255,255,0.5)',
+                            color: '#7A5230',
+                            textShadow: '0 1px 1px rgba(255,255,255,0.5)',
                         }}
                     >
                         {current}

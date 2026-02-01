@@ -4,7 +4,7 @@ import { useFireAnimationController, MOUTH_PATHS } from './useFireAnimations';
 interface TalkingFireProps {
     /** 是否正在说话 */
     isSpeaking: boolean;
-    /** 大小 (px) */
+    /** 大小，支持数字(px)或 CSS 字符串(如 "100%", "50vw") */
     size?: number | string;
     /** 自定义类名 */
     className?: string;

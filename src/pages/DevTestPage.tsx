@@ -588,21 +588,76 @@ function FireFromFigmaTest({ onBack }: { onBack: () => void }) {
 // ============================================
 // 测试 9: 篝火陪伴模式
 // ============================================
+
+/** 篝火陪伴模式布局配置 */
+const CAMPFIRE_CONFIG = {
+  /** 背景图片宽度（从 companion-bg.png 元数据获取） */
+  bgWidth: 1179,
+  /** 背景图片高度（从 companion-bg.png 元数据获取） */
+  bgHeight: 2556,
+  /** 火焰底部在图片中的垂直位置，0-1（从设计稿测量：篝火柴堆顶部） */
+  fireBottomY: 0.48,
+  /** 火焰宽度占图片宽度的比例，0-1（视觉调优得出） */
+  fireWidthRatio: 0.5,
+  /** 背景填充色（与图片边缘颜色一致，用于填充裁剪区域） */
+  bgColor: '#1D204A',
+} as const;
+
+// 派生值（模块加载时计算一次）
+const COMPANION_BG_ASPECT_RATIO = CAMPFIRE_CONFIG.bgWidth / CAMPFIRE_CONFIG.bgHeight;
+const FIRE_HEIGHT_RATIO = CAMPFIRE_CONFIG.fireWidthRatio * COMPANION_BG_ASPECT_RATIO;
+const FIRE_CENTER_Y_PERCENT = CAMPFIRE_CONFIG.fireBottomY - FIRE_HEIGHT_RATIO / 2;
+
+/**
+ * 篝火陪伴模式测试组件
+ *
+ * 实现原理：
+ * 1. 使用 CSS max() 模拟 background-size: cover 效果，保持图片宽高比
+ * 2. 以火焰中心点为锚点对齐，确保火焰在任何屏幕比例下都保持可见
+ * 3. 火焰使用百分比定位，随背景同步缩放
+ *
+ * 浏览器兼容性：CSS max() 需要 Safari 11.1+, Chrome 79+, Firefox 75+
+ */
 function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   return (
     <div
       className="fixed inset-0 w-full h-full overflow-hidden"
-      style={{
-        backgroundImage: 'url(/companion-bg.png)',
-        backgroundSize: '100% 100%', // 宽度和高度都拉伸填满屏幕
-        backgroundPosition: 'top center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#1D204A', // 底部填充色（与图片底部颜色一致）
-      }}
+      style={{ backgroundColor: CAMPFIRE_CONFIG.bgColor }}
     >
-      {/* 顶部控制区域 */}
+      {/* 内容容器 - 使用 CSS max() 模拟 cover 效果，以火焰中心为锚点对齐 */}
+      <div
+        className="absolute"
+        style={{
+          left: '50%',
+          top: `${FIRE_CENTER_Y_PERCENT * 100}%`,
+          transform: `translateX(-50%) translateY(-${FIRE_CENTER_Y_PERCENT * 100}%)`,
+          width: `max(100vw, calc(100vh * ${COMPANION_BG_ASPECT_RATIO}))`,
+          height: `max(100vh, calc(100vw / ${COMPANION_BG_ASPECT_RATIO}))`,
+        }}
+      >
+        {/* 背景图片 */}
+        <img
+          src="/companion-bg.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+
+        {/* 火焰动画 - 相对于图片容器定位，使用百分比确保同步缩放 */}
+        <div
+          className="absolute left-1/2 z-20"
+          style={{
+            top: `${CAMPFIRE_CONFIG.fireBottomY * 100}%`,
+            width: `${CAMPFIRE_CONFIG.fireWidthRatio * 100}%`,
+            transform: 'translateX(-50%) translateY(-100%)', // 水平居中，底部对齐到 top 位置
+          }}
+        >
+          <TalkingFire isSpeaking={isSpeaking} size="100%" />
+        </div>
+      </div>
+
+      {/* 顶部控制区域 - 固定在视口，不随图片缩放 */}
       <div className="absolute top-4 left-4 right-4 z-50 flex justify-between">
         {/* 返回按钮 */}
         <button
@@ -623,18 +678,6 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
         >
           {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
         </button>
-      </div>
-
-      {/* 火焰动画 - 位于篝火位置，宽度为屏幕的 50%，底部固定在柴火堆位置 */}
-      <div
-        className="absolute left-1/2 z-20"
-        style={{
-          top: '48%', // 柴火堆在图片约 48% 高度处
-          width: '50vw',
-          transform: 'translateX(-50%) translateY(-100%)', // 水平居中，底部对齐到 top 位置
-        }}
-      >
-        <TalkingFire isSpeaking={isSpeaking} size="100%" />
       </div>
     </div>
   );

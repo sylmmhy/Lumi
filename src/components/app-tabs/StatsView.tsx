@@ -27,7 +27,6 @@ import {
     buildDenseHistoryWithGaps,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
-import { StickyHeader } from './StickyHeader';
 
 /**
  * 将 Task 和完成历史转换为 Habit 格式
@@ -90,7 +89,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
     const [isLoading, setIsLoading] = useState(true);
-    const [scrollTop, setScrollTop] = useState(0);
 
     // 存钱罐数据（本周习惯完成总次数）
     const [weeklyCount, setWeeklyCount] = useState(0);
@@ -99,8 +97,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
-
-    const showStickyHeader = scrollTop > 80;
 
     // 示例习惯数据
     const exampleHabits = useMemo<Habit[]>(() => [
@@ -375,18 +371,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             {/* 打卡成功 Toast */}
             <CheckInToast message={toastMessage} onClose={hideToast} />
 
-            {/* Sticky 顶部栏 */}
-            <StickyHeader
-                title={t('stats.habitProgress')}
-                bgColor="#429950"
-                visible={showStickyHeader}
-            />
 
             {/* 滚动容器 */}
             <div
                 className="flex-1 overflow-y-auto no-scrollbar relative overscroll-none"
                 data-tour="stats-area"
-                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
                 {/* 蓄水池头部 */}
                 <StatsHeader

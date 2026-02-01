@@ -142,6 +142,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
   const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
+  const currentCallRecordIdRef = useRef<string | null>(null); // 来电记录 ID，用于记录通话时长
 
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
@@ -458,6 +459,33 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       console.log('🧹 执行统一清理...');
     }
 
+    // 🆕 记录通话结束时间和时长（如果有 callRecordId）
+    const callRecordId = currentCallRecordIdRef.current;
+    if (callRecordId && taskStartTime > 0) {
+      const durationSeconds = Math.round((Date.now() - taskStartTime) / 1000);
+      console.log('📞 记录通话结束:', { callRecordId, durationSeconds });
+
+      const supabaseForEndCall = getSupabaseClient();
+      if (supabaseForEndCall) {
+        supabaseForEndCall.functions.invoke('manage-call-records', {
+          body: {
+            action: 'end_call',
+            call_record_id: callRecordId,
+            end_at: new Date().toISOString(),
+            duration_seconds: durationSeconds,
+          },
+        }).then(({ error }) => {
+          if (error) {
+            console.error('⚠️ 记录通话结束失败:', error);
+          } else {
+            console.log('✅ 通话结束已记录');
+          }
+        });
+      }
+      // 清除 callRecordId
+      currentCallRecordIdRef.current = null;
+    }
+
     // 1. 停止计时器（复用 stopCountdown 逻辑）
     stopCountdown();
 
@@ -477,7 +505,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     if (import.meta.env.DEV) {
       console.log('✅ 统一清理完成');
     }
-  }, [geminiLive, stopCountdown]);
+  }, [geminiLive, stopCountdown, taskStartTime]);
 
   /**
    * 保存最新的 cleanup 引用，避免倒计时 effect 依赖变化导致 interval 重建
@@ -558,6 +586,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
+    currentCallRecordIdRef.current = callRecordId || null; // 保存来电记录 ID
     // 保存首选语言，用于触发词生成时保持语言一致性
     preferredLanguagesRef.current = preferredLanguages || null;
     setIsConnecting(true);

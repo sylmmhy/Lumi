@@ -434,6 +434,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     initialDuration: initialTime,
     taskStartTime,
     injectContextSilently: geminiLive.injectContextSilently,
+    sendClientContent: geminiLive.sendClientContent, // 方案 1：支持打断 AI 并立即注入记忆
     isSpeaking: geminiLive.isSpeaking,
     onSendMessage: (message) => geminiLive.sendTextMessage(message),
     enabled: isSessionActive && geminiLive.isConnected,

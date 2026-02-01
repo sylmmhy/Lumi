@@ -1,16 +1,15 @@
 ---
 title: "动态虚拟消息系统"
 created: 2026-01-27
-updated: 2026-01-29 19:00
+updated: 2026-01-31 12:00
 stage: "🔨 实现中"
 due: 2026-02-10
 issue: ""
 ---
 
-# 动态虚拟消息系统
+# 动态虚拟消息系统 实现进度
 
 ## 阶段进度
-
 - [x] 阶段 1：需求分析
 - [x] 阶段 2：方案设计
 - [x] 阶段 3：核心实现（基础设施）✅ 2026-01-28
@@ -27,17 +26,9 @@ issue: ""
   - [x] 在 `useGeminiLive` 添加 `injectContextSilently` 方法
   - [x] 创建 `useVirtualMessageQueue.ts` 消息队列
   - [x] 创建 `useVirtualMessageOrchestrator.ts` 核心调度器
-- [x] 阶段 3.7：Semantic Router 话题检测 ✅ 2026-01-28
-  - [x] 创建 `_shared/topic-embeddings.ts` 话题定义 + embedding
-  - [x] 创建 `get-topic-embedding` Edge Function
-  - [x] 重写 `useTopicDetector.ts` 为异步 API 调用
-- [x] 阶段 3.8：System Prompt + 抗拒分析重构 ✅ 2026-01-28
-  - [x] 新增 5 种虚拟消息类型
-  - [x] 新增 `analyzeResistance()` 函数
-  - [x] 重构 System Prompt，移除硬编码规则
-- [x] 阶段 3.9：Bug 修复 ✅ 2026-01-29
-  - [x] 修复 `sendClientContent` 调用错误的 SDK 方法
-  - [x] 修复话题检测阈值前后端不一致
+- [x] 阶段 3.7：方案 1 立即打断实现 ✅ 2026-01-31
+  - [x] 修改 `sendClientContent` 支持 `role='system'` 参数
+  - [x] 在 Orchestrator 中实现「AI 说话时立即打断并注入」逻辑
 - [x] 阶段 4：集成到 useAICoachSession ✅ 2026-01-28
   - [x] 初始化 `useVirtualMessageOrchestrator` 调度器
   - [x] 在 `onTranscriptUpdate` 中调用 `onUserSpeech` 和 `onAISpeech`
@@ -45,6 +36,355 @@ issue: ""
   - [x] 暴露调试方法：`orchestratorQueueSize`、`triggerMemoryRetrieval`
 - [ ] 阶段 5：测试验证
 - [ ] 阶段 6：文档更新
+- [ ] **阶段 3.8：方案 2 过渡话注入** ⏳ 待实现
+  - [ ] 用户说完话后立刻注入记忆（不入队等待）
+  - [ ] 删除定时自动发送虚拟消息功能
+  - [ ] 在 System Prompt 中添加过渡话指令
+
+---
+
+## 🆕 方案 2：过渡话注入（2026-01-31 决策）
+
+### 背景：为什么不用入队等待？
+
+1. **`turnComplete=false` 会阻塞后续语音输入**（官方 API 限制）
+2. 入队等待会导致消息发不出去
+3. 对话切换时上下文可能已过时
+
+**参考来源**：
+- [Live API Hidden context - Google AI Forum](https://discuss.ai.google.dev/t/live-api-hidden-context/66495)
+- [turnComplete=false prevents RealtimeInputMessage](https://discuss.ai.google.dev/t/turncomplete-flag-set-to-false-in-clientcontentmessage-of-multimodal-live-api-prevents-processing-of-subsequent-realtimeinputmessage/62949)
+
+### 方案设计
+
+**时序**：
+```
+用户说话: "I miss my boyfriend"
+    ↓
+检测话题 + 检索记忆 (1-2秒)
+    ↓
+注入 [CONTEXT] + turnComplete=true
+    ↓
+AI 说过渡话: "I hear you..." (同时在内部消化记忆)
+    ↓
+AI 继续: "...Tom means a lot to you, right?"
+```
+
+**System Prompt 添加**：
+```
+When you receive a [CONTEXT] message, DO NOT say "ok" or "got it".
+Instead, use a natural filler phrase based on the emotional tone:
+
+- Sad/emotional → "I hear you...", "That sounds tough..."
+- Question/curious → "That's an interesting question...", "Let me think..."
+- Frustrated → "I get it...", "That makes sense..."
+- Neutral → "Mmhmm...", "Right..."
+
+Then seamlessly continue with your response using the context provided.
+```
+
+### 要删除的功能
+
+- `cooldownMs` 定时自动发送
+- 消息队列入队逻辑（改为立刻注入）
+
+### 待实现的改动
+
+| 文件 | 改动 |
+|------|------|
+| `useVirtualMessageOrchestrator.ts` | 删除队列，改为立刻 `sendClientContent` |
+| `useVirtualMessageQueue.ts` | 可能删除或简化 |
+| `get-system-instruction` | 添加过渡话指令 |
+
+---
+
+## 12. 实现进度总结（2026-01-31 更新）
+
+### 12.1 已完成的功能
+
+#### ✅ 底层 API：`sendClientContent` 支持 system role
+
+**文件**：`src/hooks/gemini-live/core/useGeminiSession.ts`
+
+**改动**：
+```typescript
+/**
+ * 发送客户端内容（支持静默注入上下文）
+ * @param content - 要注入的文本内容
+ * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
+ * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
+ */
+sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void;
+```
+
+**实现细节**：
+- 支持 `role='system'` 参数，让 AI 把注入的内容当作系统上下文而非用户问题
+- 兼容新旧版 SDK（优先使用 `sendClientContent` 方法，回退到 `send` 方法）
+
+#### ✅ 方案 1：AI 说话时立即打断并注入记忆
+
+**文件**：`src/hooks/virtual-messages/useVirtualMessageOrchestrator.ts`
+
+**核心逻辑**：
+```typescript
+// 如果 AI 正在说话，立即打断并注入记忆
+if (isSpeakingRef.current) {
+  console.log(`🚨 [方案 1 + system role] AI 正在说话，立即打断并注入记忆`)
+  // turnComplete=true 打断 AI，role='system' 确保是上下文
+  sendClientContent(contextMessage, true, 'system')
+} else {
+  // AI 没在说话，入队等待 turnComplete 后静默注入
+  messageQueue.enqueue({ type: 'CONTEXT', ... })
+}
+```
+
+#### ✅ 向量匹配话题检测（Multi-Query RAG）
+
+**后端**：`supabase/functions/detect-topic/index.ts`
+
+**实现**：
+- 使用 Gemini 2.0 Flash Lite 生成 embedding
+- 与预计算的话题 embeddings 做向量匹配
+- 返回匹配度最高的话题及对应的记忆检索问题
+
+**前端**：`src/hooks/virtual-messages/useTopicDetector.ts`
+
+**实现**：
+- 调用 `detect-topic` API 进行向量匹配
+- 本地情绪检测作为 fallback（基于关键词）
+- 支持话题变化检测（避免重复触发）
+
+#### ✅ 异步记忆检索管道
+
+**后端**：`supabase/functions/retrieve-memories/index.ts`
+
+**实现**：
+- 接收话题和种子问题
+- 执行 Multi-Query RAG（多个问题并行搜索）
+- MRR 融合排序，返回最相关的记忆
+
+**前端**：`src/hooks/virtual-messages/useAsyncMemoryPipeline.ts`
+
+**实现**：
+- 调用 `retrieve-memories` API
+- 生成格式化的 `[CONTEXT]` 消息
+- 按记忆类型组织内容（有效激励 > 过往经历 > 偏好 > 行为模式）
+
+### 12.2 数据流完整流程
+
+```
+用户说: "I miss my boyfriend"
+        │
+        ▼
+[1] useVirtualMessageOrchestrator.onUserSpeech(text)
+        │
+        ├──► contextTracker.addUserMessage(text)
+        │
+        └──► topicDetector.detectFromMessage(text)
+             │ (调用 detect-topic API)
+             ▼
+[2] 话题检测完成: 感情话题，置信度 44%
+        │
+        ├──► 检测到强烈情绪 (sad, 0.7)
+        │    └──► 入队 [EMPATHY] 消息
+        │
+        └──► 触发记忆检索
+             │ (调用 retrieve-memories API)
+             ▼
+[3] 记忆检索完成: 4 条记忆
+        │
+        └──► 生成 [CONTEXT] 消息
+             │
+             ├──► AI 正在说话？
+             │    └──► YES: sendClientContent(msg, true, 'system') 打断并注入
+             │    └──► NO:  messageQueue.enqueue(...) 入队等待
+             ▼
+[4] AI 重新响应，这次会用上 Tom 的信息
+```
+
+---
+
+## 13. 踩过的坑
+
+### 13.1 ❌ 坑 1：`sendClientContent` 不支持 `role='system'`
+
+**问题**：最初以为 Gemini Live API 只支持 `role='user'`，导致注入的记忆被 AI 当作用户问题来回答。
+
+**表现**：
+- 注入 `[CONTEXT] 用户的男朋友叫 Tom...`
+- AI 回复：「Oh, so your boyfriend is Tom? That's nice!」（把记忆当问题）
+
+**解决**：
+- 查阅 [Google Vertex AI 文档](https://cloud.google.com/vertex-ai/generative-ai/docs/live-api/streamed-conversations)
+- 发现 `client_content` 支持 `role: 'system'`
+- 修改 `sendClientContent` 添加第三个参数 `role`
+
+**代码变化**：
+```typescript
+// Before
+sendClientContent(content, true)  // AI 会当作用户问题
+
+// After
+sendClientContent(content, true, 'system')  // AI 会当作系统上下文
+```
+
+### 13.2 ❌ 坑 2：记忆注入时机太晚
+
+**问题**：使用方案 A（turnComplete 后静默注入），记忆注入时 AI 已经说完了，用不上记忆。
+
+**表现**：
+```
+22:08:03  用户: "I miss my boyfriend"
+22:08:06  话题检测完成
+22:08:14  记忆检索完成 (包含 Tom)
+22:08:20  AI 说完话 (turnComplete)
+22:08:20  记忆注入成功 ← 但 AI 已经回复完了！
+```
+
+**解决**：
+- 改用方案 1：AI 说话时立即打断并注入
+- 检查 `isSpeakingRef.current`，如果 AI 正在说话就立即打断
+
+**代码变化**：
+```typescript
+if (isSpeakingRef.current) {
+  // 方案 1：立即打断
+  sendClientContent(contextMessage, true, 'system')
+} else {
+  // 方案 A：入队等待
+  messageQueue.enqueue(...)
+}
+```
+
+### 13.3 ❌ 坑 3：CONTEXT tag 不存在
+
+**问题**：尝试插入测试记忆时，使用了 `tag='CONTEXT'`，但数据库有约束。
+
+**表现**：
+```sql
+INSERT INTO user_memories (..., tag, ...)
+VALUES (..., 'CONTEXT', ...)
+-- ERROR: new row violates check constraint "user_memories_tag_check"
+```
+
+**原因**：`user_memories` 表的 `tag` 字段有 CHECK 约束，只允许特定值。
+
+**解决**：查询已有的 tag 类型：
+```sql
+SELECT DISTINCT tag FROM user_memories;
+-- 结果: PROC, EMO, PREF, EFFECTIVE, SOMA
+```
+
+**教训**：
+- 测试时使用已有的 tag（如 `EMO`）
+- 或者需要先修改数据库 schema 添加新 tag
+
+### 13.4 ❌ 坑 4：语言污染问题
+
+**问题**：用户设置英文，但触发记忆注入后 AI 突然切换到中文。
+
+**原因**：
+1. 触发词没有携带 `language=` 参数
+2. 记忆内容是中文，AI 被中文内容「带偏」
+
+**解决**：
+- 所有触发词都携带 `language=` 参数
+- 在 System Instruction 中强调必须遵循 `language=` 参数
+
+详见文档第 10.1 节「语言一致性方案」。
+
+### 13.5 ❌ 坑 5：SDK 方法兼容性
+
+**问题**：不同版本的 `@google/genai` SDK 方法名不同。
+
+**表现**：
+```
+TypeError: session.sendClientContent is not a function
+```
+
+**原因**：新版 SDK 使用 `sendClientContent`，旧版使用 `send`。
+
+**解决**：添加兼容层：
+```typescript
+// 优先使用新版方法
+if (typeof session.sendClientContent === 'function') {
+  session.sendClientContent({ turns, turnComplete })
+}
+// 回退到旧版方法
+else if (typeof session.send === 'function') {
+  session.send({ client_content: { turns, turn_complete: turnComplete } })
+}
+```
+
+---
+
+## 14. 测试验证方法
+
+### 14.1 证明记忆是动态注入的（而非启动时加载）
+
+**最简单的方法**：使用现有的 Tom 记忆
+
+1. **确认 Tom 记忆存在且 tag 是 EMO**：
+   ```sql
+   SELECT * FROM user_memories 
+   WHERE content LIKE '%Tom%' AND user_id = '38396857-f948-4496-8ab2-80edbae72f16';
+   -- 应该看到: tag=EMO, content="用户有一个男朋友叫 Tom"
+   ```
+
+2. **确认 EMO 不在启动预加载列表**：
+   - 启动时只加载 `PREF`、`EFFECTIVE` 等 tag
+   - `EMO` 类型需要通过向量匹配动态检索
+
+3. **测试步骤**：
+   - 开始任务 "read a book"（和感情无关）
+   - AI 开场后，问：「What's my boyfriend's name?」
+     - 预期：AI 说 "I don't know"（启动时没加载）
+   - 然后说：「I really miss my boyfriend」
+   - 等 AI 响应后，再问：「So what's his name?」
+     - 预期：AI 说 "Tom"（动态注入成功）
+
+4. **关键日志验证**：
+   ```
+   🚨 [方案 1 + system role] AI 正在说话，立即打断并注入记忆
+   📥 [GeminiSession] sendClientContent (role=system, turnComplete=true): [CONTEXT]...
+   ```
+
+### 14.2 日志时序分析
+
+```
+启动时日志（不应该有 Tom）:
+-------------------------------
+🔑 Fetching ephemeral token...
+✅ System instruction loaded
+📋 启动记忆: [PREF] 用户喜欢提前收拾行李
+📋 启动记忆: [EFFECTIVE] 番茄钟对用户有效
+（这里不应该看到 Tom）
+
+话题触发后日志（应该看到 Tom）:
+-------------------------------
+🎤 用户说话: "I miss my boyfriend"
+🔍 话题检测完成: 感情 (44.0%)
+🧠 记忆检索结果: 4 条
+🧠 记忆内容: [EMO] 用户有一个男朋友叫 Tom ← Tom 在这里
+🚨 AI 正在说话，立即打断并注入记忆
+```
+
+---
+
+## 15. 相关 commit
+
+### 2026-01-28
+- `feat(virtual-messages): add system role support to sendClientContent`
+- `feat(virtual-messages): implement 方案1 - interrupt AI and inject memory`
+- `fix(virtual-messages): language pollution in tone triggers`
+
+### 2026-01-29
+- `feat(detect-topic): vector-based topic detection with Multi-Query RAG`
+- `feat(retrieve-memories): async memory retrieval pipeline`
+
+### 2026-01-31
+- `feat(virtual-messages): integrate orchestrator with useAICoachSession`
+- `docs: update dynamic virtual messages documentation`
 
 ---
 
@@ -62,19 +402,6 @@ issue: ""
 - **动态生成**：LLM 根据上下文生成合适的指令
 - **优先级队列**：紧急指令（如情绪响应）优先发送
 - **冲突控制**：避免打断正在进行的对话
-
-### 预期效果
-```
-用户说: "我男朋友可能不来了"
-        ↓
-系统检测到: 话题="感情问题", 情绪="sad"
-        ↓
-检索相关记忆: "用户之前因为男朋友的事情影响心情"
-        ↓
-注入 [CONTEXT] 消息到 Gemini Live
-        ↓
-AI 回复时自然引用这段记忆
-```
 
 ---
 
@@ -106,9 +433,8 @@ AI 回复时自然引用这段记忆
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌────────────┐  ┌──────────────┐  ┌─────────────────┐          │
 │  │ 话题检测器  │  │ 异步记忆管道  │  │ 动态消息生成器   │          │
-│  │(Semantic   │  │ (Mem0 检索)  │  │ (LLM 快速生成)  │          │
-│  │ Router)    │  └──────┬───────┘  └────────┬────────┘          │
-│  └─────┬──────┘         │                   │                   │
+│  │(向量匹配)   │  │ (Mem0 检索)  │  │ (LLM 快速生成)  │          │
+│  └─────┬──────┘  └──────┬───────┘  └────────┬────────┘          │
 │        │                │                   │                   │
 │        └────────────────┴───────────────────┘                   │
 │                         │                                       │
@@ -121,344 +447,180 @@ AI 回复时自然引用这段记忆
                            │
                            │ 注入虚拟消息
                            ▼
-                  (sendClientContent)
+                    (sendClientContent)
 ```
 
 ---
 
-## 3. 已完成的实现
+## 3. 文件结构
 
-### 3.1 ✅ Semantic Router 话题检测 (2026-01-28)
+### 新增文件
 
-使用 embedding 向量相似度替代关键词匹配，支持多语言和语义理解。
+```
+src/hooks/virtual-messages/
+├── index.ts                              # 导出入口
+├── types.ts                              # 类型定义 ⭐
+├── constants.ts                          # 话题规则、情绪词库
+├── useConversationContextTracker.ts      # 对话上下文追踪器 ⭐⭐⭐
+├── useVirtualMessageOrchestrator.ts      # 核心调度器 ⭐⭐⭐
+├── useVirtualMessageQueue.ts             # 消息队列 + 冲突控制
+├── useTopicDetector.ts                   # 话题/情绪检测（向量匹配版）
+└── useAsyncMemoryPipeline.ts             # 异步记忆检索（调用 retrieve-memories）
 
-**实现文件**：
-
-| 仓库 | 文件 | 说明 |
-|------|------|------|
-| 后端 | `_shared/topic-embeddings.ts` | 话题定义 + embedding 缓存 |
-| 后端 | `get-topic-embedding/index.ts` | Semantic Router API |
-| 前端 | `useTopicDetector.ts` | 异步调用 API |
-
-**预定义话题**（15 个）：
-
-| 类别 | 话题 |
-|------|------|
-| 情感类 | 感情问题、失恋、压力、孤独 |
-| 生活类 | 旅行、健身运动、美食 |
-| 工作/学习类 | 工作、学习、写代码 |
-| 社交类 | 朋友、家人 |
-| 健康类 | 睡眠、健康 |
-
-**API 接口**：
-```json
-POST /functions/v1/get-topic-embedding
-{
-  "text": "我男朋友可能不来了",
-  "threshold": 0.55
-}
-
-// 响应
-{
-  "matched": true,
-  "topic": { "id": "relationship_issue", "name": "感情问题" },
-  "confidence": 0.87,
-  "shouldRetrieveMemory": true,
-  "emotion": "sad",
-  "emotionIntensity": 0.7
-}
+supabase/functions/
+├── _shared/
+│   ├── memory-retrieval.ts               # Tolan 记忆检索共享模块 ⭐⭐⭐
+│   └── topic-embeddings.ts               # 话题向量预计算
+├── detect-topic/                         # 向量匹配话题检测 API
+│   └── index.ts
+├── retrieve-memories/                    # 虚拟消息专用记忆检索 API ⭐⭐
+│   └── index.ts
+└── get-system-instruction/
+    └── index.ts                          # 添加 Dynamic Instruction 段落
 ```
 
 ---
 
-### 3.2 ✅ 抗拒分析 + 动态指令系统 (2026-01-28)
+## 4. 方案 1：AI 说话时立即打断并注入记忆
 
-将 AI 行为控制从"硬编码在 System Prompt"改为"通过虚拟消息动态注入"。
+### 4.1 背景问题
 
-**新增 5 种虚拟消息类型**：
+Gemini Live API 在对话中间注入上下文有两个核心挑战：
 
-| 类型 | 用途 | 优先级 |
-|------|------|--------|
-| `LISTEN_FIRST` | 进入倾听模式，用户想聊情感 | urgent |
-| `GENTLE_REDIRECT` | 情绪稳定后轻柔引导回任务 | high |
-| `ACCEPT_STOP` | 用户明确不想做，优雅接受 | high |
-| `PUSH_TINY_STEP` | 非情感抗拒，推进小步骤 | high |
-| `TONE_SHIFT` | 语气切换（从 ToneManager 触发） | high |
+1. **打断问题**：`sendClientContent` 会打断当前正在生成的内容
+2. **响应问题**：`sendRealtimeInput` 会触发 AI 响应，可能打断用户
 
-**抗拒分析决策树**：
+### 4.2 官方 API 分析
+
+根据 [Google 官方文档](https://ai.google.dev/gemini-api/docs/live-guide)：
+
+| 方法 | 会打断 AI 吗？ | 会触发响应吗？ |
+|------|-------------|--------------|
+| `send_realtime_input` | ❌ 不会 | ✅ 会（VAD 检测后） |
+| `send_client_content` + `turn_complete=true` | ✅ 会 | ✅ 会 |
+| `send_client_content` + `turn_complete=false` | ✅ 会 | ❌ 不会（静默注入） |
+
+**关键发现**：
+- `turn_complete=false` 可以添加内容到上下文但**不触发 AI 响应**
+- 可以使用 `role='system'` 来注入上下文/记忆
+
+### 4.3 方案设计
 
 ```
-用户抗拒 ([RESIST] 检测到)
-    ↓
-检查话题检测结果 (topicResult)
-    ↓
-┌─ 情感类话题 (relationship, breakup, stress, loneliness)
-│   ├─ emotionIntensity ≥ 0.7 → action: 'empathy' → [EMPATHY] 消息
-│   └─ emotionIntensity < 0.7 → action: 'listen'  → [LISTEN_FIRST] 消息
-│
-├─ 明确拒绝关键词 ("不想", "算了", "don't want", "give up")
-│   └─ action: 'accept_stop' → [ACCEPT_STOP] 消息
-│
-└─ 其他 (普通任务抗拒)
-    ├─ consecutiveRejections ≥ 2 → action: 'tone_shift' → [TONE_SHIFT] 消息
-    └─ consecutiveRejections < 2 → action: 'tiny_step'  → [PUSH_TINY_STEP] 消息
+时间线:
+─────────────────────────────────────────────────────
+用户说话 ──► 话题检测 ──► 记忆检索完成 ──► AI 正在说话？
+                                              │
+                                ┌─────────────┴─────────────┐
+                                │                           │
+                              YES                          NO
+                                │                           │
+                                ▼                           ▼
+                    sendClientContent               入队等待
+                    (msg, true, 'system')           turnComplete
+                    打断 AI，注入记忆               后静默注入
+                                │
+                                ▼
+                    AI 重新响应（用上记忆）
 ```
 
----
+### 4.4 核心代码
 
-### 3.3 ✅ 静默注入机制 (方案 A) (2026-01-28)
-
-使用 `sendClientContent` + `turnComplete=false` 静默注入上下文。
-
-**核心代码**：
 ```typescript
-// useGeminiSession.ts
-const sendClientContent = useCallback((content: string, turnComplete = false): boolean => {
-  if (!session) return false;
+// useVirtualMessageOrchestrator.ts
 
-  session.sendClientContent({
-    turns: [{ role: 'user', parts: [{ text: content }] }],
-    turnComplete,
-  });
-  return true;
-}, []);
-```
-
-**注入时机**：AI 说完话后（turnComplete 事件）的安全窗口期内。
-
----
-
-### 3.4 ✅ Bug 修复记录
-
-#### 3.4.1 isSpeaking 时序问题 (2026-01-28)
-
-**文件**: `src/hooks/gemini-live/useGeminiLive.ts`
-
-**问题**: `turnComplete` 事件触发后，`isSpeakingRef` 还是 `true`，导致虚拟消息发送失败。
-
-**修复**: 在 `onTurnComplete` 回调中立即同步更新 `isSpeakingRef.current = false`。
-
----
-
-#### 3.4.2 用户语音碎片化问题 (2026-01-28)
-
-**文件**: `src/hooks/useAICoachSession.ts`
-
-**问题**: `onUserSpeech` 收到的是单词碎片，话题检测器无法从碎片中检测话题。
-
-**修复**: 等用户说完整句话后（AI 开始回复时）再调用 `onUserSpeech(fullUserMessage)`。
-
----
-
-#### 3.4.3 sendClientContent 返回值问题 (2026-01-28)
-
-**文件**: `src/hooks/gemini-live/core/useGeminiSession.ts`, `useGeminiLive.ts`
-
-**问题**: `sendClientContent` 失败时仍然返回 true，导致误报发送成功。
-
-**修复**: 返回 boolean 并在 `injectContextSilently` 中检查返回值。
-
----
-
-#### 3.4.4 sendClientContent 调用错误的 SDK 方法 ✅ (2026-01-29)
-
-**文件**: `src/hooks/gemini-live/core/useGeminiSession.ts`
-
-**问题**: 代码尝试调用 `session.send()` 这个底层方法，但 Gemini SDK 暴露的是 `session.sendClientContent()` 方法。
-
-**日志表现**:
-```
-⚠️ [GeminiSession] sendClientContent 失败: session.send 不可用
-⚠️ [GeminiLive] 静默注入失败: sendClientContent 返回 false
-⏸️ [MessageQueue] 发送失败（不在安全窗口）: PUSH_TINY_STEP
-```
-
-**修复前**:
-```typescript
-const session = sessionRef.current as unknown as {
-  send?: (message: unknown) => void;
-} | null;
-
-if (session && typeof session.send === 'function') {
-  session.send({
-    client_content: { turns: [...], turn_complete: turnComplete }
-  });
-}
-```
-
-**修复后**:
-```typescript
-const session = sessionRef.current;
-if (!session) return false;
-
-try {
-  // 使用 SDK 提供的 sendClientContent 方法
-  session.sendClientContent({
-    turns: [{ role: 'user', parts: [{ text: content }] }],
-    turnComplete,
-  });
-  return true;
-} catch (error) {
-  return false;
+if (isSpeakingRef.current) {
+  // 方案 1：AI 正在说话，立即打断并注入
+  console.log(`🚨 [方案 1 + system role] AI 正在说话，立即打断并注入记忆`)
+  sendClientContent(contextMessage, true, 'system')
+} else {
+  // 方案 A：AI 没在说话，入队等待 turnComplete
+  messageQueue.enqueue({
+    type: 'CONTEXT',
+    priority: 'normal',
+    content: contextMessage,
+  })
 }
 ```
 
 ---
 
-#### 3.4.5 话题检测阈值前后端不一致 ✅ (2026-01-29)
+## 5. 消息协议设计
 
-**文件**: `src/hooks/virtual-messages/useTopicDetector.ts`
+### 5.1 指令类型
 
-**问题**: 前端传递阈值 `0.65`，但后端文档说的是 `0.55`。导致 58.5% 相似度被判定为"未匹配"。
+| 类型 | 用途 | 优先级 | 触发条件 |
+|------|------|--------|---------|
+| `[EMPATHY]` | 情绪响应 | urgent | 检测到强烈情绪 |
+| `[DIRECTIVE]` | 行为指令 | high | 需要引导 AI 行为 |
+| `[CONTEXT]` | 记忆注入 | normal | 检索到相关记忆 |
+| `[CHECKPOINT]` | 定时检查 | low | 定时触发 |
 
-**日志表现**:
+### 5.2 指令格式
+
+每个指令都包含 `conversation_context` 字段，让 AI 知道当前对话状态：
+
 ```
-🎯 [TopicDetector] 未匹配: none (58.5%)
-```
-（58.5% > 55% 应该匹配，但因为前端传了 65% 阈值所以没匹配）
-
-**修复**: 将前端 `DEFAULT_THRESHOLD` 从 `0.65` 改为 `0.55`。
-
----
-
-## 4. 当前状态总结
-
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| 虚拟消息发送 | ✅ 正常 | 所有 Bug 已修复 |
-| 用户语音处理 | ✅ 正常 | 完整句子传递给检测器 |
-| 会话开始记忆注入 | ✅ 正常 | system instruction 中的记忆被 AI 引用 |
-| **话题检测** | ✅ 已修复 | 阈值已统一为 0.55 |
-| **抗拒分析** | ✅ 已实现 | analyzeResistance() 函数 |
-| **动态指令系统** | ✅ 已实现 | System Prompt 重构完成 |
-| **新消息类型** | ✅ 已实现 | LISTEN_FIRST, ACCEPT_STOP, PUSH_TINY_STEP 等 |
-| **sendClientContent** | ✅ 已修复 | 使用正确的 SDK 方法 |
-| **实时记忆检索** | ⏸️ 待验证 | 依赖话题检测，需要测试验证 |
-
----
-
-## 5. 测试验证
-
-### 5.1 测试环境启动
-```bash
-# 终端 1：启动后端
-cd ../Lumi-supabase
-npm run supabase:start
-npm run supabase:functions
-
-# 终端 2：启动前端
-cd ../Lumi
-npm run dev:local
-```
-
-### 5.2 测试用例 - 话题检测
-
-| 测试场景 | 用户说话 | 预期结果 |
-|---------|---------|---------|
-| 感情问题 | "我男朋友可能不来了" | 匹配 `relationship_issue`, confidence > 0.55 |
-| 感情问题（间接） | "he might not come" | 匹配 `relationship_issue` |
-| 失恋 | "we broke up" | 匹配 `breakup`, emotion=sad |
-| 旅行 | "明天要去打包行李" | 匹配 `travel` |
-| 工作压力 | "deadline快到了好焦虑" | 匹配 `work` 或 `stress` |
-| 无匹配 | "今天天气不错" | matched=false |
-
-### 5.3 测试用例 - 抗拒分析 + 虚拟消息
-
-| 用户说 | 预期分析 | 预期消息 |
-|-------|----------|---------|
-| "我男朋友可能不来了" | type=emotional, action=listen | [LISTEN_FIRST] |
-| "I don't want to do this anymore" | type=explicit_stop, action=accept_stop | [ACCEPT_STOP] |
-| "太累了，待会再说" | type=task_resistance, action=tiny_step | [PUSH_TINY_STEP] |
-| 连续抗拒 2+ 次（非情感） | type=task_resistance, action=tone_shift | [TONE_SHIFT] |
-
-### 5.4 预期日志 - 完整流程
-
-**话题检测 + 记忆检索**:
-```
-🎯 [TopicDetector] 匹配: 感情问题 (58%)
-🏷️ [Orchestrator] 话题变化: 感情问题
-🧠 [MemoryPipeline] 开始检索
-🧠 [Orchestrator] 记忆检索完成，已入队 CONTEXT 消息
-📥 [GeminiSession] sendClientContent (turnComplete=false): [CONTEXT]...
-🔇 [GeminiLive] 静默注入上下文
-📤 [MessageQueue] 发送成功
-```
-
-**抗拒分析 + 虚拟消息**:
-```
-🚫 AI 检测到 [RESIST] 标记
-🔍 [ToneManager] 抗拒分析: {type: 'emotional', action: 'listen'}
-📥 [MessageQueue] 入队: LISTEN_FIRST (urgent)
-📥 [GeminiSession] sendClientContent (turnComplete=false): [LISTEN_FIRST]...
-🔇 [GeminiLive] 静默注入上下文
-📤 [MessageQueue] 发送成功: LISTEN_FIRST
+[CONTEXT] type=memory topic="失恋"
+conversation_context: 用户正在讨论失恋，情绪低落
+【有效激励】用户说运动能帮助转移注意力
+【过往经历】用户上次失恋后去跑步，感觉好多了
+【用户偏好】用户情绪低落时喜欢安静独处
+action: 自然地引用这段记忆，但不要打断当前的情感对话。
 ```
 
 ---
 
-## 6. 文件变更记录
+## 6. 语言一致性方案（已实现）
 
-### 前端（Lumi 仓库）
+### 6.1 问题背景
 
-| 文件 | 改动 |
-|------|------|
-| `src/hooks/virtual-messages/types.ts` | 新增 5 种消息类型 + SemanticRouterResponse |
-| `src/hooks/virtual-messages/useTopicDetector.ts` | 重写为异步 API 调用 + 修复阈值 |
-| `src/hooks/virtual-messages/useVirtualMessageOrchestrator.ts` | 新增消息生成函数 |
-| `src/hooks/useToneManager.ts` | 新增 `analyzeResistance()` 函数 |
-| `src/hooks/useAICoachSession.ts` | 集成抗拒分析 + 虚拟消息联动 |
-| `src/hooks/gemini-live/core/useGeminiSession.ts` | 修复 sendClientContent 方法 |
-| `src/hooks/gemini-live/useGeminiLive.ts` | 修复 isSpeaking 时序 + injectContextSilently |
+用户设置了英文作为首选语言，但当 AI 检测到用户抗拒并触发语气切换（`[TONE_SHIFT]`）时，AI 突然切换到中文回复。
 
-### 后端（Lumi-supabase 仓库）
+**根本原因**：
+1. 触发词没有携带语言信息
+2. 系统指令中的示例使用中文，可能影响 AI 的语言选择
+3. AI 在语气切换时"忘记"了用户的语言偏好
 
-| 文件 | 改动 |
-|------|------|
-| `supabase/functions/_shared/topic-embeddings.ts` | 话题定义 + embedding 缓存 |
-| `supabase/functions/get-topic-embedding/index.ts` | Semantic Router API |
-| `supabase/functions/get-system-instruction/index.ts` | 重构 System Prompt |
+### 6.2 解决方案
 
----
+**核心思路**：所有触发词都携带 `language=` 参数，明确告诉 AI 应该用什么语言回复。
 
-## 7. 技术细节
+**触发词格式变化**：
+```
+[GREETING] current_time=17:34 language=en-US
+[CHECK_IN] elapsed=2m current_time=17:36 language=en-US
+[TONE_SHIFT] style=sneaky_friend current_time=17:38 language=en-US
+[MEMORY_BOOST] type=past_success total=5 current_time=17:40 language=en-US
+```
 
-### 7.1 相似度阈值
+**系统指令更新**：
+```
+IMPORTANT: Every trigger includes TWO critical parameters:
+1. "current_time=HH:MM" (24-hour format, user's local time)
+2. "language=XX" (e.g., language=en-US, language=zh-CN) - RESPOND IN THIS LANGUAGE
 
-| 阈值 | 值 | 用途 |
-|------|------|------|
-| 匹配阈值 | **0.55** | 低于此值视为未匹配 |
-| 记忆检索阈值 | **0.65** | 高于此值才建议检索记忆 |
-
-### 7.2 消息优先级
-
-| 优先级 | 类型 | 说明 |
-|--------|------|------|
-| urgent | EMPATHY, LISTEN_FIRST | 立即发送 |
-| high | DIRECTIVE, TONE_SHIFT, ACCEPT_STOP, PUSH_TINY_STEP | 优先发送 |
-| normal | CONTEXT | 等待冷却期 |
-| low | CHECKPOINT | 最后发送 |
-
-### 7.3 性能预期
-
-| 操作 | 预期延迟 |
-|------|---------|
-| 话题检测（首次请求，初始化缓存） | ~500ms |
-| 话题检测（后续请求） | ~100-200ms |
-| 话题检测（前端缓存命中） | ~0ms |
-| 虚拟消息注入（sendClientContent） | ~10ms |
+The "language=" parameter is MANDATORY. You MUST respond in the exact language specified.
+```
 
 ---
 
-## 8. 下一步计划
+## 7. 性能目标
 
-1. **测试验证**：运行所有测试用例，验证修复效果
-2. **记忆检索测试**：验证话题检测 → 记忆检索 → 消息注入完整流程
-3. **边界情况处理**：快速连续话题切换、网络错误等
-4. **文档完善**：更新架构文档
+| 操作 | 目标延迟 | 策略 |
+|------|---------|------|
+| 话题检测 | < 500ms | 向量匹配 API |
+| 记忆检索 | < 1s | Multi-Query RAG |
+| 消息生成 | < 100ms | 模板 + 格式化 |
+| **端到端** | **< 2s** | 并行处理 |
 
 ---
 
-## 9. 相关文档
+## 8. 关键风险与缓解
 
-- 架构文档: `docs/architecture/memory-system.md`
-- 测试用例: `docs/test-cases/dynamic-virtual-messages-test.md`
+| 风险 | 后果 | 缓解措施 |
+|------|------|---------|
+| 打断太频繁 | 用户体验差 | 冷却期 + 优先级控制 |
+| 记忆检索失败 | 无法个性化 | 降级到无记忆响应 |
+| 语言污染 | AI 切换语言 | `language=` 参数强制 |
+| API 延迟 | 注入太慢 | 方案 1 立即打断 |

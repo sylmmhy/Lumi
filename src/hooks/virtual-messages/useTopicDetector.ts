@@ -1,113 +1,119 @@
 /**
- * # 话题/情绪检测器 Hook (Semantic Router 版)
+ * # 话题/情绪检测器 Hook（向量版）
  *
- * 使用语义相似度（而非关键词匹配）检测用户消息中的话题和情绪。
- *
- * ## 原理
- * 1. 调用 `get-topic-embedding` Edge Function
- * 2. 后端计算用户输入与预定义话题的语义相似度
- * 3. 返回最匹配的话题和情绪
- *
- * ## 优点
- * - 多语言支持：中文、英文、繁体自动识别
- * - 语义理解："他走了" 能匹配 "分手" 话题
- * - 无需维护大量关键词
+ * 使用后端 detect-topic API 进行向量相似度匹配，替代关键词匹配。
+ * 支持多语言（中文、英文等），语义理解更准确。
  *
  * @example
  * ```typescript
- * const { detectFromMessageAsync, isLoading } = useTopicDetector()
+ * const { detectFromMessage, isDetecting } = useTopicDetector()
  *
- * // 异步检测用户消息
- * const result = await detectFromMessageAsync('我男朋友可能不来了')
+ * // 检测用户消息（异步）
+ * const result = await detectFromMessage('boyfriend might not come')
  * // result = {
- * //   topic: { id: 'relationship_issue', name: '感情问题', ... },
- * //   emotionalState: { primary: 'sad', intensity: 0.7, ... },
+ * //   topic: { id: 'relationship', name: '感情', ... },
+ * //   emotionalState: { primary: 'neutral', intensity: 0.6, ... },
  * //   isTopicChanged: true,
- * //   confidence: 0.87,
- * //   shouldRetrieveMemory: true,
- * //   memoryQuestions: [...]
+ * //   confidence: 0.87
  * // }
  * ```
  *
- * @see docs/in-progress/20260127-dynamic-virtual-messages-progress.md
+ * @see docs/in-progress/20260127-dynamic-virtual-messages.md
  */
 
 import { useRef, useCallback, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type {
-  TopicInfo,
-  EmotionalState,
-  TopicDetectionResult,
-  SemanticRouterResponse,
-} from './types'
-import {
-  EMOTION_KEYWORDS,
-  EMOTION_INTENSIFIERS,
-  EMOTION_DIMINISHERS,
-} from './constants'
-
-// =====================================================
-// 配置
-// =====================================================
-
-/** 默认匹配阈值 */
-const DEFAULT_THRESHOLD = 0.55
-
-/** API 超时时间（毫秒） */
-const API_TIMEOUT_MS = 5000
-
-// =====================================================
-// Hook
-// =====================================================
+import { EMOTION_KEYWORDS, EMOTION_INTENSIFIERS, EMOTION_DIMINISHERS } from './constants'
+import type { TopicInfo, EmotionalState, TopicDetectionResult } from './types'
 
 /**
- * 话题/情绪检测器 (Semantic Router 版)
+ * 后端 API 响应类型
+ */
+interface DetectTopicAPIResponse {
+  success: boolean
+  topic: {
+    id: string
+    name: string
+    emotion: EmotionalState['primary']
+    emotionIntensity: number
+    memoryQuestions: string[]
+  } | null
+  confidence: number
+  allScores?: Array<{ topicId: string; score: number }>
+  error?: string
+}
+
+/**
+ * 扩展的话题检测结果（包含置信度和记忆检索问题）
+ */
+export interface TopicDetectionResultExtended extends TopicDetectionResult {
+  /** 置信度 (0-1) */
+  confidence: number
+  /** 记忆检索问题 */
+  memoryQuestions: string[]
+}
+
+/**
+ * 话题/情绪检测器（向量版）
  */
 export function useTopicDetector() {
   // 追踪当前话题（用于判断是否变化）
   const currentTopicRef = useRef<TopicInfo | null>(null)
 
-  // 加载状态
-  const [isLoading, setIsLoading] = useState(false)
+  // 检测状态
+  const [isDetecting, setIsDetecting] = useState(false)
 
-  // 防抖用的上一次请求 ID
-  const lastRequestIdRef = useRef<number>(0)
-
-  // 缓存最近的检测结果（避免重复 API 调用）
-  const cacheRef = useRef<Map<string, { result: TopicDetectionResult; timestamp: number }>>(
-    new Map()
-  )
+  // 缓存最近的检测结果（避免重复调用 API）
+  const cacheRef = useRef<Map<string, { result: DetectTopicAPIResponse; timestamp: number }>>(new Map())
+  const CACHE_TTL_MS = 30000 // 30 秒缓存
 
   /**
-   * 从缓存获取结果（1分钟内有效）
+   * 调用后端 API 检测话题
    */
-  const getCachedResult = useCallback((text: string): TopicDetectionResult | null => {
+  const callDetectTopicAPI = useCallback(async (text: string): Promise<DetectTopicAPIResponse> => {
+    // 检查缓存
     const cached = cacheRef.current.get(text)
-    if (cached && Date.now() - cached.timestamp < 60000) {
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log('🏷️ [TopicDetector] 使用缓存结果')
       return cached.result
     }
-    return null
-  }, [])
 
-  /**
-   * 保存结果到缓存
-   */
-  const setCachedResult = useCallback((text: string, result: TopicDetectionResult) => {
-    cacheRef.current.set(text, { result, timestamp: Date.now() })
+    try {
+      const { data, error } = await supabase.functions.invoke('detect-topic', {
+        body: { text },
+      })
 
-    // 限制缓存大小
-    if (cacheRef.current.size > 50) {
-      const oldestKey = cacheRef.current.keys().next().value
-      if (oldestKey) {
-        cacheRef.current.delete(oldestKey)
+      if (error) {
+        console.error('🏷️ [TopicDetector] API 错误:', error)
+        return { success: false, topic: null, confidence: 0, error: error.message }
       }
+
+      const result = data as DetectTopicAPIResponse
+
+      // 更新缓存
+      cacheRef.current.set(text, { result, timestamp: Date.now() })
+
+      // 清理过期缓存（保留最多 50 条）
+      if (cacheRef.current.size > 50) {
+        const entries = Array.from(cacheRef.current.entries())
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+        for (let i = 0; i < entries.length - 50; i++) {
+          cacheRef.current.delete(entries[i][0])
+        }
+      }
+
+      return result
+    } catch (err) {
+      console.error('🏷️ [TopicDetector] 调用失败:', err)
+      return { success: false, topic: null, confidence: 0, error: (err as Error).message }
     }
   }, [])
 
   /**
-   * 本地情绪检测（作为 API 失败时的备用）
+   * 检测文本中的情绪（本地检测，作为补充）
+   * 如果 API 返回了情绪，优先使用 API 的结果
    */
-  const detectEmotionLocal = useCallback((text: string): EmotionalState => {
+  const detectEmotionLocally = useCallback((text: string): EmotionalState => {
     const lowerText = text.toLowerCase()
     let detectedEmotion: EmotionalState['primary'] = 'neutral'
     let maxScore = 0
@@ -134,6 +140,7 @@ export function useTopicDetector() {
     // 计算情绪强度
     let intensity = 0.3
 
+    // 根据情绪关键词数量调整强度
     if (maxScore > 0) {
       intensity = Math.min(1, 0.4 + maxScore * 0.15)
     }
@@ -163,168 +170,112 @@ export function useTopicDetector() {
   }, [])
 
   /**
-   * 异步检测话题和情绪（调用 Semantic Router API）
+   * 从消息中检测话题和情绪（异步，调用后端 API）
    */
-  const detectFromMessageAsync = useCallback(
-    async (message: string): Promise<TopicDetectionResult> => {
-      const trimmedMessage = message.trim()
-
-      // 空消息直接返回
-      if (!trimmedMessage) {
-        return {
-          topic: null,
-          emotionalState: { primary: 'neutral', intensity: 0, detectedAt: Date.now() },
-          isTopicChanged: false,
-          matchedKeywords: [],
-        }
+  const detectFromMessage = useCallback(async (message: string): Promise<TopicDetectionResultExtended> => {
+    // 过滤太短的消息
+    if (message.trim().length < 3) {
+      return {
+        topic: null,
+        emotionalState: { primary: 'neutral', intensity: 0, detectedAt: Date.now() },
+        isTopicChanged: false,
+        matchedKeywords: [],
+        confidence: 0,
+        memoryQuestions: [],
       }
+    }
 
-      // 检查缓存
-      const cached = getCachedResult(trimmedMessage)
-      if (cached) {
-        if (import.meta.env.DEV) {
-          console.log('📦 [TopicDetector] 使用缓存结果:', cached.topic?.name || 'none')
-        }
-        return cached
-      }
+    setIsDetecting(true)
 
-      // 生成请求 ID（防抖）
-      const requestId = ++lastRequestIdRef.current
+    try {
+      // 1. 调用后端 API 检测话题
+      const apiResult = await callDetectTopicAPI(message)
 
-      setIsLoading(true)
+      // 2. 本地检测情绪（作为备用）
+      const localEmotion = detectEmotionLocally(message)
 
-      try {
-        // 调用 Semantic Router API
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+      // 3. 构建结果
+      let topic: TopicInfo | null = null
+      let emotionalState: EmotionalState
+      let memoryQuestions: string[] = []
 
-        const { data, error } = await supabase.functions.invoke<SemanticRouterResponse>(
-          'get-topic-embedding',
-          {
-            body: {
-              text: trimmedMessage,
-              threshold: DEFAULT_THRESHOLD,
-            },
-          }
-        )
-
-        clearTimeout(timeoutId)
-
-        // 检查是否是最新请求
-        if (requestId !== lastRequestIdRef.current) {
-          if (import.meta.env.DEV) {
-            console.log('⏭️ [TopicDetector] 跳过过时请求')
-          }
-          return {
-            topic: null,
-            emotionalState: detectEmotionLocal(trimmedMessage),
-            isTopicChanged: false,
-            matchedKeywords: [],
-          }
+      if (apiResult.success && apiResult.topic) {
+        // API 返回了话题
+        topic = {
+          id: apiResult.topic.id,
+          name: apiResult.topic.name,
+          detectedAt: Date.now(),
+          keywords: [], // 向量匹配不需要关键词
         }
 
-        if (error || !data) {
-          console.warn('⚠️ [TopicDetector] API 错误，使用本地情绪检测:', error)
-          const localResult: TopicDetectionResult = {
-            topic: null,
-            emotionalState: detectEmotionLocal(trimmedMessage),
-            isTopicChanged: false,
-            matchedKeywords: [],
-          }
-          return localResult
-        }
-
-        // 构造话题信息
-        let topic: TopicInfo | null = null
-        if (data.matched && data.topic) {
-          topic = {
-            id: data.topic.id,
-            name: data.topic.name,
-            detectedAt: Date.now(),
-            keywords: [], // Semantic Router 不使用关键词
-          }
-        }
-
-        // 判断话题是否变化
-        const isTopicChanged =
-          topic !== null &&
-          (currentTopicRef.current === null || currentTopicRef.current.id !== topic.id)
-
-        // 更新当前话题
-        if (topic) {
-          currentTopicRef.current = topic
-        }
-
-        // 构造情绪状态
-        const emotionalState: EmotionalState = {
-          primary: data.emotion,
-          intensity: data.emotionIntensity,
+        // 使用 API 返回的情绪
+        emotionalState = {
+          primary: apiResult.topic.emotion,
+          intensity: apiResult.topic.emotionIntensity,
           detectedAt: Date.now(),
         }
 
-        const result: TopicDetectionResult = {
-          topic,
-          emotionalState,
-          isTopicChanged,
-          matchedKeywords: [],
-          confidence: data.confidence,
-          shouldRetrieveMemory: data.shouldRetrieveMemory,
-          memoryQuestions: data.memoryQuestions,
-        }
+        memoryQuestions = apiResult.topic.memoryQuestions
 
-        // 缓存结果
-        setCachedResult(trimmedMessage, result)
+        console.log(`🏷️ [TopicDetector] 检测到话题: ${topic.name} (${(apiResult.confidence * 100).toFixed(1)}%)`)
+      } else {
+        // API 没有返回话题，使用本地情绪检测
+        emotionalState = localEmotion
 
-        if (import.meta.env.DEV) {
-          console.log(
-            `🎯 [TopicDetector] ${data.matched ? '匹配' : '未匹配'}: ${topic?.name || 'none'} (${(data.confidence * 100).toFixed(1)}%)`,
-            { isTopicChanged, shouldRetrieveMemory: data.shouldRetrieveMemory }
-          )
-        }
-
-        return result
-      } catch (error) {
-        console.error('❌ [TopicDetector] 检测失败:', error)
-
-        // API 失败，使用本地情绪检测
-        return {
-          topic: null,
-          emotionalState: detectEmotionLocal(trimmedMessage),
-          isTopicChanged: false,
-          matchedKeywords: [],
-        }
-      } finally {
-        // 只有最新请求才更新 loading 状态
-        if (requestId === lastRequestIdRef.current) {
-          setIsLoading(false)
+        if (localEmotion.primary !== 'neutral') {
+          console.log(`🏷️ [TopicDetector] 未检测到话题，但检测到情绪: ${localEmotion.primary}`)
         }
       }
-    },
-    [getCachedResult, setCachedResult, detectEmotionLocal]
-  )
 
-  /**
-   * 同步检测（仅使用本地情绪检测，不调用 API）
-   *
-   * 用于不需要话题检测的场景，或作为快速预检
-   */
-  const detectEmotionOnly = useCallback(
-    (message: string): TopicDetectionResult => {
+      // 4. 判断话题是否变化
+      const isTopicChanged = topic !== null && (
+        currentTopicRef.current === null ||
+        currentTopicRef.current.id !== topic.id
+      )
+
+      // 5. 更新当前话题
+      if (topic) {
+        currentTopicRef.current = topic
+      }
+
       return {
-        topic: null,
-        emotionalState: detectEmotionLocal(message),
-        isTopicChanged: false,
+        topic,
+        emotionalState,
+        isTopicChanged,
         matchedKeywords: [],
+        confidence: apiResult.confidence,
+        memoryQuestions,
       }
-    },
-    [detectEmotionLocal]
-  )
+    } finally {
+      setIsDetecting(false)
+    }
+  }, [callDetectTopicAPI, detectEmotionLocally])
 
   /**
-   * 获取当前话题
+   * 同步版本的话题检测（仅用于兼容旧代码，不推荐使用）
+   * @deprecated 请使用 detectFromMessage（异步版本）
    */
-  const getCurrentTopic = useCallback((): TopicInfo | null => {
-    return currentTopicRef.current
+  const detectFromMessageSync = useCallback((message: string): TopicDetectionResult => {
+    console.warn('🏷️ [TopicDetector] detectFromMessageSync 已废弃，请使用 detectFromMessage')
+
+    // 只做本地情绪检测
+    const localEmotion = detectEmotionLocally(message)
+
+    return {
+      topic: null,
+      emotionalState: localEmotion,
+      isTopicChanged: false,
+      matchedKeywords: [],
+    }
+  }, [detectEmotionLocally])
+
+  /**
+   * 获取话题对应的记忆检索问题
+   * @deprecated 现在 detectFromMessage 会直接返回 memoryQuestions
+   */
+  const getMemoryQuestionsForTopic = useCallback((_topicId: string): string[] => {
+    console.warn('🏷️ [TopicDetector] getMemoryQuestionsForTopic 已废弃，请使用 detectFromMessage 返回的 memoryQuestions')
+    return []
   }, [])
 
   /**
@@ -336,25 +287,27 @@ export function useTopicDetector() {
   }, [])
 
   /**
-   * 清除缓存
+   * 获取当前话题
    */
-  const clearCache = useCallback(() => {
-    cacheRef.current.clear()
+  const getCurrentTopic = useCallback((): TopicInfo | null => {
+    return currentTopicRef.current
   }, [])
 
   return {
-    /** 异步检测话题和情绪（推荐使用） */
-    detectFromMessageAsync,
-    /** 仅检测情绪（同步，不调用 API） */
-    detectEmotionOnly,
+    /** 检测话题和情绪（异步，推荐使用） */
+    detectFromMessage,
+    /** 同步版本（已废弃） */
+    detectFromMessageSync,
+    /** 本地情绪检测 */
+    detectEmotionLocally,
+    /** 获取话题的记忆检索问题（已废弃） */
+    getMemoryQuestionsForTopic,
     /** 获取当前话题 */
     getCurrentTopic,
-    /** 重置状态 */
+    /** 重置 */
     reset,
-    /** 清除缓存 */
-    clearCache,
-    /** 是否正在加载 */
-    isLoading,
+    /** 是否正在检测 */
+    isDetecting,
   }
 }
 

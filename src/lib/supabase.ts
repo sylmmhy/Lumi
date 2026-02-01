@@ -11,8 +11,22 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Supabase JS types don't expose functions.url, so we extend the options
 const hasEnv = Boolean(supabaseUrl && supabaseAnonKey)
-const projectRef = hasEnv ? new URL(supabaseUrl!).host.split('.')[0] : null
-const functionsUrl = projectRef ? `https://${projectRef}.functions.supabase.co` : null
+
+// 检测是否是本地开发环境
+const isLocalDev = supabaseUrl?.includes('127.0.0.1') || supabaseUrl?.includes('localhost')
+
+// 本地开发时使用本地 functions URL
+let functionsUrl: string | null = null
+if (hasEnv) {
+  if (isLocalDev) {
+    // 本地开发：使用 supabase functions serve 的 URL
+    functionsUrl = `${supabaseUrl}/functions/v1`
+  } else {
+    // 生产环境：使用云端 URL
+    const projectRef = new URL(supabaseUrl!).host.split('.')[0]
+    functionsUrl = `https://${projectRef}.functions.supabase.co`
+  }
+}
 
 let cachedClient: SupabaseClientType | null = null
 

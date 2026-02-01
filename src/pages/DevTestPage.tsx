@@ -612,9 +612,80 @@ const CAMPFIRE_CONFIG = {
  * 2. 图片顶部和两侧对齐视窗边缘
  * 3. 火焰使用百分比定位，相对于图片容器，确保与背景同步缩放
  * 4. 如果屏幕比图片高，底部用背景色填充
+ * 5. 支持播放篝火白噪音（循环播放）
  */
+/** 音频淡入淡出时长（毫秒） */
+const AUDIO_FADE_DURATION = 800;
+
 function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPlayingSound, setIsPlayingSound] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeIntervalRef = useRef<number | null>(null);
+
+  const toggleSound = useCallback(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio('/campfire-sound.mp3');
+      audioRef.current.loop = true;
+      audioRef.current.volume = 0;
+    }
+
+    // 清除之前的淡入淡出
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+
+    const audio = audioRef.current;
+    const steps = 20;
+    const stepDuration = AUDIO_FADE_DURATION / steps;
+    const volumeStep = 1 / steps;
+
+    if (isPlayingSound) {
+      // 淡出
+      fadeIntervalRef.current = window.setInterval(() => {
+        if (audio.volume > volumeStep) {
+          audio.volume = Math.max(0, audio.volume - volumeStep);
+        } else {
+          audio.volume = 0;
+          audio.pause();
+          if (fadeIntervalRef.current) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+          }
+        }
+      }, stepDuration);
+    } else {
+      // 淡入
+      audio.volume = 0;
+      audio.play();
+      fadeIntervalRef.current = window.setInterval(() => {
+        if (audio.volume < 1 - volumeStep) {
+          audio.volume = Math.min(1, audio.volume + volumeStep);
+        } else {
+          audio.volume = 1;
+          if (fadeIntervalRef.current) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+          }
+        }
+      }, stepDuration);
+    }
+    setIsPlayingSound(!isPlayingSound);
+  }, [isPlayingSound]);
+
+  // 组件卸载时停止音频
+  useState(() => {
+    return () => {
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  });
 
   return (
     <div
@@ -653,17 +724,32 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
           ← 返回
         </button>
 
-        {/* 说话切换按钮（调试用） */}
-        <button
-          onClick={() => setIsSpeaking(!isSpeaking)}
-          className={`px-4 py-2 rounded-full transition-colors text-sm ${
-            isSpeaking
-              ? 'bg-green-500/80 text-white'
-              : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
-          }`}
-        >
-          {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
-        </button>
+        {/* 右侧按钮组 */}
+        <div className="flex gap-2">
+          {/* 白噪音播放按钮 */}
+          <button
+            onClick={toggleSound}
+            className={`px-4 py-2 rounded-full transition-colors text-sm ${
+              isPlayingSound
+                ? 'bg-orange-500/80 text-white'
+                : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
+            }`}
+          >
+            {isPlayingSound ? '🔥 Sound On' : '🔇 Sound Off'}
+          </button>
+
+          {/* 说话切换按钮（调试用） */}
+          <button
+            onClick={() => setIsSpeaking(!isSpeaking)}
+            className={`px-4 py-2 rounded-full transition-colors text-sm ${
+              isSpeaking
+                ? 'bg-green-500/80 text-white'
+                : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
+            }`}
+          >
+            {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
+          </button>
+        </div>
       </div>
     </div>
   );

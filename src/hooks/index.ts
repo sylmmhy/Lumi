@@ -53,3 +53,11 @@ export type {
   UseToneManagerOptions,
   ToneTrigger,
 } from './useToneManager';
+
+// 助眠音乐
+export { useSleepMusic } from './useSleepMusic';
+export type {
+  SleepMusicState,
+  SleepMusicTrack,
+  SleepMusicTrackId,
+} from './useSleepMusic';

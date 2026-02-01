@@ -594,29 +594,24 @@ const CAMPFIRE_CONFIG = {
   /** 背景图片宽度（从 companion-bg.png 元数据获取） */
   bgWidth: 1179,
   /** 背景图片高度（从 companion-bg.png 元数据获取） */
-  bgHeight: 2556,
+  bgHeight: 1926,
   /** 火焰底部在图片中的垂直位置，0-1（从设计稿测量：篝火柴堆顶部） */
-  fireBottomY: 0.48,
+  fireBottomY: 0.64
+  ,
   /** 火焰宽度占图片宽度的比例，0-1（视觉调优得出） */
   fireWidthRatio: 0.5,
-  /** 背景填充色（与图片边缘颜色一致，用于填充裁剪区域） */
-  bgColor: '#1D204A',
+  /** 背景填充色（与图片底部边缘颜色一致，用于填充超出区域） */
+  bgColor: '#1D1B3D',
 } as const;
-
-// 派生值（模块加载时计算一次）
-const COMPANION_BG_ASPECT_RATIO = CAMPFIRE_CONFIG.bgWidth / CAMPFIRE_CONFIG.bgHeight;
-const FIRE_HEIGHT_RATIO = CAMPFIRE_CONFIG.fireWidthRatio * COMPANION_BG_ASPECT_RATIO;
-const FIRE_CENTER_Y_PERCENT = CAMPFIRE_CONFIG.fireBottomY - FIRE_HEIGHT_RATIO / 2;
 
 /**
  * 篝火陪伴模式测试组件
  *
  * 实现原理：
- * 1. 使用 CSS max() 模拟 background-size: cover 效果，保持图片宽高比
- * 2. 以火焰中心点为锚点对齐，确保火焰在任何屏幕比例下都保持可见
- * 3. 火焰使用百分比定位，随背景同步缩放
- *
- * 浏览器兼容性：CSS max() 需要 Safari 11.1+, Chrome 79+, Firefox 75+
+ * 1. 图片宽度铺满视窗（100vw），高度按比例自动计算
+ * 2. 图片顶部和两侧对齐视窗边缘
+ * 3. 火焰使用百分比定位，相对于图片容器，确保与背景同步缩放
+ * 4. 如果屏幕比图片高，底部用背景色填充
  */
 function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -626,22 +621,13 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
       className="fixed inset-0 w-full h-full overflow-hidden"
       style={{ backgroundColor: CAMPFIRE_CONFIG.bgColor }}
     >
-      {/* 内容容器 - 使用 CSS max() 模拟 cover 效果，以火焰中心为锚点对齐 */}
-      <div
-        className="absolute"
-        style={{
-          left: '50%',
-          top: `${FIRE_CENTER_Y_PERCENT * 100}%`,
-          transform: `translateX(-50%) translateY(-${FIRE_CENTER_Y_PERCENT * 100}%)`,
-          width: `max(100vw, calc(100vh * ${COMPANION_BG_ASPECT_RATIO}))`,
-          height: `max(100vh, calc(100vw / ${COMPANION_BG_ASPECT_RATIO}))`,
-        }}
-      >
-        {/* 背景图片 */}
+      {/* 图片容器 - 宽度 100%，高度按比例自动，顶部对齐 */}
+      <div className="relative w-full">
+        {/* 背景图片 - 宽度铺满，高度按比例 */}
         <img
           src="/companion-bg.png"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          className="w-full h-auto block"
         />
 
         {/* 火焰动画 - 相对于图片容器定位，使用百分比确保同步缩放 */}

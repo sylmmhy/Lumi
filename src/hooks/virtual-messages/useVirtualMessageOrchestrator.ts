@@ -3,17 +3,19 @@
  *
  * 核心调度器，整合所有虚拟消息系统组件：
  * - ConversationContextTracker: 追踪对话上下文
- * - TopicDetector: 检测话题和情绪变化
+ * - TopicDetector: 检测话题和情绪变化（向量匹配版）
  * - AsyncMemoryPipeline: 异步检索相关记忆
  * - VirtualMessageQueue: 消息队列管理
  *
- * ## 方案 A 实现：turnComplete 后静默注入
+ * ## 方案 1 实现：AI 说话时立即打断并注入记忆
  *
  * 核心流程：
- * 1. 话题检测 → 异步检索记忆（不阻塞）
- * 2. 监听 turnComplete 事件（AI 说完话）
- * 3. 在安全窗口期调用 injectContextSilently
- * 4. 记忆被静默加入上下文，等待下次 AI 自然引用
+ * 1. 用户说话 → 话题检测（向量匹配）→ 异步检索记忆
+ * 2. 如果检索到记忆且 AI 正在说话：
+ *    - 使用 sendClientContent(content, true) 打断 AI 并注入记忆
+ *    - AI 会重新响应，这次会用上记忆中的信息
+ * 3. 如果 AI 没在说话：
+ *    - 入队等待 turnComplete 后静默注入
  *
  * ## 使用示例
  *
@@ -24,6 +26,7 @@
  *   initialDuration: 300,
  *   taskStartTime: Date.now(),
  *   injectContextSilently: geminiLive.injectContextSilently,
+ *   sendClientContent: geminiLive.sendClientContent, // 方案 1 必需
  *   isSpeaking: geminiLive.isSpeaking,
  * })
  *
@@ -40,9 +43,9 @@
  * @see docs/in-progress/20260127-dynamic-virtual-messages.md
  */
 
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { useConversationContextTracker } from './useConversationContextTracker'
-import { useTopicDetector } from './useTopicDetector'
+import { useTopicDetector, type TopicDetectionResultExtended } from './useTopicDetector'
 import { useAsyncMemoryPipeline, generateContextMessage } from './useAsyncMemoryPipeline'
 import { useVirtualMessageQueue } from './useVirtualMessageQueue'
 import type {
@@ -61,6 +64,14 @@ interface UseVirtualMessageOrchestratorOptions extends VirtualMessageOrchestrato
    * 来自 useGeminiLive.injectContextSilently
    */
   injectContextSilently: (content: string, options?: { force?: boolean }) => boolean
+  /**
+   * 发送客户端内容的回调（支持打断 AI）
+   * 来自 useGeminiLive.sendClientContent
+   * @param content - 要发送的内容
+   * @param turnComplete - true=打断AI并触发新响应, false=静默注入
+   * @param role - 'user' 或 'system'，用 'system' 注入记忆上下文
+   */
+  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void
   /**
    * AI 是否正在说话
    * 来自 useGeminiLive.isSpeaking
@@ -94,6 +105,10 @@ interface VirtualMessageOrchestratorResult {
   getContext: () => ReturnType<ReturnType<typeof useConversationContextTracker>['getContext']>
   /** 重置调度器状态 */
   reset: () => void
+  /** 是否正在检测话题 */
+  isDetectingTopic: boolean
+  /** 待处理的记忆（调试用） */
+  pendingMemory: { topic: string; count: number } | null
 }
 
 /**
@@ -108,6 +123,7 @@ export function useVirtualMessageOrchestrator(
     initialDuration,
     taskStartTime,
     injectContextSilently,
+    sendClientContent,
     isSpeaking,
     enabled = true,
     enableMemoryRetrieval = true,
@@ -126,7 +142,7 @@ export function useVirtualMessageOrchestrator(
     taskStartTime,
   })
 
-  // 话题检测器
+  // 话题检测器（向量版）
   const topicDetector = useTopicDetector()
 
   // 异步记忆管道
@@ -140,15 +156,15 @@ export function useVirtualMessageOrchestrator(
   })
 
   // =====================================================
-  // Refs
+  // State & Refs
   // =====================================================
 
   // 追踪上一次检测到的话题
   const lastTopicRef = useRef<TopicInfo | null>(null)
-  // 追踪是否有待发送的记忆消息
-  const pendingMemoryRef = useRef<boolean>(false)
   // 追踪 AI 说话状态
   const isSpeakingRef = useRef<boolean>(isSpeaking)
+  // 待处理的记忆（调试用）
+  const [pendingMemory, setPendingMemory] = useState<{ topic: string; count: number } | null>(null)
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
@@ -181,80 +197,17 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
   }, [contextTracker, preferredLanguage])
 
   /**
-   * 处理话题变化，触发记忆检索
+   * 处理话题检测结果，触发记忆检索
    */
-  const handleTopicChange = useCallback(async (
-    topic: TopicInfo,
-    emotionalState: EmotionalState
+  const handleTopicDetectionResult = useCallback(async (
+    result: TopicDetectionResultExtended,
+    userText: string
   ) => {
-    if (!enableMemoryRetrieval || !userId) {
-      return
-    }
-
-    // 标记有待处理的记忆
-    pendingMemoryRef.current = true
-
-    // 获取话题相关的记忆检索问题
-    const seedQuestions = topicDetector.getMemoryQuestionsForTopic(topic.id)
-
-    // 异步检索记忆
-    const memories = await memoryPipeline.fetchMemoriesForTopic(
-      topic.name,
-      topic.keywords,
-      contextTracker.getContext().summary,
-      seedQuestions
-    )
-
-    if (memories.length > 0) {
-      // 生成 [CONTEXT] 消息
-      const contextMessage = generateContextMessage(
-        memories,
-        topic.name,
-        emotionalState.primary,
-        emotionalState.intensity
-      )
-
-      // 入队消息
-      messageQueue.enqueue({
-        type: 'CONTEXT',
-        priority: 'normal',
-        content: contextMessage,
-        relatedTopic: topic.name,
-      })
-
-      if (import.meta.env.DEV) {
-        console.log(`🧠 [Orchestrator] 记忆检索完成，已入队 CONTEXT 消息`, {
-          topic: topic.name,
-          memoriesCount: memories.length,
-          queueSize: messageQueue.size(),
-        })
-      }
-    }
-
-    pendingMemoryRef.current = false
-  }, [
-    enableMemoryRetrieval,
-    userId,
-    topicDetector,
-    memoryPipeline,
-    contextTracker,
-    messageQueue,
-  ])
-
-  /**
-   * 处理用户说话事件
-   */
-  const onUserSpeech = useCallback((text: string) => {
-    if (!enabled) return
-
-    // 更新上下文
-    contextTracker.addUserMessage(text)
-
-    // 检测话题和情绪（函数内部已追踪话题变化）
-    const result = topicDetector.detectFromMessage(text)
+    const timestamp = new Date().toLocaleTimeString()
 
     // 更新情绪状态
     if (result.emotionalState.primary !== 'neutral') {
+      console.log(`💭 [Orchestrator] 更新情绪状态: ${result.emotionalState.primary} (强度: ${result.emotionalState.intensity.toFixed(2)})`)
       contextTracker.updateEmotionalState(result.emotionalState)
     }
 
@@ -263,6 +216,9 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
       result.emotionalState.intensity >= EMOTION_RESPONSE_THRESHOLD &&
       result.emotionalState.primary !== 'neutral'
     ) {
+      console.log(`\n💗 [${timestamp}] ========== 触发情绪响应 ==========`)
+      console.log(`💗 [Orchestrator] 情绪强度 ${result.emotionalState.intensity.toFixed(2)} >= 阈值 ${EMOTION_RESPONSE_THRESHOLD}`)
+      
       // 生成 [EMPATHY] 消息并入队（最高优先级）
       const empathyMessage = generateEmpathyMessage(
         result.emotionalState.primary,
@@ -276,12 +232,11 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
         content: empathyMessage,
       })
 
-      if (import.meta.env.DEV) {
-        console.log(`💗 [Orchestrator] 检测到强烈情绪，已入队 EMPATHY 消息`, {
-          emotion: result.emotionalState.primary,
-          intensity: result.emotionalState.intensity,
-        })
-      }
+      console.log(`💗 [Orchestrator] 已入队 [EMPATHY] 消息`, {
+        emotion: result.emotionalState.primary,
+        intensity: result.emotionalState.intensity,
+        queueSize: messageQueue.size(),
+      })
     }
 
     // 处理话题变化
@@ -289,25 +244,126 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
       contextTracker.updateTopic(result.topic)
 
       if (result.isTopicChanged) {
+        console.log(`\n🏷️ [${timestamp}] ========== 话题变化 ==========`)
+        console.log(`🏷️ [Orchestrator] 新话题: "${result.topic.name}" (置信度: ${(result.confidence * 100).toFixed(1)}%)`)
+        console.log(`🏷️ [Orchestrator] 记忆检索问题:`, result.memoryQuestions)
+        
         lastTopicRef.current = result.topic
 
-        if (import.meta.env.DEV) {
-          console.log(`🏷️ [Orchestrator] 话题变化: ${result.topic.name}`, {
-            keywords: result.matchedKeywords,
-          })
-        }
-
         // 触发异步记忆检索
-        handleTopicChange(result.topic, result.emotionalState)
+        if (enableMemoryRetrieval && userId) {
+          console.log(`\n🧠 [${timestamp}] ========== 开始记忆检索 ==========`)
+          console.log(`🧠 [Orchestrator] 用户ID: ${userId}`)
+          console.log(`🧠 [Orchestrator] 话题: ${result.topic.name}`)
+          
+          setPendingMemory({ topic: result.topic.name, count: 0 })
+
+          // 使用 API 返回的 memoryQuestions 作为种子问题
+          const memories = await memoryPipeline.fetchMemoriesForTopic(
+            result.topic.name,
+            [], // 向量匹配不需要关键词
+            contextTracker.getContext().summary,
+            result.memoryQuestions
+          )
+
+          console.log(`🧠 [Orchestrator] 记忆检索结果: ${memories.length} 条`)
+          if (memories.length > 0) {
+            console.log(`🧠 [Orchestrator] 记忆内容:`, memories.map(m => ({ tag: m.tag, content: m.content.substring(0, 30) + '...' })))
+            
+            // 生成 [CONTEXT] 消息
+            const contextMessage = generateContextMessage(
+              memories,
+              result.topic.name,
+              result.emotionalState.primary,
+              result.emotionalState.intensity
+            )
+
+            setPendingMemory({ topic: result.topic.name, count: memories.length })
+
+            // 💡 方案 1：如果 AI 正在说话，立即打断并注入记忆
+            // 根据 Google 官方文档，使用 role='system' 来注入上下文/记忆
+            if (isSpeakingRef.current) {
+              console.log(`\n🚨 [方案 1 + system role] ========== AI 正在说话，立即打断并注入记忆 ==========`)
+              console.log(`🚨 [Orchestrator] 话题: ${result.topic.name}`)
+              console.log(`🚨 [Orchestrator] 记忆数: ${memories.length}`)
+              console.log(`🚨 [Orchestrator] 消息预览: ${contextMessage.substring(0, 100)}...`)
+              
+              // 使用 sendClientContent + turnComplete=true + role='system' 打断 AI 并注入记忆
+              // role='system' 确保 AI 把这些内容当作上下文而不是用户问题
+              sendClientContent(contextMessage, true, 'system')
+              
+              console.log(`🚨 [Orchestrator] ✅ 记忆已注入 (role=system)，AI 将重新响应`)
+            } else {
+              // AI 没在说话，入队等待
+              messageQueue.enqueue({
+                type: 'CONTEXT',
+                priority: 'normal',
+                content: contextMessage,
+                relatedTopic: result.topic.name,
+              })
+
+              console.log(`\n📥 [${timestamp}] ========== 入队 CONTEXT 消息 ==========`)
+              console.log(`📥 [Orchestrator] 话题: ${result.topic.name}`)
+              console.log(`📥 [Orchestrator] 记忆数: ${memories.length}`)
+              console.log(`📥 [Orchestrator] 队列大小: ${messageQueue.size()}`)
+              console.log(`📥 [Orchestrator] 消息预览: ${contextMessage.substring(0, 100)}...`)
+            }
+          } else {
+            console.log(`🧠 [Orchestrator] 未找到相关记忆`)
+            setPendingMemory(null)
+          }
+        } else {
+          console.log(`🧠 [Orchestrator] 跳过记忆检索 (enableMemoryRetrieval=${enableMemoryRetrieval}, userId=${userId})`)
+        }
       }
     }
+  }, [
+    enableMemoryRetrieval,
+    userId,
+    memoryPipeline,
+    contextTracker,
+    messageQueue,
+    generateEmpathyMessage,
+    sendClientContent,
+  ])
+
+  /**
+   * 处理用户说话事件
+   */
+  const onUserSpeech = useCallback((text: string) => {
+    if (!enabled) return
+
+    const timestamp = new Date().toLocaleTimeString()
+    console.log(`\n🎤 [${timestamp}] ========== 用户说话 ==========`)
+    console.log(`🎤 [Orchestrator] 内容: "${text.substring(0, 50)}..."`)
+
+    // 更新上下文
+    contextTracker.addUserMessage(text)
+
+    // 异步检测话题和情绪（向量匹配）
+    console.log(`🔍 [Orchestrator] 开始话题检测 (向量匹配)...`)
+    topicDetector.detectFromMessage(text).then((result) => {
+      console.log(`🔍 [Orchestrator] 话题检测完成:`, {
+        topic: result.topic?.name || '无',
+        confidence: result.confidence ? `${(result.confidence * 100).toFixed(1)}%` : 'N/A',
+        emotion: result.emotionalState.primary,
+        isTopicChanged: result.isTopicChanged,
+      })
+      handleTopicDetectionResult(result, text)
+    }).catch((err) => {
+      console.error('🏷️ [Orchestrator] 话题检测失败:', err)
+      
+      // 失败时使用本地情绪检测作为 fallback
+      const localEmotion = topicDetector.detectEmotionLocally(text)
+      if (localEmotion.primary !== 'neutral') {
+        contextTracker.updateEmotionalState(localEmotion)
+      }
+    })
   }, [
     enabled,
     contextTracker,
     topicDetector,
-    messageQueue,
-    generateEmpathyMessage,
-    handleTopicChange,
+    handleTopicDetectionResult,
   ])
 
   /**
@@ -328,19 +384,20 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
   const onTurnComplete = useCallback(() => {
     if (!enabled) return
 
-    if (import.meta.env.DEV) {
-      console.log(`✅ [Orchestrator] turnComplete - 尝试发送队列消息`, {
-        queueSize: messageQueue.size(),
-        isInCooldown: messageQueue.isInCooldown(),
-      })
-    }
+    const timestamp = new Date().toLocaleTimeString()
+    console.log(`\n✅ [${timestamp}] ========== AI 说完话 (turnComplete) ==========`)
+    console.log(`✅ [Orchestrator] 队列大小: ${messageQueue.size()}`)
+    console.log(`✅ [Orchestrator] 冷却中: ${messageQueue.isInCooldown()}`)
 
     // 尝试发送队列中的消息
     // injectContextSilently 会检查是否在安全窗口期
     const sent = messageQueue.tryFlush()
 
-    if (sent && import.meta.env.DEV) {
-      console.log(`📤 [Orchestrator] 成功发送队列消息`)
+    if (sent) {
+      console.log(`📤 [${timestamp}] ========== 发送虚拟消息成功 ==========`)
+      console.log(`📤 [Orchestrator] 消息已注入到 AI 上下文`)
+    } else if (messageQueue.size() > 0) {
+      console.log(`⏳ [Orchestrator] 队列有消息但未发送 (可能在冷却中)`)
     }
   }, [enabled, messageQueue])
 
@@ -391,14 +448,15 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
    */
   const reset = useCallback(() => {
     contextTracker.resetContext()
+    topicDetector.reset()
     messageQueue.clear()
     lastTopicRef.current = null
-    pendingMemoryRef.current = false
+    setPendingMemory(null)
 
     if (import.meta.env.DEV) {
       console.log(`🔄 [Orchestrator] 状态已重置`)
     }
-  }, [contextTracker, messageQueue])
+  }, [contextTracker, topicDetector, messageQueue])
 
   return {
     onUserSpeech,
@@ -408,6 +466,8 @@ action: 优先倾听和安慰，等情绪稳定后再轻柔地引导回任务。
     getQueueSize,
     getContext,
     reset,
+    isDetectingTopic: topicDetector.isDetecting,
+    pendingMemory,
   }
 }
 

@@ -106,8 +106,9 @@ interface UseGeminiSessionReturn {
    *
    * @param content - 要注入的文本内容
    * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
+   * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
    */
-  sendClientContent: (content: string, turnComplete?: boolean) => void;
+  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void;
 }
 
 // ============================================================================
@@ -270,30 +271,62 @@ export function useGeminiSession(
    * - turnComplete=false: 添加内容到上下文，但不触发 AI 生成（静默注入）
    * - turnComplete=true: 添加内容并触发 AI 响应
    *
+   * 根据 Google 官方文档，可以使用 role="system" 来注入上下文/记忆：
+   * @see https://cloud.google.com/vertex-ai/generative-ai/docs/live-api/streamed-conversations
+   *
    * 注意：client_content 会打断当前正在生成的内容，
    * 因此应该在 AI 说完话后（turnComplete 事件后）再调用
+   *
+   * @param content - 要注入的文本内容
+   * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
+   * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
    */
-  const sendClientContent = useCallback((content: string, turnComplete = false) => {
+  const sendClientContent = useCallback((content: string, turnComplete = false, role: 'user' | 'system' = 'user') => {
     if (sessionRef.current) {
-      // 使用底层 send 方法发送 client_content 消息
+      // 尝试使用 Gemini SDK 的 sendClientContent 方法
       // @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
-      (sessionRef.current as unknown as {
-        send: (message: unknown) => void;
-      }).send({
-        client_content: {
+      const session = sessionRef.current as unknown as {
+        sendClientContent?: (params: {
+          turns: Array<{ role: string; parts: Array<{ text: string }> }>;
+          turnComplete: boolean;
+        }) => void;
+        send?: (message: unknown) => void;
+      };
+
+      // 优先使用 sendClientContent 方法（新版 SDK）
+      if (typeof session.sendClientContent === 'function') {
+        session.sendClientContent({
           turns: [
             {
-              role: 'user',
+              role,  // 使用传入的 role（'user' 或 'system'）
               parts: [{ text: content }],
             },
           ],
-          turn_complete: turnComplete,
-        },
-      });
+          turnComplete,
+        });
+      } 
+      // 回退到 send 方法（旧版 SDK）
+      else if (typeof session.send === 'function') {
+        session.send({
+          client_content: {
+            turns: [
+              {
+                role,  // 使用传入的 role（'user' 或 'system'）
+                parts: [{ text: content }],
+              },
+            ],
+            turn_complete: turnComplete,
+          },
+        });
+      } else {
+        console.error('❌ [GeminiSession] 无法发送 client_content: session 没有 sendClientContent 或 send 方法');
+        console.log('📋 [GeminiSession] session 可用方法:', Object.keys(sessionRef.current || {}));
+        return;
+      }
 
       if (import.meta.env.DEV) {
         console.log(
-          `📥 [GeminiSession] sendClientContent (turnComplete=${turnComplete}):`,
+          `📥 [GeminiSession] sendClientContent (role=${role}, turnComplete=${turnComplete}):`,
           content.substring(0, 60) + (content.length > 60 ? '...' : '')
         );
       }

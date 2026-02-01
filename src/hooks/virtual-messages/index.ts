@@ -3,7 +3,7 @@
  *
  * 本模块提供动态虚拟消息系统的核心 Hooks，用于：
  * - 追踪对话上下文
- * - 检测话题和情绪变化
+ * - 检测话题和情绪变化（向量匹配版）
  * - 异步检索相关记忆
  * - 生成动态虚拟消息
  *
@@ -24,34 +24,35 @@
  *     taskStartTime: Date.now(),
  *   })
  *
- *   const { detectFromMessage, getMemoryQuestionsForTopic } = useTopicDetector()
+ *   const { detectFromMessage } = useTopicDetector()
  *   const { fetchMemoriesForTopic } = useAsyncMemoryPipeline(userId)
  *
  *   // 当用户说话时
  *   const handleUserSpeech = async (text: string) => {
  *     tracker.addUserMessage(text)
  *
- *     const { topic, emotionalState, isTopicChanged } = detectFromMessage(text)
+ *     // 异步检测话题（向量匹配）
+ *     const result = await detectFromMessage(text)
  *
- *     if (topic) {
- *       tracker.updateTopic(topic)
- *       tracker.updateEmotionalState(emotionalState)
+ *     if (result.topic) {
+ *       tracker.updateTopic(result.topic)
+ *       tracker.updateEmotionalState(result.emotionalState)
  *
- *       if (isTopicChanged) {
- *         const questions = getMemoryQuestionsForTopic(topic.id)
+ *       if (result.isTopicChanged) {
+ *         // API 直接返回 memoryQuestions
  *         const memories = await fetchMemoriesForTopic(
- *           topic.name,
- *           topic.keywords,
+ *           result.topic.name,
+ *           [],
  *           undefined,
- *           questions
+ *           result.memoryQuestions
  *         )
  *
  *         if (memories.length > 0) {
  *           const message = generateContextMessage(
  *             memories,
- *             topic.name,
- *             emotionalState.primary,
- *             emotionalState.intensity
+ *             result.topic.name,
+ *             result.emotionalState.primary,
+ *             result.emotionalState.intensity
  *           )
  *           // 发送虚拟消息
  *           sendTextMessage(message)
@@ -104,6 +105,7 @@ export {
 export {
   useTopicDetector,
   type TopicDetector,
+  type TopicDetectionResultExtended,
 } from './useTopicDetector'
 
 export {

@@ -41,7 +41,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
 
     return (
         <div
-            className="relative w-full"
+            className="relative w-full sticky top-0 z-30"
             data-tour="stats-header"
             style={{ backgroundColor: '#429950' }}
         >

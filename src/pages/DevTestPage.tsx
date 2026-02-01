@@ -48,7 +48,8 @@ type TestMode =
   | 'fire-from-figma'
   | 'task-complete-animation'
   | 'feedback-card'
-  | 'voice-chat-test';
+  | 'voice-chat-test'
+  | 'campfire-companion';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -335,6 +336,20 @@ export function DevTestPage() {
             </div>
           </button>
 
+          {/* Campfire Companion Mode */}
+          <button
+            onClick={() => setMode('campfire-companion')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🏕️ 篝火陪伴模式
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              森林夜景背景 + 火焰动画 + 陪伴 UI
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 测试篝火陪伴页面 UI
+            </div>
+          </button>
+
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">反馈组件</p>
@@ -489,6 +504,7 @@ export function DevTestPage() {
 
       {mode === 'talking-fire' && <TalkingFireTest onBack={backToMenu} />}
       {mode === 'fire-from-figma' && <FireFromFigmaTest onBack={backToMenu} />}
+      {mode === 'campfire-companion' && <CampfireCompanionTest onBack={backToMenu} />}
       {mode === 'task-complete-animation' && <TaskCompleteAnimationTest onBack={backToMenu} />}
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
@@ -565,6 +581,113 @@ function FireFromFigmaTest({ onBack }: { onBack: () => void }) {
       <button onClick={onBack} className="text-gray-500 hover:text-gray-300 text-sm underline">
         ← Back to Menu
       </button>
+    </div>
+  );
+}
+
+// ============================================
+// 测试 9: 篝火陪伴模式
+// ============================================
+function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  return (
+    <div className="min-h-screen w-full relative flex flex-col overflow-hidden bg-[#1a1a2e]">
+      {/* 返回按钮 */}
+      <button
+        onClick={onBack}
+        className="absolute top-6 left-6 z-50 px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-lg hover:bg-black/60 transition-colors"
+      >
+        ← 返回
+      </button>
+
+      {/* 说话切换按钮（调试用） */}
+      <button
+        onClick={() => setIsSpeaking(!isSpeaking)}
+        className={`absolute top-6 right-6 z-50 px-4 py-2 rounded-lg transition-colors ${
+          isSpeaking
+            ? 'bg-green-500/80 text-white'
+            : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
+        }`}
+      >
+        {isSpeaking ? '🔊 说话中' : '🔇 静默'}
+      </button>
+
+      {/* 上半部分：圆形容器 + 背景图 + 火焰 */}
+      <div className="relative flex-1 flex items-end justify-center pb-0">
+        {/* 圆形背景容器 */}
+        <div
+          className="relative w-[120vw] aspect-square rounded-full overflow-hidden"
+          style={{
+            backgroundImage: 'url(/campfire-bg.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 30%',
+            transform: 'translateY(25%)',
+          }}
+        >
+          {/* 火焰动画 - 定位在圆形中央偏上 */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2"
+            style={{ top: '28%' }}
+          >
+            <TalkingFire isSpeaking={isSpeaking} size={160} />
+          </div>
+        </div>
+      </div>
+
+      {/* 下半部分：磨砂背景 + 光线渐变 */}
+      <div
+        className="relative z-10 px-8 pt-16 pb-12 flex flex-col items-center gap-4"
+        style={{
+          background: `
+            linear-gradient(
+              to bottom,
+              rgba(255, 180, 100, 0.15) 0%,
+              rgba(255, 150, 80, 0.08) 20%,
+              rgba(30, 30, 60, 0.95) 40%,
+              rgba(26, 26, 46, 1) 100%
+            )
+          `,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        }}
+      >
+        {/* 顶部光线反射效果 */}
+        <div
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[80px] pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center top, rgba(255, 200, 120, 0.3) 0%, transparent 70%)',
+          }}
+        />
+
+        {/* Have A Rest 按钮 */}
+        <button
+          onClick={() => alert('休息一下！')}
+          className="w-full max-w-[240px] py-4 px-8 bg-white/95 rounded-full text-[#2a2a4a] font-bold text-lg shadow-lg hover:bg-white transition-colors flex items-center justify-center gap-3"
+          style={{ fontFamily: 'Sansita, sans-serif' }}
+        >
+          Have A Rest
+          <span className="text-xl">🛏️</span>
+        </button>
+
+        {/* Finish 按钮 */}
+        <button
+          onClick={() => alert('完成任务！')}
+          className="w-full max-w-[240px] py-4 px-8 rounded-full font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-3"
+          style={{
+            fontFamily: 'Sansita, sans-serif',
+            background: 'linear-gradient(to bottom, #ffd666 0%, #f5a623 100%)',
+            color: '#5a3e1b',
+            boxShadow: '0 4px 12px rgba(245, 166, 35, 0.4)',
+          }}
+        >
+          Finish
+          <span className="text-xl">✓</span>
+        </button>
+
+        {/* 右下角装饰星星 */}
+        <div className="absolute bottom-4 right-4 text-amber-300/60 text-xl">✦</div>
+      </div>
     </div>
   );
 }
@@ -1105,7 +1228,7 @@ function ExampleConfirmationWrapper({ onBack }: { onBack: () => void }) {
 }
 
 // ============================================
-// 测试 9: 任务完成动画
+// 测试 10: 任务完成动画
 // ============================================
 interface AnimatedTask {
   id: string;
@@ -1395,7 +1518,7 @@ setTrigger(Date.now());`}</pre>
 }
 
 // ============================================
-// 测试 10: Feedback Card
+// 测试 11: Feedback Card
 // ============================================
 function FeedbackCardTest({ onBack }: { onBack: () => void }) {
   return (

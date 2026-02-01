@@ -27,6 +27,7 @@ import type {
   VirtualMessageType,
   TopicInfo,
   EmotionalState,
+  MemoryRetrievalResult,
 } from './types'
 import { EMOTION_RESPONSE_THRESHOLD } from './constants'
 import type { SuggestedAction } from '../useToneManager'
@@ -141,6 +142,13 @@ export function useVirtualMessageOrchestrator(
   const lastTopicRef = useRef<TopicInfo | null>(null)
   // 追踪 AI 说话状态
   const isSpeakingRef = useRef<boolean>(isSpeaking)
+  // 🆕 待注入的记忆（AI 说话时暂存，等说完再注入）
+  const pendingMemoryRef = useRef<{
+    memories: MemoryRetrievalResult[]
+    topic: string
+    emotion: EmotionalState['primary']
+    intensity: number
+  } | null>(null)
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
@@ -152,7 +160,8 @@ export function useVirtualMessageOrchestrator(
 
   /**
    * 立即注入虚拟消息
-   * 使用 sendClientContent + turnComplete=true + role='system'
+   * 使用 sendClientContent + turnComplete=true + role='user'
+   * 注意：Gemini Live API 只支持 role='user'，不支持 'system'
    * AI 会用过渡话响应，然后引用注入的上下文
    */
   const injectMessageImmediately = useCallback((content: string, type: VirtualMessageType) => {
@@ -160,9 +169,9 @@ export function useVirtualMessageOrchestrator(
     console.log(`\n💉 [${timestamp}] ========== 立即注入 ${type} ==========`)
     console.log(`💉 [Orchestrator] 内容预览: ${content.substring(0, 100)}...`)
 
-    // 使用 role='system' 确保 AI 把内容当作上下文而非用户问题
+    // Gemini Live API 只支持 role='user'，所以用 [CONTEXT] 标签让 AI 识别这是系统指令
     // turnComplete=true 触发 AI 响应（AI 会用过渡话开头）
-    sendClientContent(content, true, 'system')
+    sendClientContent(content, true, 'user')
 
     console.log(`💉 [Orchestrator] ✅ 已注入，等待 AI 响应`)
   }, [sendClientContent])
@@ -272,66 +281,6 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
   }, [generateListenFirstMessage, generateAcceptStopMessage, generatePushTinyStepMessage])
 
   // =====================================================
-  // 话题变化处理（方案 2：立即注入）
-  // =====================================================
-
-  /**
-   * 处理话题变化，触发记忆检索并立即注入
-   */
-  const handleTopicChange = useCallback(async (
-    topic: TopicInfo,
-    emotionalState: EmotionalState,
-    memoryQuestions?: string[]
-  ) => {
-    if (!enableMemoryRetrieval || !userId) {
-      return
-    }
-
-    const timestamp = new Date().toLocaleTimeString()
-    console.log(`\n🧠 [${timestamp}] ========== 开始记忆检索 ==========`)
-    console.log(`🧠 [Orchestrator] 话题: ${topic.name}`)
-
-    // 使用 API 返回的 memoryQuestions 作为种子问题
-    const seedQuestions = memoryQuestions || []
-
-    // 异步检索记忆
-    const memories = await memoryPipeline.fetchMemoriesForTopic(
-      topic.name,
-      topic.keywords || [],
-      contextTracker.getContext().summary,
-      seedQuestions
-    )
-
-    console.log(`🧠 [Orchestrator] 记忆检索结果: ${memories.length} 条`)
-
-    if (memories.length > 0) {
-      console.log(`🧠 [Orchestrator] 记忆内容:`, memories.map(m => ({
-        tag: m.tag,
-        content: m.content.substring(0, 30) + '...'
-      })))
-
-      // 生成 [CONTEXT] 消息
-      const contextMessage = generateContextMessage(
-        memories,
-        topic.name,
-        emotionalState.primary,
-        emotionalState.intensity
-      )
-
-      // 🆕 方案 2：立即注入，不入队
-      injectMessageImmediately(contextMessage, 'CONTEXT')
-    } else {
-      console.log(`🧠 [Orchestrator] 未找到相关记忆`)
-    }
-  }, [
-    enableMemoryRetrieval,
-    userId,
-    memoryPipeline,
-    contextTracker,
-    injectMessageImmediately,
-  ])
-
-  // =====================================================
   // 事件处理
   // =====================================================
 
@@ -381,18 +330,57 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
       injectMessageImmediately(empathyMessage, 'EMPATHY')
     }
 
-    // 处理话题变化
+    // 处理话题变化（用于上下文追踪）
     if (result.topic) {
       contextTracker.updateTopic(result.topic)
 
       if (result.isTopicChanged) {
         console.log(`\n🏷️ [${timestamp}] ========== 话题变化 ==========`)
         console.log(`🏷️ [Orchestrator] 新话题: "${result.topic.name}"`)
-
         lastTopicRef.current = result.topic
+      }
+    }
 
-        // 触发记忆检索并立即注入
-        handleTopicChange(result.topic, result.emotionalState, result.memoryQuestions)
+    // 🆕 直接用用户输入做向量搜索记忆（不依赖话题检测）
+    // 这样"中国"可以通过向量相似度找到"农历新年"相关的记忆
+    if (enableMemoryRetrieval && userId && text.length > 5) {
+      console.log(`\n🔎 [${timestamp}] ========== 直接向量搜索记忆 ==========`)
+      console.log(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
+
+      // 使用用户原始输入作为搜索词
+      const memories = await memoryPipeline.fetchMemoriesForTopic(
+        text,  // 直接用用户输入
+        [],    // 不需要额外关键词
+        contextTracker.getContext().summary
+      )
+
+      if (memories.length > 0) {
+        console.log(`🔎 [Orchestrator] 找到 ${memories.length} 条相关记忆:`)
+        memories.forEach((m, i) => {
+          console.log(`   ${i + 1}. [${m.tag}] ${m.content}`)
+        })
+
+        // 🆕 检查 AI 是否正在说话，如果是则等待
+        if (isSpeaking) {
+          console.log(`🔎 [Orchestrator] ⏸️ AI 正在说话，等待说完再注入...`)
+          // 存储待注入的记忆，等 AI 说完再注入
+          pendingMemoryRef.current = {
+            memories,
+            topic: result.topic?.name || '对话',
+            emotion: result.emotionalState.primary,
+            intensity: result.emotionalState.intensity,
+          }
+        } else {
+          const contextMessage = generateContextMessage(
+            memories,
+            result.topic?.name || '对话',
+            result.emotionalState.primary,
+            result.emotionalState.intensity
+          )
+          injectMessageImmediately(contextMessage, 'CONTEXT')
+        }
+      } else {
+        console.log(`🔎 [Orchestrator] 未找到相关记忆`)
       }
     }
 
@@ -405,10 +393,14 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     }
   }, [
     enabled,
+    enableMemoryRetrieval,
+    userId,
+    isSpeaking,
     contextTracker,
     topicDetector,
+    memoryPipeline,
     generateEmpathyMessage,
-    handleTopicChange,
+    generateContextMessage,
     injectMessageImmediately,
   ])
 
@@ -422,16 +414,36 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
 
   /**
    * 处理 AI 说完话事件（turnComplete）
-   * 方案 2 中不再用于发送队列消息，仅用于日志
+   * 🆕 检查是否有待注入的记忆，如果有则立即注入
    */
   const onTurnComplete = useCallback(() => {
     if (!enabled) return
 
+    const timestamp = new Date().toLocaleTimeString()
+
     if (import.meta.env.DEV) {
-      const timestamp = new Date().toLocaleTimeString()
       console.log(`\n✅ [${timestamp}] ========== AI 说完话 (turnComplete) ==========`)
     }
-  }, [enabled])
+
+    // 🆕 检查是否有待注入的记忆
+    if (pendingMemoryRef.current) {
+      const { memories, topic, emotion, intensity } = pendingMemoryRef.current
+      console.log(`\n💉 [${timestamp}] ========== 注入待处理的记忆 ==========`)
+      console.log(`💉 [Orchestrator] 之前 AI 正在说话，现在注入 ${memories.length} 条记忆`)
+
+      const contextMessage = generateContextMessage(
+        memories,
+        topic,
+        emotion,
+        intensity
+      )
+
+      injectMessageImmediately(contextMessage, 'CONTEXT')
+
+      // 清空待注入记忆
+      pendingMemoryRef.current = null
+    }
+  }, [enabled, injectMessageImmediately])
 
   /**
    * 手动触发记忆检索（用于调试）

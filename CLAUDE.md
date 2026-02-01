@@ -45,32 +45,36 @@
 
 **背景**：本项目原为单一仓库，为了 Hackathon 方便进行了前后端分离。
 
-### GitHub 仓库
+### 仓库架构（四端）
 
-| 仓库 | 地址 | 相对路径 | 说明 |
+| 端 | 仓库 | 相对路径 | 说明 |
 |------|------|---------|------|
-| **前端（当前仓库）** | https://github.com/sylmmhy/Lumi.git | `.`（当前目录） | React + TypeScript + Vite |
-| **后端（Supabase）** | https://github.com/sylmmhy/Lumi-supabase.git | `../Lumi-supabase` | Supabase 后端 |
+| **网页版（当前）** | Lumi-front-end | `.`（当前目录） | React + TypeScript + Vite |
+| **后端** | Lumi-backend | `../Lumi-backend` | Supabase：迁移、Edge Functions |
+| **iOS 端** | mindboat-ios-web-warpper | `../mindboat-ios-web-warpper` | WebView 壳子，Swift |
+| **Android 端** | Android-warpper | `../Android-warpper` | WebView 壳子，Kotlin |
 
-> **推荐目录结构**：
+> **目录结构**：
 > ```
-> 父目录/                 # 如 "Lumi hackthon"（名称可自定义）
-> ├── Lumi/               # 前端仓库（当前仓库）
-> └── Lumi-supabase/      # 后端仓库
+> 父目录/                         # 如 "Lumi hackthon"
+> ├── Lumi-front-end/             # 前端仓库（当前仓库）
+> ├── Lumi-backend/               # 后端仓库
+> ├── mindboat-ios-web-warpper/   # iOS 仓库
+> └── Android-warpper/            # Android 仓库
 > ```
-> 将两个仓库 clone 到同一父目录下，即可使用 `../Lumi-supabase` 相对路径互相访问。
+> 四个仓库在同一父目录下，使用相对路径互相访问。
 
 ### 跨仓库操作命令
 
 ```bash
 # 查看后端仓库（假设与前端在同一父目录）
-ls ../Lumi-supabase/
+ls ../Lumi-backend/
 
 # 在后端仓库执行 git 操作
-git -C ../Lumi-supabase status
+git -C ../Lumi-backend status
 
 # 查看后端迁移文件
-ls ../Lumi-supabase/supabase/migrations/
+ls ../Lumi-backend/supabase/migrations/
 ```
 
 ### 仓库关联说明
@@ -82,7 +86,7 @@ ls ../Lumi-supabase/supabase/migrations/
 ### 前端项目目录结构
 
 ```
-Lumi/
+Lumi-front-end/
 ├── .claude/              # Claude Code 配置（skills、agents、hooks）
 ├── docs/                 # 项目文档（架构、实现记录）
 ├── public/               # 静态资源（图片、图标）
@@ -126,9 +130,9 @@ Lumi/
 
 | 端 | 仓库路径 | 说明 |
 |------|---------|------|
-| **网页版** | 当前仓库 (`Lumi`) | 主代码库，React + TypeScript |
+| **网页版** | 当前仓库 (`Lumi-front-end`) | 主代码库，React + TypeScript |
 | **iOS 端** | `../mindboat-ios-web-warpper` | WebView 壳子，Swift |
-| **Android 端** | `../FireGo` | WebView 壳子，Kotlin |
+| **Android 端** | `../Android-warpper` | WebView 壳子，Kotlin |
 
 ### 跨端联动场景
 
@@ -136,7 +140,7 @@ Lumi/
 |------|--------------|
 | JS Bridge 接口变更 | 三端都要改 |
 | 新增原生功能（推送、音频） | iOS + Android |
-| 纯 Web UI/逻辑改动 | 仅 firego-app |
+| 纯 Web UI/逻辑改动 | 仅前端（Lumi-front-end） |
 | Deep Link / URL Scheme | 三端都要改 |
 
 ### 跨仓库操作命令
@@ -146,10 +150,11 @@ Lumi/
 ls ../mindboat-ios-web-warpper/
 
 # 查看 Android 仓库
-ls ../FireGo/
+ls ../Android-warpper/
 
-# 在 iOS 仓库执行 git 操作
+# 在其他仓库执行 git 操作
 git -C ../mindboat-ios-web-warpper status
+git -C ../Android-warpper status
 ```
 
 ---
@@ -198,8 +203,8 @@ npm run lint         # 代码检查
 
 | 仓库 | 路径 | 说明 |
 |------|------|------|
-| **前端（当前）** | `Lumi/` | React 前端 |
-| **后端** | `../Lumi-supabase/` | Supabase 后端（迁移、Edge Functions） |
+| **前端（当前）** | `Lumi-front-end/` | React 前端 |
+| **后端** | `../Lumi-backend/` | Supabase 后端（迁移、Edge Functions） |
 
 ### 切换 Supabase 环境
 
@@ -212,16 +217,16 @@ npm run lint         # 代码检查
 
 ```bash
 # ============================================
-# 终端 1：启动后端（在 Lumi-supabase 目录）
+# 终端 1：启动后端（在 Lumi-backend 目录）
 # ============================================
-cd ../Lumi-supabase
+cd ../Lumi-backend
 npm run supabase:start       # 启动 Supabase 服务
 npm run supabase:functions   # 启动 Edge Functions（AI 功能需要）
 
 # ============================================
-# 终端 2：启动前端（在 Lumi 目录）
+# 终端 2：启动前端（在 Lumi-front-end 目录）
 # ============================================
-cd ../Lumi
+cd ../Lumi-front-end
 npm run dev:local            # 自动切换到本地配置并启动
 
 # 访问 http://localhost:5173
@@ -248,7 +253,7 @@ npm run dev:remote
 
 ## 🗄️ Supabase 本地开发
 
-> ⛔ **强制规则**：任何涉及后端的改动，都**只能**在本地 Supabase 进行（仓库路径：`../Lumi-supabase/`）。
+> ⛔ **强制规则**：任何涉及后端的改动，都**只能**在本地 Supabase 进行（仓库路径：`../Lumi-backend/`）。
 > **严禁**在用户未明确授权的情况下修改云端 Supabase！
 
 ### ⛔ 云端部署安全规则（强制）
@@ -266,7 +271,7 @@ npm run dev:remote
 - 任何不带 `--local` 标志的 Supabase CLI 命令 ❌
 
 **✅ 正确流程**：
-1. 在 `../Lumi-supabase/` 仓库中进行所有后端改动
+1. 在 `../Lumi-backend/` 仓库中进行所有后端改动
 2. 使用 `--local` 标志在本地开发和测试
 3. 验证功能正常
 4. **主动询问用户**："本地测试通过，是否需要部署到云端？"

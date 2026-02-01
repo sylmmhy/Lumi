@@ -33,3 +33,6 @@ supabase/.branches
 *.sln
 *.sw?
 .mcp.json
+
+# Claude Code 配置（包含本地指令，不上传）
+CLAUDE.md

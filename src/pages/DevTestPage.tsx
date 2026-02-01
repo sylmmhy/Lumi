@@ -24,7 +24,8 @@ import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
-import { HabitStackingTest, DailyReportTest, VoiceChatTest } from '../components/dev/BackendApiTest';
+import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
+import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 
 type TestMode =
   | 'menu'
@@ -36,7 +37,6 @@ type TestMode =
   | 'effects'
   | 'habit-stacking'
   | 'daily-report'
-  | 'voice-chat'
   | 'example-simple-timer'
   | 'example-checkin'
   | 'example-failure'
@@ -47,7 +47,8 @@ type TestMode =
   | 'talking-fire'
   | 'fire-from-figma'
   | 'task-complete-animation'
-  | 'feedback-card';
+  | 'feedback-card'
+  | 'voice-chat-test';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -384,17 +385,21 @@ export function DevTestPage() {
             </div>
           </button>
 
-          {/* AI 语音对话测试 */}
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🎤 语音对话测试 (三层 AI 架构)</p>
+
+          {/* 语音对话测试 */}
           <button
-            onClick={() => setMode('voice-chat')}
-            className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl transition-all shadow-lg"
+            onClick={() => setMode('voice-chat-test')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold rounded-xl transition-all shadow-lg"
           >
-            🎤 AI 语音对话 (start-voice-chat)
+            🎤 语音对话测试
             <span className="block text-xs font-normal opacity-70 mt-1">
-              Gemini Live API 制定睡眠计划
+              Gemini Live + 意图检测 + 工具调用
             </span>
             <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
-              📄 functions/start-voice-chat
+              📄 三层 AI 架构完整测试
             </div>
           </button>
 
@@ -488,7 +493,7 @@ export function DevTestPage() {
       {mode === 'feedback-card' && <FeedbackCardTest onBack={backToMenu} />}
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
-      {mode === 'voice-chat' && <VoiceChatTest onBack={backToMenu} />}
+      {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
     </>
   );
 }
@@ -574,8 +579,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   const aiCoach = useAICoachSession({
     initialTime: 60, // 测试用 1 分钟
     onCountdownComplete: () => {
-      // 立即停止音频播放，让 AI 马上静音
-      aiCoach.stopAudioImmediately();
       aiCoach.endSession();
       setCelebrationFlow('confirm');
       setStep('celebration');
@@ -597,8 +600,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
   }, [aiCoach]);
 
   const handleComplete = useCallback(() => {
-    // 立即停止音频播放，让 AI 马上静音
-    aiCoach.stopAudioImmediately();
     aiCoach.endSession();
     setCelebrationFlow('success');
     setStep('celebration');
@@ -661,8 +662,6 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
             label: 'BACK',
             emoji: '←',
             onClick: () => {
-              // 立即停止音频播放，让 AI 马上静音
-              aiCoach.stopAudioImmediately();
               aiCoach.endSession();
               onBack();
             },

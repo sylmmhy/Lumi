@@ -19,8 +19,8 @@ interface StatsCardProps {
     onToggleToday: () => void;
     /** 点击查看详情的回调 */
     onClickDetail: () => void;
-    /** 打卡成功回调（用于联动蓄水池和 Toast） */
-    onCheckIn?: (habitId: string) => void;
+    /** 打卡成功回调（用于联动存钱罐和 Toast） */
+    onCheckIn?: (habitId: string) => Promise<void>;
     /** 启动 AI Coach 任务的回调（传递习惯 ID 和名称） */
     onStartTask?: (habitId: string, habitTitle: string) => void;
 }
@@ -161,34 +161,12 @@ export const StatsCard: React.FC<StatsCardProps> = ({
             }}
             onClick={onClickDetail}
         >
-            {/* 上半部分：复选框 + 标题 + 启动按钮 */}
+            {/* 上半部分：标题 + 启动按钮 */}
             <div className="flex items-center justify-between mb-6">
-                {/* 左侧：复选框 + 标题 + 引导语 */}
-                <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
-                    {/* 打勾复选框 */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (!isTodayDone && onCheckIn) {
-                                onCheckIn(habit.id);
-                            }
-                        }}
-                        className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                            isTodayDone
-                                ? 'bg-green-500 border-green-500'
-                                : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
-                        }`}
-                    >
-                        {isTodayDone && (
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                        )}
-                    </button>
-
-                    <div className="min-w-0">
-                        <h3 className="text-gray-800 font-bold text-xl flex items-center gap-2">
-                            <span className="truncate">{habit.title}</span>
+                {/* 左侧：标题 + 引导语 */}
+                <div className="flex-1 min-w-0 pr-4">
+                    <h3 className="text-gray-800 font-bold text-xl flex items-center gap-2">
+                        <span className="truncate">{habit.title}</span>
                         {streakDays > 0 && (
                             <span
                                 className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap"

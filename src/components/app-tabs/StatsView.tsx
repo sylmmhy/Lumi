@@ -262,17 +262,28 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     };
 
     /**
-     * 打卡成功回调（联动能量球和 Toast）
+     * 打卡成功回调（联动存钱罐和 Toast）
+     * @param habitId - 习惯 ID
      */
-    const handleCheckIn = () => {
-        // 1. 能量球 +1（乐观更新）
+    const handleCheckIn = async (habitId: string) => {
+        // 检查是否已经打卡
+        const habit = habits.find(h => h.id === habitId);
+        const todayKey = getLocalDateString();
+        if (habit?.history[todayKey]) {
+            return; // 今天已打卡，不重复
+        }
+
+        // 1. 调用 API 记录打卡
+        await toggleHabitToday(habitId);
+
+        // 2. 存钱罐 +1（触发金币掉落动画）
         setWeeklyCount(prev => prev + 1);
 
-        // 2. 触发水位上涨动画
+        // 3. 触发动画
         setTriggerRise(true);
         setTimeout(() => setTriggerRise(false), 600);
 
-        // 3. 显示 Toast
+        // 4. 显示 Toast
         showToast();
     };
 

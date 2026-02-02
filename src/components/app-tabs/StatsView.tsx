@@ -7,7 +7,7 @@
  * - 打卡联动：下方操作 → 上方充能 → Toast 激励
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getLocalDateString, getCategoryFromTimeString, getTimeIcon } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -98,6 +98,24 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
+
+    // StatsHeader 高度（用于动态定位金币盒子）
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerHeight, setHeaderHeight] = useState(310);
+
+    // 获取 StatsHeader 高度
+    const updateHeaderHeight = useCallback(() => {
+        if (headerRef.current) {
+            const height = headerRef.current.offsetHeight;
+            setHeaderHeight(height);
+        }
+    }, []);
+
+    useEffect(() => {
+        updateHeaderHeight();
+        window.addEventListener('resize', updateHeaderHeight);
+        return () => window.removeEventListener('resize', updateHeaderHeight);
+    }, [updateHeaderHeight]);
 
     /**
      * 播放打卡光晕音效
@@ -413,9 +431,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             {/* 存钱罐 - fixed 定位，打卡时在遮罩上方 */}
             {/* 位置：绿色区域底部边缘，一半在绿色区域一半在白色区域 */}
             <div
-                className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300"
+                className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2"
                 style={{
-                    top: 310,
+                    top: headerHeight,
                     zIndex: triggerRise ? 40 : 31,
                 }}
             >
@@ -437,6 +455,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             >
                 {/* 蓄水池头部 */}
                 <StatsHeader
+                    ref={headerRef}
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
                 />

@@ -99,23 +99,27 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
 
-    // StatsHeader 高度（用于动态定位金币盒子）
+    // StatsHeader 底部位置（用于动态定位金币盒子）
     const headerRef = useRef<HTMLDivElement>(null);
-    const [headerHeight, setHeaderHeight] = useState(310);
+    const [headerBottom, setHeaderBottom] = useState(0);
 
-    // 获取 StatsHeader 高度
-    const updateHeaderHeight = useCallback(() => {
+    // 获取 StatsHeader 底部相对于视口的位置
+    const updateHeaderPosition = useCallback(() => {
         if (headerRef.current) {
-            const height = headerRef.current.offsetHeight;
-            setHeaderHeight(height);
+            const rect = headerRef.current.getBoundingClientRect();
+            setHeaderBottom(rect.bottom);
         }
     }, []);
 
     useEffect(() => {
-        updateHeaderHeight();
-        window.addEventListener('resize', updateHeaderHeight);
-        return () => window.removeEventListener('resize', updateHeaderHeight);
-    }, [updateHeaderHeight]);
+        // 延迟获取位置，确保渲染完成
+        const timer = setTimeout(updateHeaderPosition, 50);
+        window.addEventListener('resize', updateHeaderPosition);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', updateHeaderPosition);
+        };
+    }, [updateHeaderPosition]);
 
     /**
      * 播放打卡光晕音效
@@ -433,8 +437,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             <div
                 className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2"
                 style={{
-                    top: headerHeight,
+                    top: headerBottom,
                     zIndex: triggerRise ? 40 : 31,
+                    opacity: headerBottom > 0 ? 1 : 0,
                 }}
             >
                 <EnergyBall

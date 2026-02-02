@@ -71,7 +71,7 @@ function getRandomTexture(): string {
 /**
  * 存钱罐进度组件
  */
-export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
+export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = false }) => {
     const size = 125;
     const borderWidth = 8;
     const innerSize = size - borderWidth * 2; // 109px
@@ -276,14 +276,36 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
 
     return (
         <div className="relative">
+            {/* 金色光晕 - 打卡时显示并旋转 */}
+            <div
+                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300 ${
+                    triggerRise ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                    width: size * 3.5,
+                    height: size * 3.5,
+                    zIndex: 0,
+                }}
+            >
+                <img
+                    src="/golden-light.png"
+                    alt=""
+                    className="w-full h-full object-contain"
+                    style={{
+                        animation: triggerRise ? 'spin-glow 10s linear infinite' : 'none',
+                    }}
+                />
+            </div>
+
             {/* 外层白色圆圈 */}
             <div
-                className="rounded-full flex items-center justify-center"
+                className="rounded-full flex items-center justify-center relative"
                 style={{
                     width: size,
                     height: size,
                     backgroundColor: 'white',
                     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+                    zIndex: 1,
                 }}
             >
                 {/* 内层圆形容器 */}
@@ -350,6 +372,18 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
                     </span>
                 </div>
             </div>
+
+            {/* 光晕旋转动画 */}
+            <style>{`
+                @keyframes spin-glow {
+                    from {
+                        transform: rotate(0deg);
+                    }
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+            `}</style>
         </div>
     );
 };

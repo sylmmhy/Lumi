@@ -114,31 +114,18 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     }
   }, [chatType]);
 
-  // 监听 AI 回复，触发意图检测（防重复）
-  const processedMessagesRef = useRef<Set<string>>(new Set());
-  
+  // 监听 AI 回复，触发意图检测
   useEffect(() => {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === 'ai' && lastMsg.text) {
-        // 防重复检测
-        const msgId = lastMsg.text.substring(0, 50);
-        if (!processedMessagesRef.current.has(msgId)) {
-          processedMessagesRef.current.add(msgId);
-          intentDetection.processAIResponse(lastMsg.text);
-          
-          // 只保留最近10条，避免内存泄漏
-          if (processedMessagesRef.current.size > 10) {
-            const arr = Array.from(processedMessagesRef.current);
-            processedMessagesRef.current = new Set(arr.slice(-10));
-          }
-        }
+        intentDetection.processAIResponse(lastMsg.text);
       }
       if (lastMsg.role === 'user' && lastMsg.text) {
         intentDetection.addUserMessage(lastMsg.text);
       }
     }
-  }, [messages, intentDetection]);
+  }, [messages]);
 
   // 滚动到底部
   useEffect(() => {

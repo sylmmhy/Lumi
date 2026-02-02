@@ -238,6 +238,9 @@ export async function handleToolCall(
     case 'get_daily_report':
       return handleGetDailyReport(args, context);
 
+    case 'save_goal_plan':
+      return handleSaveGoalPlan(args, context);
+
     case 'create_habit_stack':
       return handleCreateHabitStack(args, context);
 
@@ -248,5 +251,55 @@ export async function handleToolCall(
         error: `Unknown tool: ${functionName}`,
         responseHint: 'I don\'t know how to do that yet.',
       };
+  }
+}
+
+/**
+ * 处理 save_goal_plan 工具调用
+ */
+export async function handleSaveGoalPlan(
+  args: Record<string, unknown>,
+  context: ToolCallContext
+): Promise<ToolCallResult> {
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  
+  console.log('🔧 [Tool] save_goal_plan 调用:', args);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/save-goal-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
+        ...args,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] save_goal_plan 结果:', data);
+
+    return {
+      success: true,
+      data,
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? `好的，已经帮你保存了！我会按时提醒你～`
+        : `Done! I've saved your plan. I'll remind you on time.`,
+    };
+
+  } catch (error) {
+    console.error('❌ [Tool] save_goal_plan 错误:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+      responseHint: '抱歉，保存计划时出了点问题',
+    };
   }
 }

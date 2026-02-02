@@ -252,6 +252,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 }
                 return habit;
             }));
+
+            // 5. 更新存钱罐计数（取消打卡时减少）
+            if (!newStatus) {
+                setWeeklyCount(prev => Math.max(prev - 1, 0));
+            }
         } catch (error) {
             console.error('Failed to toggle habit:', error);
         }

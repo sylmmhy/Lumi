@@ -229,9 +229,6 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const sortedCoins = [...coins].sort((a, b) => a.spawnOrder - b.spawnOrder);
     const totalCoins = sortedCoins.length;
 
-    // 调试日志
-    console.log('[EnergyBall] current:', current, 'coins.length:', coins.length, 'sortedCoins.length:', sortedCoins.length);
-
     return (
         <div className="relative">
             {/* 外层白色圆圈 */}

@@ -6,10 +6,11 @@
  * 视觉规格：
  * 1. 纹理权重：正面/微侧面 80%，全侧面 20%
  * 2. 旋转限制：±30° 以内，防止"金墩子"
- * 3. 物理参数：高摩擦 + 轻微弹性
+ * 3. 物理参数：高摩擦 + 轻微弹性 + 空气阻力
  * 4. 纵深感：底层 brightness(0.8) contrast(1.1)
  * 5. 数字置顶：毛玻璃背景 blur(5px)
  * 6. 增量更新：打卡时只新增一个金币掉落
+ * 7. 归零扭矩：金币静止时自动趋向"平躺"姿态（角度归零）
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -138,6 +139,26 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
 
             const newCoins: CoinState[] = [];
             coinBodiesRef.current.forEach(({ body, texture }, id) => {
+                // === 关键修复：让金币趋向于"平躺"（角度归零）===
+                // 计算当前角速度和速度的大小
+                const speed = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
+                const angularSpeed = Math.abs(body.angularVelocity);
+
+                // 当金币接近静止时，施加归零扭矩
+                if (speed < 0.5 && angularSpeed < 0.1) {
+                    // 将角度归一化到 [-π, π]
+                    let angle = body.angle % (2 * Math.PI);
+                    if (angle > Math.PI) angle -= 2 * Math.PI;
+                    if (angle < -Math.PI) angle += 2 * Math.PI;
+
+                    // 施加反向角速度，让角度趋向 0（平躺）
+                    const targetAngularVelocity = -angle * 0.05;
+                    Matter.Body.setAngularVelocity(
+                        body,
+                        body.angularVelocity * 0.95 + targetAngularVelocity * 0.05
+                    );
+                }
+
                 let rotation = (body.angle * 180) / Math.PI;
                 rotation = rotation % 360;
                 if (rotation > 180) rotation -= 360;
@@ -174,9 +195,12 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
             frictionStatic: 0.9,
             restitution: 0.2,
             density: 0.005,
+            // 角度阻尼：让旋转更快停下来
+            frictionAir: 0.02,
         });
 
-        Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.2);
+        // 初始角速度降低，减少侧立概率
+        Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.1);
         Matter.Composite.add(worldRef.current, coin);
 
         const texture = getRandomTexture();
@@ -214,9 +238,12 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
                 frictionStatic: 0.9,
                 restitution: 0.2,
                 density: 0.005,
+                // 角度阻尼：让旋转更快停下来
+                frictionAir: 0.02,
             });
 
-            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.2);
+            // 初始角速度降低，减少侧立概率
+            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.1);
             Matter.Composite.add(worldRef.current, coin);
 
             const texture = getRandomTexture();

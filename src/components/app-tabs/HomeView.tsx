@@ -268,13 +268,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
 
     // Handle skip for day - 跳过今天的任务
+    // 原理：把 called 设为 true，后端检查 called = false 才会打电话
     const handleSkipForDay = (task: Task) => {
         if (!onUpdateTask) return;
 
-        const today = getLocalDateString(new Date());
         const updatedTask: Task = {
             ...task,
-            skippedForDate: today,
+            called: true,
         };
 
         onUpdateTask(updatedTask);

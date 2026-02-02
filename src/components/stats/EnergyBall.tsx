@@ -86,6 +86,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
     const prevCurrentRef = useRef<number>(0);
     const animationIdRef = useRef<number | null>(null);
     const isInitializedRef = useRef(false);
+    const timeoutIdsRef = useRef<number[]>([]);
 
     /**
      * 初始化物理引擎（只执行一次）
@@ -228,6 +229,10 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
         initEngine();
 
         return () => {
+            // 清理所有 pending 的 setTimeout
+            timeoutIdsRef.current.forEach(id => window.clearTimeout(id));
+            timeoutIdsRef.current = [];
+
             if (animationIdRef.current) {
                 cancelAnimationFrame(animationIdRef.current);
             }
@@ -254,7 +259,8 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current }) => {
         else if (targetCount > currentCount) {
             const diff = targetCount - currentCount;
             for (let i = 0; i < diff; i++) {
-                setTimeout(() => addCoin(), i * 100); // 间隔 100ms 掉落
+                const timeoutId = window.setTimeout(() => addCoin(), i * 100); // 间隔 100ms 掉落
+                timeoutIdsRef.current.push(timeoutId);
             }
         }
         // 减少金币：逐个移除

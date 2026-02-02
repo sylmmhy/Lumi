@@ -178,6 +178,11 @@
   "profile.aiVoiceFemale": "女声",
   "profile.aiVoiceTitle": "Lumi 的声音",
   "profile.aiVoiceDescription": "选择 Lumi 的声音性别",
+  "profile.screenTime": "应用限制",
+  "profile.screenTimeHint": "未接电话时锁定干扰应用",
+  "profile.appsSelected": "个应用已选",
+  "profile.selectApps": "选择应用",
+  "profile.notAuthorized": "未授权",
 
   "feedback.title": "感谢你的反馈！",
   "feedback.contactInfo": "联系方式",

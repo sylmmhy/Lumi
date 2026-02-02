@@ -268,13 +268,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
 
     // Handle skip for day - 跳过今天的任务
-    // 原理：把 called 设为 true，后端检查 called = false 才会打电话
+    // 原理：
+    // - called: true → 后端 routine_instance 不打电话
+    // - skippedForDate: 今天 → 前端显示"已跳过"标签，明天自动消失
+    // - isSkip: true → 行为统计
     const handleSkipForDay = (task: Task) => {
         if (!onUpdateTask) return;
 
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         const updatedTask: Task = {
             ...task,
             called: true,
+            skippedForDate: today,
+            isSkip: true,
         };
 
         onUpdateTask(updatedTask);

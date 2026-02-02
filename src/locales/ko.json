@@ -55,6 +55,9 @@
   "home.skipForDay.message": "오늘은 \"{{task}}\"에 대해 Lumi가 전화 안 할게. 직접 완료할 수 있어.",
   "home.skipForDay.confirm": "건너뛰기",
   "home.skipForDay.tag": "건너뜀",
+  "home.unskipForDay.title": "건너뛰기 취소할까?",
+  "home.unskipForDay.message": "시간이 아직 안 지났으면, \"{{task}}\"에 대해 다시 전화할게.",
+  "home.unskipForDay.confirm": "취소하기",
 
   "stats.loadingHistory": "불러오는 중...",
   "stats.noCompletedTasks": "아직 완료한 거 없어",

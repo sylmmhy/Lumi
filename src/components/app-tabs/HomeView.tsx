@@ -269,18 +269,36 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
     // Handle skip for day - 跳过今天的任务
     // 原理：
-    // - called: true → 后端 routine_instance 不打电话
-    // - skippedForDate: 今天 → 前端显示"已跳过"标签，明天自动消失
-    // - isSkip: true → 行为统计
+    // - 对于 routine 模板：reminderService 会只更新今天的 routine_instance
+    //   - instance.called = true → 后端不打电话
+    //   - instance.isSkip = true → 行为统计 + 前端通过 loadTasks 同步到模板显示标签
+    // - 对于 todo 任务：直接更新该任务
+    // - 不再使用 skippedForDate，因为 instance 的 reminder_date + isSkip 就能表达
     const handleSkipForDay = (task: Task) => {
         if (!onUpdateTask) return;
 
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         const updatedTask: Task = {
             ...task,
             called: true,
-            skippedForDate: today,
             isSkip: true,
+        };
+
+        onUpdateTask(updatedTask);
+    };
+
+    // Handle unskip for day - 取消跳过今天的任务
+    // 原理：与 skip 相反
+    // - 对于 routine 模板：reminderService 会只更新今天的 routine_instance
+    //   - instance.called = false → 后端可以打电话（如果时间还在窗口内）
+    //   - instance.isSkip = false → 取消跳过状态
+    // - 对于 todo 任务：直接更新该任务
+    const handleUnskipForDay = (task: Task) => {
+        if (!onUpdateTask) return;
+
+        const updatedTask: Task = {
+            ...task,
+            called: false,
+            isSkip: false,
         };
 
         onUpdateTask(updatedTask);
@@ -475,6 +493,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onDelete={onDeleteTask}
                                         onEdit={handleEditTask}
                                         onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -487,6 +506,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -500,6 +520,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -513,6 +534,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -526,6 +548,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}

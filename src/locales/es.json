@@ -55,6 +55,9 @@
   "home.skipForDay.message": "Lumi no te llamará por \"{{task}}\" hoy. Aún puedes completarlo manualmente.",
   "home.skipForDay.confirm": "Saltar",
   "home.skipForDay.tag": "Saltado",
+  "home.unskipForDay.title": "¿Deshacer salto?",
+  "home.unskipForDay.message": "Si el tiempo no ha pasado, Lumi te llamará de nuevo por \"{{task}}\".",
+  "home.unskipForDay.confirm": "Deshacer",
 
   "stats.loadingHistory": "Cargando...",
   "stats.noCompletedTasks": "Nada completado aún",

@@ -45,6 +45,10 @@
   "home.setRecurringReminder": "设定重复提醒",
   "home.setOnceReminder": "设定单次提醒",
   "home.taskInputHint": "先输入你想做的事，然后再设置时间。",
+  "home.skipForDay.title": "跳过今天？",
+  "home.skipForDay.message": "Lumi 今天不会为「{{task}}」打电话给你。你仍然可以手动完成它。",
+  "home.skipForDay.confirm": "跳过",
+  "home.skipForDay.tag": "已跳过",
 
   "stats.habitProgress": "习惯进度",
 
@@ -86,6 +90,10 @@
   "stats.slogan": "小步前进，大步改变",
   "stats.weeklyWins": "本周收获！",
   "stats.monthlyProgress": "本月进度",
+  "stats.cancelCheckIn.title": "取消今日打卡？",
+  "stats.cancelCheckIn.message": "取消后，今天的进度将不会被记录。",
+  "stats.cancelCheckIn.keep": "保留",
+  "stats.cancelCheckIn.cancel": "取消打卡",
 
   "profile.notLoggedIn": "未登录",
   "profile.enterName": "输入你的名字",

@@ -9,6 +9,7 @@ interface TaskGroupProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit?: (task: Task) => void;
+  onSkipForDay?: (task: Task) => void;
 }
 
 /**
@@ -26,6 +27,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   onToggle,
   onDelete,
   onEdit,
+  onSkipForDay,
 }) => (
     <div className="animate-fade-in-up">
         {/* Section Label - Quicksand Bold */}
@@ -43,6 +45,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
                     onToggle={onToggle}
                     onDelete={onDelete}
                     onEdit={onEdit}
+                    onSkipForDay={onSkipForDay}
                 />
             ))}
         </div>

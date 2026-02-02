@@ -45,6 +45,10 @@
   "home.setRecurringReminder": "Set Recurring Reminder",
   "home.setOnceReminder": "Set One-time Reminder",
   "home.taskInputHint": "Enter what you want to do first, then set the time.",
+  "home.skipForDay.title": "Skip for Today?",
+  "home.skipForDay.message": "Lumi won't call you for \"{{task}}\" today. You can still complete it manually.",
+  "home.skipForDay.confirm": "Skip",
+  "home.skipForDay.tag": "Skipped",
 
   "stats.habitProgress": "Habit Progress",
   "stats.loadingHistory": "Loading history...",
@@ -82,6 +86,10 @@
   "stats.slogan": "Small Wins, Big Change",
   "stats.weeklyWins": "Weekly Wins!",
   "stats.monthlyProgress": "Monthly Progress",
+  "stats.cancelCheckIn.title": "Cancel today's check-in?",
+  "stats.cancelCheckIn.message": "Your progress for today will not be recorded.",
+  "stats.cancelCheckIn.keep": "Keep",
+  "stats.cancelCheckIn.cancel": "Cancel",
 
   "profile.title": "Profile",
   "profile.notLoggedIn": "Not logged in",

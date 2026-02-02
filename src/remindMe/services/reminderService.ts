@@ -31,6 +31,7 @@ interface TaskRecord {
   recurrence_end_date: string | null; // 重复结束日期
   parent_routine_id: string | null; // 父 routine 模板 ID（仅用于 routine_instance）
   is_snoozed: boolean; // 是否被临时推迟（iOS Live Activity Later 按钮）
+  skipped_for_date: string | null; // 跳过的日期（YYYY-MM-DD），AI 该日不会打电话
   created_at: string;
   updated_at: string;
   // Success metadata fields - 成功元数据字段
@@ -128,6 +129,7 @@ function dbToTask(record: TaskRecord): Task {
     recurrenceEndDate: record.recurrence_end_date || undefined,
     parentRoutineId: record.parent_routine_id || undefined,
     isSnoozed: record.is_snoozed || false,
+    skippedForDate: record.skipped_for_date || undefined,
     // Success metadata fields
     completionMood: record.completion_mood || undefined,
     difficultyPerception: record.difficulty_perception || undefined,
@@ -449,6 +451,7 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   if (updates.recurrencePattern !== undefined) dbUpdates.recurrence_pattern = updates.recurrencePattern || null;
   if (updates.recurrenceDays !== undefined) dbUpdates.recurrence_days = updates.recurrenceDays || null;
   if (updates.recurrenceEndDate !== undefined) dbUpdates.recurrence_end_date = updates.recurrenceEndDate || null;
+  if (updates.skippedForDate !== undefined) dbUpdates.skipped_for_date = updates.skippedForDate || null;
 
   // Success metadata fields - 成功元数据字段
   if (updates.completionMood !== undefined) dbUpdates.completion_mood = updates.completionMood || null;

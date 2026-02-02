@@ -7,10 +7,11 @@
  * - 底部：每周打卡进度（周一到周日的7个圆圈，完成显示金币）
  */
 
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { calculateCurrentStreak } from './heatmapHelpers';
+import { LanguageContext } from '../../context/LanguageContextDefinition';
 import type { Habit } from './types';
 
 interface StatsCardProps {
@@ -118,6 +119,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
 }) => {
     const todayKey = getLocalDateString();
     const isTodayDone = !!habit.history[todayKey];
+    const { t } = useContext(LanguageContext);
 
     // 动画状态
     const [isPressed, setIsPressed] = useState(false);
@@ -297,7 +299,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                                     <img
                                         src="/coins.png"
                                         alt="完成"
-                                        className="w-7 h-7 object-contain"
+                                        className="w-8 h-8 object-contain"
                                     />
                                 ) : null}
                             </div>
@@ -320,12 +322,10 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h3 className="text-lg font-bold text-gray-800 mb-2">
-                            {containsChinese(habit.title) ? '取消今日打卡？' : 'Cancel today\'s check-in?'}
+                            {t('stats.cancelCheckIn.title')}
                         </h3>
                         <p className="text-gray-500 text-sm mb-6">
-                            {containsChinese(habit.title)
-                                ? '取消后，今天的进度将不会被记录。'
-                                : 'Your progress for today will not be recorded.'}
+                            {t('stats.cancelCheckIn.message')}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -335,7 +335,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                                     setShowCancelConfirm(false);
                                 }}
                             >
-                                {containsChinese(habit.title) ? '保留' : 'Keep'}
+                                {t('stats.cancelCheckIn.keep')}
                             </button>
                             <button
                                 className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium"
@@ -344,7 +344,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                                     handleConfirmCancel();
                                 }}
                             >
-                                {containsChinese(habit.title) ? '取消打卡' : 'Cancel'}
+                                {t('stats.cancelCheckIn.cancel')}
                             </button>
                         </div>
                     </div>

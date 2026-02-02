@@ -25,6 +25,7 @@ import {
     CheckInToast,
     useCheckInToast,
     buildDenseHistoryWithGaps,
+    EnergyBall,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
 
@@ -97,6 +98,24 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
+
+    /**
+     * 播放打卡光晕音效
+     */
+    const playCheckInSound = () => {
+        const audio = new Audio('/checkin-sound.mp3');
+        audio.volume = 0.7;
+        audio.play().catch(err => console.log('音效播放失败:', err));
+    };
+
+    /**
+     * 播放硬币掉落音效
+     */
+    const playCoinDropSound = () => {
+        const audio = new Audio('/coin-drop-sound.wav');
+        audio.volume = 0.7;
+        audio.play().catch(err => console.log('硬币音效播放失败:', err));
+    };
 
     // 示例习惯数据
     const exampleHabits = useMemo<Habit[]>(() => [
@@ -277,12 +296,16 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         // 1. 调用 API 记录打卡
         await toggleHabitToday(habitId);
 
-        // 2. 存钱罐 +1（触发金币掉落动画）
-        setWeeklyCount(prev => prev + 1);
-
-        // 3. 触发动画
+        // 2. 触发光晕动画（持续 3.5 秒）+ 播放音效
         setTriggerRise(true);
-        setTimeout(() => setTriggerRise(false), 600);
+        playCheckInSound();
+        setTimeout(() => setTriggerRise(false), 3500);
+
+        // 3. 延迟 1 秒后，存钱罐 +1（触发金币掉落动画）+ 播放硬币音效
+        setTimeout(() => {
+            setWeeklyCount(prev => prev + 1);
+            playCoinDropSound();
+        }, 1000);
 
         // 4. 显示 Toast
         showToast();
@@ -335,14 +358,20 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 targetDate.getMonth() === currentMonth.getMonth();
 
             if (isInCurrentMonth) {
-                // 更新能量球计数
-                setWeeklyCount(prev => newStatus ? prev + 1 : Math.max(prev - 1, 0));
-
-                // 如果是打卡（非取消打卡），触发水位上涨动画和 Toast
+                // 如果是打卡（非取消打卡），触发光晕动画、音效和 Toast
                 if (newStatus) {
                     setTriggerRise(true);
-                    setTimeout(() => setTriggerRise(false), 600);
+                    playCheckInSound();
+                    setTimeout(() => setTriggerRise(false), 3500);
+                    // 延迟 1 秒后更新能量球计数（触发金币掉落）+ 播放硬币音效
+                    setTimeout(() => {
+                        setWeeklyCount(prev => prev + 1);
+                        playCoinDropSound();
+                    }, 1000);
                     showToast();
+                } else {
+                    // 取消打卡时立即更新
+                    setWeeklyCount(prev => Math.max(prev - 1, 0));
                 }
             }
 
@@ -373,6 +402,30 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             className="flex-1 relative h-full overflow-hidden flex flex-col"
             style={{ backgroundColor: '#F5F5F5' }}
         >
+            {/* 打卡时的黑色遮罩 - 覆盖整个页面，只有存钱罐和光晕在上方 */}
+            <div
+                className={`fixed inset-0 bg-black/60 transition-opacity duration-300 pointer-events-none ${
+                    triggerRise ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{ zIndex: 35 }}
+            />
+
+            {/* 存钱罐 - fixed 定位，打卡时在遮罩上方 */}
+            {/* 位置：绿色区域底部边缘，一半在绿色区域一半在白色区域 */}
+            <div
+                className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300"
+                style={{
+                    top: 310,
+                    zIndex: triggerRise ? 40 : 31,
+                }}
+            >
+                <EnergyBall
+                    current={weeklyCount}
+                    target={weeklyTarget}
+                    triggerRise={triggerRise}
+                />
+            </div>
+
             {/* 打卡成功 Toast */}
             <CheckInToast message={toastMessage} onClose={hideToast} />
 
@@ -386,9 +439,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 <StatsHeader
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
-                    weeklyCount={weeklyCount}
-                    weeklyTarget={weeklyTarget}
-                    triggerRise={triggerRise}
                 />
 
                 {/* 内容区域 - pt-20 为悬挂的能量球留出空间 */}

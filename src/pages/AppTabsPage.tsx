@@ -583,6 +583,8 @@ export function AppTabsPage() {
                 date: updatedTask.date,
                 category: updatedTask.category,
                 called: updatedTask.called, // 🆕 支持 Skip for Day 功能
+                skippedForDate: updatedTask.skippedForDate, // 🆕 前端标签显示
+                isSkip: updatedTask.isSkip, // 🆕 行为统计
             });
             if (!result) {
                 throw new Error('Failed to update');

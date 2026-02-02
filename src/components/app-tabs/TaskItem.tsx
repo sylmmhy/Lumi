@@ -25,11 +25,13 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
     const [confettiTrigger, setConfettiTrigger] = useState(0);
     const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
-    // 检查任务是否被跳过（called = true 表示已跳过或已打过电话）
-    // 对于未完成的任务，called = true 意味着用户选择了跳过
+    // 检查任务是否今天被跳过
+    // 用 skippedForDate 字段判断，明天日期不匹配，标签自动消失
     const isSkippedForToday = useMemo(() => {
-        return task.called === true && !task.completed;
-    }, [task.called, task.completed]);
+        if (!task.skippedForDate) return false;
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        return task.skippedForDate === today && !task.completed;
+    }, [task.skippedForDate, task.completed]);
 
     // 调试日志：检查 isSnoozed 值
     if (task.isSnoozed && !task.completed) {

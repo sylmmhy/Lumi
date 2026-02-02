@@ -175,6 +175,11 @@
   "profile.aiVoiceFemale": "Female",
   "profile.aiVoiceTitle": "Lumi's Voice",
   "profile.aiVoiceDescription": "Choose the voice gender for Lumi",
+  "profile.screenTime": "App Limits",
+  "profile.screenTimeHint": "Lock distracting apps when you miss calls",
+  "profile.appsSelected": "apps selected",
+  "profile.selectApps": "Select apps",
+  "profile.notAuthorized": "Not authorized",
 
   "profile.aiTone": "Lumi's Personality",
   "profile.aiToneHint": "How should Lumi talk to you?",

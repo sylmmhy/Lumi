@@ -7,7 +7,7 @@
  * - EnergyBall 已移至 StatsView 以便控制层级
  */
 
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface StatsHeaderProps {
@@ -24,11 +24,12 @@ interface StatsHeaderProps {
  * 1. 森系暖绿纯色背景
  * 2. 居中标语文案
  */
-export const StatsHeader: React.FC<StatsHeaderProps> = () => {
+export const StatsHeader = forwardRef<HTMLDivElement, StatsHeaderProps>((_props, ref) => {
     const { t } = useTranslation();
 
     return (
         <div
+            ref={ref}
             className="relative w-full sticky top-0 z-30"
             data-tour="stats-header"
             style={{ backgroundColor: '#429950' }}
@@ -50,6 +51,8 @@ export const StatsHeader: React.FC<StatsHeaderProps> = () => {
             </div>
         </div>
     );
-};
+});
+
+StatsHeader.displayName = 'StatsHeader';
 
 export default StatsHeader;

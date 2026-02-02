@@ -51,6 +51,10 @@
   "home.setRecurringReminder": "Establecer recordatorio recurrente",
   "home.setOnceReminder": "Establecer recordatorio único",
   "home.taskInputHint": "Primero escribe qué quieres hacer, luego pon la hora.",
+  "home.skipForDay.title": "¿Saltar por hoy?",
+  "home.skipForDay.message": "Lumi no te llamará por \"{{task}}\" hoy. Aún puedes completarlo manualmente.",
+  "home.skipForDay.confirm": "Saltar",
+  "home.skipForDay.tag": "Saltado",
 
   "stats.loadingHistory": "Cargando...",
   "stats.noCompletedTasks": "Nada completado aún",
@@ -87,6 +91,10 @@
   "stats.slogan": "Pequeñas victorias, gran cambio",
   "stats.weeklyWins": "¡Logros de la Semana!",
   "stats.monthlyProgress": "Progreso Mensual",
+  "stats.cancelCheckIn.title": "¿Cancelar el check-in de hoy?",
+  "stats.cancelCheckIn.message": "Si cancelas, el progreso de hoy no se guardará.",
+  "stats.cancelCheckIn.keep": "Mantener",
+  "stats.cancelCheckIn.cancel": "Cancelar",
 
   "profile.notLoggedIn": "Sin iniciar sesión",
   "profile.enterName": "Tu nombre",

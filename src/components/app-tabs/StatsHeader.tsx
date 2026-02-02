@@ -3,12 +3,11 @@
  *
  * 设计理念：
  * - 森系暖绿背景，营造温暖治愈的氛围
- * - 居中标题 + 底部悬挂能量球布局
- * - 物理隐喻：蓄水池/充能球效果
+ * - 居中标题布局
+ * - EnergyBall 已移至 StatsView 以便控制层级
  */
 
-import React from 'react';
-import { EnergyBall } from '../stats/EnergyBall';
+import React, { forwardRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface StatsHeaderProps {
@@ -16,12 +15,6 @@ interface StatsHeaderProps {
     activeTab: 'routine' | 'done';
     /** Tab 切换回调 */
     onTabChange: (tab: 'routine' | 'done') => void;
-    /** 本周完成数 */
-    weeklyCount: number;
-    /** 本周目标数 */
-    weeklyTarget: number;
-    /** 水位上涨动画触发器 */
-    triggerRise?: boolean;
 }
 
 /**
@@ -30,17 +23,13 @@ interface StatsHeaderProps {
  * 包含：
  * 1. 森系暖绿纯色背景
  * 2. 居中标语文案
- * 3. 底部悬挂的蓄水池/充能球进度组件
  */
-export const StatsHeader: React.FC<StatsHeaderProps> = ({
-    weeklyCount,
-    weeklyTarget,
-    triggerRise = false,
-}) => {
+export const StatsHeader = forwardRef<HTMLDivElement, StatsHeaderProps>((_props, ref) => {
     const { t } = useTranslation();
 
     return (
         <div
+            ref={ref}
             className="relative w-full sticky top-0 z-30"
             data-tour="stats-header"
             style={{ backgroundColor: '#429950' }}
@@ -60,17 +49,10 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
                     {t('stats.weeklyWins')}
                 </h1>
             </div>
-
-            {/* 底部悬挂的能量球 - 一半在绿色区域，一半在白色区域 */}
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-1/2 z-20">
-                <EnergyBall
-                    current={weeklyCount}
-                    target={weeklyTarget}
-                    triggerRise={triggerRise}
-                />
-            </div>
         </div>
     );
-};
+});
+
+StatsHeader.displayName = 'StatsHeader';
 
 export default StatsHeader;

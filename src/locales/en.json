@@ -49,6 +49,9 @@
   "home.skipForDay.message": "Lumi won't call you for \"{{task}}\" today. You can still complete it manually.",
   "home.skipForDay.confirm": "Skip",
   "home.skipForDay.tag": "Skipped",
+  "home.unskipForDay.title": "Undo Skip?",
+  "home.unskipForDay.message": "Lumi will call you for \"{{task}}\" again if the time hasn't passed.",
+  "home.unskipForDay.confirm": "Undo",
 
   "stats.habitProgress": "Habit Progress",
   "stats.loadingHistory": "Loading history...",

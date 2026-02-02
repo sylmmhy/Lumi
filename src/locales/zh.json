@@ -49,6 +49,9 @@
   "home.skipForDay.message": "Lumi 今天不会为「{{task}}」打电话给你。你仍然可以手动完成它。",
   "home.skipForDay.confirm": "跳过",
   "home.skipForDay.tag": "已跳过",
+  "home.unskipForDay.title": "取消跳过？",
+  "home.unskipForDay.message": "如果时间还没过，Lumi 会再次为「{{task}}」打电话给你。",
+  "home.unskipForDay.confirm": "取消跳过",
 
   "stats.habitProgress": "习惯进度",
 

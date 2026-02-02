@@ -13,25 +13,27 @@ interface TaskItemProps {
     onEdit?: (task: Task) => void;
     /** 跳过今天的回调 */
     onSkipForDay?: (task: Task) => void;
+    /** 取消跳过今天的回调 */
+    onUnskipForDay?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
     /** urgency 模式下点击 Start 的回调 */
     onStart?: () => void;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, mode = 'home', onStart }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, mode = 'home', onStart }) => {
     const { t } = useTranslation();
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
     const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+    const [showUnskipConfirm, setShowUnskipConfirm] = useState(false);
 
     // 检查任务是否今天被跳过
-    // 用 skippedForDate 字段判断，明天日期不匹配，标签自动消失
+    // 🆕 改用 isSkip 字段判断（由 AppTabsPage.loadTasks 从 routine_instance 同步到模板）
+    // 这样每天的 skip 状态独立，不会污染第二天
     const isSkippedForToday = useMemo(() => {
-        if (!task.skippedForDate) return false;
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-        return task.skippedForDate === today && !task.completed;
-    }, [task.skippedForDate, task.completed]);
+        return task.isSkip === true && !task.completed;
+    }, [task.isSkip, task.completed]);
 
     // 调试日志：检查 isSnoozed 值
     if (task.isSnoozed && !task.completed) {
@@ -98,6 +100,16 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
         currentTranslateX.current = 0;
     };
 
+    // 处理取消跳过确认
+    const handleUnskipConfirm = () => {
+        if (onUnskipForDay) {
+            onUnskipForDay(task);
+        }
+        setShowUnskipConfirm(false);
+        setTranslateX(0);
+        currentTranslateX.current = 0;
+    };
+
     return (
         <>
             {/* 彩带效果 - 放在最外层，使用 fixed 定位覆盖全屏 */}
@@ -140,16 +152,31 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                     transition: `opacity 0s ${translateX === 0 ? '0.2s' : '0s'}`
                 }}
             >
-                {/* Skip Button - Yellow */}
+                {/* Skip/Unskip Button - Orange */}
                 <div className="w-20 h-full flex items-center justify-center bg-[#F59E0B]">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            setShowSkipConfirm(true);
+                            if (isSkippedForToday) {
+                                // 已跳过，显示取消跳过确认弹窗
+                                setShowUnskipConfirm(true);
+                            } else {
+                                // 未跳过，显示跳过确认弹窗
+                                setShowSkipConfirm(true);
+                            }
                         }}
                         className="w-full h-full flex items-center justify-center text-white"
                     >
-                        <i className="fa-solid fa-forward text-xl"></i>
+                        {isSkippedForToday ? (
+                            // 已跳过：forward 图标 + 斜线（表示取消跳过）
+                            <span className="fa-stack text-xl" style={{ width: '1em', height: '1em', lineHeight: '1em' }}>
+                                <i className="fa-solid fa-forward fa-stack-1x"></i>
+                                <i className="fa-solid fa-slash fa-stack-1x" style={{ opacity: 0.9 }}></i>
+                            </span>
+                        ) : (
+                            // 未跳过：普通 forward 图标
+                            <i className="fa-solid fa-forward text-xl"></i>
+                        )}
                     </button>
                 </div>
                 {/* Delete Button - Red */}
@@ -276,6 +303,65 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                                 style={{ fontFamily: "'Quicksand', sans-serif" }}
                             >
                                 {t('home.skipForDay.confirm')}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Unskip Confirmation Modal - 取消跳过确认弹窗 */}
+            {showUnskipConfirm && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center animate-fade-in"
+                    onClick={() => setShowUnskipConfirm(false)}
+                >
+                    {/* Semi-transparent backdrop */}
+                    <div className="absolute inset-0 bg-gray-500/40" />
+
+                    {/* Modal content */}
+                    <div
+                        className="relative bg-white rounded-[24px] shadow-2xl w-[300px] p-6 border border-gray-100/50"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Icon */}
+                        <div className="flex justify-center mb-4">
+                            <div className="w-12 h-12 rounded-full bg-[#D1FAE5] flex items-center justify-center">
+                                <i className="fa-solid fa-rotate-left text-[#10B981] text-xl"></i>
+                            </div>
+                        </div>
+
+                        {/* Title */}
+                        <h3
+                            className="text-gray-900 font-semibold text-lg text-center mb-2"
+                            style={{ fontFamily: "'Quicksand', sans-serif" }}
+                        >
+                            {t('home.unskipForDay.title')}
+                        </h3>
+
+                        {/* Description */}
+                        <p
+                            className="text-gray-500 text-sm text-center mb-6"
+                            style={{ fontFamily: "'Quicksand', sans-serif" }}
+                        >
+                            {t('home.unskipForDay.message', { task: task.text })}
+                        </p>
+
+                        {/* Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowUnskipConfirm(false)}
+                                className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+                                style={{ fontFamily: "'Quicksand', sans-serif" }}
+                            >
+                                {t('common.cancel')}
+                            </button>
+                            <button
+                                onClick={handleUnskipConfirm}
+                                className="flex-1 py-3 bg-[#10B981] text-white font-semibold rounded-xl hover:bg-[#059669] transition-colors"
+                                style={{ fontFamily: "'Quicksand', sans-serif" }}
+                            >
+                                {t('home.unskipForDay.confirm')}
                             </button>
                         </div>
                     </div>

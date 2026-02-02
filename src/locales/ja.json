@@ -55,6 +55,9 @@
   "home.skipForDay.message": "今日は「{{task}}」の電話はしないよ。手動で完了にはできるからね。",
   "home.skipForDay.confirm": "スキップ",
   "home.skipForDay.tag": "スキップ済み",
+  "home.unskipForDay.title": "スキップを取り消す？",
+  "home.unskipForDay.message": "時間がまだ過ぎていなければ、「{{task}}」の電話をまたするよ。",
+  "home.unskipForDay.confirm": "取り消す",
 
   "stats.loadingHistory": "読み込み中...",
   "stats.noCompletedTasks": "まだ完了したタスクないよ",

@@ -210,20 +210,39 @@ export function AppTabsPage() {
                 t.type === 'routine_instance' && t.isSnoozed && t.parentRoutineId && !t.completed
             );
 
-            const routineTemplatesWithSnoozeStatus = routineTemplates.map(routine => {
+            // 🆕 将 routine_instance 的 isSkip 状态同步到对应的 routine 模板
+            // 这样 UI 上的 routine 模板会显示 "Skipped" 标签
+            // 注意：只有未完成且 isSkip=true 的今日实例才显示标签
+            const skippedInstances = todayTasks.filter(t =>
+                t.type === 'routine_instance' && t.isSkip && t.parentRoutineId && !t.completed
+            );
+
+            const routineTemplatesWithStatus = routineTemplates.map(routine => {
+                let updatedRoutine = routine;
+
                 // 检查这个 routine 是否有被 snooze 的今日实例
                 const hasSnoozedInstance = snoozedInstances.some(
                     instance => instance.parentRoutineId === routine.id
                 );
                 if (hasSnoozedInstance) {
                     console.log('🏷️ [loadTasks] 同步 snooze 状态到 routine:', routine.text);
-                    return { ...routine, isSnoozed: true };
+                    updatedRoutine = { ...updatedRoutine, isSnoozed: true };
                 }
-                return routine;
+
+                // 🆕 检查这个 routine 是否有被 skip 的今日实例
+                const hasSkippedInstance = skippedInstances.some(
+                    instance => instance.parentRoutineId === routine.id
+                );
+                if (hasSkippedInstance) {
+                    console.log('🏷️ [loadTasks] 同步 skip 状态到 routine:', routine.text);
+                    updatedRoutine = { ...updatedRoutine, isSkip: true };
+                }
+
+                return updatedRoutine;
             });
 
-            // 合并所有任务（routine_instance 不会显示在 UI 中，但 routine 模板会带有 snooze 标签）
-            const allTasks = [...todayTasks, ...routineTemplatesWithSnoozeStatus];
+            // 合并所有任务（routine_instance 不会显示在 UI 中，但 routine 模板会带有 snooze/skip 标签）
+            const allTasks = [...todayTasks, ...routineTemplatesWithStatus];
 
             setTasks(allTasks);
 
@@ -582,9 +601,8 @@ export function AppTabsPage() {
                 displayTime: updatedTask.displayTime,
                 date: updatedTask.date,
                 category: updatedTask.category,
-                called: updatedTask.called, // 🆕 支持 Skip for Day 功能
-                skippedForDate: updatedTask.skippedForDate, // 🆕 前端标签显示
-                isSkip: updatedTask.isSkip, // 🆕 行为统计
+                called: updatedTask.called, // 支持 Skip for Day 功能
+                isSkip: updatedTask.isSkip, // 行为统计 + 前端标签显示
             });
             if (!result) {
                 throw new Error('Failed to update');

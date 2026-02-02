@@ -134,6 +134,9 @@ export function AppTabsPage() {
     const [completionTime, setCompletionTime] = useState(0);
     const [currentTaskDescription, setCurrentTaskDescription] = useState('');
     const [currentTaskId, setCurrentTaskId] = useState<string | null>(null); // 当前正在进行的任务 ID
+
+    // 通话追踪：来电记录 ID（用于追踪 WebView 打开和麦克风连接状态）
+    const [currentCallRecordId, setCurrentCallRecordId] = useState<string | null>(null);
     const [currentTaskType, setCurrentTaskType] = useState<'todo' | 'routine' | 'routine_instance' | null>(null); // 当前任务类型（用于完成时判断是否需要更新 routine_completions）
 
     const [hasSeenVoicePrompt, setHasSeenVoicePrompt] = useState(() => {
@@ -693,6 +696,7 @@ export function AppTabsPage() {
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
                 taskId: taskId,  // 传入真实的 taskId 用于保存 actual_duration_minutes
+                callRecordId: currentCallRecordId ?? undefined,  // 🆕 传入 callRecordId 用于追踪麦克风连接
             });
             console.log('✅ AI Coach session started successfully');
 
@@ -835,6 +839,27 @@ export function AppTabsPage() {
         const taskIdParam = urlParams.get('taskId');
         const autostartParam = urlParams.get('autostart');
         const skipPromptParam = urlParams.get('skipPrompt');
+        const callRecordIdParam = urlParams.get('callRecordId');
+
+        // 🆕 如果有 callRecordId，记录 WebView 打开时间（表示用户点击了接听）
+        if (callRecordIdParam && !currentCallRecordId) {
+            console.log('📞 检测到 callRecordId，记录 WebView 打开时间:', callRecordIdParam);
+            setCurrentCallRecordId(callRecordIdParam);
+
+            // 立即调用 API 记录 webview_opened_at
+            supabase?.functions.invoke('manage-call-records', {
+                body: {
+                    action: 'mark_webview_opened',
+                    call_record_id: callRecordIdParam,
+                },
+            }).then(({ error }) => {
+                if (error) {
+                    console.error('⚠️ 记录 webview_opened_at 失败:', error);
+                } else {
+                    console.log('✅ webview_opened_at 已记录');
+                }
+            });
+        }
 
         // 检查是否需要自动启动
         const shouldAutoStart = autostartParam === 'true' && taskParam && !hasAutoStarted;

@@ -142,6 +142,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
   const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
+  const currentCallRecordIdRef = useRef<string | null>(null); // 来电记录 ID，用于记录通话时长
 
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
@@ -530,6 +531,33 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       console.log('🧹 执行统一清理...');
     }
 
+    // 🆕 记录通话结束时间和时长（如果有 callRecordId）
+    const callRecordId = currentCallRecordIdRef.current;
+    if (callRecordId && taskStartTime > 0) {
+      const durationSeconds = Math.round((Date.now() - taskStartTime) / 1000);
+      console.log('📞 记录通话结束:', { callRecordId, durationSeconds });
+
+      const supabaseForEndCall = getSupabaseClient();
+      if (supabaseForEndCall) {
+        supabaseForEndCall.functions.invoke('manage-call-records', {
+          body: {
+            action: 'end_call',
+            call_record_id: callRecordId,
+            end_at: new Date().toISOString(),
+            duration_seconds: durationSeconds,
+          },
+        }).then(({ error }) => {
+          if (error) {
+            console.error('⚠️ 记录通话结束失败:', error);
+          } else {
+            console.log('✅ 通话结束已记录');
+          }
+        });
+      }
+      // 清除 callRecordId
+      currentCallRecordIdRef.current = null;
+    }
+
     // 1. 停止计时器（复用 stopCountdown 逻辑）
     stopCountdown();
 
@@ -549,7 +577,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     if (import.meta.env.DEV) {
       console.log('✅ 统一清理完成');
     }
-  }, [geminiLive, stopCountdown]);
+  }, [geminiLive, stopCountdown, taskStartTime]);
 
   /**
    * 保存最新的 cleanup 引用，避免倒计时 effect 依赖变化导致 interval 重建
@@ -616,12 +644,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
    * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
    * @param options.taskId 任务 ID（用于保存 actual_duration_minutes 到 tasks 表）
+   * @param options.callRecordId 来电记录 ID（用于追踪麦克风连接状态）
    */
   const startSession = useCallback(async (
     taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string }
+    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string; callRecordId?: string }
   ) => {
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId } = options || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId } = options || {};
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
@@ -629,6 +658,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
+    currentCallRecordIdRef.current = callRecordId || null; // 保存来电记录 ID
     // 保存首选语言，用于触发词生成时保持语言一致性
     preferredLanguagesRef.current = preferredLanguages || null;
     setIsConnecting(true);
@@ -714,6 +744,26 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         console.log('🎤 步骤2: toggleMicrophone() 完成');
       } else {
         console.log('🎤 步骤2: 麦克风已启用，跳过');
+      }
+
+      // 🆕 步骤2.1：如果有 callRecordId，记录麦克风连接成功
+      if (callRecordId) {
+        console.log('📞 记录 mic_connected_at:', callRecordId);
+        const supabaseForMic = getSupabaseClient();
+        if (supabaseForMic) {
+          supabaseForMic.functions.invoke('manage-call-records', {
+            body: {
+              action: 'mark_mic_connected',
+              call_record_id: callRecordId,
+            },
+          }).then(({ error }) => {
+            if (error) {
+              console.error('⚠️ 记录 mic_connected_at 失败:', error);
+            } else {
+              console.log('✅ mic_connected_at 已记录');
+            }
+          });
+        }
       }
 
       // 步骤3：并行获取系统指令和 Gemini token（带超时保护）

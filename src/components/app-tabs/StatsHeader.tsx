@@ -41,7 +41,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
 
     return (
         <div
-            className="relative w-full"
+            className="relative w-full sticky top-0 z-30"
             data-tour="stats-header"
             style={{ backgroundColor: '#429950' }}
         >
@@ -57,7 +57,7 @@ export const StatsHeader: React.FC<StatsHeaderProps> = ({
                     className="text-white italic font-bold whitespace-nowrap"
                     style={{ fontFamily: "'Sansita', sans-serif", fontSize: 'clamp(28px, 10vw, 44px)' }}
                 >
-                    {t('stats.monthlyMission')}
+                    {t('stats.weeklyWins')}
                 </h1>
             </div>
 

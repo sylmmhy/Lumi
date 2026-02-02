@@ -22,7 +22,11 @@ import {
     fetchRecurringReminders,
     taskToNativeReminder,
 } from '../remindMe/services/reminderService';
-import { isNativeApp, syncAllTasksToNative, registerNativeRefreshTasks } from '../utils/nativeTaskEvents';
+import {
+    isNativeApp,
+    syncAllTasksToNative,
+    registerNativeRefreshTasks,
+} from '../utils/nativeTaskEvents';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase, getSupabaseClient } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
@@ -1422,6 +1426,9 @@ export function AppTabsPage() {
                         onToggleComplete={toggleComplete}
                         onDeleteTask={handleDeleteTask}
                         onRegisterHelpMeStart={registerUrgencyStart}
+                        onOpenCampfire={() => {
+                            navigate('/campfire');
+                        }}
                     />
                 )}
 

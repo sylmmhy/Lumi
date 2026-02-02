@@ -24,6 +24,7 @@ import { TaskFlowController } from '../components';
 import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
+import { CampfireView } from '../components/campfire';
 import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
 import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 
@@ -588,170 +589,74 @@ function FireFromFigmaTest({ onBack }: { onBack: () => void }) {
 // ============================================
 // 测试 9: 篝火陪伴模式
 // ============================================
-
-/** 篝火陪伴模式布局配置 */
-const CAMPFIRE_CONFIG = {
-  /** 背景图片宽度（从 companion-bg.png 元数据获取） */
-  bgWidth: 1179,
-  /** 背景图片高度（从 companion-bg.png 元数据获取） */
-  bgHeight: 1926,
-  /** 火焰底部在图片中的垂直位置，0-1（从设计稿测量：篝火柴堆顶部） */
-  fireBottomY: 0.64
-  ,
-  /** 火焰宽度占图片宽度的比例，0-1（视觉调优得出） */
-  fireWidthRatio: 0.5,
-  /** 背景填充色（与图片底部边缘颜色一致，用于填充超出区域） */
-  bgColor: '#1D1B3D',
-} as const;
-
-/**
- * 篝火陪伴模式测试组件
- *
- * 实现原理：
- * 1. 图片宽度铺满视窗（100vw），高度按比例自动计算
- * 2. 图片顶部和两侧对齐视窗边缘
- * 3. 火焰使用百分比定位，相对于图片容器，确保与背景同步缩放
- * 4. 如果屏幕比图片高，底部用背景色填充
- * 5. 支持播放篝火白噪音（循环播放）
- */
-/** 音频淡入淡出时长（毫秒） */
-const AUDIO_FADE_DURATION = 800;
-
 function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPlayingSound, setIsPlayingSound] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const fadeIntervalRef = useRef<number | null>(null);
-
-  const toggleSound = useCallback(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio('/campfire-sound.mp3');
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0;
-    }
-
-    // 清除之前的淡入淡出
-    if (fadeIntervalRef.current) {
-      clearInterval(fadeIntervalRef.current);
-      fadeIntervalRef.current = null;
-    }
-
-    const audio = audioRef.current;
-    const steps = 20;
-    const stepDuration = AUDIO_FADE_DURATION / steps;
-    const volumeStep = 1 / steps;
-
-    if (isPlayingSound) {
-      // 淡出
-      fadeIntervalRef.current = window.setInterval(() => {
-        if (audio.volume > volumeStep) {
-          audio.volume = Math.max(0, audio.volume - volumeStep);
-        } else {
-          audio.volume = 0;
-          audio.pause();
-          if (fadeIntervalRef.current) {
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
-          }
-        }
-      }, stepDuration);
-    } else {
-      // 淡入
-      audio.volume = 0;
-      audio.play();
-      fadeIntervalRef.current = window.setInterval(() => {
-        if (audio.volume < 1 - volumeStep) {
-          audio.volume = Math.min(1, audio.volume + volumeStep);
-        } else {
-          audio.volume = 1;
-          if (fadeIntervalRef.current) {
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
-          }
-        }
-      }, stepDuration);
-    }
-    setIsPlayingSound(!isPlayingSound);
-  }, [isPlayingSound]);
-
-  // 组件卸载时停止音频
-  useState(() => {
-    return () => {
-      if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
+  const [uiError, setUiError] = useState<string | null>(null);
+  const aiCoach = useAICoachSession({
+    initialTime: 300,
+    sessionMode: 'campfire',
+    enableIdleDisconnect: true,
+    enableVirtualMessages: true,
+    enableVAD: true,
   });
+  const {
+    canvasRef,
+    startSession,
+    endSession,
+    stopAudioImmediately,
+    sendTextMessage,
+    isSessionActive,
+    isConnecting,
+    isSpeaking,
+    isSilentMode,
+    connectionError,
+  } = aiCoach;
+
+  const handleStartSession = useCallback(async () => {
+    setUiError(null);
+    try {
+      await startSession('Campfire Companion Session');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '连接失败，请重试';
+      setUiError(message);
+    }
+  }, [startSession]);
+
+  const handleEndSession = useCallback(() => {
+    stopAudioImmediately();
+    endSession();
+  }, [stopAudioImmediately, endSession]);
+
+  const handleBack = useCallback(() => {
+    stopAudioImmediately();
+    endSession();
+    onBack();
+  }, [stopAudioImmediately, endSession, onBack]);
+
+  const handleEnterSilentMode = useCallback(() => {
+    sendTextMessage('Okay I need to focus now, please be quiet.');
+  }, [sendTextMessage]);
 
   return (
-    <div
-      className="fixed inset-0 w-full h-full overflow-hidden"
-      style={{ backgroundColor: CAMPFIRE_CONFIG.bgColor }}
-    >
-      {/* 图片容器 - 宽度 100%，高度按比例自动，顶部对齐 */}
-      <div className="relative w-full">
-        {/* 背景图片 - 宽度铺满，高度按比例 */}
-        <img
-          src="/companion-bg.png"
-          alt=""
-          className="w-full h-auto block"
-        />
+    <>
+      <canvas ref={canvasRef} className="hidden" />
+      <CampfireView
+        onBack={handleBack}
+        onStartSession={handleStartSession}
+        onEndSession={handleEndSession}
+        isSessionActive={isSessionActive}
+        isConnecting={isConnecting}
+        isAISpeaking={isSpeaking}
+        isSilentMode={isSilentMode}
+        onEnterSilentMode={handleEnterSilentMode}
+        showDebugControls={true}
+      />
 
-        {/* 火焰动画 - 相对于图片容器定位，使用百分比确保同步缩放 */}
-        <div
-          className="absolute left-1/2 z-20"
-          style={{
-            top: `${CAMPFIRE_CONFIG.fireBottomY * 100}%`,
-            width: `${CAMPFIRE_CONFIG.fireWidthRatio * 100}%`,
-            transform: 'translateX(-50%) translateY(-100%)', // 水平居中，底部对齐到 top 位置
-          }}
-        >
-          <TalkingFire isSpeaking={isSpeaking} size="100%" />
+      {(uiError || connectionError) && (
+        <div className="fixed left-1/2 top-8 z-[70] -translate-x-1/2 rounded-xl bg-red-500/85 px-4 py-2 text-sm text-white shadow-lg">
+          {uiError || connectionError}
         </div>
-      </div>
-
-      {/* 顶部控制区域 - 固定在视口，不随图片缩放 */}
-      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between">
-        {/* 返回按钮 */}
-        <button
-          onClick={onBack}
-          className="px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-full hover:bg-black/60 transition-colors text-sm"
-        >
-          ← 返回
-        </button>
-
-        {/* 右侧按钮组 */}
-        <div className="flex gap-2">
-          {/* 白噪音播放按钮 */}
-          <button
-            onClick={toggleSound}
-            className={`px-4 py-2 rounded-full transition-colors text-sm ${
-              isPlayingSound
-                ? 'bg-orange-500/80 text-white'
-                : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
-            }`}
-          >
-            {isPlayingSound ? '🔥 Sound On' : '🔇 Sound Off'}
-          </button>
-
-          {/* 说话切换按钮（调试用） */}
-          <button
-            onClick={() => setIsSpeaking(!isSpeaking)}
-            className={`px-4 py-2 rounded-full transition-colors text-sm ${
-              isSpeaking
-                ? 'bg-green-500/80 text-white'
-                : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
-            }`}
-          >
-            {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 

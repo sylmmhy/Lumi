@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import type { Task } from '../../remindMe/types';
 import { ConfettiEffect } from '../effects';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getLocalDateString } from '../../utils/timeUtils';
 
 interface TaskItemProps {
     task: Task;
@@ -26,12 +25,11 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
     const [confettiTrigger, setConfettiTrigger] = useState(0);
     const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
-    // 检查任务是否今天被跳过
+    // 检查任务是否被跳过（called = true 表示已跳过或已打过电话）
+    // 对于未完成的任务，called = true 意味着用户选择了跳过
     const isSkippedForToday = useMemo(() => {
-        if (!task.skippedForDate) return false;
-        const today = getLocalDateString(new Date());
-        return task.skippedForDate === today;
-    }, [task.skippedForDate]);
+        return task.called === true && !task.completed;
+    }, [task.called, task.completed]);
 
     // 调试日志：检查 isSnoozed 值
     if (task.isSnoozed && !task.completed) {

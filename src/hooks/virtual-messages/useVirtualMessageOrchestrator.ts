@@ -6,14 +6,12 @@
  * - TopicDetector: 检测话题和情绪变化（向量匹配）
  * - AsyncMemoryPipeline: 异步检索相关记忆
  *
- * ## 方案 2 实现：过渡话注入
+ * ## 方案 B 实现：同步等待记忆 + 静默注入
  *
  * 核心流程：
- * 1. 用户说话 → 话题检测 → 异步检索记忆
- * 2. 记忆检索完成后立刻注入（sendClientContent + turnComplete=true + role='system'）
- * 3. AI 用过渡话开头（如 "I hear you..."），然后自然引用记忆
- *
- * 注意：不再使用队列等待，因为 turnComplete=false 会阻塞后续语音输入。
+ * 1. 用户说话 → 同步等待记忆检索（最多1秒）
+ * 2. 记忆 + 用户的话静默注入（turnComplete=false）
+ * 3. AI 带着记忆自然回复
  *
  * @see docs/in-progress/20260127-dynamic-virtual-messages.md
  */
@@ -100,7 +98,7 @@ interface VirtualMessageOrchestratorResult {
 }
 
 /**
- * 虚拟消息调度器（方案 2：过渡话注入）
+ * 虚拟消息调度器（方案 B：同步等待记忆）
  */
 export function useVirtualMessageOrchestrator(
   options: UseVirtualMessageOrchestratorOptions
@@ -142,13 +140,6 @@ export function useVirtualMessageOrchestrator(
   const lastTopicRef = useRef<TopicInfo | null>(null)
   // 追踪 AI 说话状态
   const isSpeakingRef = useRef<boolean>(isSpeaking)
-  // 🆕 待注入的记忆（AI 说话时暂存，等说完再注入）
-  const pendingMemoryRef = useRef<{
-    memories: MemoryRetrievalResult[]
-    topic: string
-    emotion: EmotionalState['primary']
-    intensity: number
-  } | null>(null)
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
@@ -326,8 +317,9 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
         result.emotionalState.trigger
       )
 
-      // 🆕 方案 2：立即注入
-      injectMessageImmediately(empathyMessage, 'EMPATHY')
+      // 🆕 方案 2：静默注入
+      sendClientContent(empathyMessage, false, 'user')
+      console.log(`✅ [Orchestrator] EMPATHY 已静默注入`) 
     }
 
     // 处理话题变化（用于上下文追踪）
@@ -341,44 +333,34 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
       }
     }
 
-    // 🆕 直接用用户输入做向量搜索记忆（不依赖话题检测）
-    // 这样"中国"可以通过向量相似度找到"农历新年"相关的记忆
+    // 🔧 方案 B：同步等待记忆检索，立即静默注入
     if (enableMemoryRetrieval && userId && text.length > 5) {
-      console.log(`\n🔎 [${timestamp}] ========== 直接向量搜索记忆 ==========`)
+      console.log(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
       console.log(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
 
-      // 使用用户原始输入作为搜索词
+      // 同步等待记忆检索完成
       const memories = await memoryPipeline.fetchMemoriesForTopic(
-        text,  // 直接用用户输入
-        [],    // 不需要额外关键词
+        text,
+        [],
         contextTracker.getContext().summary
       )
 
       if (memories.length > 0) {
-        console.log(`🔎 [Orchestrator] 找到 ${memories.length} 条相关记忆:`)
+        console.log(`🔎 [Orchestrator] 找到 ${memories.length} 条记忆，立即静默注入`)
         memories.forEach((m, i) => {
           console.log(`   ${i + 1}. [${m.tag}] ${m.content}`)
         })
 
-        // 🆕 检查 AI 是否正在说话，如果是则等待
-        if (isSpeaking) {
-          console.log(`🔎 [Orchestrator] ⏸️ AI 正在说话，等待说完再注入...`)
-          // 存储待注入的记忆，等 AI 说完再注入
-          pendingMemoryRef.current = {
-            memories,
-            topic: result.topic?.name || '对话',
-            emotion: result.emotionalState.primary,
-            intensity: result.emotionalState.intensity,
-          }
-        } else {
-          const contextMessage = generateContextMessage(
-            memories,
-            result.topic?.name || '对话',
-            result.emotionalState.primary,
-            result.emotionalState.intensity
-          )
-          injectMessageImmediately(contextMessage, 'CONTEXT')
-        }
+        const contextMessage = generateContextMessage(
+          memories,
+          result.topic?.name || '对话',
+          result.emotionalState.primary,
+          result.emotionalState.intensity
+        )
+
+        // ✅ 静默注入（turnComplete=false），AI 回复时会自然引用
+        sendClientContent(contextMessage, false, 'user')
+        console.log(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
       } else {
         console.log(`🔎 [Orchestrator] 未找到相关记忆`)
       }
@@ -395,13 +377,13 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     enabled,
     enableMemoryRetrieval,
     userId,
-    isSpeaking,
     contextTracker,
     topicDetector,
     memoryPipeline,
     generateEmpathyMessage,
     generateContextMessage,
     injectMessageImmediately,
+    sendClientContent,
   ])
 
   /**
@@ -414,7 +396,6 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
 
   /**
    * 处理 AI 说完话事件（turnComplete）
-   * 🆕 检查是否有待注入的记忆，如果有则立即注入
    */
   const onTurnComplete = useCallback(() => {
     if (!enabled) return
@@ -424,26 +405,7 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     if (import.meta.env.DEV) {
       console.log(`\n✅ [${timestamp}] ========== AI 说完话 (turnComplete) ==========`)
     }
-
-    // 🆕 检查是否有待注入的记忆
-    if (pendingMemoryRef.current) {
-      const { memories, topic, emotion, intensity } = pendingMemoryRef.current
-      console.log(`\n💉 [${timestamp}] ========== 注入待处理的记忆 ==========`)
-      console.log(`💉 [Orchestrator] 之前 AI 正在说话，现在注入 ${memories.length} 条记忆`)
-
-      const contextMessage = generateContextMessage(
-        memories,
-        topic,
-        emotion,
-        intensity
-      )
-
-      injectMessageImmediately(contextMessage, 'CONTEXT')
-
-      // 清空待注入记忆
-      pendingMemoryRef.current = null
-    }
-  }, [enabled, injectMessageImmediately])
+  }, [enabled])
 
   /**
    * 手动触发记忆检索（用于调试）

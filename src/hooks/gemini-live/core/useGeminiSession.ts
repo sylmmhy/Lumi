@@ -175,8 +175,12 @@ export function useGeminiSession(
           thinkingConfig: {
             thinkingBudget: config?.enableThinking ? undefined : 0,
           },
+          // 🔧 临时关闭 Proactive Audio：避免 AI 说话太频繁
           // 启用 Proactive Audio：模型智能判断何时需要响应
-          proactivity: config?.enableProactiveAudio !== false ? {
+          // proactivity: config?.enableProactiveAudio !== false ? {
+          //   proactiveAudio: true,
+          // } : undefined,
+          proactivity: config?.enableProactiveAudio === true ? {
             proactiveAudio: true,
           } : undefined,
           // 启用语音转录

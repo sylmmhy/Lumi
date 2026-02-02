@@ -549,6 +549,43 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
     }
   }
 
+  // 🆕 如果是 routine 模板且设置 called=true（跳过），只更新今天的 routine_instance
+  // 问题背景：用户点击 Skip 更新的是 routine 模板，但后端检查的是 routine_instance
+  // 重要：routine 模板本身不应该改 called，只改 routine_instance
+  if (taskRecord.task_type === 'routine' && updates.called === true) {
+    const today = getLocalDateString();
+
+    // 1. 把 routine 模板的 called 恢复为 false（不应该被改）
+    await supabase
+      .from('tasks')
+      .update({ called: false })
+      .eq('id', id)
+      .eq('user_id', sessionUser.id);
+
+    // 2. 只更新今天的 routine_instance
+    const { data: updatedInstances, error: syncError } = await supabase
+      .from('tasks')
+      .update({ called: true })
+      .eq('parent_routine_id', id)
+      .eq('task_type', 'routine_instance')
+      .eq('status', 'pending')
+      .eq('reminder_date', today)
+      .select('id, title, reminder_date');
+
+    if (syncError) {
+      console.warn('⚠️ Failed to sync called=true to routine_instance:', syncError);
+    } else {
+      const count = updatedInstances?.length || 0;
+      console.log(`✅ Skipped routine: only updated ${count} routine_instance(s) for today (routine template unchanged)`);
+      if (updatedInstances && updatedInstances.length > 0) {
+        console.log('   Skipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
+      }
+    }
+
+    // 更新返回的任务对象，保持 routine 的 called 为 false
+    updatedTask.called = false;
+  }
+
   // 🆕 对于非 routine 任务，如果修改了时间，重置 called 状态
   if (
     updatedTask &&

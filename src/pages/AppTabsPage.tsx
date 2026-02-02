@@ -585,6 +585,7 @@ export function AppTabsPage() {
                 displayTime: updatedTask.displayTime,
                 date: updatedTask.date,
                 category: updatedTask.category,
+                called: updatedTask.called, // 🆕 支持 Skip for Day 功能
             });
             if (!result) {
                 throw new Error('Failed to update');

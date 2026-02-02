@@ -7,7 +7,7 @@
 | **中文回复** | 始终用中文，解释原理和操作步骤 |
 | **保持局部性** | 不要随意重构没有要求修改的模块 |
 | **搜索网上资料** | Bug 排查和技术调研必须先 WebSearch |
-| **Supabase 本地优先** | 所有后端代码默认本地开发，禁止未授权部署云端 |
+| **Supabase 仅限本地** | ⛔ 所有后端改动**只能**在本地 Supabase 进行，**严禁**未授权修改云端 |
 
 ---
 
@@ -17,6 +17,7 @@
 
 | Skill | 路径 | 触发场景 |
 |-------|------|---------|
+| **commit** | `.claude/skills/commit/SKILL.md` | 说 `/commit`，自动修复 lint 并提交代码 |
 | **launch** | `.claude/skills/launch/SKILL.md` | 说 `/launch`，将 dev 同步到 master 发布 |
 | **debug-workflow** | `.claude/skills/debug-workflow/SKILL.md` | Bug 排查、调试、遇到错误时 |
 | **tech-research** | `.claude/skills/tech-research/SKILL.md` | 评估新技术/功能可行性时 |
@@ -40,15 +41,98 @@
 
 ---
 
+## 🗂️ 项目仓库架构
+
+**背景**：本项目原为单一仓库，为了 Hackathon 方便进行了前后端分离。
+
+### 仓库架构（四端）
+
+| 端 | 仓库 | 相对路径 | 说明 |
+|------|------|---------|------|
+| **网页版（当前）** | Lumi-front-end | `.`（当前目录） | React + TypeScript + Vite |
+| **后端** | Lumi-backend | `../Lumi-backend` | Supabase：迁移、Edge Functions |
+| **iOS 端** | mindboat-ios-web-warpper | `../mindboat-ios-web-warpper` | WebView 壳子，Swift |
+| **Android 端** | Android-warpper | `../Android-warpper` | WebView 壳子，Kotlin |
+
+> **目录结构**：
+> ```
+> 父目录/                         # 如 "Lumi hackthon"
+> ├── Lumi-front-end/             # 前端仓库（当前仓库）
+> ├── Lumi-backend/               # 后端仓库
+> ├── mindboat-ios-web-warpper/   # iOS 仓库
+> └── Android-warpper/            # Android 仓库
+> ```
+> 四个仓库在同一父目录下，使用相对路径互相访问。
+
+### 跨仓库操作命令
+
+```bash
+# 查看后端仓库（假设与前端在同一父目录）
+ls ../Lumi-backend/
+
+# 在后端仓库执行 git 操作
+git -C ../Lumi-backend status
+
+# 查看后端迁移文件
+ls ../Lumi-backend/supabase/migrations/
+```
+
+### 仓库关联说明
+
+- 两个仓库原本是**同一个 repo**，部分文件和规则存在相互引用
+- 后端仓库包含：Supabase 迁移文件、Edge Functions、RPC 函数
+- 前端通过 `src/lib/supabase.ts` 连接后端 API
+
+### 前端项目目录结构
+
+```
+Lumi-front-end/
+├── .claude/              # Claude Code 配置（skills、agents、hooks）
+├── docs/                 # 项目文档（架构、实现记录）
+├── public/               # 静态资源（图片、图标）
+├── scripts/              # 构建/检查脚本
+├── src/
+│   ├── assets/           # 前端资源（图片、字体）
+│   ├── components/       # React 组件
+│   │   ├── ai/           # AI 相关组件（TalkingFire）
+│   │   ├── app-tabs/     # 主 Tab 页视图（Home, Stats, Profile）
+│   │   ├── celebration/  # 任务完成庆祝视图
+│   │   ├── common/       # 通用组件
+│   │   ├── effects/      # 动效组件（Confetti, LevelBar）
+│   │   ├── feedback/     # 反馈组件
+│   │   ├── landing/      # 落地页组件
+│   │   ├── modals/       # 弹窗组件
+│   │   ├── onboarding/   # Onboarding 组件
+│   │   ├── task/         # 任务执行视图
+│   │   └── ui/           # UI 基础组件
+│   ├── constants/        # 常量定义
+│   ├── context/          # React Context（Auth 等）
+│   ├── hooks/            # 自定义 Hooks
+│   │   └── gemini-live/  # Gemini Live API 封装
+│   ├── lib/              # 工具库（supabase, i18n, amplitude）
+│   ├── locales/          # 国际化翻译文件
+│   ├── pages/            # 页面组件
+│   │   └── onboarding/   # Onboarding 页面
+│   ├── remindMe/         # 提醒功能模块
+│   ├── styles/           # 样式文件
+│   ├── types/            # TypeScript 类型定义
+│   └── utils/            # 工具函数
+├── CLAUDE.md             # Claude Code 项目指令（当前文件）
+├── package.json          # 依赖配置
+└── vite.config.ts        # Vite 构建配置
+```
+
+---
+
 ## 🏗️ 跨仓库协作架构
 
 **重要**：本产品有三端，经常需要跨仓库修改。
 
 | 端 | 仓库路径 | 说明 |
 |------|---------|------|
-| **网页版** | 当前仓库 (`firego-app`) | 主代码库，React + TypeScript |
+| **网页版** | 当前仓库 (`Lumi-front-end`) | 主代码库，React + TypeScript |
 | **iOS 端** | `../mindboat-ios-web-warpper` | WebView 壳子，Swift |
-| **Android 端** | `../FireGo` | WebView 壳子，Kotlin |
+| **Android 端** | `../Android-warpper` | WebView 壳子，Kotlin |
 
 ### 跨端联动场景
 
@@ -56,7 +140,7 @@
 |------|--------------|
 | JS Bridge 接口变更 | 三端都要改 |
 | 新增原生功能（推送、音频） | iOS + Android |
-| 纯 Web UI/逻辑改动 | 仅 firego-app |
+| 纯 Web UI/逻辑改动 | 仅前端（Lumi-front-end） |
 | Deep Link / URL Scheme | 三端都要改 |
 
 ### 跨仓库操作命令
@@ -66,10 +150,11 @@
 ls ../mindboat-ios-web-warpper/
 
 # 查看 Android 仓库
-ls ../FireGo/
+ls ../Android-warpper/
 
-# 在 iOS 仓库执行 git 操作
+# 在其他仓库执行 git 操作
 git -C ../mindboat-ios-web-warpper status
+git -C ../Android-warpper status
 ```
 
 ---
@@ -103,33 +188,94 @@ docs/
 ## 🔧 常用命令
 
 ```bash
-npm run dev      # 启动开发服务器
-npm run build    # 构建生产版本
-npm run lint     # 代码检查
+npm run dev          # 启动开发服务器（使用当前 .env.local 配置）
+npm run dev:local    # 连接本地 Supabase 开发
+npm run dev:remote   # 连接远程 Supabase 开发
+npm run build        # 构建生产版本
+npm run lint         # 代码检查
 ```
+
+---
+
+## 🔄 前后端分离开发流程
+
+### 仓库说明
+
+| 仓库 | 路径 | 说明 |
+|------|------|------|
+| **前端（当前）** | `Lumi-front-end/` | React 前端 |
+| **后端** | `../Lumi-backend/` | Supabase 后端（迁移、Edge Functions） |
+
+### 切换 Supabase 环境
+
+| 命令 | 连接目标 | 适用场景 |
+|------|---------|---------|
+| `npm run dev:local` | 本地 Supabase (`127.0.0.1:54321`) | 开发新功能、调试后端 |
+| `npm run dev:remote` | 云端 Supabase | 只改前端、测试生产数据 |
+
+### 完整本地开发流程（推荐）
+
+```bash
+# ============================================
+# 终端 1：启动后端（在 Lumi-backend 目录）
+# ============================================
+cd ../Lumi-backend
+npm run supabase:start       # 启动 Supabase 服务
+npm run supabase:functions   # 启动 Edge Functions（AI 功能需要）
+
+# ============================================
+# 终端 2：启动前端（在 Lumi-front-end 目录）
+# ============================================
+cd ../Lumi-front-end
+npm run dev:local            # 自动切换到本地配置并启动
+
+# 访问 http://localhost:5173
+```
+
+### 仅前端开发流程（不需要后端改动）
+
+```bash
+# 直接连接远程 Supabase，无需启动本地服务
+npm run dev:remote
+```
+
+### 环境配置文件
+
+| 文件 | 作用 | Git 追踪 |
+|------|------|---------|
+| `.env.supabase-local` | 本地 Supabase 配置 | ✅ 是 |
+| `.env.supabase-remote` | 远程 Supabase 配置 | ✅ 是 |
+| `.env.local` | 当前生效配置 | ❌ 否（由脚本生成） |
+
+**原理**：`npm run dev:local` 会执行 `cp .env.supabase-local .env.local && vite`
 
 ---
 
 ## 🗄️ Supabase 本地开发
 
+> ⛔ **强制规则**：任何涉及后端的改动，都**只能**在本地 Supabase 进行（仓库路径：`../Lumi-backend/`）。
+> **严禁**在用户未明确授权的情况下修改云端 Supabase！
+
 ### ⛔ 云端部署安全规则（强制）
 
 | 规则 | 说明 |
 |------|------|
-| **默认本地开发** | 所有 Supabase 代码（迁移、Edge Functions、RPC）默认在本地环境开发和测试 |
-| **禁止未授权部署** | **严禁**在未经用户明确授权的情况下，将代码部署到云端 Supabase |
-| **本地测试优先** | 必须先在本地验证通过后，再请求用户授权部署到云端 |
+| **仅限本地开发** | 所有 Supabase 代码（迁移、Edge Functions、RPC）**只能**在本地环境开发和测试 |
+| **严禁未授权云端操作** | **严禁**在未经用户明确授权的情况下，对云端 Supabase 进行任何读写操作 |
+| **本地验证必须通过** | 必须先在本地验证通过后，再请求用户授权部署到云端 |
 
-**禁止的操作**（除非用户明确要求）：
-- `npx supabase db push`（不带 `--local`）→ 会推送到云端
-- `npx supabase functions deploy` → 会部署到云端
-- `npx supabase migrations push` → 会推送到云端
+**🚫 绝对禁止的操作**（除非用户**明确说**"部署到云端"）：
+- `npx supabase db push`（不带 `--local`）→ 会推送到云端 ❌
+- `npx supabase functions deploy` → 会部署到云端 ❌
+- `npx supabase migrations push` → 会推送到云端 ❌
+- 任何不带 `--local` 标志的 Supabase CLI 命令 ❌
 
-**正确流程**：
-1. 在本地开发和测试（使用 `--local` 标志）
-2. 验证功能正常
-3. **询问用户**是否要部署到云端
-4. 获得授权后才能执行云端部署命令
+**✅ 正确流程**：
+1. 在 `../Lumi-backend/` 仓库中进行所有后端改动
+2. 使用 `--local` 标志在本地开发和测试
+3. 验证功能正常
+4. **主动询问用户**："本地测试通过，是否需要部署到云端？"
+5. **只有**获得用户明确授权后，才能执行云端部署命令
 
 ### 本地数据库更改必须持久化
 

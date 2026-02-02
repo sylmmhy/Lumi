@@ -29,6 +29,11 @@ export interface Task {
    * true 时显示 "+15 mins · later" 标签
    */
   isSnoozed?: boolean | null
+  /**
+   * 跳过的日期（YYYY-MM-DD 格式）
+   * 如果设置为今天的日期，AI 今天不会打电话提醒
+   */
+  skippedForDate?: string | null
 
   // Success metadata fields - 成功元数据字段
   /**

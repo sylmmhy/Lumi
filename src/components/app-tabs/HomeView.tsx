@@ -267,6 +267,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setEditingTask(null);
     };
 
+    // Handle skip for day - 跳过今天的任务
+    const handleSkipForDay = (task: Task) => {
+        if (!onUpdateTask) return;
+
+        const today = getLocalDateString(new Date());
+        const updatedTask: Task = {
+            ...task,
+            skippedForDate: today,
+        };
+
+        onUpdateTask(updatedTask);
+    };
+
     // 显示所有任务（routine + todo），包括已完成的
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
     // routine_instance 的 snooze 状态会同步到对应的 routine 模板上（在 AppTabsPage.loadTasks 中处理）
@@ -455,6 +468,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
                                         onEdit={handleEditTask}
+                                        onSkipForDay={handleSkipForDay}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -466,6 +480,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
                                         />
                                     </div>
                                 )}
@@ -478,6 +493,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
                                         />
                                     </div>
                                 )}
@@ -490,6 +506,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
                                         />
                                     </div>
                                 )}
@@ -502,6 +519,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
                                         />
                                     </div>
                                 )}

@@ -274,6 +274,18 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   }, [audioOutput]);
 
   /**
+   * 仅断开 Gemini 会话，保留麦克风/摄像头采集。
+   * 用于篝火陪伴模式的“空闲休眠”场景，方便用户开口后快速重连。
+   */
+  const disconnectSessionOnly = useCallback(() => {
+    devLog('💤 Disconnecting Gemini session only (keep media active)...');
+
+    analytics.trackDisconnect();
+    session.disconnect();
+    audioOutput.stop();
+  }, [session, audioOutput, analytics]);
+
+  /**
    * 断开连接并清理所有资源
    */
   const disconnect = useCallback(() => {
@@ -407,14 +419,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
 
     // 执行静默注入
-    const success = session.sendClientContent(content, false);
-
-    if (!success) {
-      if (import.meta.env.DEV) {
-        console.warn('⚠️ [GeminiLive] 静默注入失败: sendClientContent 返回 false');
-      }
-      return false;
-    }
+    session.sendClientContent(content, false);
 
     if (import.meta.env.DEV) {
       console.log('🔇 [GeminiLive] 静默注入上下文:', content.substring(0, 80) + (content.length > 80 ? '...' : ''));
@@ -481,6 +486,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     // Actions
     connect,
     disconnect,
+    disconnectSessionOnly,
     stopAudio,
     toggleMicrophone,
     toggleCamera,

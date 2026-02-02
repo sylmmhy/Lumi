@@ -10,6 +10,7 @@ import { DevTestPage } from './pages/DevTestPage'
 import { LandingPageWrapper } from './pages/LandingPageWrapper'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
+import { CampfireCompanionPage } from './pages/CampfireCompanionPage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PermissionProvider } from './context/PermissionContext'
@@ -84,6 +85,7 @@ function App() {
           <Route path="/habit-onboarding" element={<HabitOnboardingPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfUsePage />} />
+          <Route path="/campfire" element={<CampfireCompanionPage />} />
           <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />
           <Route path="/app/:tab" element={<AppTabsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

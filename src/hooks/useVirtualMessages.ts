@@ -50,6 +50,8 @@ export interface UseVirtualMessagesOptions {
   initialDuration?: number;
   /** 用户首选语言，用于触发词中携带语言信息，确保 AI 回复使用正确语言 */
   preferredLanguage?: string;
+  /** 静默模式：用户请求安静陪伴，停止所有主动消息 */
+  silentMode?: boolean;
 }
 
 // 冷却时间：15秒
@@ -59,6 +61,12 @@ const INITIAL_DELAY_MS = 0;
 // 检查间隔：每5秒检查一次
 const CHECK_INTERVAL_MS = 5000;
 
+/**
+ * 虚拟消息调度 Hook（AI 主动问候与鼓励）
+ *
+ * @param {UseVirtualMessagesOptions} options - 虚拟消息配置
+ * @returns 虚拟消息控制方法
+ */
 export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const {
     enabled,
@@ -71,6 +79,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     successRecord,
     initialDuration = 300, // 默认5分钟
     preferredLanguage = 'en-US', // 默认英文，确保触发词携带语言信息
+    silentMode = false, // 默认非静默模式
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -79,6 +88,10 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const lastUserSpeechRef = useRef(lastUserSpeechTime);
   const lastVirtualMessageTimeRef = useRef<number>(0);
   const lastTurnCompleteTimeRef = useRef<number>(0);
+  const silentModeRef = useRef(silentMode);
+  const initializedTaskStartRef = useRef<number>(0);
+  const openingSentTaskStartRef = useRef<number>(0);
+  const sentMemoryBoostCheckpointsRef = useRef<Set<number>>(new Set());
 
   // 更新 refs
   useEffect(() => {
@@ -92,6 +105,10 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   useEffect(() => {
     lastUserSpeechRef.current = lastUserSpeechTime;
   }, [lastUserSpeechTime]);
+
+  useEffect(() => {
+    silentModeRef.current = silentMode;
+  }, [silentMode]);
 
   /**
    * 记录 AI 完成回复的时间
@@ -120,6 +137,14 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
    * 返回 true 表示不应该发送虚拟消息
    */
   const isUserInConversation = useCallback(() => {
+    // 检查 0: 静默模式 → 停止所有主动消息
+    if (silentModeRef.current) {
+      if (import.meta.env.DEV) {
+        console.log('🤫 ⏸️ 跳过虚拟消息 - 静默模式');
+      }
+      return true; // 返回 true 表示不发送
+    }
+
     // 检查 1: 用户正在说话 (VAD 检测)
     if (userSpeakingRef.current) {
       if (import.meta.env.DEV) {
@@ -345,13 +370,23 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       return;
     }
 
-    // 🔑 关键：重置所有冷却时间，确保新任务不受旧任务影响
-    lastVirtualMessageTimeRef.current = 0;
-    lastTurnCompleteTimeRef.current = 0;
+    // 仅在“新会话”时重置状态；重连时不重置，避免重复 opening 影响上下文连续性
+    const isNewSession = initializedTaskStartRef.current !== taskStartTime;
+    if (isNewSession) {
+      initializedTaskStartRef.current = taskStartTime;
+      openingSentTaskStartRef.current = 0;
+      sentMemoryBoostCheckpointsRef.current.clear();
+      lastVirtualMessageTimeRef.current = 0;
+      lastTurnCompleteTimeRef.current = 0;
+    }
 
     if (import.meta.env.DEV) {
-      console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);
-      console.log('🔄 冷却时间已重置');
+      if (isNewSession) {
+        console.log(`🤖 虚拟消息系统已激活 - AI 将在 ${INITIAL_DELAY_MS / 1000} 秒后说话`);
+        console.log('🔄 冷却时间已重置');
+      } else {
+        console.log('🔁 虚拟消息系统已恢复（重连场景，不发送 opening）');
+      }
       if (successRecord && successRecord.totalCompletions > 0) {
         console.log(`🏆 记忆增强已启用 - 用户有 ${successRecord.totalCompletions} 次成功记录，连胜 ${successRecord.currentStreak} 天`);
       }
@@ -371,13 +406,18 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       }, CHECK_INTERVAL_MS);
     };
 
-    // 初始消息：使用 'opening' 类型触发 AI 开场白
-    const initialTimeoutId = setTimeout(async () => {
-      if (!isActive) return;
-      await sendVirtualMessageInternal('opening');
-      // 开始定期检查
+    // 初始消息：仅新会话发送 opening；重连后直接恢复定期检查
+    let initialTimeoutId: NodeJS.Timeout | null = null;
+    if (isNewSession && openingSentTaskStartRef.current !== taskStartTime) {
+      initialTimeoutId = setTimeout(async () => {
+        if (!isActive) return;
+        openingSentTaskStartRef.current = taskStartTime;
+        await sendVirtualMessageInternal('opening');
+        scheduleNextCheck();
+      }, INITIAL_DELAY_MS);
+    } else {
       scheduleNextCheck();
-    }, INITIAL_DELAY_MS);
+    }
 
     // 🏆 记忆增强检查点 - 在关键时刻注入成功记录
     // 只有当用户有成功记录时才启用
@@ -389,26 +429,44 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
         { time: 240 * 1000, label: '4分钟' },     // 4分钟：接近结束，庆祝连胜
       ];
 
+      const elapsedMs = Math.max(0, Date.now() - taskStartTime);
       for (const checkpoint of memoryBoostCheckpoints) {
+        if (sentMemoryBoostCheckpointsRef.current.has(checkpoint.time)) {
+          continue;
+        }
+
+        const remainingMs = checkpoint.time - elapsedMs;
+        if (remainingMs <= 0) {
+          // 已过期的检查点不补发，避免重连后时间线错位
+          sentMemoryBoostCheckpointsRef.current.add(checkpoint.time);
+          continue;
+        }
+
         const timeout = setTimeout(async () => {
           if (!isActive) return;
+          if (sentMemoryBoostCheckpointsRef.current.has(checkpoint.time)) {
+            return;
+          }
           // 只有在用户不说话时才发送
           if (!isUserInConversation()) {
             if (import.meta.env.DEV) {
               console.log(`🏆 记忆增强检查点 [${checkpoint.label}] - 发送 memory_boost`);
             }
+            sentMemoryBoostCheckpointsRef.current.add(checkpoint.time);
             await sendVirtualMessageInternal('memory_boost');
           } else if (import.meta.env.DEV) {
             console.log(`🏆 记忆增强检查点 [${checkpoint.label}] - 跳过（用户在对话中）`);
           }
-        }, checkpoint.time);
+        }, remainingMs);
         memoryBoostTimeouts.push(timeout);
       }
     }
 
     return () => {
       isActive = false;
-      clearTimeout(initialTimeoutId);
+      if (initialTimeoutId) {
+        clearTimeout(initialTimeoutId);
+      }
       if (recurringTimeoutId) {
         clearTimeout(recurringTimeoutId);
       }

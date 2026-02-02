@@ -8,6 +8,7 @@
  */
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { calculateCurrentStreak } from './heatmapHelpers';
 import type { Habit } from './types';
@@ -305,10 +306,10 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                 })}
             </div>
 
-            {/* 取消打卡确认弹窗 */}
-            {showCancelConfirm && (
+            {/* 取消打卡确认弹窗 - 使用 Portal 渲染到 body */}
+            {showCancelConfirm && createPortal(
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
                     onClick={(e) => {
                         e.stopPropagation();
                         setShowCancelConfirm(false);
@@ -347,7 +348,8 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* CSS 动画 */}

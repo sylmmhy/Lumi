@@ -7,7 +7,7 @@
  * - EnergyBall 已移至 StatsView 以便控制层级
  */
 
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface StatsHeaderProps {

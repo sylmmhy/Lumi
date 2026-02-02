@@ -25,6 +25,7 @@ interface TaskRecord {
   task_type: 'todo' | 'routine' | 'routine_instance' | null; // 任务类型
   time_category: 'morning' | 'noon' | 'afternoon' | 'evening' | 'latenight' | null; // 时间分类
   called: boolean; // AI 是否已打电话
+  is_skip: boolean; // 用户是否点击了跳过今天按钮（仅用于行为统计）
   is_recurring: boolean; // 是否重复
   recurrence_pattern: RecurrencePattern | null; // 重复模式
   recurrence_days: number[] | null; // 重复日期
@@ -122,6 +123,7 @@ function dbToTask(record: TaskRecord): Task {
     type: record.task_type || 'todo',
     category: record.time_category || undefined,
     called: record.called,
+    isSkip: record.is_skip,
     isRecurring: record.is_recurring,
     timezone: record.timezone || undefined,
     recurrencePattern: record.recurrence_pattern || undefined,
@@ -447,6 +449,7 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   if (updates.type !== undefined) dbUpdates.task_type = updates.type;
   if (updates.category !== undefined) dbUpdates.time_category = updates.category || null;
   if (updates.called !== undefined) dbUpdates.called = updates.called;
+  if (updates.isSkip !== undefined) dbUpdates.is_skip = updates.isSkip;
   if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
   if (updates.recurrencePattern !== undefined) dbUpdates.recurrence_pattern = updates.recurrencePattern || null;
   if (updates.recurrenceDays !== undefined) dbUpdates.recurrence_days = updates.recurrenceDays || null;
@@ -556,16 +559,21 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
     const today = getLocalDateString();
 
     // 1. 把 routine 模板的 called 恢复为 false（不应该被改）
+    // 但保留 skipped_for_date 用于前端显示标签
     await supabase
       .from('tasks')
-      .update({ called: false })
+      .update({
+        called: false,
+        skipped_for_date: today, // 保留跳过日期，用于前端标签显示
+        is_skip: true, // 行为统计
+      })
       .eq('id', id)
       .eq('user_id', sessionUser.id);
 
-    // 2. 只更新今天的 routine_instance
+    // 2. 只更新今天的 routine_instance（同时记录 is_skip 用于行为统计）
     const { data: updatedInstances, error: syncError } = await supabase
       .from('tasks')
-      .update({ called: true })
+      .update({ called: true, is_skip: true })
       .eq('parent_routine_id', id)
       .eq('task_type', 'routine_instance')
       .eq('status', 'pending')
@@ -582,8 +590,10 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
       }
     }
 
-    // 更新返回的任务对象，保持 routine 的 called 为 false
+    // 更新返回的任务对象
     updatedTask.called = false;
+    updatedTask.skippedForDate = today;
+    updatedTask.isSkip = true;
   }
 
   // 🆕 对于非 routine 任务，如果修改了时间，重置 called 状态

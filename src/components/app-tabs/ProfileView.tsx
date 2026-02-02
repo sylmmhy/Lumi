@@ -14,6 +14,7 @@ import { getRingtoneType, setRingtoneType, type RingtoneType } from '../../lib/r
 import { getVoiceMode, setVoiceMode, isLiveKitAvailable, type VoiceMode } from '../../lib/liveKitSettings';
 import { getVoiceName, setVoiceName, getVoicesByGender, getVoicePreviewUrl, mapUILanguageToPreviewLanguage, type VoiceName } from '../../lib/voiceSettings';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useScreenTime } from '../../hooks/useScreenTime';
 
 interface ProfileViewProps {
     isPremium: boolean;
@@ -63,6 +64,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     // LiveKit mode state (iOS only)
     const [showLiveKitOption] = useState<boolean>(isLiveKitAvailable());
     const [currentVoiceMode, setCurrentVoiceMode] = useState<VoiceMode>(getVoiceMode());
+
+    // Screen Time state (iOS only)
+    const screenTime = useScreenTime();
 
     // AI Voice state
     const [currentVoiceName, setCurrentVoiceName] = useState<VoiceName>(getVoiceName());
@@ -552,7 +556,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     {showLiveKitOption && (
                         <button
                             onClick={handleVoiceModeToggle}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                            className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${screenTime.isAvailable ? 'border-b border-gray-100' : ''}`}
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center">
@@ -570,6 +574,49 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                 <div className={`w-12 h-7 rounded-full p-1 transition-colors ${currentVoiceMode === 'livekit' ? 'bg-green-500' : 'bg-gray-300'}`}>
                                     <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${currentVoiceMode === 'livekit' ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </div>
+                            </div>
+                        </button>
+                    )}
+
+                    {/* Screen Time Setting - iOS Only */}
+                    {screenTime.isAvailable && (
+                        <button
+                            onClick={() => {
+                                if (!screenTime.status.isAuthorized) {
+                                    screenTime.requestAuthorization();
+                                } else {
+                                    screenTime.showAppPicker();
+                                }
+                            }}
+                            disabled={screenTime.isLoading}
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center">
+                                    <i className="fa-solid fa-hourglass-half text-indigo-500"></i>
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-medium text-gray-800">{t('profile.screenTime')}</p>
+                                    <p className="text-sm text-gray-400">{t('profile.screenTimeHint')}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {screenTime.isLoading ? (
+                                    <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                                ) : screenTime.status.isConfigured ? (
+                                    <span className="text-sm text-green-500">
+                                        {screenTime.status.appsCount} {t('profile.appsSelected')}
+                                    </span>
+                                ) : screenTime.status.isAuthorized ? (
+                                    <span className="text-sm text-gray-500">
+                                        {t('profile.selectApps')}
+                                    </span>
+                                ) : (
+                                    <span className="text-sm text-orange-500">
+                                        {t('profile.notAuthorized')}
+                                    </span>
+                                )}
+                                <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
                             </div>
                         </button>
                     )}

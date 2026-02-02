@@ -110,7 +110,9 @@ const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
  */
 export const StatsCard: React.FC<StatsCardProps> = ({
     habit,
+    onToggleToday,
     onClickDetail,
+    onCheckIn,
     onStartTask,
 }) => {
     const todayKey = getLocalDateString();
@@ -119,6 +121,8 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     // 动画状态
     const [isPressed, setIsPressed] = useState(false);
     const [showConfetti] = useState(false);
+    // 取消打卡确认弹窗状态
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
     // 获取引导语
     const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);
@@ -149,6 +153,35 @@ export const StatsCard: React.FC<StatsCardProps> = ({
         // 启动 AI Coach 任务（传递习惯 ID 和名称，用于完成时更新正确的习惯记录）
         if (onStartTask) {
             onStartTask(habit.id, habit.title);
+        }
+    };
+
+    /**
+     * 处理今天圆圈点击
+     * - 未完成：直接打卡
+     * - 已完成：弹出确认取消弹窗
+     */
+    const handleTodayCircleClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        if (isTodayDone) {
+            // 已完成，显示取消确认弹窗
+            setShowCancelConfirm(true);
+        } else {
+            // 未完成，直接打卡
+            if (onCheckIn) {
+                await onCheckIn(habit.id);
+            }
+        }
+    };
+
+    /**
+     * 确认取消打卡
+     */
+    const handleConfirmCancel = () => {
+        setShowCancelConfirm(false);
+        if (onToggleToday) {
+            onToggleToday();
         }
     };
 
@@ -248,15 +281,16 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                             >
                                 {WEEKDAY_LABELS[index]}
                             </span>
-                            {/* 打卡状态圆圈 */}
+                            {/* 打卡状态圆圈 - 今天的可点击 */}
                             <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${
                                     isCompleted
                                         ? ''
                                         : isToday
                                           ? 'border-2 border-amber-400 bg-amber-50'
                                           : 'border-2 border-gray-200 bg-gray-50'
-                                }`}
+                                } ${isToday ? 'cursor-pointer active:scale-90' : ''}`}
+                                onClick={isToday ? handleTodayCircleClick : undefined}
                             >
                                 {isCompleted ? (
                                     <img
@@ -270,6 +304,51 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                     );
                 })}
             </div>
+
+            {/* 取消打卡确认弹窗 */}
+            {showCancelConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCancelConfirm(false);
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-2xl p-6 mx-6 max-w-sm w-full shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">
+                            {containsChinese(habit.title) ? '取消今日打卡？' : 'Cancel today\'s check-in?'}
+                        </h3>
+                        <p className="text-gray-500 text-sm mb-6">
+                            {containsChinese(habit.title)
+                                ? '取消后，今天的进度将不会被记录。'
+                                : 'Your progress for today will not be recorded.'}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-medium"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowCancelConfirm(false);
+                                }}
+                            >
+                                {containsChinese(habit.title) ? '保留' : 'Keep'}
+                            </button>
+                            <button
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConfirmCancel();
+                                }}
+                            >
+                                {containsChinese(habit.title) ? '取消打卡' : 'Cancel'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* CSS 动画 */}
             <style>{`

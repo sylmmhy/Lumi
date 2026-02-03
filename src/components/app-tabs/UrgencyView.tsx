@@ -11,8 +11,6 @@ interface UrgencyViewProps {
   onToggleComplete: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onRegisterHelpMeStart?: (handler: (() => void) | null) => void;
-  /** 打开篝火陪伴模式入口（可选） */
-  onOpenCampfire?: () => void;
 }
 
 interface CustomTaskFormProps {
@@ -116,7 +114,6 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
 export const UrgencyView: React.FC<UrgencyViewProps> = ({
   onStartTask,
   onRegisterHelpMeStart,
-  onOpenCampfire,
 }) => {
     const { t } = useTranslation();
     const [customTask, setCustomTask] = useState('');
@@ -188,14 +185,6 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({
                         onQuickFill={setCustomTask}
                         onRegisterSubmit={onRegisterHelpMeStart}
                     />
-                    {onOpenCampfire && (
-                        <button
-                            onClick={onOpenCampfire}
-                            className="mt-6 rounded-full border border-[#bc3813]/20 bg-[#ffe7ba] px-6 py-2 text-sm font-semibold text-[#bc3813] transition-transform hover:scale-[1.02]"
-                        >
-                            🔥 进入篝火陪伴模式
-                        </button>
-                    )}
                 </div>
             </div>
         </div>

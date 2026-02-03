@@ -1426,9 +1426,6 @@ export function AppTabsPage() {
                         onToggleComplete={toggleComplete}
                         onDeleteTask={handleDeleteTask}
                         onRegisterHelpMeStart={registerUrgencyStart}
-                        onOpenCampfire={() => {
-                            navigate('/campfire');
-                        }}
                     />
                 )}
 

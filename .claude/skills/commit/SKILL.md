@@ -76,26 +76,27 @@ git diff
 
 分析所有变更，生成符合 Conventional Commits 规范的中文 commit message。
 
+**永远不要把你加入到Co-author列表中！**
+
 **格式**：
 ```
 <type>(<scope>): <简短描述>
 
 <详细说明（可选）>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 **type 类型**：
-| type | 说明 |
-|------|------|
-| feat | 新功能 |
-| fix | Bug 修复 |
-| docs | 文档变更 |
-| style | 代码格式（不影响功能） |
+| type     | 说明                         |
+| -------- | ---------------------------- |
+| feat     | 新功能                       |
+| fix      | Bug 修复                     |
+| docs     | 文档变更                     |
+| style    | 代码格式（不影响功能）       |
 | refactor | 重构（不是新功能也不是修复） |
-| perf | 性能优化 |
-| test | 测试相关 |
-| chore | 构建/工具/依赖变更 |
+| perf     | 性能优化                     |
+| test     | 测试相关                     |
+| chore    | 构建/工具/依赖变更           |
 
 **示例**：
 ```
@@ -104,7 +105,6 @@ feat(auth): 添加用户登录功能
 - 实现邮箱密码登录
 - 添加登录状态持久化
 
-Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 ### 5. 确认并提交
@@ -130,8 +130,6 @@ git add <file1> <file2> ...
 # 提交（使用 HEREDOC 确保格式正确）
 git commit -m "$(cat <<'EOF'
 <commit message>
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```

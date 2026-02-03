@@ -84,25 +84,28 @@ export function CampfireCompanionPage() {
   }
 
   return (
-    <>
-      <canvas ref={canvasRef} className="hidden" />
-      <CampfireView
-        onBack={handleBack}
-        onStartSession={handleStartSession}
-        onEndSession={handleEndSession}
-        isSessionActive={isSessionActive}
-        isConnecting={isConnecting}
-        isAISpeaking={isSpeaking}
-        isSilentMode={isSilentMode}
-        onEnterSilentMode={import.meta.env.DEV ? handleEnterSilentMode : undefined}
-        showDebugControls={import.meta.env.DEV}
-      />
+    <div className="fixed inset-0 w-full h-full bg-white md:bg-gray-100 flex flex-col items-center md:justify-center font-sans overflow-hidden">
+      {/* Main Shell: 与 AppTabsPage 保持一致的手机壳样式 */}
+      <div className="w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col">
+        <canvas ref={canvasRef} className="hidden" />
+        <CampfireView
+          onBack={handleBack}
+          onStartSession={handleStartSession}
+          onEndSession={handleEndSession}
+          isSessionActive={isSessionActive}
+          isConnecting={isConnecting}
+          isAISpeaking={isSpeaking}
+          isSilentMode={isSilentMode}
+          onEnterSilentMode={import.meta.env.DEV ? handleEnterSilentMode : undefined}
+          showDebugControls={import.meta.env.DEV}
+        />
 
-      {(uiError || connectionError) && (
-        <div className="fixed left-1/2 top-8 z-[70] -translate-x-1/2 rounded-xl bg-red-500/85 px-4 py-2 text-sm text-white shadow-lg">
-          {uiError || connectionError}
-        </div>
-      )}
-    </>
+        {(uiError || connectionError) && (
+          <div className="fixed left-1/2 top-8 z-[70] -translate-x-1/2 rounded-xl bg-red-500/85 px-4 py-2 text-sm text-white shadow-lg">
+            {uiError || connectionError}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

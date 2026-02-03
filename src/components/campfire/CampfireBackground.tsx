@@ -39,7 +39,7 @@ export const CampfireBackground: React.FC<CampfireBackgroundProps> = ({
 
   return (
     <div
-      className="fixed inset-0 w-full h-full overflow-hidden"
+      className="absolute inset-0 w-full h-full overflow-hidden z-0"
       style={{ backgroundColor: config.bgColor }}
     >
       {/* 图片容器 - 宽度 100%，高度按比例自动，顶部对齐 */}

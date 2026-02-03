@@ -56,12 +56,32 @@ export async function handleSuggestHabitStack(
     }
 
     if (data.suggestions?.length === 0) {
+      // 检查是否是因为没有锚点习惯
+      if (data.noAnchor) {
+        return {
+          success: true,
+          data: {
+            ...data,
+            needsTimeInput: true, // 标记需要用户输入时间
+            habitName: data.newHabitName || newHabit, // 传递习惯名称
+          },
+          responseHint: preferredLanguage?.startsWith('zh')
+            ? `好的，我帮你设置「${newHabit}」的每日提醒。你想每天几点提醒你呢？`
+            : `Sure, I'll set up a daily reminder for "${newHabit}". What time would you like me to remind you each day?`,
+        };
+      }
+      
+      // 有锚点但没有合适的挂载点
       return {
         success: true,
-        data,
+        data: {
+          ...data,
+          needsTimeInput: true,
+          habitName: newHabit,
+        },
         responseHint: preferredLanguage?.startsWith('zh')
-          ? `你还没有足够稳定的习惯可以作为锚点。建议先坚持一个简单的习惯两周以上，比如每天喝水或者刷牙后做某件事。等你有了稳定的习惯，我就能帮你把「${newHabit}」挂载上去了。`
-          : `You don't have stable habits yet to use as anchors. Try sticking to a simple habit for two weeks first, like drinking water or doing something after brushing your teeth. Once you have stable habits, I can help you stack "${newHabit}" onto them.`,
+          ? `暂时没找到特别合适的挂载点。要不我帮你设置一个每日提醒？你想几点提醒？`
+          : `I couldn't find a perfect spot to stack this habit. Want me to set up a standalone daily reminder instead? What time works for you?`,
       };
     }
 
@@ -70,8 +90,17 @@ export async function handleSuggestHabitStack(
     const anchorTitle = topSuggestion.anchor_title;
     const position = topSuggestion.position === 'after' ? '之后' : '之前';
     const positionEn = topSuggestion.position;
-    const confidence = Math.round(topSuggestion.confidence * 100);
-    const reasoning = topSuggestion.reasoning;
+    
+    // 获取锚点习惯的统计数据
+    const anchor = data.anchors?.find((a: { task_id: string }) => a.task_id === topSuggestion.anchor_task_id);
+    const completionRate = anchor?.completion_rate || 85;
+    const avgTime = anchor?.avg_time || '';
+    
+    // 构建更专业的说明
+    const timeInfo = avgTime ? `你通常在 ${avgTime} 左右完成它。` : '';
+    const scienceReason = topSuggestion.position === 'after' 
+      ? `刚完成一件事时大脑会释放多巴胺，这时开始新习惯更容易坚持。`
+      : `在固定习惯前做新事，可以借助已有的仪式感帮助记忆。`;
 
     return {
       success: true,
@@ -86,8 +115,8 @@ export async function handleSuggestHabitStack(
         },
       },
       responseHint: preferredLanguage?.startsWith('zh')
-        ? `我分析了你的习惯数据，发现「${anchorTitle}」是你最稳定的习惯。我建议你在「${anchorTitle}」${position}做「${newHabit}」，成功率预计有 ${confidence}%。${reasoning} 要帮你设置这个提醒吗？`
-        : `I analyzed your habit data and found that "${anchorTitle}" is your most stable habit. I suggest doing "${newHabit}" ${positionEn} "${anchorTitle}", with an estimated ${confidence}% success rate. ${reasoning} Would you like me to set up this reminder?`,
+        ? `我分析了你过去两周的数据，「${anchorTitle}」是你最稳定的习惯，完成率达到 ${completionRate}%。${timeInfo}我建议你在「${anchorTitle}」${position}做「${newHabit}」。${scienceReason}要帮你设置这个提醒吗？`
+        : `I analyzed your data from the past two weeks. "${anchorTitle}" is your most stable habit with a ${completionRate}% completion rate. ${avgTime ? `You usually complete it around ${avgTime}. ` : ''}I suggest doing "${newHabit}" ${positionEn} "${anchorTitle}". When you finish a task, your brain releases dopamine, making it easier to start a new habit. Would you like me to set this up?`,
     };
 
   } catch (error) {
@@ -178,7 +207,7 @@ export async function handleCreateHabitStack(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { preferredLanguage } = context;
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
   const anchorTaskId = args.anchor_task_id as string;
   const newHabitTitle = args.new_habit_title as string;
   const position = args.position as string;
@@ -187,22 +216,35 @@ export async function handleCreateHabitStack(
   console.log('🔧 [Tool] create_habit_stack 调用:', { anchorTaskId, newHabitTitle, position });
 
   try {
-    // 注意：这里需要先创建新习惯的 task，然后再创建 habit_stack
-    // 简化起见，我们先返回一个模拟成功的响应
-    // TODO: 实现完整的创建流程
-
-    return {
-      success: true,
-      data: {
-        created: true,
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-habit-stack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
         anchor_task_id: anchorTaskId,
         new_habit_title: newHabitTitle,
         position,
         reminder_message: reminderMessage,
-      },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] create_habit_stack 结果:', data);
+
+    return {
+      success: true,
+      data,
       responseHint: preferredLanguage?.startsWith('zh')
-        ? `好的，我已经帮你设置好了！以后你完成那个习惯${position === 'after' ? '之后' : '之前'}，我会提醒你「${newHabitTitle}」。加油！`
-        : `Done! I've set it up for you. I'll remind you to "${newHabitTitle}" ${position} that habit. You got this!`,
+        ? `好的，我已经帮你设置好了！以后你完成「${data.anchorTitle}」${position === 'after' ? '之后' : '之前'}，我会提醒你「${newHabitTitle}」。加油！`
+        : `Done! I'll remind you to "${newHabitTitle}" ${position} "${data.anchorTitle}". You got this!`,
     };
 
   } catch (error) {
@@ -238,8 +280,14 @@ export async function handleToolCall(
     case 'get_daily_report':
       return handleGetDailyReport(args, context);
 
+    case 'save_goal_plan':
+      return handleSaveGoalPlan(args, context);
+
     case 'create_habit_stack':
       return handleCreateHabitStack(args, context);
+
+    case 'create_simple_routine':
+      return handleCreateSimpleRoutine(args, context);
 
     default:
       console.warn(`⚠️ [ToolDispatcher] 未知工具: ${functionName}`);
@@ -248,5 +296,113 @@ export async function handleToolCall(
         error: `Unknown tool: ${functionName}`,
         responseHint: 'I don\'t know how to do that yet.',
       };
+  }
+}
+
+/**
+ * 处理 save_goal_plan 工具调用
+ */
+export async function handleSaveGoalPlan(
+  args: Record<string, unknown>,
+  context: ToolCallContext
+): Promise<ToolCallResult> {
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  
+  console.log('🔧 [Tool] save_goal_plan 调用:', args);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/save-goal-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
+        ...args,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] save_goal_plan 结果:', data);
+
+    return {
+      success: true,
+      data,
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? `好的，已经帮你保存了！我会按时提醒你～`
+        : `Done! I've saved your plan. I'll remind you on time.`,
+    };
+
+  } catch (error) {
+    console.error('❌ [Tool] save_goal_plan 错误:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+      responseHint: '抱歉，保存计划时出了点问题',
+    };
+  }
+}
+
+/**
+ * 处理 create_simple_routine 工具调用
+ * 直接创建一个独立的每日提醒任务
+ */
+export async function handleCreateSimpleRoutine(
+  args: Record<string, unknown>,
+  context: ToolCallContext
+): Promise<ToolCallResult> {
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  const habitName = args.habit_name as string;
+  const reminderTime = args.reminder_time as string;
+  const durationMinutes = (args.duration_minutes as number) || 5;
+
+  console.log('🛠️ [Tool] create_simple_routine 调用:', { habitName, reminderTime });
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-simple-routine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
+        habit_name: habitName,
+        reminder_time: reminderTime,
+        duration_minutes: durationMinutes,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] create_simple_routine 结果:', data);
+
+    return {
+      success: true,
+      data,
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? `好的，已经设置好了！我会每天 ${reminderTime} 提醒你「${habitName}」～`
+        : `Done! I'll remind you to "${habitName}" every day at ${reminderTime}.`,
+    };
+
+  } catch (error) {
+    console.error('❌ [Tool] create_simple_routine 错误:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? '抱歉，创建提醒时出了点问题'
+        : 'Sorry, there was an issue creating the reminder.',
+    };
   }
 }

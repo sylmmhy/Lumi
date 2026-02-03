@@ -92,6 +92,15 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
   
   // 正在处理中
   const isProcessingRef = useRef(false);
+  
+  // 待处理的最新 AI 回复（用于排队）
+  const pendingAIResponseRef = useRef<string | null>(null);
+  
+  // 已触发的工具记录（防止同一会话重复触发 save_goal_plan）
+  const triggeredToolsRef = useRef<Set<string>>(new Set());
+  
+  // 待创建的习惯名称（用于 create_simple_routine）
+  const pendingHabitRef = useRef<string | null>(null);
 
   // Supabase 配置
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -102,10 +111,18 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
    */
   const addUserMessage = useCallback((message: string) => {
     userMessagesRef.current.push(message);
-    // 只保留最近 5 条
-    if (userMessagesRef.current.length > 5) {
-      userMessagesRef.current = userMessagesRef.current.slice(-5);
+    // 只保留最近 10 条
+    if (userMessagesRef.current.length > 10) {
+      userMessagesRef.current = userMessagesRef.current.slice(-10);
     }
+  }, []);
+
+  /**
+   * 直接设置用户消息历史（替换整个数组）
+   */
+  const setUserMessages = useCallback((messages: string[]) => {
+    userMessagesRef.current = messages.slice(-10);
+    console.log('📝 [用户消息] 设置:', userMessagesRef.current);
   }, []);
 
   /**
@@ -114,6 +131,8 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
   const clearHistory = useCallback(() => {
     userMessagesRef.current = [];
     lastSuggestionRef.current = null;
+    pendingHabitRef.current = null; // 清空待创建习惯
+    triggeredToolsRef.current.clear(); // 重置已触发工具记录
   }, []);
 
   /**
@@ -132,6 +151,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           aiResponse,
           chatType,
           lastSuggestion: lastSuggestionRef.current,
+          pendingHabit: pendingHabitRef.current, // 待创建的习惯名称
         }),
       });
 
@@ -183,11 +203,23 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
       };
       console.log('💾 [IntentDetection] 保存推荐结果:', lastSuggestionRef.current);
     }
+    
+    // 如果是 suggest_habit_stack 但需要用户输入时间（没有锚点）
+    if (tool === 'suggest_habit_stack' && result.success && result.data?.needsTimeInput) {
+      pendingHabitRef.current = result.data.habitName as string;
+      console.log('💾 [IntentDetection] 保存待创建习惯:', pendingHabitRef.current);
+    }
 
     // 如果是 create_habit_stack 成功，清空推荐
     if (tool === 'create_habit_stack' && result.success) {
       lastSuggestionRef.current = null;
       console.log('🗑️ [IntentDetection] 清空推荐结果');
+    }
+    
+    // 如果是 create_simple_routine 成功，清空待创建习惯
+    if (tool === 'create_simple_routine' && result.success) {
+      pendingHabitRef.current = null;
+      console.log('🗑️ [IntentDetection] 清空待创建习惯');
     }
 
     return result;
@@ -212,45 +244,67 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
 
     // 防抖处理
     debounceTimerRef.current = setTimeout(async () => {
-      // 避免重复处理
+      // 如果正在处理，把这次请求存起来等待
       if (isProcessingRef.current) {
-        console.log('⏳ [IntentDetection] 正在处理中，跳过');
+        console.log('⏳ [IntentDetection] 正在处理中，将新请求加入队列');
+        pendingAIResponseRef.current = aiResponse;
         return;
       }
 
       isProcessingRef.current = true;
+      let currentResponse: string | null = aiResponse;
 
-      try {
-        console.log('🔍 [IntentDetection] 开始检测意图...');
-        
-        // 1. 调用检测 API
-        const detection = await detectIntent(aiResponse);
-        
-        console.log('🔍 [IntentDetection] 检测结果:', detection);
-
-        // 通知检测完成
-        onDetectionComplete?.(detection);
-
-        // 2. 如果检测到工具，执行它
-        if (detection.success && detection.tool && detection.confidence >= 0.6) {
-          console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
+      // 循环处理，直到没有待处理的请求
+      while (currentResponse) {
+        try {
+          console.log('🔍 [IntentDetection] 开始检测意图...');
           
-          const toolResult = await executeToolCall(detection.tool, detection.args);
+          // 1. 调用检测 API
+          const detection = await detectIntent(currentResponse);
           
-          // 通知工具结果
-          onToolResult?.({
-            ...toolResult,
-            tool: detection.tool,
-          });
-        } else if (detection.tool) {
-          console.log(`⚠️ [IntentDetection] 置信度不足，跳过: ${detection.tool} (${detection.confidence})`);
+          console.log('🔍 [IntentDetection] 检测结果:', detection);
+
+          // 通知检测完成
+          onDetectionComplete?.(detection);
+
+          // 2. 如果检测到工具，执行它
+          // 注意：AI 可能返回字符串 "null" 而不是真正的 null
+          const hasTool = detection.tool && detection.tool !== 'null';
+          if (detection.success && hasTool && detection.confidence >= 0.6) {
+            // 检查工具是否已触发过（防重复）
+            if (triggeredToolsRef.current.has(detection.tool)) {
+              console.log(`⚠️ [IntentDetection] ${detection.tool} 已触发过，跳过`);
+            } else {
+              console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
+              
+              const toolResult = await executeToolCall(detection.tool, detection.args);
+              
+              // 标记已触发的工具（防止重复触发）
+              if (toolResult.success && ['save_goal_plan', 'create_simple_routine', 'create_habit_stack'].includes(detection.tool)) {
+                triggeredToolsRef.current.add(detection.tool);
+                console.log(`✅ [IntentDetection] 已标记 ${detection.tool} 触发`);
+              }
+              
+              // 通知工具结果
+              onToolResult?.({
+                ...toolResult,
+                tool: detection.tool,
+              });
+            }
+          } else if (detection.tool && detection.tool !== 'null') {
+            console.log(`⚠️ [IntentDetection] 置信度不足，跳过: ${detection.tool} (${detection.confidence})`);
+          }
+
+        } catch (error) {
+          console.error('❌ [IntentDetection] 处理失败:', error);
         }
-
-      } catch (error) {
-        console.error('❌ [IntentDetection] 处理失败:', error);
-      } finally {
-        isProcessingRef.current = false;
+        
+        // 检查是否有待处理的请求
+        currentResponse = pendingAIResponseRef.current;
+        pendingAIResponseRef.current = null;
       }
+      
+      isProcessingRef.current = false;
     }, debounceMs);
   }, [enabled, debounceMs, detectIntent, executeToolCall, onToolResult, onDetectionComplete]);
 
@@ -259,6 +313,8 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     processAIResponse,
     // 添加用户消息
     addUserMessage,
+    // 直接设置用户消息历史
+    setUserMessages,
     // 清空历史
     clearHistory,
     // 获取当前推荐

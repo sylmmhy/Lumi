@@ -6,7 +6,6 @@ import {
   isHealthKitSupported,
   healthKitAsync,
 } from '../../lib/healthKitBridge';
-import type { HealthKitAvailableTypes, HKObjectTypeClass } from '../../lib/healthKitBridge';
 
 /**
  * HealthKit 元数据类型 - 直接存储 HealthKit 返回的 metadata 字典
@@ -32,6 +31,39 @@ interface HealthDataRecord {
   metadata: HealthKitMetadata | null;  // HealthKit 元数据
   created_at: string;
 }
+
+/**
+ * HK 标识符到简化名称的映射
+ * 数据库存储的是完整标识符（如 HKQuantityTypeIdentifierHeartRate）
+ * UI 配置使用简化名称（如 heart_rate）
+ */
+const HK_IDENTIFIER_TO_KEY: Record<string, string> = {
+  // 心脏
+  'HKQuantityTypeIdentifierHeartRate': 'heart_rate',
+  'HKQuantityTypeIdentifierRestingHeartRate': 'resting_heart_rate',
+  'HKQuantityTypeIdentifierHeartRateVariabilitySDNN': 'hrv',
+  'HKQuantityTypeIdentifierWalkingHeartRateAverage': 'walking_heart_rate',
+  // 活动
+  'HKQuantityTypeIdentifierStepCount': 'steps',
+  'HKQuantityTypeIdentifierDistanceWalkingRunning': 'distance',
+  'HKQuantityTypeIdentifierActiveEnergyBurned': 'active_energy',
+  'HKQuantityTypeIdentifierBasalEnergyBurned': 'basal_energy',
+  'HKQuantityTypeIdentifierFlightsClimbed': 'flights_climbed',
+  'HKQuantityTypeIdentifierAppleExerciseTime': 'exercise_time',
+  'HKQuantityTypeIdentifierAppleStandTime': 'stand_time',
+  // 睡眠
+  'HKCategoryTypeIdentifierSleepAnalysis': 'sleep',
+  // 身体
+  'HKQuantityTypeIdentifierBodyMass': 'body_mass',
+  'HKQuantityTypeIdentifierHeight': 'height',
+  'HKQuantityTypeIdentifierBodyMassIndex': 'bmi',
+  // 呼吸
+  'HKQuantityTypeIdentifierOxygenSaturation': 'oxygen_saturation',
+  'HKQuantityTypeIdentifierRespiratoryRate': 'respiratory_rate',
+  // 其他
+  'HKQuantityTypeIdentifierVO2Max': 'vo2_max',
+  'HKQuantityTypeIdentifierBodyTemperature': 'body_temperature',
+};
 
 /**
  * 数据类型配置
@@ -105,24 +137,73 @@ const DATA_TYPE_CONFIG: Record<string, {
     labelKey: 'activeEnergy',
     formatValue: (v, u) => v !== null ? `${Math.round(v)} ${u || 'kcal'}` : '-',
   },
+  basal_energy: {
+    icon: 'fa-battery-half',
+    iconBg: 'bg-yellow-50',
+    iconColor: 'text-yellow-600',
+    labelKey: 'basalEnergy',
+    formatValue: (v, u) => v !== null ? `${Math.round(v)} ${u || 'kcal'}` : '-',
+  },
+  walking_heart_rate: {
+    icon: 'fa-person-walking',
+    iconBg: 'bg-pink-50',
+    iconColor: 'text-pink-500',
+    labelKey: 'walkingHeartRate',
+    formatValue: (v, u) => v !== null ? `${Math.round(v)} ${u || 'bpm'}` : '-',
+  },
+  flights_climbed: {
+    icon: 'fa-stairs',
+    iconBg: 'bg-cyan-50',
+    iconColor: 'text-cyan-500',
+    labelKey: 'flightsClimbed',
+    formatValue: (v) => v !== null ? `${Math.round(v)} 层` : '-',
+  },
+  exercise_time: {
+    icon: 'fa-stopwatch',
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-500',
+    labelKey: 'exerciseTime',
+    formatValue: (v) => v !== null ? `${Math.round(v)} 分钟` : '-',
+  },
+  stand_time: {
+    icon: 'fa-person',
+    iconBg: 'bg-teal-50',
+    iconColor: 'text-teal-500',
+    labelKey: 'standTime',
+    formatValue: (v) => v !== null ? `${Math.round(v)} 分钟` : '-',
+  },
+  oxygen_saturation: {
+    icon: 'fa-lungs',
+    iconBg: 'bg-sky-50',
+    iconColor: 'text-sky-500',
+    labelKey: 'oxygenSaturation',
+    formatValue: (v) => v !== null ? `${(v * 100).toFixed(1)}%` : '-',
+  },
+  respiratory_rate: {
+    icon: 'fa-wind',
+    iconBg: 'bg-slate-50',
+    iconColor: 'text-slate-500',
+    labelKey: 'respiratoryRate',
+    formatValue: (v, u) => v !== null ? `${Math.round(v)} ${u || '次/分'}` : '-',
+  },
+  vo2_max: {
+    icon: 'fa-chart-line',
+    iconBg: 'bg-violet-50',
+    iconColor: 'text-violet-500',
+    labelKey: 'vo2Max',
+    formatValue: (v, u) => v !== null ? `${v.toFixed(1)} ${u || 'mL/kg/min'}` : '-',
+  },
+  body_mass: {
+    icon: 'fa-weight-scale',
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-600',
+    labelKey: 'bodyMass',
+    formatValue: (v, u) => v !== null ? `${v.toFixed(1)} ${u || 'kg'}` : '-',
+  },
 };
 
 /**
- * HKObjectType 子类中文名称映射
- */
-const HK_CLASS_LABELS: Record<HKObjectTypeClass, string> = {
-  HKQuantityType: '数值型数据',
-  HKCategoryType: '分类型数据',
-  HKCharacteristicType: '特征数据',
-  HKCorrelationType: '关联数据',
-  HKWorkoutType: '锻炼数据',
-  HKActivitySummaryType: '活动摘要',
-  HKAudiogramSampleType: '听力图',
-  HKElectrocardiogramType: '心电图',
-};
-
-/**
- * 数据类型中文名称映射（用于可用性检查展示）
+ * 数据类型中文名称映射（用于数据展示）
  */
 const DATA_TYPE_LABELS: Record<string, string> = {
   // HKQuantityType - 心脏
@@ -344,6 +425,9 @@ const DATA_TYPE_LABELS: Record<string, string> = {
   electrocardiogram: '心电图',
 };
 
+/** 授权状态类型 */
+type AuthorizationStatus = 'loading' | 'not_available' | 'prompt' | 'granted' | 'denied';
+
 /**
  * HealthKitSection - 展示用户的 HealthKit 健康数据
  * 可折叠设计，展开时自动复制数据到剪贴板
@@ -360,11 +444,10 @@ export function HealthKitSection() {
   const [copySuccess, setCopySuccess] = useState(false);
   // 追踪是否已经自动复制过（避免重复复制）
   const hasCopiedRef = useRef(false);
-  // 数据类型可用性状态（按 HKObjectType 子类分组）
-  const [availableTypes, setAvailableTypes] = useState<HealthKitAvailableTypes | null>(null);
-  const [isLoadingTypes, setIsLoadingTypes] = useState(false);
-  const [typeCopySuccess, setTypeCopySuccess] = useState(false);
-  const [expandedClasses, setExpandedClasses] = useState<Set<HKObjectTypeClass>>(new Set());
+
+  // 授权状态
+  const [authStatus, setAuthStatus] = useState<AuthorizationStatus>('loading');
+  const [isRequestingAuth, setIsRequestingAuth] = useState(false);
 
   // 检查是否支持 HealthKit（仅 iOS）
   const isSupported = isHealthKitSupported();
@@ -403,6 +486,57 @@ export function HealthKitSection() {
   }, [userId]);
 
   /**
+   * 检查授权状态
+   */
+  const checkAuthorizationStatus = useCallback(async () => {
+    if (!isSupported) {
+      setAuthStatus('not_available');
+      return;
+    }
+
+    try {
+      const status = await healthKitAsync.getPermissionStatus();
+      console.log('[HealthKitSection] Authorization status:', status);
+      setAuthStatus(status);
+    } catch (err) {
+      console.error('[HealthKitSection] Error checking auth status:', err);
+      setAuthStatus('not_available');
+    }
+  }, [isSupported]);
+
+  /**
+   * 请求 HealthKit 授权（独立按钮）
+   */
+  const handleRequestAuthorization = useCallback(async () => {
+    if (!isSupported) return;
+
+    setIsRequestingAuth(true);
+    try {
+      console.log('[HealthKitSection] Requesting authorization...');
+      const granted = await healthKitAsync.requestPermission();
+      console.log('[HealthKitSection] Authorization result:', granted);
+
+      if (granted) {
+        setAuthStatus('granted');
+        // 授权成功后自动同步数据
+        const result = await healthKitAsync.syncData(7);
+        if (result.success) {
+          setLastSyncTime(new Date());
+          await fetchHealthData();
+        }
+      } else {
+        // 用户拒绝或取消，重新检查状态
+        await checkAuthorizationStatus();
+      }
+    } catch (err) {
+      console.error('[HealthKitSection] Authorization error:', err);
+      await checkAuthorizationStatus();
+    } finally {
+      setIsRequestingAuth(false);
+    }
+  }, [isSupported, checkAuthorizationStatus, fetchHealthData]);
+
+  /**
    * 触发 HealthKit 同步
    * 如果未授权，先请求授权再同步
    */
@@ -424,6 +558,8 @@ export function HealthKitSection() {
           setIsSyncing(false);
           return;
         }
+        // 授权成功，更新状态
+        setAuthStatus('granted');
       }
 
       // 授权后同步数据
@@ -432,6 +568,8 @@ export function HealthKitSection() {
 
       if (result.success) {
         setLastSyncTime(new Date());
+        // 同步成功说明有读取权限，确保状态为 granted
+        setAuthStatus('granted');
         // 同步完成后重新获取数据
         await fetchHealthData();
       }
@@ -508,103 +646,14 @@ export function HealthKitSection() {
     }
   }, [formatDataForCopy]);
 
-  /**
-   * 获取所有数据类型的可用性
-   * 会先检查/请求权限，然后再查询数据
-   */
-  const handleGetAvailableTypes = useCallback(async () => {
-    if (!isSupported) return;
-
-    setIsLoadingTypes(true);
-    try {
-      // 先检查授权状态
-      const permissionStatus = await healthKitAsync.getPermissionStatus();
-      console.log('[HealthKitSection] Permission status for availability check:', permissionStatus);
-
-      // 如果未授权，先请求授权
-      if (permissionStatus !== 'granted') {
-        console.log('[HealthKitSection] Requesting permission before checking availability...');
-        const granted = await healthKitAsync.requestPermission();
-        if (!granted) {
-          console.log('[HealthKitSection] Permission not granted, cannot check availability');
-          setIsLoadingTypes(false);
-          return;
-        }
-      }
-
-      // 授权后查询可用数据类型
-      const types = await healthKitAsync.getAvailableTypes();
-      setAvailableTypes(types);
-      console.log('[HealthKitSection] Available types:', types);
-    } catch (err) {
-      console.error('[HealthKitSection] Error getting available types:', err);
-    } finally {
-      setIsLoadingTypes(false);
+  // 组件挂载时检查授权状态
+  useEffect(() => {
+    if (isSupported) {
+      checkAuthorizationStatus();
+    } else {
+      setAuthStatus('not_available');
     }
-  }, [isSupported]);
-
-  /**
-   * 切换类别展开/折叠状态
-   */
-  const toggleClassExpanded = useCallback((className: HKObjectTypeClass) => {
-    setExpandedClasses(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(className)) {
-        newSet.delete(className);
-      } else {
-        newSet.add(className);
-      }
-      return newSet;
-    });
-  }, []);
-
-  /**
-   * 格式化并复制数据类型可用性信息
-   */
-  const copyAvailabilityInfo = useCallback(async () => {
-    if (!availableTypes) return;
-
-    const lines: string[] = ['=== HealthKit 数据可用性（过去30天）===', ''];
-
-    let totalAvailable = 0;
-    let totalUnavailable = 0;
-
-    // 按类别分组输出
-    Object.entries(availableTypes).filter(([, types]) => types != null).forEach(([className, types]) => {
-      const classLabel = HK_CLASS_LABELS[className as HKObjectTypeClass] || className;
-      const available = Object.entries(types!).filter(([, count]) => count > 0);
-      const unavailable = Object.entries(types!).filter(([, count]) => count === 0);
-
-      totalAvailable += available.length;
-      totalUnavailable += unavailable.length;
-
-      lines.push(`📁 ${classLabel} (${className})`);
-      lines.push(`   ✅ 可用: ${available.length} 种`);
-      if (available.length > 0) {
-        available.forEach(([type, count]) => {
-          lines.push(`      - ${DATA_TYPE_LABELS[type] || type}: ${count} 条`);
-        });
-      }
-      lines.push(`   ❌ 不可用: ${unavailable.length} 种`);
-      if (unavailable.length > 0) {
-        lines.push(`      ${unavailable.map(([type]) => DATA_TYPE_LABELS[type] || type).join(', ')}`);
-      }
-      lines.push('');
-    });
-
-    lines.push(`总计: ✅ ${totalAvailable} 种可用, ❌ ${totalUnavailable} 种不可用`);
-
-    const text = lines.join('\n');
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setTypeCopySuccess(true);
-      setTimeout(() => setTypeCopySuccess(false), 2000);
-      console.log('[HealthKitSection] Availability info copied to clipboard');
-    } catch (err) {
-      console.error('[HealthKitSection] Failed to copy availability info:', err);
-    }
-  }, [availableTypes]);
+  }, [isSupported, checkAuthorizationStatus]);
 
   // 展开时自动复制数据（只复制一次）
   useEffect(() => {
@@ -646,6 +695,27 @@ export function HealthKitSection() {
   const latestSummary = getLatestSummary();
   const dataTypeCount = latestSummary.size;
 
+  /**
+   * 获取授权状态的显示信息
+   */
+  const getAuthStatusDisplay = () => {
+    switch (authStatus) {
+      case 'loading':
+        return { icon: 'fa-spinner fa-spin', color: 'text-gray-400', bg: 'bg-gray-100', text: t('profile.healthKit.authStatus.checking') };
+      case 'granted':
+        return { icon: 'fa-circle-check', color: 'text-green-500', bg: 'bg-green-100', text: t('profile.healthKit.authStatus.granted') };
+      case 'denied':
+        return { icon: 'fa-circle-xmark', color: 'text-red-500', bg: 'bg-red-100', text: t('profile.healthKit.authStatus.denied') };
+      case 'prompt':
+        return { icon: 'fa-circle-question', color: 'text-amber-500', bg: 'bg-amber-100', text: t('profile.healthKit.authStatus.notAuthorized') };
+      case 'not_available':
+      default:
+        return { icon: 'fa-circle-exclamation', color: 'text-gray-400', bg: 'bg-gray-100', text: t('profile.healthKit.authStatus.notAvailable') };
+    }
+  };
+
+  const authStatusDisplay = getAuthStatusDisplay();
+
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
       {/* Main Row - Clickable to expand */}
@@ -663,26 +733,100 @@ export function HealthKitSection() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Authorization Status Badge */}
+          <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${authStatusDisplay.bg} ${authStatusDisplay.color}`}>
+            <i className={`fa-solid ${authStatusDisplay.icon}`}></i>
+            <span className="hidden sm:inline">{authStatusDisplay.text}</span>
+          </span>
           {isLoading ? (
             <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
           ) : dataTypeCount > 0 ? (
             <span className="text-xs text-green-500 flex items-center gap-1">
-              <i className="fa-solid fa-circle-check"></i>
-              {dataTypeCount} {t('profile.healthKit.dataTypes')}
+              <i className="fa-solid fa-database"></i>
+              {dataTypeCount}
             </span>
-          ) : (
-            <span className="text-xs text-gray-400">
-              {t('profile.healthKit.noData')}
-            </span>
-          )}
+          ) : null}
           <i className={`fa-solid fa-chevron-right text-gray-300 text-sm transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}></i>
         </div>
       </button>
 
       {/* Expandable Content */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
         {/* Divider */}
         <div className="border-t border-gray-100"></div>
+
+        {/* Authorization Status Section */}
+        <div className="p-4 bg-gray-50 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 ${authStatusDisplay.bg} rounded-full flex items-center justify-center`}>
+                <i className={`fa-solid ${authStatusDisplay.icon} ${authStatusDisplay.color}`}></i>
+              </div>
+              <div>
+                <p className="font-medium text-gray-700 text-sm">{t('profile.healthKit.authStatus.title')}</p>
+                <p className={`text-xs ${authStatusDisplay.color}`}>{authStatusDisplay.text}</p>
+              </div>
+            </div>
+
+            {/* Authorization Button - Show when not granted */}
+            {authStatus !== 'granted' && authStatus !== 'loading' && authStatus !== 'not_available' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRequestAuthorization();
+                }}
+                disabled={isRequestingAuth}
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-medium rounded-xl hover:shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isRequestingAuth ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    {t('profile.healthKit.authorizing')}
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-shield-check"></i>
+                    {t('profile.healthKit.authorize')}
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Refresh Status Button - Show when already checked */}
+            {authStatus !== 'loading' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  checkAuthorizationStatus();
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
+                title={t('profile.healthKit.refreshStatus')}
+              >
+                <i className="fa-solid fa-arrows-rotate"></i>
+              </button>
+            )}
+          </div>
+
+          {/* Denied State - Guide user to Settings */}
+          {authStatus === 'denied' && (
+            <div className="mt-3 p-3 bg-red-50 rounded-xl">
+              <p className="text-xs text-red-600">
+                <i className="fa-solid fa-info-circle mr-1"></i>
+                {t('profile.healthKit.authStatus.deniedHint')}
+              </p>
+            </div>
+          )}
+
+          {/* Prompt State - Explain what will happen */}
+          {authStatus === 'prompt' && (
+            <div className="mt-3 p-3 bg-amber-50 rounded-xl">
+              <p className="text-xs text-amber-700">
+                <i className="fa-solid fa-lightbulb mr-1"></i>
+                {t('profile.healthKit.authStatus.promptHint')}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Copy Success Banner */}
         {copySuccess && (
@@ -729,15 +873,22 @@ export function HealthKitSection() {
         {!isLoading && healthData.length > 0 && (
           <>
             {Array.from(latestSummary.entries()).map(([type, record], index) => {
-              const config = DATA_TYPE_CONFIG[type] || {
+              // 将 HK 标识符转换为简化键名
+              const configKey = HK_IDENTIFIER_TO_KEY[type] || type;
+              const config = DATA_TYPE_CONFIG[configKey] || {
                 icon: 'fa-chart-simple',
                 iconBg: 'bg-gray-50',
                 iconColor: 'text-gray-500',
-                labelKey: type,
+                labelKey: configKey,
                 formatValue: (v: number | null, u: string | null) => `${v} ${u || ''}`,
               };
 
-              const label = t(`profile.healthKit.dataTypes.${config.labelKey}`) || type;
+              // 尝试翻译，如果失败则使用 DATA_TYPE_LABELS 中的中文名
+              const translationKey = `profile.healthKit.dataTypes.${config.labelKey}`;
+              const translatedLabel = t(translationKey);
+              const label = translatedLabel !== translationKey
+                ? translatedLabel
+                : (DATA_TYPE_LABELS[configKey] || DATA_TYPE_LABELS[type.replace(/^HK(Quantity|Category)TypeIdentifier/, '')] || type);
               const value = config.formatValue(record.value, record.unit, record.sleep_stage);
               const date = new Date(record.start_date);
               const dateStr = date.toLocaleDateString();
@@ -803,145 +954,6 @@ export function HealthKitSection() {
             </div>
           </>
         )}
-
-        {/* Data Type Availability Section */}
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-700">
-              {t('profile.healthKit.dataTypeAvailability')}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={handleGetAvailableTypes}
-                disabled={isLoadingTypes}
-                className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50"
-              >
-                {isLoadingTypes ? (
-                  <>
-                    <i className="fa-solid fa-spinner fa-spin mr-1"></i>
-                    {t('profile.healthKit.checking')}
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-magnifying-glass mr-1"></i>
-                    {t('profile.healthKit.checkAvailability')}
-                  </>
-                )}
-              </button>
-              {availableTypes && (
-                <button
-                  onClick={copyAvailabilityInfo}
-                  className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 active:scale-95 transition-all"
-                >
-                  <i className={`fa-solid ${typeCopySuccess ? 'fa-check' : 'fa-copy'} mr-1`}></i>
-                  {typeCopySuccess ? t('profile.healthKit.copied') : t('profile.healthKit.copy')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Availability Results - Grouped by HKObjectType Class */}
-          {availableTypes && (
-            <div className="space-y-2">
-              {/* Summary */}
-              <div className="bg-gray-50 rounded-xl p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">
-                    {t('profile.healthKit.totalTypes')}: {
-                      Object.values(availableTypes).filter(Boolean).reduce((sum, types) => sum + Object.keys(types!).length, 0)
-                    }
-                  </span>
-                  <div className="flex gap-3 text-xs">
-                    <span className="text-green-600">
-                      <i className="fa-solid fa-circle-check mr-1"></i>
-                      {Object.values(availableTypes).filter(Boolean).reduce((sum, types) =>
-                        sum + Object.values(types!).filter(c => c > 0).length, 0
-                      )} {t('profile.healthKit.available')}
-                    </span>
-                    <span className="text-gray-400">
-                      <i className="fa-solid fa-circle-xmark mr-1"></i>
-                      {Object.values(availableTypes).filter(Boolean).reduce((sum, types) =>
-                        sum + Object.values(types!).filter(c => c === 0).length, 0
-                      )} {t('profile.healthKit.unavailable')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Grouped by Class */}
-              {Object.entries(availableTypes).filter(([, types]) => types != null).map(([className, types]) => {
-                const classKey = className as HKObjectTypeClass;
-                const classLabel = HK_CLASS_LABELS[classKey] || className;
-                const availableCount = Object.values(types!).filter(c => c > 0).length;
-                const unavailableCount = Object.values(types!).filter(c => c === 0).length;
-                const isExpanded = expandedClasses.has(classKey);
-
-                return (
-                  <div key={className} className="bg-gray-50 rounded-xl overflow-hidden">
-                    {/* Class Header */}
-                    <button
-                      onClick={() => toggleClassExpanded(classKey)}
-                      className="w-full flex items-center justify-between p-3 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <i className={`fa-solid fa-chevron-right text-gray-400 text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}></i>
-                        <span className="text-sm font-medium text-gray-700">{classLabel}</span>
-                        <span className="text-xs text-gray-400">({className})</span>
-                      </div>
-                      <div className="flex gap-2 text-xs">
-                        <span className="text-green-600">{availableCount} ✓</span>
-                        <span className="text-gray-400">{unavailableCount} ✗</span>
-                      </div>
-                    </button>
-
-                    {/* Expanded Content */}
-                    {isExpanded && (
-                      <div className="px-3 pb-3 border-t border-gray-100">
-                        {/* Available */}
-                        {availableCount > 0 && (
-                          <div className="mt-2">
-                            <p className="text-xs text-green-600 mb-1">{t('profile.healthKit.available')}:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {Object.entries(types)
-                                .filter(([, count]) => count > 0)
-                                .map(([type, count]) => (
-                                  <span
-                                    key={type}
-                                    className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full"
-                                  >
-                                    {DATA_TYPE_LABELS[type] || type}
-                                    <span className="ml-1 text-green-500">({count})</span>
-                                  </span>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                        {/* Unavailable */}
-                        {unavailableCount > 0 && (
-                          <div className="mt-2">
-                            <p className="text-xs text-gray-400 mb-1">{t('profile.healthKit.unavailable')}:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {Object.entries(types)
-                                .filter(([, count]) => count === 0)
-                                .map(([type]) => (
-                                  <span
-                                    key={type}
-                                    className="inline-flex items-center px-2 py-0.5 bg-gray-200 text-gray-500 text-xs rounded-full"
-                                  >
-                                    {DATA_TYPE_LABELS[type] || type}
-                                  </span>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* Privacy Note */}
         <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">

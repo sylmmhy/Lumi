@@ -8,6 +8,7 @@ import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { PermissionsSection } from '../profile/PermissionsSection';
 import { MemoriesSection } from '../profile/MemoriesSection';
 import { HealthKitSection } from '../profile/HealthKitSection';
+import { BedtimeRecommendation } from '../profile/BedtimeRecommendation';
 import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
@@ -742,6 +743,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* HealthKit Data Section (iOS only) */}
                 <HealthKitSection />
+
+                {/* Optimal Bedtime Recommendation (iOS only) */}
+                <BedtimeRecommendation />
 
                 {/* Discord Community Section */}
                 <a

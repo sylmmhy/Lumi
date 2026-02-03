@@ -302,6 +302,25 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const isReconnectingRef = useRef(false); // 防止重复重连
   const isIdleDisconnectedRef = useRef(false); // 是否处于空闲断开状态
   const lastSystemInstructionRef = useRef<string>(''); // 缓存上次系统指令，重连时复用
+  /**
+   * 记录用户最后一次说话时间（来自 VAD）
+   * 用于空闲断开判断，避免 effect 因频繁更新而重建定时器
+   */
+  const lastSpeakingTimeRef = useRef<Date | null>(null);
+  /**
+   * 记录任务开始时间（空闲断开没有用户说话时的兜底基准）
+   * 避免依赖变化导致空闲检测 effect 频繁重跑
+   */
+  const taskStartTimeRef = useRef<number>(0);
+  /**
+   * 记录 Gemini 连接状态，用于空闲断开时判断是否需要断开
+   * 避免把 isConnected 作为 effect 依赖导致定时器反复重置
+   */
+  const isGeminiConnectedRef = useRef(false);
+  /**
+   * 保存断开函数引用，避免 effect 依赖函数变化造成频繁重建
+   */
+  const disconnectSessionOnlyRef = useRef<() => void>(() => {});
 
   /**
    * 保存最新的 saveSessionMemory 引用，确保倒计时结束时可以稳定触发记忆保存
@@ -619,6 +638,30 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     smoothingTimeConstant: 0.8,
     fftSize: 2048,
   });
+  /**
+   * 同步 VAD 最后说话时间到 ref，供空闲检测使用
+   */
+  useEffect(() => {
+    lastSpeakingTimeRef.current = vad.lastSpeakingTime;
+  }, [vad.lastSpeakingTime]);
+  /**
+   * 同步任务开始时间到 ref，供空闲检测兜底使用
+   */
+  useEffect(() => {
+    taskStartTimeRef.current = taskStartTime;
+  }, [taskStartTime]);
+  /**
+   * 同步 Gemini 连接状态到 ref，避免 idle 检测 effect 抖动
+   */
+  useEffect(() => {
+    isGeminiConnectedRef.current = geminiLive.isConnected;
+  }, [geminiLive.isConnected]);
+  /**
+   * 同步断开函数到 ref，避免函数引用变化导致 effect 反复重建
+   */
+  useEffect(() => {
+    disconnectSessionOnlyRef.current = geminiLive.disconnectSessionOnly;
+  }, [geminiLive.disconnectSessionOnly]);
 
   // ==========================================
   // 智能空闲断开（Idle Disconnect for Campfire Mode）
@@ -704,7 +747,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   useEffect(() => {
     if (!enableIdleDisconnect || !isSessionActive) {
+      if (import.meta.env.DEV) {
+        console.log('🧪 idle monitor disabled', {
+          enableIdleDisconnect,
+          isSessionActive,
+        });
+      }
       return;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('🧪 idle monitor enabled', {
+        enableIdleDisconnect,
+        isSessionActive,
+      });
     }
 
     const IDLE_THRESHOLD_MS = 2 * 60 * 1000; // 2 分钟
@@ -716,10 +772,24 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       const now = Date.now();
-      const lastSpeakingTime = vad.lastSpeakingTime ? vad.lastSpeakingTime.getTime() : taskStartTime;
+      const lastSpeakingTime = lastSpeakingTimeRef.current
+        ? lastSpeakingTimeRef.current.getTime()
+        : taskStartTimeRef.current;
       const silenceDuration = now - lastSpeakingTime;
 
-      if (silenceDuration > IDLE_THRESHOLD_MS && geminiLive.isConnected) {
+      if (import.meta.env.DEV) {
+        console.log('🧪 idle check', {
+          now: new Date(now).toLocaleTimeString(),
+          lastSpeakingTime: lastSpeakingTimeRef.current?.toISOString() ?? null,
+          silenceSeconds: Math.floor(silenceDuration / 1000),
+          vadIsSpeaking: vad.isSpeaking,
+          vadVolume: vad.currentVolume,
+          aiIsSpeaking: geminiLive.isSpeaking,
+          isConnected: isGeminiConnectedRef.current,
+        });
+      }
+
+      if (silenceDuration > IDLE_THRESHOLD_MS && isGeminiConnectedRef.current) {
         if (import.meta.env.DEV) {
           console.log('💤 检测到 2 分钟静默，触发空闲断开...');
           console.log(`   静默时长: ${Math.floor(silenceDuration / 1000)}秒`);
@@ -727,7 +797,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
         setIsSilentMode(true);
         isIdleDisconnectedRef.current = true;
-        geminiLive.disconnectSessionOnly();
+        disconnectSessionOnlyRef.current();
 
         if (import.meta.env.DEV) {
           console.log('💤 空闲断开完成 - AI 会话休眠，媒体保持开启');
@@ -741,14 +811,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         idleCheckIntervalRef.current = null;
       }
     };
-  }, [
-    enableIdleDisconnect,
-    isSessionActive,
-    vad.lastSpeakingTime,
-    taskStartTime,
-    geminiLive.isConnected,
-    geminiLive.disconnectSessionOnly,
-  ]);
+  }, [enableIdleDisconnect, isSessionActive]);
 
   // ==========================================
   // 自动重连（用户说话时唤醒 AI）

@@ -56,12 +56,32 @@ export async function handleSuggestHabitStack(
     }
 
     if (data.suggestions?.length === 0) {
+      // 检查是否是因为没有锚点习惯
+      if (data.noAnchor) {
+        return {
+          success: true,
+          data: {
+            ...data,
+            needsTimeInput: true, // 标记需要用户输入时间
+            habitName: data.newHabitName || newHabit, // 传递习惯名称
+          },
+          responseHint: preferredLanguage?.startsWith('zh')
+            ? `好的，我帮你设置「${newHabit}」的每日提醒。你想每天几点提醒你呢？`
+            : `Sure, I'll set up a daily reminder for "${newHabit}". What time would you like me to remind you each day?`,
+        };
+      }
+      
+      // 有锚点但没有合适的挂载点
       return {
         success: true,
-        data,
+        data: {
+          ...data,
+          needsTimeInput: true,
+          habitName: newHabit,
+        },
         responseHint: preferredLanguage?.startsWith('zh')
-          ? `你还没有足够稳定的习惯可以作为锚点。建议先坚持一个简单的习惯两周以上，比如每天喝水或者刷牙后做某件事。等你有了稳定的习惯，我就能帮你把「${newHabit}」挂载上去了。`
-          : `You don't have stable habits yet to use as anchors. Try sticking to a simple habit for two weeks first, like drinking water or doing something after brushing your teeth. Once you have stable habits, I can help you stack "${newHabit}" onto them.`,
+          ? `暂时没找到特别合适的挂载点。要不我帮你设置一个每日提醒？你想几点提醒？`
+          : `I couldn't find a perfect spot to stack this habit. Want me to set up a standalone daily reminder instead? What time works for you?`,
       };
     }
 

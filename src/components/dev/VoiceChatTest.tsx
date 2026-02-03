@@ -6,7 +6,10 @@
  * - useGeminiLive: Gemini Live 连接
  * - useIntentDetection: 三层 AI 意图检测
  * 
- * UI 参考 AI Coach 页面，但不需要摄像头
+ * 消息处理模式参考 useAICoachSession.ts：
+ * - 在 onTranscriptUpdate 回调里处理
+ * - 用户消息累积，AI 说话时一次性存储
+ * - 防重复机制
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -20,6 +23,13 @@ interface VoiceChatTestProps {
 
 type ChatType = 'intention_compile' | 'daily_chat';
 
+/**
+ * 清理文本中的噪音标记
+ */
+const cleanNoiseMarkers = (text: string): string => {
+  return text.replace(/<noise>/g, '').trim();
+};
+
 export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   // 状态
   const [chatType, setChatType] = useState<ChatType | null>(null);
@@ -28,7 +38,7 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   const [showTextInput, setShowTextInput] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
-  // 对话内容
+  // 对话内容（用于 UI 显示）
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,30 +46,12 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // Gemini Live Hook
-  const geminiLive = useGeminiLive({
-    enableMicrophone: true,
-    enableCamera: false, // 不需要摄像头
-    onTranscriptUpdate: (transcript) => {
-      // 合并连续的同角色消息
-      const mergedMessages: Array<{ role: 'user' | 'ai'; text: string }> = [];
-      
-      for (const t of transcript) {
-        const role = t.role === 'user' ? 'user' as const : 'ai' as const;
-        const lastMsg = mergedMessages[mergedMessages.length - 1];
-        
-        if (lastMsg && lastMsg.role === role) {
-          // 同角色，合并文本
-          lastMsg.text += t.text;
-        } else {
-          // 新角色，新建消息
-          mergedMessages.push({ role, text: t.text });
-        }
-      }
-      
-      setMessages(mergedMessages);
-    },
-  });
+  // ==========================================
+  // 消息处理相关 Refs
+  // ==========================================
+  
+  // 存储 intentDetection 的 ref（用于在回调里访问）
+  const intentDetectionRef = useRef<ReturnType<typeof useIntentDetection> | null>(null);
 
   // 意图检测 Hook（三层 AI 架构）
   const intentDetection = useIntentDetection({
@@ -68,12 +60,96 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     preferredLanguage: 'zh',
     onToolResult: (result) => {
       console.log('🔧 工具结果:', result);
-      if (result.responseHint && geminiLive.isConnected) {
+      
+      if (result.responseHint && geminiLiveRef.current?.isConnected) {
         // 注入工具结果给 AI
-        geminiLive.sendTextMessage(`[System] ${result.responseHint}`);
+        geminiLiveRef.current.sendTextMessage(`[System] ${result.responseHint}`);
       }
     },
   });
+
+  // 更新 intentDetection ref
+  useEffect(() => {
+    intentDetectionRef.current = intentDetection;
+  }, [intentDetection]);
+
+  // 存储 geminiLive 的 ref（用于在回调里访问）
+  const geminiLiveRef = useRef<ReturnType<typeof useGeminiLive> | null>(null);
+  
+  // 存储最新的 AI 完整消息（用于意图检测）
+  const latestAIMessageRef = useRef<string>('');
+
+  // Gemini Live Hook
+  const geminiLive = useGeminiLive({
+    enableMicrophone: true,
+    enableCamera: false,
+    onTranscriptUpdate: (newTranscript) => {
+      // ==========================================
+      // 核心消息处理逻辑
+      // 直接根据 transcript 重建 messages，避免碎片化
+      // ==========================================
+      
+      // 1. 合并连续的同角色消息
+      const mergedMessages: Array<{ role: 'user' | 'ai'; text: string }> = [];
+      
+      for (const t of newTranscript) {
+        const role = t.role === 'user' ? 'user' as const : 'ai' as const;
+        const cleanedText = cleanNoiseMarkers(t.text);
+        
+        if (!cleanedText) continue;
+        
+        const lastMsg = mergedMessages[mergedMessages.length - 1];
+        
+        if (lastMsg && lastMsg.role === role) {
+          // 同角色，合并文本
+          lastMsg.text += cleanedText;
+        } else {
+          // 新角色，新建消息
+          mergedMessages.push({ role, text: cleanedText });
+        }
+      }
+      
+      // 2. 更新 UI
+      setMessages(mergedMessages);
+      
+      // 3. 存储最新的 AI 完整消息（用于意图检测）
+      const lastAIMsg = mergedMessages.filter(m => m.role === 'ai').pop();
+      if (lastAIMsg) {
+        latestAIMessageRef.current = lastAIMsg.text;
+      }
+    },
+  });
+
+  // 更新 geminiLive ref
+  useEffect(() => {
+    geminiLiveRef.current = geminiLive;
+  }, [geminiLive]);
+
+  // ==========================================
+  // 监听 AI 说完话，触发意图检测
+  // ==========================================
+  const wasSpeakingRef = useRef(false);
+  
+  useEffect(() => {
+    // 检测 AI 是否刚停止说话
+    const justStoppedSpeaking = wasSpeakingRef.current && !geminiLive.isSpeaking;
+    wasSpeakingRef.current = geminiLive.isSpeaking;
+    
+    if (justStoppedSpeaking && latestAIMessageRef.current) {
+      // 从 messages 里提取所有用户消息
+      const userMsgs = messages
+        .filter(m => m.role === 'user' && m.text.trim())
+        .map(m => m.text);
+      
+      console.log('🤖 [AI消息] 说完了:', latestAIMessageRef.current.substring(0, 100));
+      console.log('📝 [用户消息] 全部:', userMsgs);
+      console.log('🔍 [意图检测] 触发...');
+      
+      // 先设置用户消息，再触发检测
+      intentDetectionRef.current?.setUserMessages(userMsgs);
+      intentDetectionRef.current?.processAIResponse(latestAIMessageRef.current);
+    }
+  }, [geminiLive.isSpeaking, messages]);
 
   // 连接成功后让 AI 先开口
   const hasGreetedRef = useRef(false);
@@ -82,7 +158,6 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     if (geminiLive.isConnected && chatType && !hasGreetedRef.current) {
       hasGreetedRef.current = true;
       
-      // 等待一下确保连接稳定
       setTimeout(() => {
         const intentionGreetings = [
           'Say hi and ask what habit the user wants to build.',
@@ -105,7 +180,7 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
         console.log('👋 AI 开场白:', randomGreeting);
       }, 500);
     }
-  }, [geminiLive.isConnected, chatType]);
+  }, [geminiLive.isConnected, chatType, geminiLive]);
 
   // 重置 greeting 状态
   useEffect(() => {
@@ -113,44 +188,6 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
       hasGreetedRef.current = false;
     }
   }, [chatType]);
-
-  // 监听 AI 回复，触发意图检测
-  // 只有当 AI 停止说话时才检测，避免流式输出时重复触发
-  const lastProcessedIndexRef = useRef<number>(-1);
-  const lastAIMessageRef = useRef<string>('');
-  const wasSpekingRef = useRef(false);
-  
-  useEffect(() => {
-    // 检测 AI 是否刚停止说话
-    const justStoppedSpeaking = wasSpekingRef.current && !geminiLive.isSpeaking;
-    wasSpekingRef.current = geminiLive.isSpeaking;
-    
-    if (messages.length > 0 && justStoppedSpeaking) {
-      const lastMsg = messages[messages.length - 1];
-      
-      if (lastMsg.role === 'ai' && lastMsg.text) {
-        // 先添加用户消息（从上次处理的位置开始）
-        for (let i = lastProcessedIndexRef.current + 1; i < messages.length - 1; i++) {
-          const msg = messages[i];
-          if (msg.role === 'user' && msg.text) {
-            const cleanedText = msg.text.replace(/<noise>/g, '').trim();
-            if (cleanedText) {
-              intentDetection.addUserMessage(cleanedText);
-              console.log('📝 [用户消息] 添加:', cleanedText);
-            }
-          }
-        }
-        lastProcessedIndexRef.current = messages.length - 2;
-        
-        // 检测 AI 消息（只有和上次不同才处理）
-        if (lastMsg.text !== lastAIMessageRef.current) {
-          lastAIMessageRef.current = lastMsg.text;
-          console.log('🤖 [AI消息] 说完了:', lastMsg.text.substring(0, 100));
-          intentDetection.processAIResponse(lastMsg.text);
-        }
-      }
-    }
-  }, [messages, geminiLive.isSpeaking, intentDetection]);
 
   // 滚动到底部
   useEffect(() => {
@@ -164,11 +201,9 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     setConnectionError(null);
 
     try {
-      // 1. 获取 Gemini Token
       console.log('🔑 获取 Gemini Token...');
-      const token = await fetchGeminiToken(); // 使用默认 ttl
+      const token = await fetchGeminiToken();
       
-      // 2. 获取系统提示词
       console.log('📝 获取系统提示词...');
       const configResponse = await fetch(`${supabaseUrl}/functions/v1/start-voice-chat`, {
         method: 'POST',
@@ -191,11 +226,10 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
       const config = await configResponse.json();
       console.log('📞 配置:', config);
 
-      // 3. 连接 Gemini Live
       console.log('🔌 连接 Gemini Live...');
       await geminiLive.connect(
         config.geminiConfig?.systemPrompt || '',
-        [], // 不传 tools，用三层架构
+        [],
         token,
         config.geminiConfig?.voiceConfig?.voiceName || 'Aoede'
       );
@@ -215,17 +249,17 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     geminiLive.disconnect();
     setChatType(null);
     setMessages([]);
-    intentDetection.clearHistory();
+    intentDetection.clearHistory(); // clearHistory 会重置防重复标记
   }, [geminiLive, intentDetection]);
 
   // 发送文字
   const handleSendText = useCallback(() => {
     if (textInput.trim() && geminiLive.isConnected) {
       geminiLive.sendTextMessage(textInput);
-      intentDetection.addUserMessage(textInput);
+      setMessages(prev => [...prev, { role: 'user', text: textInput }]);
       setTextInput('');
     }
-  }, [textInput, geminiLive, intentDetection]);
+  }, [textInput, geminiLive]);
 
   // ============================================
   // 选择对话模式界面
@@ -281,7 +315,7 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   }
 
   // ============================================
-  // 对话界面（类似 AI Coach）
+  // 对话界面
   // ============================================
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex flex-col relative">
@@ -294,13 +328,11 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
           ← 退出
         </button>
         
-        {/* LIVE 标志 */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 rounded-full">
           <span className={`w-2 h-2 rounded-full ${geminiLive.isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <span className="text-white text-sm font-medium">LIVE</span>
         </div>
 
-        {/* 文字/语音切换按钮 */}
         <button
           onClick={() => setShowTextInput(!showTextInput)}
           className="px-3 py-1.5 bg-black/50 text-white text-sm rounded-lg hover:bg-black/70"
@@ -311,23 +343,20 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-32">
-        {/* 火焰动画 */}
         <TalkingFire isSpeaking={geminiLive.isSpeaking} size={200} />
         
-        {/* 状态文字 */}
         <p className="text-gray-400 text-sm mt-4">
           {geminiLive.isSpeaking ? '🔊 Lumi 正在说话...' : 
            geminiLive.isRecording ? '🎤 正在听你说...' : 
            geminiLive.isConnected ? '👂 等待中...' : '⏳ 连接中...'}
         </p>
 
-        {/* 当前对话类型 */}
         <p className="text-gray-500 text-xs mt-2">
           {chatType === 'intention_compile' ? '习惯制定模式' : '日常对话模式'}
         </p>
       </div>
 
-      {/* 对话记录（可滚动） */}
+      {/* 对话记录 */}
       {messages.length > 0 && (
         <div className="absolute bottom-40 left-0 right-0 max-h-40 overflow-y-auto px-4">
           <div className="space-y-2">
@@ -350,7 +379,6 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
 
       {/* 底部控制区 */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a] to-transparent">
-        {/* 文字输入框 */}
         {showTextInput && (
           <div className="flex gap-2 mb-4">
             <input
@@ -371,7 +399,6 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
           </div>
         )}
 
-        {/* 麦克风按钮 */}
         {!showTextInput && (
           <div className="flex justify-center">
             <button
@@ -396,7 +423,6 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
         </p>
       </div>
 
-      {/* 错误提示 */}
       {geminiLive.error && (
         <div className="absolute top-20 left-4 right-4 p-3 bg-red-500/20 border border-red-500 rounded-lg">
           <p className="text-red-400 text-sm">{geminiLive.error}</p>

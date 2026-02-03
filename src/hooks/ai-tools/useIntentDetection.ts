@@ -92,6 +92,9 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
   
   // 正在处理中
   const isProcessingRef = useRef(false);
+  
+  // 待处理的最新 AI 回复（用于塨排）
+  const pendingAIResponseRef = useRef<string | null>(null);
 
   // Supabase 配置
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -212,45 +215,56 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
 
     // 防抖处理
     debounceTimerRef.current = setTimeout(async () => {
-      // 避免重复处理
+      // 如果正在处理，把这次请求存起来等待
       if (isProcessingRef.current) {
-        console.log('⏳ [IntentDetection] 正在处理中，跳过');
+        console.log('⏳ [IntentDetection] 正在处理中，将新请求加入队列');
+        pendingAIResponseRef.current = aiResponse;
         return;
       }
 
       isProcessingRef.current = true;
+      let currentResponse: string | null = aiResponse;
 
-      try {
-        console.log('🔍 [IntentDetection] 开始检测意图...');
-        
-        // 1. 调用检测 API
-        const detection = await detectIntent(aiResponse);
-        
-        console.log('🔍 [IntentDetection] 检测结果:', detection);
-
-        // 通知检测完成
-        onDetectionComplete?.(detection);
-
-        // 2. 如果检测到工具，执行它
-        if (detection.success && detection.tool && detection.confidence >= 0.6) {
-          console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
+      // 循环处理，直到没有待处理的请求
+      while (currentResponse) {
+        try {
+          console.log('🔍 [IntentDetection] 开始检测意图...');
           
-          const toolResult = await executeToolCall(detection.tool, detection.args);
+          // 1. 调用检测 API
+          const detection = await detectIntent(currentResponse);
           
-          // 通知工具结果
-          onToolResult?.({
-            ...toolResult,
-            tool: detection.tool,
-          });
-        } else if (detection.tool) {
-          console.log(`⚠️ [IntentDetection] 置信度不足，跳过: ${detection.tool} (${detection.confidence})`);
+          console.log('🔍 [IntentDetection] 检测结果:', detection);
+
+          // 通知检测完成
+          onDetectionComplete?.(detection);
+
+          // 2. 如果检测到工具，执行它
+          // 注意：AI 可能返回字符串 "null" 而不是真正的 null
+          const hasTool = detection.tool && detection.tool !== 'null';
+          if (detection.success && hasTool && detection.confidence >= 0.6) {
+            console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
+            
+            const toolResult = await executeToolCall(detection.tool, detection.args);
+            
+            // 通知工具结果
+            onToolResult?.({
+              ...toolResult,
+              tool: detection.tool,
+            });
+          } else if (detection.tool && detection.tool !== 'null') {
+            console.log(`⚠️ [IntentDetection] 置信度不足，跳过: ${detection.tool} (${detection.confidence})`);
+          }
+
+        } catch (error) {
+          console.error('❌ [IntentDetection] 处理失败:', error);
         }
-
-      } catch (error) {
-        console.error('❌ [IntentDetection] 处理失败:', error);
-      } finally {
-        isProcessingRef.current = false;
+        
+        // 检查是否有待处理的请求
+        currentResponse = pendingAIResponseRef.current;
+        pendingAIResponseRef.current = null;
       }
+      
+      isProcessingRef.current = false;
     }, debounceMs);
   }, [enabled, debounceMs, detectIntent, executeToolCall, onToolResult, onDetectionComplete]);
 

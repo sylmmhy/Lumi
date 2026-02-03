@@ -203,22 +203,40 @@ export function AppTabsPage() {
                 fetchRecurringReminders(auth.userId),
             ]);
 
-            // 将 routine_instance 的 snooze 状态同步到对应的 routine 模板
-            // 这样 UI 上的 routine 模板会显示 "+15 mins · later" 标签
-            // 注意：只有未完成的 snoozed 实例才显示标签，完成后标签消失
+            // 将 routine_instance 的状态同步到对应的 routine 模板
+            // 这样 UI 上的 routine 模板会正确显示今天的状态
+
+            // 🔧 Bug 修复 (2026-02-02)：将 routine_instance 的完成状态同步到 routine 模板
+            // 之前 routine 模板的 status 会被错误地永久设为 completed，导致第二天仍显示已完成
+            // 修复：routine 模板的数据库 status 始终为 pending，显示状态由今日 routine_instance 决定
+            const completedInstances = todayTasks.filter(t =>
+                t.type === 'routine_instance' && t.completed && t.parentRoutineId
+            );
+
+            // snooze 状态：只有未完成的 snoozed 实例才显示标签
             const snoozedInstances = todayTasks.filter(t =>
                 t.type === 'routine_instance' && t.isSnoozed && t.parentRoutineId && !t.completed
             );
 
-            // 🆕 将 routine_instance 的 isSkip 状态同步到对应的 routine 模板
-            // 这样 UI 上的 routine 模板会显示 "Skipped" 标签
-            // 注意：只有未完成且 isSkip=true 的今日实例才显示标签
+            // skip 状态：只有未完成且 isSkip=true 的今日实例才显示标签
             const skippedInstances = todayTasks.filter(t =>
                 t.type === 'routine_instance' && t.isSkip && t.parentRoutineId && !t.completed
             );
 
             const routineTemplatesWithStatus = routineTemplates.map(routine => {
                 let updatedRoutine = routine;
+
+                // 🔧 检查今日 routine_instance 是否已完成，同步到 routine 模板的显示状态
+                const hasCompletedInstance = completedInstances.some(
+                    instance => instance.parentRoutineId === routine.id
+                );
+                if (hasCompletedInstance) {
+                    // 今日已完成：显示为已完成（注意：这只是 UI 显示，数据库中 routine 模板的 status 仍为 pending）
+                    updatedRoutine = { ...updatedRoutine, completed: true };
+                } else {
+                    // 今日未完成：强制显示为未完成（覆盖可能残留的错误 completed 状态）
+                    updatedRoutine = { ...updatedRoutine, completed: false };
+                }
 
                 // 检查这个 routine 是否有被 snooze 的今日实例
                 const hasSnoozedInstance = snoozedInstances.some(
@@ -229,7 +247,7 @@ export function AppTabsPage() {
                     updatedRoutine = { ...updatedRoutine, isSnoozed: true };
                 }
 
-                // 🆕 检查这个 routine 是否有被 skip 的今日实例
+                // 检查这个 routine 是否有被 skip 的今日实例
                 const hasSkippedInstance = skippedInstances.some(
                     instance => instance.parentRoutineId === routine.id
                 );
@@ -493,8 +511,14 @@ export function AppTabsPage() {
      * 切换任务的完成状态
      *
      * 同步逻辑：
-     * - routine_instance 完成时：同步更新对应的 routine 模板状态 + 记录 routine_completions
-     * - routine 模板完成时：同步更新今日的 routine_instance 状态 + 记录 routine_completions
+     * - routine_instance 完成时：只更新 routine_instance 的数据库状态，UI 同步更新 routine 模板的显示
+     * - routine 模板完成时：只更新今日 routine_instance 的数据库状态，UI 同步更新 routine 模板的显示
+     *
+     * 🔧 Bug 修复 (2026-02-02)：
+     * 之前的逻辑会把 routine 模板的数据库 status 也改为 completed，导致：
+     * - 第二天新生成的 routine_instance 是 pending 状态（后台会 call）
+     * - 但 routine 模板仍然是 completed 状态（前端显示为已完成）
+     * 修复：只更新 routine_instance 的数据库状态，routine 模板的 status 始终保持 pending
      */
     const toggleComplete = async (id: string) => {
         const task = tasks.find(t => t.id === id);
@@ -503,20 +527,26 @@ export function AppTabsPage() {
         const newCompletedStatus = !task.completed;
         const today = getLocalDateString();
 
-        // 准备需要同步更新的任务 ID 列表
-        const idsToUpdate: string[] = [id];
+        // 需要更新数据库的任务 ID（只有 routine_instance）
+        let dbIdToUpdate: string | null = null;
+        // 需要更新 UI 显示的任务 ID 列表（routine_instance + routine 模板）
+        const uiIdsToUpdate: string[] = [id];
         let routineIdForCompletion: string | null = null;
 
         if (task.type === 'routine_instance' && task.parentRoutineId) {
-            // 完成 routine_instance 时，找到对应的 routine 模板
+            // 完成 routine_instance 时：
+            // - 数据库：只更新 routine_instance
+            // - UI：同时更新 routine_instance 和 routine 模板的显示
+            dbIdToUpdate = id;
             routineIdForCompletion = task.parentRoutineId;
-            // 同步更新模板的 UI 状态
             const routineTemplate = tasks.find(t => t.id === task.parentRoutineId);
             if (routineTemplate) {
-                idsToUpdate.push(routineTemplate.id);
+                uiIdsToUpdate.push(routineTemplate.id);
             }
         } else if (task.type === 'routine') {
-            // 完成 routine 模板时，找到今日的 routine_instance
+            // 完成 routine 模板时：
+            // - 数据库：只更新今日的 routine_instance（不更新 routine 模板！）
+            // - UI：同时更新 routine 模板和 routine_instance 的显示
             routineIdForCompletion = id;
             const todayInstance = tasks.find(t =>
                 t.type === 'routine_instance' &&
@@ -524,20 +554,28 @@ export function AppTabsPage() {
                 t.date === today
             );
             if (todayInstance) {
-                idsToUpdate.push(todayInstance.id);
+                dbIdToUpdate = todayInstance.id;
+                uiIdsToUpdate.push(todayInstance.id);
+            } else {
+                // 如果今天还没有 routine_instance，则不允许完成
+                console.warn('No routine_instance found for today, cannot toggle completion');
+                return;
             }
+        } else {
+            // todo 类型：直接更新
+            dbIdToUpdate = id;
         }
 
-        // Optimistically update UI（同步更新所有相关任务）
+        // Optimistically update UI（同步更新 routine_instance 和 routine 模板的显示）
         setTasks(prev => prev.map(t =>
-            idsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
+            uiIdsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
         ));
 
         try {
-            // 更新数据库中的所有相关任务
-            await Promise.all(idsToUpdate.map(taskId =>
-                toggleReminderCompletion(taskId, newCompletedStatus)
-            ));
+            // 只更新数据库中的 routine_instance（或 todo），不更新 routine 模板
+            if (dbIdToUpdate) {
+                await toggleReminderCompletion(dbIdToUpdate, newCompletedStatus);
+            }
 
             // 记录 routine_completions（用于热力图）
             if (routineIdForCompletion) {
@@ -554,7 +592,7 @@ export function AppTabsPage() {
             console.error('Failed to toggle reminder completion:', error);
             // Revert optimistic update on error
             setTasks(prev => prev.map(t =>
-                idsToUpdate.includes(t.id) ? { ...t, completed: !newCompletedStatus } : t
+                uiIdsToUpdate.includes(t.id) ? { ...t, completed: !newCompletedStatus } : t
             ));
         }
     };

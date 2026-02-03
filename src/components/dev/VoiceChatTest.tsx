@@ -167,31 +167,30 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
 
   // 连接成功后让 AI 先开口
   const hasGreetedRef = useRef(false);
-  
+
   useEffect(() => {
     if (geminiLive.isConnected && chatType && !hasGreetedRef.current) {
       hasGreetedRef.current = true;
-      
+
       setTimeout(() => {
-        const intentionGreetings = [
-          'Say hi and ask what habit the user wants to build.',
-          'Greet the user warmly and ask about their goals.',
-          'Start by asking what the user wants to improve in their life.',
-          'Say hello and ask if there is anything they want to change.',
-        ];
-        
-        const dailyGreetings = [
-          'Say hi and ask how their day is going.',
-          'Greet the user and ask what is on their mind today.',
-          'Start with a friendly hello and ask how they are doing.',
-          'Say hi and check in on how their day has been.',
-        ];
-        
-        const greetings = chatType === 'intention_compile' ? intentionGreetings : dailyGreetings;
-        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
-        
-        geminiLive.sendTextMessage(randomGreeting);
-        console.log('👋 AI 开场白:', randomGreeting);
+        let greeting: string;
+
+        if (chatType === 'intention_compile') {
+          const intentionGreetings = [
+            'Say hi and ask what habit the user wants to build.',
+            'Greet the user warmly and ask about their goals.',
+            'Start by asking what the user wants to improve in their life.',
+            'Say hello and ask if there is anything they want to change.',
+          ];
+          greeting = intentionGreetings[Math.floor(Math.random() * intentionGreetings.length)];
+        } else {
+          // 日常对话：让 AI 使用系统提示词中定义的开场白
+          // 系统提示词已经包含了 suggestedOpening，AI 会自动使用
+          greeting = 'Say your opening line from the system prompt. Be natural and friendly.';
+        }
+
+        geminiLive.sendTextMessage(greeting);
+        console.log('👋 AI 开场白指令:', greeting);
       }, 500);
     }
   }, [geminiLive.isConnected, chatType, geminiLive]);
@@ -217,7 +216,45 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
     try {
       console.log('🔑 获取 Gemini Token...');
       const token = await fetchGeminiToken();
-      
+
+      // 构建上下文 - 日常对话需要先获取智能开场白上下文
+      let context: Record<string, unknown> = { phase: 'onboarding' };
+
+      if (type === 'daily_chat') {
+        console.log('🗣️ 获取日常对话上下文...');
+        try {
+          const dailyChatContextResponse = await fetch(`${supabaseUrl}/functions/v1/get-daily-chat-context`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              userId: '11111111-1111-1111-1111-111111111111',
+            }),
+          });
+
+          if (dailyChatContextResponse.ok) {
+            const dailyChatContext = await dailyChatContextResponse.json();
+            console.log('🗣️ 日常对话上下文:', dailyChatContext);
+
+            // 将 get-daily-chat-context 返回的数据传给 start-voice-chat
+            context = {
+              ...context,
+              openingStrategy: dailyChatContext.openingStrategy,
+              suggestedOpening: dailyChatContext.suggestedOpening,
+              skippedTask: dailyChatContext.context?.skippedTask,
+              relevantMemory: dailyChatContext.context?.relevantMemory,
+              completedStreak: dailyChatContext.context?.completedStreak,
+            };
+          } else {
+            console.warn('⚠️ 获取日常对话上下文失败，使用默认上下文');
+          }
+        } catch (err) {
+          console.warn('⚠️ 获取日常对话上下文出错:', err);
+        }
+      }
+
       console.log('📝 获取系统提示词...');
       const configResponse = await fetch(`${supabaseUrl}/functions/v1/start-voice-chat`, {
         method: 'POST',
@@ -228,7 +265,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
         body: JSON.stringify({
           userId: '11111111-1111-1111-1111-111111111111',
           chatType: type,
-          context: { phase: 'onboarding' },
+          context,
           aiTone: 'gentle',
         }),
       });
@@ -258,13 +295,65 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
     }
   }, [supabaseUrl, supabaseAnonKey, geminiLive]);
 
-  // 断开连接
-  const handleDisconnect = useCallback(() => {
+  // 断开连接（包含记忆保存）
+  const handleDisconnect = useCallback(async () => {
+    // 1. 如果是日常对话且有消息，先保存记忆
+    if (chatType === 'daily_chat' && messages.length > 0) {
+      console.log('💾 [记忆保存] 开始提取对话记忆...');
+
+      try {
+        // 将 messages 转换为 memory-extractor 需要的格式
+        const mem0Messages = messages.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.text,
+        }));
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/memory-extractor`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            action: 'extract',
+            userId: '11111111-1111-1111-1111-111111111111', // TODO: 使用真实用户 ID
+            messages: mem0Messages,
+            taskDescription: '日常对话',
+            localDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+            metadata: {
+              source: 'daily_chat',
+              timestamp: new Date().toISOString(),
+            },
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('💾 [记忆保存] 成功:', {
+            extracted: result.extracted,
+            saved: result.saved,
+            merged: result.merged,
+          });
+          if (result.memories && result.memories.length > 0) {
+            console.log('💾 [记忆保存] 提取的记忆:');
+            result.memories.forEach((m: { tag: string; content: string }) => {
+              console.log(`  - [${m.tag}] ${m.content}`);
+            });
+          }
+        } else {
+          console.warn('💾 [记忆保存] 失败:', await response.text());
+        }
+      } catch (err) {
+        console.error('💾 [记忆保存] 错误:', err);
+      }
+    }
+
+    // 2. 断开 Gemini Live 连接
     geminiLive.disconnect();
     setChatType(null);
     setMessages([]);
-    intentDetection.clearHistory(); // clearHistory 会重置防重复标记
-  }, [geminiLive, intentDetection]);
+    intentDetection.clearHistory();
+  }, [geminiLive, intentDetection, chatType, messages, supabaseUrl, supabaseAnonKey]);
 
   // 发送文字
   const handleSendText = useCallback(() => {

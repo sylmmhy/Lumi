@@ -25,7 +25,6 @@ import type {
   VirtualMessageType,
   TopicInfo,
   EmotionalState,
-  MemoryRetrievalResult,
 } from './types'
 import { EMOTION_RESPONSE_THRESHOLD } from './constants'
 import type { SuggestedAction } from '../useToneManager'

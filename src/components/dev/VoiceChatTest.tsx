@@ -27,7 +27,13 @@ type ChatType = 'intention_compile' | 'daily_chat';
  * 清理文本中的噪音标记
  */
 const cleanNoiseMarkers = (text: string): string => {
-  return text.replace(/<noise>/g, '').trim();
+  return text
+    .replace(/<noise>/g, '')
+    .replace(/\[TOOL_RESULT\][\s\S]*?(?=\n\n|$)/gi, '') // 过滤 [TOOL_RESULT] 整个块
+    .replace(/\[CONTEXT\][\s\S]*?(?=\n\n|$)/gi, '') // 过滤 [CONTEXT] 整个块
+    .replace(/\[System\][^\u4e00-\u9fa5]*/gi, '') // 过滤 [System] 及其后的英文内容
+    .replace(/\[内部结果.*?\]/g, '') // 过滤内部结果标记
+    .trim();
 };
 
 export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
@@ -53,17 +59,25 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   // 存储 intentDetection 的 ref（用于在回调里访问）
   const intentDetectionRef = useRef<ReturnType<typeof useIntentDetection> | null>(null);
 
+  // 获取用户语言偏好（从浏览器或用户设置）
+  const preferredLanguage = navigator.language?.startsWith('zh') ? 'zh' : 'en';
+
   // 意图检测 Hook（三层 AI 架构）
   const intentDetection = useIntentDetection({
     userId: '11111111-1111-1111-1111-111111111111',
     chatType: chatType || 'daily_chat',
-    preferredLanguage: 'zh',
+    preferredLanguage,
     onToolResult: (result) => {
       console.log('🔧 工具结果:', result);
       
       if (result.responseHint && geminiLiveRef.current?.isConnected) {
-        // 注入工具结果给 AI
-        geminiLiveRef.current.sendTextMessage(`[System] ${result.responseHint}`);
+        // 使用虚拟消息格式注入工具结果
+        // 关键是 action: 指令告诉 AI 要怎么做
+        const contextMessage = `[TOOL_RESULT] type=${result.tool}
+result: ${result.responseHint}
+action: 用你自己的话简短地告诉用户这个结果。不要直接照读，像朋友一样自然地说。`;
+        geminiLiveRef.current.sendClientContent(contextMessage, true);
+        console.log('💉 [工具结果] 已注入:', contextMessage.substring(0, 80) + '...');
       }
     },
   });

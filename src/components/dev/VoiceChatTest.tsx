@@ -114,31 +114,43 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
     }
   }, [chatType]);
 
-  // 监听 AI 回复，触发意图检测（防重复）
-  const processedMessagesRef = useRef<Set<string>>(new Set());
+  // 监听 AI 回复，触发意图检测
+  // 只有当 AI 停止说话时才检测，避免流式输出时重复触发
+  const lastProcessedIndexRef = useRef<number>(-1);
+  const lastAIMessageRef = useRef<string>('');
+  const wasSpekingRef = useRef(false);
   
   useEffect(() => {
-    if (messages.length > 0) {
+    // 检测 AI 是否刚停止说话
+    const justStoppedSpeaking = wasSpekingRef.current && !geminiLive.isSpeaking;
+    wasSpekingRef.current = geminiLive.isSpeaking;
+    
+    if (messages.length > 0 && justStoppedSpeaking) {
       const lastMsg = messages[messages.length - 1];
+      
       if (lastMsg.role === 'ai' && lastMsg.text) {
-        // 防重复检测
-        const msgId = lastMsg.text.substring(0, 50);
-        if (!processedMessagesRef.current.has(msgId)) {
-          processedMessagesRef.current.add(msgId);
-          intentDetection.processAIResponse(lastMsg.text);
-          
-          // 只保留最近10条，避免内存泄漏
-          if (processedMessagesRef.current.size > 10) {
-            const arr = Array.from(processedMessagesRef.current);
-            processedMessagesRef.current = new Set(arr.slice(-10));
+        // 先添加用户消息（从上次处理的位置开始）
+        for (let i = lastProcessedIndexRef.current + 1; i < messages.length - 1; i++) {
+          const msg = messages[i];
+          if (msg.role === 'user' && msg.text) {
+            const cleanedText = msg.text.replace(/<noise>/g, '').trim();
+            if (cleanedText) {
+              intentDetection.addUserMessage(cleanedText);
+              console.log('📝 [用户消息] 添加:', cleanedText);
+            }
           }
         }
-      }
-      if (lastMsg.role === 'user' && lastMsg.text) {
-        intentDetection.addUserMessage(lastMsg.text);
+        lastProcessedIndexRef.current = messages.length - 2;
+        
+        // 检测 AI 消息（只有和上次不同才处理）
+        if (lastMsg.text !== lastAIMessageRef.current) {
+          lastAIMessageRef.current = lastMsg.text;
+          console.log('🤖 [AI消息] 说完了:', lastMsg.text.substring(0, 100));
+          intentDetection.processAIResponse(lastMsg.text);
+        }
       }
     }
-  }, [messages, intentDetection]);
+  }, [messages, geminiLive.isSpeaking, intentDetection]);
 
   // 滚动到底部
   useEffect(() => {

@@ -244,6 +244,9 @@ export async function handleToolCall(
     case 'create_habit_stack':
       return handleCreateHabitStack(args, context);
 
+    case 'create_simple_routine':
+      return handleCreateSimpleRoutine(args, context);
+
     default:
       console.warn(`⚠️ [ToolDispatcher] 未知工具: ${functionName}`);
       return {
@@ -300,6 +303,64 @@ export async function handleSaveGoalPlan(
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
       responseHint: '抱歉，保存计划时出了点问题',
+    };
+  }
+}
+
+/**
+ * 处理 create_simple_routine 工具调用
+ * 直接创建一个独立的每日提醒任务
+ */
+export async function handleCreateSimpleRoutine(
+  args: Record<string, unknown>,
+  context: ToolCallContext
+): Promise<ToolCallResult> {
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  const habitName = args.habit_name as string;
+  const reminderTime = args.reminder_time as string;
+  const durationMinutes = (args.duration_minutes as number) || 5;
+
+  console.log('🛠️ [Tool] create_simple_routine 调用:', { habitName, reminderTime });
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-simple-routine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
+        habit_name: habitName,
+        reminder_time: reminderTime,
+        duration_minutes: durationMinutes,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] create_simple_routine 结果:', data);
+
+    return {
+      success: true,
+      data,
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? `好的，已经设置好了！我会每天 ${reminderTime} 提醒你「${habitName}」～`
+        : `Done! I'll remind you to "${habitName}" every day at ${reminderTime}.`,
+    };
+
+  } catch (error) {
+    console.error('❌ [Tool] create_simple_routine 错误:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+      responseHint: preferredLanguage?.startsWith('zh')
+        ? '抱歉，创建提醒时出了点问题'
+        : 'Sorry, there was an issue creating the reminder.',
     };
   }
 }

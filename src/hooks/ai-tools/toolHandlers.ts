@@ -90,8 +90,17 @@ export async function handleSuggestHabitStack(
     const anchorTitle = topSuggestion.anchor_title;
     const position = topSuggestion.position === 'after' ? '之后' : '之前';
     const positionEn = topSuggestion.position;
-    const confidence = Math.round(topSuggestion.confidence * 100);
-    const reasoning = topSuggestion.reasoning;
+    
+    // 获取锚点习惯的统计数据
+    const anchor = data.anchors?.find((a: { task_id: string }) => a.task_id === topSuggestion.anchor_task_id);
+    const completionRate = anchor?.completion_rate || 85;
+    const avgTime = anchor?.avg_time || '';
+    
+    // 构建更专业的说明
+    const timeInfo = avgTime ? `你通常在 ${avgTime} 左右完成它。` : '';
+    const scienceReason = topSuggestion.position === 'after' 
+      ? `刚完成一件事时大脑会释放多巴胺，这时开始新习惯更容易坚持。`
+      : `在固定习惯前做新事，可以借助已有的仪式感帮助记忆。`;
 
     return {
       success: true,
@@ -106,8 +115,8 @@ export async function handleSuggestHabitStack(
         },
       },
       responseHint: preferredLanguage?.startsWith('zh')
-        ? `我分析了你的习惯数据，发现「${anchorTitle}」是你最稳定的习惯。我建议你在「${anchorTitle}」${position}做「${newHabit}」，成功率预计有 ${confidence}%。${reasoning} 要帮你设置这个提醒吗？`
-        : `I analyzed your habit data and found that "${anchorTitle}" is your most stable habit. I suggest doing "${newHabit}" ${positionEn} "${anchorTitle}", with an estimated ${confidence}% success rate. ${reasoning} Would you like me to set up this reminder?`,
+        ? `我分析了你过去两周的数据，「${anchorTitle}」是你最稳定的习惯，完成率达到 ${completionRate}%。${timeInfo}我建议你在「${anchorTitle}」${position}做「${newHabit}」。${scienceReason}要帮你设置这个提醒吗？`
+        : `I analyzed your data from the past two weeks. "${anchorTitle}" is your most stable habit with a ${completionRate}% completion rate. ${avgTime ? `You usually complete it around ${avgTime}. ` : ''}I suggest doing "${newHabit}" ${positionEn} "${anchorTitle}". When you finish a task, your brain releases dopamine, making it easier to start a new habit. Would you like me to set this up?`,
     };
 
   } catch (error) {
@@ -198,7 +207,7 @@ export async function handleCreateHabitStack(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { preferredLanguage } = context;
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
   const anchorTaskId = args.anchor_task_id as string;
   const newHabitTitle = args.new_habit_title as string;
   const position = args.position as string;
@@ -207,22 +216,35 @@ export async function handleCreateHabitStack(
   console.log('🔧 [Tool] create_habit_stack 调用:', { anchorTaskId, newHabitTitle, position });
 
   try {
-    // 注意：这里需要先创建新习惯的 task，然后再创建 habit_stack
-    // 简化起见，我们先返回一个模拟成功的响应
-    // TODO: 实现完整的创建流程
-
-    return {
-      success: true,
-      data: {
-        created: true,
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-habit-stack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        userId,
         anchor_task_id: anchorTaskId,
         new_habit_title: newHabitTitle,
         position,
         reminder_message: reminderMessage,
-      },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API 调用失败');
+    }
+
+    const data = await response.json();
+    console.log('✅ [Tool] create_habit_stack 结果:', data);
+
+    return {
+      success: true,
+      data,
       responseHint: preferredLanguage?.startsWith('zh')
-        ? `好的，我已经帮你设置好了！以后你完成那个习惯${position === 'after' ? '之后' : '之前'}，我会提醒你「${newHabitTitle}」。加油！`
-        : `Done! I've set it up for you. I'll remind you to "${newHabitTitle}" ${position} that habit. You got this!`,
+        ? `好的，我已经帮你设置好了！以后你完成「${data.anchorTitle}」${position === 'after' ? '之后' : '之前'}，我会提醒你「${newHabitTitle}」。加油！`
+        : `Done! I'll remind you to "${newHabitTitle}" ${position} "${data.anchorTitle}". You got this!`,
     };
 
   } catch (error) {

@@ -4,12 +4,14 @@
  * 新版设计理念（截图版）：
  * - 左侧：习惯名称 + 轻量化启动引导语
  * - 右侧：3D 风格 Start 按钮（黄/橙色，有厚度）
- * - 底部：累计经验进度条 + Level 显示
+ * - 底部：每周打卡进度（周一到周日的7个圆圈，完成显示金币）
  */
 
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { calculateCurrentStreak } from './heatmapHelpers';
+import { LanguageContext } from '../../context/LanguageContextDefinition';
 import type { Habit } from './types';
 
 interface StatsCardProps {
@@ -19,8 +21,8 @@ interface StatsCardProps {
     onToggleToday: () => void;
     /** 点击查看详情的回调 */
     onClickDetail: () => void;
-    /** 打卡成功回调（用于联动蓄水池和 Toast） */
-    onCheckIn?: (habitId: string) => void;
+    /** 打卡成功回调（用于联动存钱罐和 Toast） */
+    onCheckIn?: (habitId: string) => Promise<void>;
     /** 启动 AI Coach 任务的回调（传递习惯 ID 和名称） */
     onStartTask?: (habitId: string, habitTitle: string) => void;
 }
@@ -80,56 +82,56 @@ const getDefaultSubtitle = (title: string): string => {
 };
 
 /**
- * 根据累计次数计算当前等级和下一等级目标
- * 等级里程碑：1, 5, 15, 30, 50, 80, 120, 170, 230, 300...
+ * 获取本周的日期数组（周一到周日）
+ * @returns 本周每天的日期字符串数组（YYYY-MM-DD 格式）
  */
-const getLevelInfo = (totalCompletions: number): { level: number; current: number; target: number } => {
-    // 等级对应的累计次数要求（到达该次数升级）
-    const levelThresholds = [0, 1, 5, 15, 30, 50, 80, 120, 170, 230, 300, 400, 500, 650, 800, 1000];
+const getThisWeekDays = (): string[] => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = 周日, 1 = 周一, ...
+    // 计算本周周一的日期（如果今天是周日，则往前推6天）
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
 
-    let level = 1;
-    for (let i = 1; i < levelThresholds.length; i++) {
-        if (totalCompletions >= levelThresholds[i]) {
-            level = i + 1;
-        } else {
-            break;
-        }
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        days.push(getLocalDateString(date));
     }
-
-    // 当前等级的起始值
-    const currentLevelStart = levelThresholds[level - 1] || 0;
-    // 下一等级的目标值
-    const nextLevelTarget = levelThresholds[level] || currentLevelStart + 100;
-
-    return {
-        level,
-        current: totalCompletions - currentLevelStart,
-        target: nextLevelTarget - currentLevelStart,
-    };
+    return days;
 };
+
+/**
+ * 周几的简称（用于显示）
+ */
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
 /**
  * 能量启动卡片
  */
 export const StatsCard: React.FC<StatsCardProps> = ({
     habit,
+    onToggleToday,
     onClickDetail,
+    onCheckIn,
     onStartTask,
 }) => {
     const todayKey = getLocalDateString();
     const isTodayDone = !!habit.history[todayKey];
+    const { t } = useContext(LanguageContext);
 
     // 动画状态
     const [isPressed, setIsPressed] = useState(false);
     const [showConfetti] = useState(false);
+    // 取消打卡确认弹窗状态
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
     // 获取引导语
     const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);
 
-    // 获取等级信息（基于累计完成次数）
-    const totalCompletions = habit.totalCompletions || 0;
-    const { level, current, target } = getLevelInfo(totalCompletions);
-    const progress = Math.min(current / target, 1);
+    // 获取本周的打卡进度
+    const thisWeekDays = getThisWeekDays();
 
     // 计算连胜天数（复用 heatmapHelpers 中的统一逻辑）
     const streakDays = calculateCurrentStreak(habit.history);
@@ -154,6 +156,35 @@ export const StatsCard: React.FC<StatsCardProps> = ({
         // 启动 AI Coach 任务（传递习惯 ID 和名称，用于完成时更新正确的习惯记录）
         if (onStartTask) {
             onStartTask(habit.id, habit.title);
+        }
+    };
+
+    /**
+     * 处理今天圆圈点击
+     * - 未完成：直接打卡
+     * - 已完成：弹出确认取消弹窗
+     */
+    const handleTodayCircleClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        if (isTodayDone) {
+            // 已完成，显示取消确认弹窗
+            setShowCancelConfirm(true);
+        } else {
+            // 未完成，直接打卡
+            if (onCheckIn) {
+                await onCheckIn(habit.id);
+            }
+        }
+    };
+
+    /**
+     * 确认取消打卡
+     */
+    const handleConfirmCancel = () => {
+        setShowCancelConfirm(false);
+        if (onToggleToday) {
+            onToggleToday();
         }
     };
 
@@ -234,38 +265,92 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                 </div>
             </div>
 
-            {/* 下半部分：累计经验进度条 + Level */}
-            <div className="flex items-center gap-3">
-                {/* 进度条 */}
-                <div className="flex-1 relative">
-                    <div
-                        className="h-7 rounded-full overflow-hidden"
-                        style={{ backgroundColor: '#F0F0F0' }}
-                    >
-                        {/* 进度填充 */}
-                        <div
-                            className="h-full rounded-full transition-all duration-500 ease-out"
-                            style={{
-                                width: `${progress * 100}%`,
-                                background: 'linear-gradient(90deg, #FFD966 0%, #E6A800 100%)',
-                            }}
-                        />
-                    </div>
-                    {/* 进度文字 */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-gray-600 font-medium text-sm">
-                            {current} / {target}
-                        </span>
-                    </div>
-                </div>
+            {/* 下半部分：每周打卡进度（周一到周日） */}
+            <div className="flex items-center justify-between">
+                {thisWeekDays.map((dateKey, index) => {
+                    const isCompleted = !!habit.history[dateKey];
+                    const isToday = dateKey === todayKey;
 
-                {/* Level 标签 */}
-                <div className="flex-shrink-0">
-                    <span className="text-gray-600 font-semibold text-sm">
-                        Level {level}
-                    </span>
-                </div>
+                    return (
+                        <div
+                            key={dateKey}
+                            className="flex flex-col items-center gap-1"
+                        >
+                            {/* 周几标签 */}
+                            <span
+                                className={`text-xs font-medium ${
+                                    isToday ? 'text-amber-500' : 'text-gray-400'
+                                }`}
+                            >
+                                {WEEKDAY_LABELS[index]}
+                            </span>
+                            {/* 打卡状态圆圈 - 今天的可点击 */}
+                            <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${
+                                    isCompleted
+                                        ? ''
+                                        : isToday
+                                          ? 'border-2 border-amber-400 bg-amber-50'
+                                          : 'border-2 border-gray-200 bg-gray-50'
+                                } ${isToday ? 'cursor-pointer active:scale-90' : ''}`}
+                                onClick={isToday ? handleTodayCircleClick : undefined}
+                            >
+                                {isCompleted ? (
+                                    <img
+                                        src="/coins.png"
+                                        alt="完成"
+                                        className="w-8 h-8 object-contain"
+                                    />
+                                ) : null}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
+
+            {/* 取消打卡确认弹窗 - 使用 Portal 渲染到 body */}
+            {showCancelConfirm && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCancelConfirm(false);
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-2xl p-6 mx-6 max-w-sm w-full shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">
+                            {t('stats.cancelCheckIn.title')}
+                        </h3>
+                        <p className="text-gray-500 text-sm mb-6">
+                            {t('stats.cancelCheckIn.message')}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-medium"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowCancelConfirm(false);
+                                }}
+                            >
+                                {t('stats.cancelCheckIn.keep')}
+                            </button>
+                            <button
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConfirmCancel();
+                                }}
+                            >
+                                {t('stats.cancelCheckIn.cancel')}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* CSS 动画 */}
             <style>{`

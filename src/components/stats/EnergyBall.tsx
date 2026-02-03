@@ -1,217 +1,416 @@
 /**
- * EnergyBall - 液体波浪充能球组件
+ * EnergyBall - 存钱罐进度组件
  *
- * 触发式物理动画：
- * - 默认状态：水面静止
- * - 进度增加时：触发波浪晃动，然后物理衰减至静止
+ * Matter.js 物理引擎 + 多角度金币素材
+ *
+ * 视觉规格：
+ * 1. 纹理权重：正面/微侧面 80%，全侧面 20%
+ * 2. 旋转限制：±30° 以内，防止"金墩子"
+ * 3. 物理参数：高摩擦 + 轻微弹性 + 空气阻力
+ * 4. 纵深感：底层 brightness(0.8) contrast(1.1)
+ * 5. 数字置顶：毛玻璃背景 blur(5px)
+ * 6. 增量更新：打卡时只新增一个金币掉落
+ * 7. 归零扭矩：金币静止时自动趋向"平躺"姿态（角度归零）
  */
 
-import React, { useEffect, useState, useRef } from 'react';
-import { useTranslation } from '../../hooks/useTranslation';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Matter from 'matter-js';
 
 interface EnergyBallProps {
-    /** 当前完成数 */
     current: number;
-    /** 目标数 */
     target: number;
-    /** 触发水位上涨动画 */
     triggerRise?: boolean;
 }
 
+interface CoinState {
+    id: string;
+    x: number;
+    y: number;
+    rotation: number;
+    texture: string;
+}
+
 /**
- * 液体波浪充能球组件
+ * 金币纹理配置
+ * - 正面/微侧面 (coin-0 ~ coin-3): 权重高，占 80%
+ * - 全侧面 (coin-4 ~ coin-9): 权重低，占 20%
  */
-export const EnergyBall: React.FC<EnergyBallProps> = ({
-    current,
-    target,
-    triggerRise = false,
-}) => {
-    const { t } = useTranslation();
-    const percentage = Math.min((current / target) * 100, 100);
-    const [isRising, setIsRising] = useState(false);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const animationRef = useRef<number>(0);
+const COIN_TEXTURES = {
+    // 正面和微侧面（高权重）
+    front: [
+        '/coins/coin-0.png',
+        '/coins/coin-1.png',
+        '/coins/coin-2.png',
+        '/coins/coin-3.png',
+    ],
+    // 全侧面（低权重）
+    side: [
+        '/coins/coin-4.png',
+        '/coins/coin-5.png',
+        '/coins/coin-6.png',
+        '/coins/coin-7.png',
+        '/coins/coin-8.png',
+        '/coins/coin-9.png',
+    ],
+};
 
-    // 保存上一次的 current 值，用于检测变化
-    const prevCurrentRef = useRef(current);
+/**
+ * 根据权重随机选择纹理
+ * 80% 概率选正面/微侧面，20% 概率选全侧面
+ */
+function getRandomTexture(): string {
+    const isFront = Math.random() < 0.8;
+    if (isFront) {
+        const idx = Math.floor(Math.random() * COIN_TEXTURES.front.length);
+        return COIN_TEXTURES.front[idx];
+    } else {
+        const idx = Math.floor(Math.random() * COIN_TEXTURES.side.length);
+        return COIN_TEXTURES.side[idx];
+    }
+}
 
-    // 物理动画状态
-    const waveStateRef = useRef({
-        amplitude: 0,        // 当前振幅（会衰减）
-        phase: 0,            // 当前相位
-        isAnimating: false,  // 是否正在动画
-    });
-
-    // 监听 triggerRise 触发缩放效果
-    /* eslint-disable react-hooks/set-state-in-effect -- 需要响应外部 prop 变化触发动画 */
-    useEffect(() => {
-        if (triggerRise) {
-            setIsRising(true);
-            const timer = setTimeout(() => setIsRising(false), 600);
-            return () => clearTimeout(timer);
-        }
-    }, [triggerRise]);
-    /* eslint-enable react-hooks/set-state-in-effect */
-
-    // 监听 current 变化，触发波浪动画
-    useEffect(() => {
-        if (current > prevCurrentRef.current) {
-            // 进度增加了，触发波浪！
-            waveStateRef.current.amplitude = 12; // 初始振幅
-            waveStateRef.current.isAnimating = true;
-        }
-        prevCurrentRef.current = current;
-    }, [current]);
-
-    // 首次挂载时触发一次波浪动画（页面进入时的视觉反馈）
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            waveStateRef.current.amplitude = 8; // 稍小的初始振幅
-            waveStateRef.current.isAnimating = true;
-        }, 300); // 延迟 300ms，等页面渲染完成
-        return () => clearTimeout(timer);
-    }, []);
-
-    // 尺寸配置（1.3倍）
+/**
+ * 存钱罐进度组件
+ */
+export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = false }) => {
     const size = 125;
     const borderWidth = 8;
-    const innerSize = size - borderWidth * 2;
+    const innerSize = size - borderWidth * 2; // 109px
+    const coinSize = 18;
+    const radius = innerSize / 2;
+    const hitboxScale = 0.85;
 
-    // Canvas 绘制
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+    const [coins, setCoins] = useState<CoinState[]>([]);
+    const engineRef = useRef<Matter.Engine | null>(null);
+    const worldRef = useRef<Matter.World | null>(null);
+    const coinBodiesRef = useRef<Map<string, { body: Matter.Body; texture: string }>>(new Map());
+    const prevCurrentRef = useRef<number>(0);
+    const animationIdRef = useRef<number | null>(null);
+    const isInitializedRef = useRef(false);
+    const timeoutIdsRef = useRef<number[]>([]);
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    /**
+     * 初始化物理引擎（只执行一次）
+     */
+    const initEngine = useCallback(() => {
+        if (isInitializedRef.current) return;
 
-        // 高清屏适配
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = innerSize * dpr;
-        canvas.height = innerSize * dpr;
-        ctx.scale(dpr, dpr);
+        // 创建物理引擎
+        const engine = Matter.Engine.create({
+            gravity: { x: 0, y: 1.5 },
+        });
+        engineRef.current = engine;
+        worldRef.current = engine.world;
 
-        // 衰减系数（越接近 1，衰减越慢，晃动越久）
-        const dampingFactor = 0.99;
-        // 停止动画的振幅阈值（越小，余波荡漾越久）
-        const stopThreshold = 0.1;
+        // 创建圆形边界（下半圆弧）
+        const segments = 20;
+        const wallThickness = 15;
+        for (let i = 0; i < segments; i++) {
+            const angle = (i / segments) * Math.PI;
+            const nextAngle = ((i + 1) / segments) * Math.PI;
+            const midAngle = (angle + nextAngle) / 2;
 
-        const draw = () => {
-            ctx.clearRect(0, 0, innerSize, innerSize);
+            const wallRadius = radius + 5;
+            const x = radius + Math.cos(midAngle) * wallRadius;
+            const y = radius + Math.sin(midAngle) * wallRadius;
 
-            const state = waveStateRef.current;
+            const segmentLength = 2 * wallRadius * Math.sin(Math.PI / segments / 2) * 2 + 4;
 
-            // 水位高度（从顶部算起）
-            const waterLevel = innerSize - (percentage / 100) * innerSize;
+            const wall = Matter.Bodies.rectangle(x, y, segmentLength, wallThickness, {
+                isStatic: true,
+                angle: midAngle + Math.PI / 2,
+                friction: 0.9,
+                restitution: 0.1,
+            });
+            Matter.Composite.add(engine.world, wall);
+        }
 
-            // 如果正在动画，更新相位和衰减振幅
-            if (state.isAnimating) {
-                state.phase += 0.08; // 相位递增速度
-                state.amplitude *= dampingFactor; // 振幅衰减
+        // 左右墙壁
+        Matter.Composite.add(engine.world, Matter.Bodies.rectangle(-2, radius + 10, 10, innerSize + 20, { isStatic: true, friction: 0.9 }));
+        Matter.Composite.add(engine.world, Matter.Bodies.rectangle(innerSize + 2, radius + 10, 10, innerSize + 20, { isStatic: true, friction: 0.9 }));
 
-                // 振幅低于阈值，停止动画
-                if (state.amplitude < stopThreshold) {
-                    state.amplitude = 0;
-                    state.isAnimating = false;
+        isInitializedRef.current = true;
+
+        // 启动物理模拟循环
+        const updatePhysics = () => {
+            if (!engineRef.current) return;
+
+            Matter.Engine.update(engineRef.current, 1000 / 60);
+
+            const newCoins: CoinState[] = [];
+            coinBodiesRef.current.forEach(({ body, texture }, id) => {
+                // === 关键修复：让金币趋向于"平躺"（角度归零）===
+                // 计算当前角速度和速度的大小
+                const speed = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
+                const angularSpeed = Math.abs(body.angularVelocity);
+
+                // 当金币接近静止时，施加归零扭矩
+                if (speed < 0.5 && angularSpeed < 0.1) {
+                    // 将角度归一化到 [-π, π]
+                    let angle = body.angle % (2 * Math.PI);
+                    if (angle > Math.PI) angle -= 2 * Math.PI;
+                    if (angle < -Math.PI) angle += 2 * Math.PI;
+
+                    // 施加反向角速度，让角度趋向 0（平躺）
+                    const targetAngularVelocity = -angle * 0.05;
+                    Matter.Body.setAngularVelocity(
+                        body,
+                        body.angularVelocity * 0.95 + targetAngularVelocity * 0.05
+                    );
                 }
-            }
 
-            // 当前振幅（静止时为 0）
-            const currentAmplitude = state.amplitude;
+                let rotation = (body.angle * 180) / Math.PI;
+                rotation = rotation % 360;
+                if (rotation > 180) rotation -= 360;
+                if (rotation < -180) rotation += 360;
+                const clampedRotation = Math.max(-30, Math.min(30, rotation));
 
-            // 波长配置（平缓的大波浪）
-            const backWavelength = innerSize * 2.5;
-            const frontWavelength = innerSize * 1.8;
+                newCoins.push({
+                    id,
+                    x: body.position.x - coinSize / 2,
+                    y: body.position.y - coinSize / 2,
+                    rotation: clampedRotation,
+                    texture,
+                });
+            });
 
-            // 绘制后层波浪（浅色）
-            ctx.beginPath();
-            ctx.moveTo(0, innerSize);
-            for (let x = 0; x <= innerSize; x++) {
-                const waveY = currentAmplitude * Math.sin((x / backWavelength) * Math.PI * 2 + state.phase);
-                ctx.lineTo(x, waterLevel + waveY);
-            }
-            ctx.lineTo(innerSize, innerSize);
-            ctx.closePath();
-            ctx.fillStyle = '#FAE59D';
-            ctx.fill();
-
-            // 绘制前层波浪（深色，相位偏移 + 反向）
-            ctx.beginPath();
-            ctx.moveTo(0, innerSize);
-            for (let x = 0; x <= innerSize; x++) {
-                const waveY = currentAmplitude * 0.8 * Math.sin((x / frontWavelength) * Math.PI * 2 - state.phase * 0.7 + Math.PI * 0.5);
-                ctx.lineTo(x, waterLevel + waveY);
-            }
-            ctx.lineTo(innerSize, innerSize);
-            ctx.closePath();
-            ctx.fillStyle = '#F9CF3A';
-            ctx.fill();
-
-            animationRef.current = requestAnimationFrame(draw);
+            setCoins([...newCoins]);
+            animationIdRef.current = requestAnimationFrame(updatePhysics);
         };
 
-        draw();
+        animationIdRef.current = requestAnimationFrame(updatePhysics);
+    }, [radius, innerSize, coinSize]);
+
+    /**
+     * 添加一个金币
+     */
+    const addCoin = useCallback(() => {
+        if (!worldRef.current) return;
+
+        const startX = radius + (Math.random() - 0.5) * 70;
+        const startY = -coinSize * 2;
+
+        const coin = Matter.Bodies.circle(startX, startY, (coinSize / 2) * hitboxScale, {
+            friction: 0.8,
+            frictionStatic: 0.9,
+            restitution: 0.2,
+            density: 0.005,
+            // 角度阻尼：让旋转更快停下来
+            frictionAir: 0.02,
+        });
+
+        // 初始角速度降低，减少侧立概率
+        Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.1);
+        Matter.Composite.add(worldRef.current, coin);
+
+        const texture = getRandomTexture();
+        coinBodiesRef.current.set(coin.id.toString(), { body: coin, texture });
+    }, [radius, coinSize, hitboxScale]);
+
+    /**
+     * 移除一个金币（移除最后添加的）
+     */
+    const removeCoin = useCallback(() => {
+        if (!worldRef.current || coinBodiesRef.current.size === 0) return;
+
+        // 获取最后一个金币
+        const entries = Array.from(coinBodiesRef.current.entries());
+        const lastEntry = entries[entries.length - 1];
+        if (lastEntry) {
+            const [id, { body }] = lastEntry;
+            Matter.Composite.remove(worldRef.current, body);
+            coinBodiesRef.current.delete(id);
+        }
+    }, []);
+
+    /**
+     * 批量添加金币（初始化时使用）
+     */
+    const addCoinsInBatch = useCallback((count: number) => {
+        if (!worldRef.current) return;
+
+        for (let i = 0; i < count; i++) {
+            const startX = radius + (Math.random() - 0.5) * 70;
+            const startY = -coinSize - i * 3;
+
+            const coin = Matter.Bodies.circle(startX, startY, (coinSize / 2) * hitboxScale, {
+                friction: 0.8,
+                frictionStatic: 0.9,
+                restitution: 0.2,
+                density: 0.005,
+                // 角度阻尼：让旋转更快停下来
+                frictionAir: 0.02,
+            });
+
+            // 初始角速度降低，减少侧立概率
+            Matter.Body.setAngularVelocity(coin, (Math.random() - 0.5) * 0.1);
+            Matter.Composite.add(worldRef.current, coin);
+
+            const texture = getRandomTexture();
+            coinBodiesRef.current.set(coin.id.toString(), { body: coin, texture });
+        }
+    }, [radius, coinSize, hitboxScale]);
+
+    // 初始化引擎
+    useEffect(() => {
+        initEngine();
 
         return () => {
-            cancelAnimationFrame(animationRef.current);
+            // 清理所有 pending 的 setTimeout
+            timeoutIdsRef.current.forEach(id => window.clearTimeout(id));
+            timeoutIdsRef.current = [];
+
+            if (animationIdRef.current) {
+                cancelAnimationFrame(animationIdRef.current);
+            }
+            if (engineRef.current) {
+                Matter.World.clear(engineRef.current.world, false);
+                Matter.Engine.clear(engineRef.current);
+            }
+            isInitializedRef.current = false;
+            coinBodiesRef.current.clear();
         };
-    }, [percentage, innerSize]);
+    }, [initEngine]);
+
+    // 响应 current 变化
+    useEffect(() => {
+        const targetCount = Math.min(Math.max(current, 0), 40);
+        const currentCount = coinBodiesRef.current.size;
+        const prevCount = prevCurrentRef.current;
+
+        // 首次加载或重新挂载：批量添加
+        if (prevCount === 0 && targetCount > 0 && currentCount === 0) {
+            addCoinsInBatch(targetCount);
+        }
+        // 增加金币：逐个添加
+        else if (targetCount > currentCount) {
+            const diff = targetCount - currentCount;
+            for (let i = 0; i < diff; i++) {
+                const timeoutId = window.setTimeout(() => addCoin(), i * 100); // 间隔 100ms 掉落
+                timeoutIdsRef.current.push(timeoutId);
+            }
+        }
+        // 减少金币：逐个移除
+        else if (targetCount < currentCount) {
+            const diff = currentCount - targetCount;
+            for (let i = 0; i < diff; i++) {
+                removeCoin();
+            }
+        }
+
+        prevCurrentRef.current = targetCount;
+    }, [current, addCoin, removeCoin, addCoinsInBatch]);
 
     return (
-        <div className={`relative transition-transform duration-300 ${isRising ? 'scale-110' : 'scale-100'}`}>
+        <div className="relative">
+            {/* 金色光晕 - 打卡时显示并旋转 */}
+            <div
+                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300 ${
+                    triggerRise ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                    width: size * 3.5,
+                    height: size * 3.5,
+                    zIndex: 0,
+                }}
+            >
+                <img
+                    src="/golden-light.png"
+                    alt=""
+                    className="w-full h-full object-contain"
+                    style={{
+                        animation: triggerRise ? 'spin-glow 10s linear infinite' : 'none',
+                    }}
+                />
+            </div>
+
             {/* 外层白色圆圈 */}
             <div
-                className="rounded-full flex items-center justify-center"
+                className="rounded-full flex items-center justify-center relative"
                 style={{
                     width: size,
                     height: size,
                     backgroundColor: 'white',
                     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+                    zIndex: 1,
                 }}
             >
-                {/* 内层圆形容器（遮罩） */}
+                {/* 内层圆形容器 */}
                 <div
                     className="relative rounded-full overflow-hidden"
                     style={{
                         width: innerSize,
                         height: innerSize,
-                        backgroundColor: '#FFF8E7',
+                        background: 'linear-gradient(180deg, #FFF8E7 0%, #F5E6C8 100%)',
                     }}
                 >
-                    {/* Canvas 波浪 */}
-                    <canvas
-                        ref={canvasRef}
-                        style={{
-                            width: innerSize,
-                            height: innerSize,
-                        }}
-                    />
+                    {/* 金币层 */}
+                    <div className="absolute inset-0">
+                        {coins.map((coin, index) => {
+                            const depthRatio = index / Math.max(coins.length - 1, 1);
+                            const brightness = 0.85 + depthRatio * 0.15;
+                            const contrast = 1.05 - depthRatio * 0.05;
+
+                            return (
+                                <img
+                                    key={coin.id}
+                                    src={coin.texture}
+                                    alt=""
+                                    className="absolute"
+                                    style={{
+                                        width: coinSize,
+                                        height: coinSize,
+                                        objectFit: 'contain',
+                                        left: coin.x,
+                                        top: coin.y,
+                                        transform: `rotate(${coin.rotation}deg)`,
+                                        filter: `brightness(${brightness}) contrast(${contrast}) drop-shadow(1px 2px 3px rgba(0,0,0,0.35))`,
+                                        zIndex: index + 1,
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
 
-            {/* 中心文字 */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span
-                    className="font-extrabold text-3xl leading-none"
+            {/* 数字层 - 最顶层，轻微磨砂透明背景 */}
+            <div
+                className="absolute inset-0 flex items-start justify-center pt-6 pointer-events-none"
+                style={{ zIndex: 999 }}
+            >
+                <div
+                    className="px-2.5 py-1 rounded-full"
                     style={{
-                        fontFamily: "'Quicksand', sans-serif",
-                        color: '#8B5A3C',
+                        background: 'rgba(255, 248, 235, 0.2)',
+                        backdropFilter: 'blur(2px)',
+                        WebkitBackdropFilter: 'blur(2px)',
                     }}
                 >
-                    {current}/{target}
-                </span>
-                <span
-                    className="leading-none whitespace-nowrap"
-                    style={{
-                        fontFamily: "'Quicksand', sans-serif",
-                        color: '#AC6F46',
-                        fontSize: '9px',
-                        marginTop: '4px',
-                    }}
-                >
-                    {t('stats.monthlyProgress')}
-                </span>
+                    <span
+                        className="font-bold text-xl"
+                        style={{
+                            fontFamily: "'Quicksand', sans-serif",
+                            color: '#7A5230',
+                            textShadow: '0 1px 1px rgba(255,255,255,0.5)',
+                        }}
+                    >
+                        {current}
+                    </span>
+                </div>
             </div>
+
+            {/* 光晕旋转动画 */}
+            <style>{`
+                @keyframes spin-glow {
+                    from {
+                        transform: rotate(0deg);
+                    }
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+            `}</style>
         </div>
     );
 };

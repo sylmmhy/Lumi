@@ -74,13 +74,13 @@ export async function getWeeklyCompletedCount(
         throw new Error('Supabase client is not initialized');
     }
     const monday = getThisMonday();
+    const mondayDateStr = monday.toISOString().split('T')[0]; // YYYY-MM-DD 格式
 
     const { count, error } = await supabase
-        .from('tasks')
+        .from('routine_completions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('status', 'completed')
-        .gte('completed_at', monday.toISOString());
+        .gte('completion_date', mondayDateStr);
 
     if (error) {
         console.error('Failed to get weekly completed count:', error);

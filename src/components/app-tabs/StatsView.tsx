@@ -7,7 +7,7 @@
  * - 打卡联动：下方操作 → 上方充能 → Toast 激励
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getLocalDateString, getCategoryFromTimeString, getTimeIcon } from '../../utils/timeUtils';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -15,7 +15,7 @@ import { StatsHeader } from './StatsHeader';
 import type { Task } from '../../remindMe/types';
 import { fetchRecurringReminders, toggleReminderCompletion, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
-import { getMonthlyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
+import { getWeeklyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
 
 // 从 stats 模块导入组件和类型
 import {
@@ -25,9 +25,9 @@ import {
     CheckInToast,
     useCheckInToast,
     buildDenseHistoryWithGaps,
+    EnergyBall,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
-import { StickyHeader } from './StickyHeader';
 
 /**
  * 将 Task 和完成历史转换为 Habit 格式
@@ -90,17 +90,54 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
     const [isLoading, setIsLoading] = useState(true);
-    const [scrollTop, setScrollTop] = useState(0);
 
-    // 能量球数据（本月习惯完成总次数）
-    const [monthlyCount, setMonthlyCount] = useState(0);
-    const [monthlyTarget] = useState(20); // 目标固定为 20
+    // 存钱罐数据（本周习惯完成总次数）
+    const [weeklyCount, setWeeklyCount] = useState(0);
+    const [weeklyTarget] = useState(20); // 目标固定为 20
     const [triggerRise, setTriggerRise] = useState(false);
 
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
 
-    const showStickyHeader = scrollTop > 80;
+    // StatsHeader 底部位置（用于动态定位金币盒子）
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerBottom, setHeaderBottom] = useState(0);
+
+    // 获取 StatsHeader 底部相对于视口的位置
+    const updateHeaderPosition = useCallback(() => {
+        if (headerRef.current) {
+            const rect = headerRef.current.getBoundingClientRect();
+            setHeaderBottom(rect.bottom);
+        }
+    }, []);
+
+    useEffect(() => {
+        // 延迟获取位置，确保渲染完成
+        const timer = setTimeout(updateHeaderPosition, 50);
+        window.addEventListener('resize', updateHeaderPosition);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', updateHeaderPosition);
+        };
+    }, [updateHeaderPosition]);
+
+    /**
+     * 播放打卡光晕音效
+     */
+    const playCheckInSound = () => {
+        const audio = new Audio('/checkin-sound.mp3');
+        audio.volume = 0.7;
+        audio.play().catch(err => console.log('音效播放失败:', err));
+    };
+
+    /**
+     * 播放硬币掉落音效
+     */
+    const playCoinDropSound = () => {
+        const audio = new Audio('/coin-drop-sound.wav');
+        audio.volume = 0.7;
+        audio.play().catch(err => console.log('硬币音效播放失败:', err));
+    };
 
     // 示例习惯数据
     const exampleHabits = useMemo<Habit[]>(() => [
@@ -173,9 +210,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 // 2. 获取所有完成历史
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
 
-                // 3. 获取本月完成数（能量球数据）
-                const monthlyProgress = await getMonthlyCompletedCount(auth.userId);
-                setMonthlyCount(monthlyProgress.current);
+                // 3. 获取本周完成数（存钱罐数据）
+                const weeklyProgress = await getWeeklyCompletedCount(auth.userId);
+                setWeeklyCount(weeklyProgress.current);
 
                 // 4. 批量获取累计完成次数（里程碑进度条数据）
                 const habitIds = routineTasks.map(t => t.id);
@@ -256,23 +293,43 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 }
                 return habit;
             }));
+
+            // 5. 更新存钱罐计数（取消打卡时减少）
+            if (!newStatus) {
+                setWeeklyCount(prev => Math.max(prev - 1, 0));
+            }
         } catch (error) {
             console.error('Failed to toggle habit:', error);
         }
     };
 
     /**
-     * 打卡成功回调（联动能量球和 Toast）
+     * 打卡成功回调（联动存钱罐和 Toast）
+     * @param habitId - 习惯 ID
      */
-    const handleCheckIn = () => {
-        // 1. 能量球 +1（乐观更新）
-        setMonthlyCount(prev => prev + 1);
+    const handleCheckIn = async (habitId: string) => {
+        // 检查是否已经打卡
+        const habit = habits.find(h => h.id === habitId);
+        const todayKey = getLocalDateString();
+        if (habit?.history[todayKey]) {
+            return; // 今天已打卡，不重复
+        }
 
-        // 2. 触发水位上涨动画
+        // 1. 调用 API 记录打卡
+        await toggleHabitToday(habitId);
+
+        // 2. 触发光晕动画（持续 3.5 秒）+ 播放音效
         setTriggerRise(true);
-        setTimeout(() => setTriggerRise(false), 600);
+        playCheckInSound();
+        setTimeout(() => setTriggerRise(false), 3500);
 
-        // 3. 显示 Toast
+        // 3. 延迟 1 秒后，存钱罐 +1（触发金币掉落动画）+ 播放硬币音效
+        setTimeout(() => {
+            setWeeklyCount(prev => prev + 1);
+            playCoinDropSound();
+        }, 1000);
+
+        // 4. 显示 Toast
         showToast();
     };
 
@@ -323,14 +380,20 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 targetDate.getMonth() === currentMonth.getMonth();
 
             if (isInCurrentMonth) {
-                // 更新能量球计数
-                setMonthlyCount(prev => newStatus ? prev + 1 : Math.max(prev - 1, 0));
-
-                // 如果是打卡（非取消打卡），触发水位上涨动画和 Toast
+                // 如果是打卡（非取消打卡），触发光晕动画、音效和 Toast
                 if (newStatus) {
                     setTriggerRise(true);
-                    setTimeout(() => setTriggerRise(false), 600);
+                    playCheckInSound();
+                    setTimeout(() => setTriggerRise(false), 3500);
+                    // 延迟 1 秒后更新能量球计数（触发金币掉落）+ 播放硬币音效
+                    setTimeout(() => {
+                        setWeeklyCount(prev => prev + 1);
+                        playCoinDropSound();
+                    }, 1000);
                     showToast();
+                } else {
+                    // 取消打卡时立即更新
+                    setWeeklyCount(prev => Math.max(prev - 1, 0));
                 }
             }
 
@@ -361,29 +424,45 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             className="flex-1 relative h-full overflow-hidden flex flex-col"
             style={{ backgroundColor: '#F5F5F5' }}
         >
+            {/* 打卡时的黑色遮罩 - 覆盖整个页面，只有存钱罐和光晕在上方 */}
+            <div
+                className={`fixed inset-0 bg-black/60 transition-opacity duration-300 pointer-events-none ${
+                    triggerRise ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{ zIndex: 35 }}
+            />
+
+            {/* 存钱罐 - fixed 定位，打卡时在遮罩上方 */}
+            {/* 位置：绿色区域底部边缘，一半在绿色区域一半在白色区域 */}
+            <div
+                className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{
+                    top: headerBottom,
+                    zIndex: triggerRise ? 40 : 31,
+                    opacity: headerBottom > 0 ? 1 : 0,
+                }}
+            >
+                <EnergyBall
+                    current={weeklyCount}
+                    target={weeklyTarget}
+                    triggerRise={triggerRise}
+                />
+            </div>
+
             {/* 打卡成功 Toast */}
             <CheckInToast message={toastMessage} onClose={hideToast} />
 
-            {/* Sticky 顶部栏 */}
-            <StickyHeader
-                title={t('stats.habitProgress')}
-                bgColor="#429950"
-                visible={showStickyHeader}
-            />
 
             {/* 滚动容器 */}
             <div
                 className="flex-1 overflow-y-auto no-scrollbar relative overscroll-none"
                 data-tour="stats-area"
-                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
                 {/* 蓄水池头部 */}
                 <StatsHeader
+                    ref={headerRef}
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
-                    weeklyCount={monthlyCount}
-                    weeklyTarget={monthlyTarget}
-                    triggerRise={triggerRise}
                 />
 
                 {/* 内容区域 - pt-20 为悬挂的能量球留出空间 */}

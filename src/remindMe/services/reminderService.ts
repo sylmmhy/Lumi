@@ -25,6 +25,7 @@ interface TaskRecord {
   task_type: 'todo' | 'routine' | 'routine_instance' | null; // 任务类型
   time_category: 'morning' | 'noon' | 'afternoon' | 'evening' | 'latenight' | null; // 时间分类
   called: boolean; // AI 是否已打电话
+  is_skip: boolean; // 用户是否点击了跳过今天按钮（仅用于行为统计）
   is_recurring: boolean; // 是否重复
   recurrence_pattern: RecurrencePattern | null; // 重复模式
   recurrence_days: number[] | null; // 重复日期
@@ -121,6 +122,7 @@ function dbToTask(record: TaskRecord): Task {
     type: record.task_type || 'todo',
     category: record.time_category || undefined,
     called: record.called,
+    isSkip: record.is_skip,
     isRecurring: record.is_recurring,
     timezone: record.timezone || undefined,
     recurrencePattern: record.recurrence_pattern || undefined,
@@ -445,6 +447,7 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   if (updates.type !== undefined) dbUpdates.task_type = updates.type;
   if (updates.category !== undefined) dbUpdates.time_category = updates.category || null;
   if (updates.called !== undefined) dbUpdates.called = updates.called;
+  if (updates.isSkip !== undefined) dbUpdates.is_skip = updates.isSkip;
   if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
   if (updates.recurrencePattern !== undefined) dbUpdates.recurrence_pattern = updates.recurrencePattern || null;
   if (updates.recurrenceDays !== undefined) dbUpdates.recurrence_days = updates.recurrenceDays || null;
@@ -544,6 +547,85 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
         });
       }
     }
+  }
+
+  // 🆕 如果是 routine 模板且设置 called=true（跳过），只更新今天的 routine_instance
+  // 问题背景：用户点击 Skip 更新的是 routine 模板，但后端检查的是 routine_instance
+  // 重要：routine 模板完全不动，只改 routine_instance
+  // 前端通过同步 instance 的 isSkip 状态到模板来显示"已跳过"标签
+  if (taskRecord.task_type === 'routine' && updates.called === true) {
+    const today = getLocalDateString();
+
+    // 1. 把 routine 模板恢复为原始状态（不应该被改）
+    await supabase
+      .from('tasks')
+      .update({
+        called: false,
+        is_skip: false, // 🔧 模板的 is_skip 必须恢复为 false，避免污染第二天的 instance
+      })
+      .eq('id', id)
+      .eq('user_id', sessionUser.id);
+
+    // 2. 只更新今天的 routine_instance（同时记录 is_skip 用于行为统计）
+    const { data: updatedInstances, error: syncError } = await supabase
+      .from('tasks')
+      .update({ called: true, is_skip: true })
+      .eq('parent_routine_id', id)
+      .eq('task_type', 'routine_instance')
+      .eq('status', 'pending')
+      .eq('reminder_date', today)
+      .select('id, title, reminder_date');
+
+    if (syncError) {
+      console.warn('⚠️ Failed to sync called=true to routine_instance:', syncError);
+    } else {
+      const count = updatedInstances?.length || 0;
+      console.log(`✅ Skipped routine: only updated ${count} routine_instance(s) for today (routine template unchanged)`);
+      if (updatedInstances && updatedInstances.length > 0) {
+        console.log('   Skipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
+      }
+    }
+
+    // 更新返回的任务对象
+    // 模板本身 isSkip=false，前端乐观更新会临时显示标签
+    // 刷新后 loadTasks 会从 instance 同步真实的 isSkip 状态到模板
+    updatedTask.called = false;
+    updatedTask.isSkip = true; // 乐观更新：让 UI 立即显示标签
+  }
+
+  // 🆕 如果是 routine 模板且设置 called=false 和 isSkip=false（取消跳过），更新今天的 routine_instance
+  if (taskRecord.task_type === 'routine' && updates.called === false && updates.isSkip === false) {
+    const today = getLocalDateString();
+
+    // 更新今天的 routine_instance：取消跳过状态，重置推送状态让后端可以再次打电话
+    const { data: updatedInstances, error: syncError } = await supabase
+      .from('tasks')
+      .update({
+        called: false,
+        is_skip: false,
+        push_attempts: 0,        // 重置推送尝试次数
+        push_last_attempt: null, // 清除上次推送时间
+        push_last_error: null,   // 清除推送错误
+      })
+      .eq('parent_routine_id', id)
+      .eq('task_type', 'routine_instance')
+      .eq('status', 'pending')
+      .eq('reminder_date', today)
+      .select('id, title, reminder_date');
+
+    if (syncError) {
+      console.warn('⚠️ Failed to sync unskip to routine_instance:', syncError);
+    } else {
+      const count = updatedInstances?.length || 0;
+      console.log(`✅ Unskipped routine: updated ${count} routine_instance(s) for today`);
+      if (updatedInstances && updatedInstances.length > 0) {
+        console.log('   Unskipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
+      }
+    }
+
+    // 更新返回的任务对象
+    updatedTask.called = false;
+    updatedTask.isSkip = false;
   }
 
   // 🆕 对于非 routine 任务，如果修改了时间，重置 called 状态

@@ -134,6 +134,9 @@ export function AppTabsPage() {
     const [completionTime, setCompletionTime] = useState(0);
     const [currentTaskDescription, setCurrentTaskDescription] = useState('');
     const [currentTaskId, setCurrentTaskId] = useState<string | null>(null); // 当前正在进行的任务 ID
+
+    // 通话追踪：来电记录 ID（用于追踪 WebView 打开和麦克风连接状态）
+    const [currentCallRecordId, setCurrentCallRecordId] = useState<string | null>(null);
     const [currentTaskType, setCurrentTaskType] = useState<'todo' | 'routine' | 'routine_instance' | null>(null); // 当前任务类型（用于完成时判断是否需要更新 routine_completions）
 
     const [hasSeenVoicePrompt, setHasSeenVoicePrompt] = useState(() => {
@@ -200,27 +203,64 @@ export function AppTabsPage() {
                 fetchRecurringReminders(auth.userId),
             ]);
 
-            // 将 routine_instance 的 snooze 状态同步到对应的 routine 模板
-            // 这样 UI 上的 routine 模板会显示 "+15 mins · later" 标签
-            // 注意：只有未完成的 snoozed 实例才显示标签，完成后标签消失
+            // 将 routine_instance 的状态同步到对应的 routine 模板
+            // 这样 UI 上的 routine 模板会正确显示今天的状态
+
+            // 🔧 Bug 修复 (2026-02-02)：将 routine_instance 的完成状态同步到 routine 模板
+            // 之前 routine 模板的 status 会被错误地永久设为 completed，导致第二天仍显示已完成
+            // 修复：routine 模板的数据库 status 始终为 pending，显示状态由今日 routine_instance 决定
+            const completedInstances = todayTasks.filter(t =>
+                t.type === 'routine_instance' && t.completed && t.parentRoutineId
+            );
+
+            // snooze 状态：只有未完成的 snoozed 实例才显示标签
             const snoozedInstances = todayTasks.filter(t =>
                 t.type === 'routine_instance' && t.isSnoozed && t.parentRoutineId && !t.completed
             );
 
-            const routineTemplatesWithSnoozeStatus = routineTemplates.map(routine => {
+            // skip 状态：只有未完成且 isSkip=true 的今日实例才显示标签
+            const skippedInstances = todayTasks.filter(t =>
+                t.type === 'routine_instance' && t.isSkip && t.parentRoutineId && !t.completed
+            );
+
+            const routineTemplatesWithStatus = routineTemplates.map(routine => {
+                let updatedRoutine = routine;
+
+                // 🔧 检查今日 routine_instance 是否已完成，同步到 routine 模板的显示状态
+                const hasCompletedInstance = completedInstances.some(
+                    instance => instance.parentRoutineId === routine.id
+                );
+                if (hasCompletedInstance) {
+                    // 今日已完成：显示为已完成（注意：这只是 UI 显示，数据库中 routine 模板的 status 仍为 pending）
+                    updatedRoutine = { ...updatedRoutine, completed: true };
+                } else {
+                    // 今日未完成：强制显示为未完成（覆盖可能残留的错误 completed 状态）
+                    updatedRoutine = { ...updatedRoutine, completed: false };
+                }
+
                 // 检查这个 routine 是否有被 snooze 的今日实例
                 const hasSnoozedInstance = snoozedInstances.some(
                     instance => instance.parentRoutineId === routine.id
                 );
                 if (hasSnoozedInstance) {
                     console.log('🏷️ [loadTasks] 同步 snooze 状态到 routine:', routine.text);
-                    return { ...routine, isSnoozed: true };
+                    updatedRoutine = { ...updatedRoutine, isSnoozed: true };
                 }
-                return routine;
+
+                // 检查这个 routine 是否有被 skip 的今日实例
+                const hasSkippedInstance = skippedInstances.some(
+                    instance => instance.parentRoutineId === routine.id
+                );
+                if (hasSkippedInstance) {
+                    console.log('🏷️ [loadTasks] 同步 skip 状态到 routine:', routine.text);
+                    updatedRoutine = { ...updatedRoutine, isSkip: true };
+                }
+
+                return updatedRoutine;
             });
 
-            // 合并所有任务（routine_instance 不会显示在 UI 中，但 routine 模板会带有 snooze 标签）
-            const allTasks = [...todayTasks, ...routineTemplatesWithSnoozeStatus];
+            // 合并所有任务（routine_instance 不会显示在 UI 中，但 routine 模板会带有 snooze/skip 标签）
+            const allTasks = [...todayTasks, ...routineTemplatesWithStatus];
 
             setTasks(allTasks);
 
@@ -471,8 +511,14 @@ export function AppTabsPage() {
      * 切换任务的完成状态
      *
      * 同步逻辑：
-     * - routine_instance 完成时：同步更新对应的 routine 模板状态 + 记录 routine_completions
-     * - routine 模板完成时：同步更新今日的 routine_instance 状态 + 记录 routine_completions
+     * - routine_instance 完成时：只更新 routine_instance 的数据库状态，UI 同步更新 routine 模板的显示
+     * - routine 模板完成时：只更新今日 routine_instance 的数据库状态，UI 同步更新 routine 模板的显示
+     *
+     * 🔧 Bug 修复 (2026-02-02)：
+     * 之前的逻辑会把 routine 模板的数据库 status 也改为 completed，导致：
+     * - 第二天新生成的 routine_instance 是 pending 状态（后台会 call）
+     * - 但 routine 模板仍然是 completed 状态（前端显示为已完成）
+     * 修复：只更新 routine_instance 的数据库状态，routine 模板的 status 始终保持 pending
      */
     const toggleComplete = async (id: string) => {
         const task = tasks.find(t => t.id === id);
@@ -481,20 +527,26 @@ export function AppTabsPage() {
         const newCompletedStatus = !task.completed;
         const today = getLocalDateString();
 
-        // 准备需要同步更新的任务 ID 列表
-        const idsToUpdate: string[] = [id];
+        // 需要更新数据库的任务 ID（只有 routine_instance）
+        let dbIdToUpdate: string | null = null;
+        // 需要更新 UI 显示的任务 ID 列表（routine_instance + routine 模板）
+        const uiIdsToUpdate: string[] = [id];
         let routineIdForCompletion: string | null = null;
 
         if (task.type === 'routine_instance' && task.parentRoutineId) {
-            // 完成 routine_instance 时，找到对应的 routine 模板
+            // 完成 routine_instance 时：
+            // - 数据库：只更新 routine_instance
+            // - UI：同时更新 routine_instance 和 routine 模板的显示
+            dbIdToUpdate = id;
             routineIdForCompletion = task.parentRoutineId;
-            // 同步更新模板的 UI 状态
             const routineTemplate = tasks.find(t => t.id === task.parentRoutineId);
             if (routineTemplate) {
-                idsToUpdate.push(routineTemplate.id);
+                uiIdsToUpdate.push(routineTemplate.id);
             }
         } else if (task.type === 'routine') {
-            // 完成 routine 模板时，找到今日的 routine_instance
+            // 完成 routine 模板时：
+            // - 数据库：只更新今日的 routine_instance（不更新 routine 模板！）
+            // - UI：同时更新 routine 模板和 routine_instance 的显示
             routineIdForCompletion = id;
             const todayInstance = tasks.find(t =>
                 t.type === 'routine_instance' &&
@@ -502,20 +554,28 @@ export function AppTabsPage() {
                 t.date === today
             );
             if (todayInstance) {
-                idsToUpdate.push(todayInstance.id);
+                dbIdToUpdate = todayInstance.id;
+                uiIdsToUpdate.push(todayInstance.id);
+            } else {
+                // 如果今天还没有 routine_instance，则不允许完成
+                console.warn('No routine_instance found for today, cannot toggle completion');
+                return;
             }
+        } else {
+            // todo 类型：直接更新
+            dbIdToUpdate = id;
         }
 
-        // Optimistically update UI（同步更新所有相关任务）
+        // Optimistically update UI（同步更新 routine_instance 和 routine 模板的显示）
         setTasks(prev => prev.map(t =>
-            idsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
+            uiIdsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
         ));
 
         try {
-            // 更新数据库中的所有相关任务
-            await Promise.all(idsToUpdate.map(taskId =>
-                toggleReminderCompletion(taskId, newCompletedStatus)
-            ));
+            // 只更新数据库中的 routine_instance（或 todo），不更新 routine 模板
+            if (dbIdToUpdate) {
+                await toggleReminderCompletion(dbIdToUpdate, newCompletedStatus);
+            }
 
             // 记录 routine_completions（用于热力图）
             if (routineIdForCompletion) {
@@ -532,7 +592,7 @@ export function AppTabsPage() {
             console.error('Failed to toggle reminder completion:', error);
             // Revert optimistic update on error
             setTasks(prev => prev.map(t =>
-                idsToUpdate.includes(t.id) ? { ...t, completed: !newCompletedStatus } : t
+                uiIdsToUpdate.includes(t.id) ? { ...t, completed: !newCompletedStatus } : t
             ));
         }
     };
@@ -579,6 +639,8 @@ export function AppTabsPage() {
                 displayTime: updatedTask.displayTime,
                 date: updatedTask.date,
                 category: updatedTask.category,
+                called: updatedTask.called, // 支持 Skip for Day 功能
+                isSkip: updatedTask.isSkip, // 行为统计 + 前端标签显示
             });
             if (!result) {
                 throw new Error('Failed to update');
@@ -693,6 +755,7 @@ export function AppTabsPage() {
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
                 taskId: taskId,  // 传入真实的 taskId 用于保存 actual_duration_minutes
+                callRecordId: currentCallRecordId ?? undefined,  // 🆕 传入 callRecordId 用于追踪麦克风连接
             });
             console.log('✅ AI Coach session started successfully');
 
@@ -835,6 +898,27 @@ export function AppTabsPage() {
         const taskIdParam = urlParams.get('taskId');
         const autostartParam = urlParams.get('autostart');
         const skipPromptParam = urlParams.get('skipPrompt');
+        const callRecordIdParam = urlParams.get('callRecordId');
+
+        // 🆕 如果有 callRecordId，记录 WebView 打开时间（表示用户点击了接听）
+        if (callRecordIdParam && !currentCallRecordId) {
+            console.log('📞 检测到 callRecordId，记录 WebView 打开时间:', callRecordIdParam);
+            setCurrentCallRecordId(callRecordIdParam);
+
+            // 立即调用 API 记录 webview_opened_at
+            supabase?.functions.invoke('manage-call-records', {
+                body: {
+                    action: 'mark_webview_opened',
+                    call_record_id: callRecordIdParam,
+                },
+            }).then(({ error }) => {
+                if (error) {
+                    console.error('⚠️ 记录 webview_opened_at 失败:', error);
+                } else {
+                    console.log('✅ webview_opened_at 已记录');
+                }
+            });
+        }
 
         // 检查是否需要自动启动
         const shouldAutoStart = autostartParam === 'true' && taskParam && !hasAutoStarted;

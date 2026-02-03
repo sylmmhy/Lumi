@@ -267,6 +267,43 @@ export const HomeView: React.FC<HomeViewProps> = ({
         setEditingTask(null);
     };
 
+    // Handle skip for day - 跳过今天的任务
+    // 原理：
+    // - 对于 routine 模板：reminderService 会只更新今天的 routine_instance
+    //   - instance.called = true → 后端不打电话
+    //   - instance.isSkip = true → 行为统计 + 前端通过 loadTasks 同步到模板显示标签
+    // - 对于 todo 任务：直接更新该任务
+    // - 不再使用 skippedForDate，因为 instance 的 reminder_date + isSkip 就能表达
+    const handleSkipForDay = (task: Task) => {
+        if (!onUpdateTask) return;
+
+        const updatedTask: Task = {
+            ...task,
+            called: true,
+            isSkip: true,
+        };
+
+        onUpdateTask(updatedTask);
+    };
+
+    // Handle unskip for day - 取消跳过今天的任务
+    // 原理：与 skip 相反
+    // - 对于 routine 模板：reminderService 会只更新今天的 routine_instance
+    //   - instance.called = false → 后端可以打电话（如果时间还在窗口内）
+    //   - instance.isSkip = false → 取消跳过状态
+    // - 对于 todo 任务：直接更新该任务
+    const handleUnskipForDay = (task: Task) => {
+        if (!onUpdateTask) return;
+
+        const updatedTask: Task = {
+            ...task,
+            called: false,
+            isSkip: false,
+        };
+
+        onUpdateTask(updatedTask);
+    };
+
     // 显示所有任务（routine + todo），包括已完成的
     // 注意：routine_instance 只在后台用于闹钟提醒，不在 UI 显示
     // routine_instance 的 snooze 状态会同步到对应的 routine 模板上（在 AppTabsPage.loadTasks 中处理）
@@ -455,6 +492,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onToggle={onToggleComplete}
                                         onDelete={onDeleteTask}
                                         onEdit={handleEditTask}
+                                        onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -466,6 +505,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -478,6 +519,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -490,6 +533,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}
@@ -502,6 +547,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onToggle={onToggleComplete}
                                             onDelete={onDeleteTask}
                                             onEdit={handleEditTask}
+                                            onSkipForDay={handleSkipForDay}
+                                        onUnskipForDay={handleUnskipForDay}
                                         />
                                     </div>
                                 )}

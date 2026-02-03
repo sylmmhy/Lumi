@@ -10,6 +10,7 @@ export interface Task {
   type: 'todo' | 'routine' | 'routine_instance'
   category?: 'morning' | 'noon' | 'afternoon' | 'evening' | 'latenight'
   called: boolean // Has the reminder call been triggered?
+  isSkip?: boolean // 用户是否点击了跳过今天按钮（仅用于行为统计）
 
   // Recurrence fields for routine tasks
   isRecurring?: boolean

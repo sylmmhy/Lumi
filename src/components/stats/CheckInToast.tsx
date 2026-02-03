@@ -72,17 +72,20 @@ export const CheckInToast: React.FC<CheckInToastProps> = ({
     return (
         <div
             className={`
-                fixed top-20 left-1/2 -translate-x-1/2 z-[200]
+                fixed left-1/2 -translate-x-1/2 z-[200]
                 px-6 py-3 rounded-full
                 bg-brand-goldBorder text-white font-medium
                 shadow-lg shadow-brand-goldBorder/30
                 transition-all duration-300 ease-out
                 ${visible
                     ? 'opacity-100 translate-y-0'
-                    : 'opacity-0 -translate-y-4'
+                    : 'opacity-0 translate-y-4'
                 }
             `}
-            style={{ fontFamily: "'Quicksand', sans-serif" }}
+            style={{
+                fontFamily: "'Quicksand', sans-serif",
+                top: 440,
+            }}
         >
             {displayMessage}
         </div>

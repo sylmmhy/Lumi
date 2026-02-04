@@ -4,8 +4,6 @@
  * 显示专注统计信息
  */
 
-import React from 'react';
-
 interface SessionStats {
   sessionId: string;
   taskDescription: string | null;

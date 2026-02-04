@@ -94,6 +94,7 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
   const [error, setError] = useState<string | null>(null);
 
   const isAvailable = isIOSNativeApp();
+  const onAction = options.onAction;
 
   // 设置全局回调函数
   useEffect(() => {
@@ -174,8 +175,8 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
       const customEvent = event as CustomEvent<ScreenTimeActionEvent>;
       console.log('[ScreenTime] Action event received:', customEvent.detail);
 
-      if (options.onAction) {
-        options.onAction(customEvent.detail);
+      if (onAction) {
+        onAction(customEvent.detail);
       }
     };
 
@@ -184,7 +185,7 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
     return () => {
       window.removeEventListener('screenTimeAction', handleScreenTimeAction);
     };
-  }, [options.onAction]);
+  }, [onAction]);
 
   /**
    * 发送消息到 Native

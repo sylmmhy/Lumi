@@ -148,7 +148,7 @@ export function OnboardingAuthSheet({
     return () => {
       cancelled = true;
     };
-  }, [handleCredential, isOpen, canShowGoogleLogin]);
+  }, [handleCredential, isOpen, canShowGoogleLogin, t]);
 
   const handleEmailLogin = () => {
     auth.navigateToLogin(DEFAULT_APP_PATH);

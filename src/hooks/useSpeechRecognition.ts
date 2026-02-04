@@ -191,91 +191,6 @@ export function useSpeechRecognition(
   }, []);
 
   /**
-   * 停止录音并识别
-   */
-  const stopRecording = useCallback(async (): Promise<SpeechRecognitionResult | null> => {
-    return new Promise((resolve) => {
-      if (!mediaRecorderRef.current || !isRecording) {
-        resolve(null);
-        return;
-      }
-
-      const mediaRecorder = mediaRecorderRef.current;
-
-      mediaRecorder.onstop = async () => {
-        // 停止音频分析
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-          audioContextRef.current = null;
-        }
-        analyserRef.current = null;
-        setAudioLevel(0);
-
-        // 停止所有音轨
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-          streamRef.current = null;
-        }
-
-        setIsRecording(false);
-        setIsProcessing(true);
-
-        // 合并音频数据
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        console.log('[SpeechRecognition] Recording stopped, audio size:', audioBlob.size);
-
-        // 识别音频
-        const recognitionResult = await recognizeAudio(audioBlob);
-        resolve(recognitionResult);
-      };
-
-      mediaRecorder.stop();
-    });
-  }, [isRecording]);
-
-  /**
-   * 取消录音
-   */
-  const cancelRecording = useCallback(() => {
-    // 停止音频分析
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    analyserRef.current = null;
-    setAudioLevel(0);
-
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setIsRecording(false);
-    setIsProcessing(false);
-    audioChunksRef.current = [];
-    console.log('[SpeechRecognition] Recording cancelled');
-  }, [isRecording]);
-
-  /**
-   * 重置状态
-   */
-  const reset = useCallback(() => {
-    cancelRecording();
-    setResult(null);
-    setError(null);
-  }, [cancelRecording]);
-
-  /**
    * 识别音频文件
    */
   const recognizeAudio = useCallback(
@@ -325,6 +240,91 @@ export function useSpeechRecognition(
     },
     [language, expectedPledge, supabaseUrl, supabaseAnonKey]
   );
+
+  /**
+   * 停止录音并识别
+   */
+  const stopRecording = useCallback(async (): Promise<SpeechRecognitionResult | null> => {
+    return new Promise((resolve) => {
+      if (!mediaRecorderRef.current || !isRecording) {
+        resolve(null);
+        return;
+      }
+
+      const mediaRecorder = mediaRecorderRef.current;
+
+      mediaRecorder.onstop = async () => {
+        // 停止音频分析
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+        setAudioLevel(0);
+
+        // 停止所有音轨
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+
+        setIsRecording(false);
+        setIsProcessing(true);
+
+        // 合并音频数据
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        console.log('[SpeechRecognition] Recording stopped, audio size:', audioBlob.size);
+
+        // 识别音频
+        const recognitionResult = await recognizeAudio(audioBlob);
+        resolve(recognitionResult);
+      };
+
+      mediaRecorder.stop();
+    });
+  }, [isRecording, recognizeAudio]);
+
+  /**
+   * 取消录音
+   */
+  const cancelRecording = useCallback(() => {
+    // 停止音频分析
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+    setAudioLevel(0);
+
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsRecording(false);
+    setIsProcessing(false);
+    audioChunksRef.current = [];
+    console.log('[SpeechRecognition] Recording cancelled');
+  }, [isRecording]);
+
+  /**
+   * 重置状态
+   */
+  const reset = useCallback(() => {
+    cancelRecording();
+    setResult(null);
+    setError(null);
+  }, [cancelRecording]);
 
   /**
    * 验证文本输入（不需要语音）

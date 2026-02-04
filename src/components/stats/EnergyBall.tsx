@@ -254,6 +254,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
     // 初始化引擎
     useEffect(() => {
         initEngine();
+        const coinBodies = coinBodiesRef.current;
 
         return () => {
             // 清理所有 pending 的 setTimeout
@@ -268,7 +269,7 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
                 Matter.Engine.clear(engineRef.current);
             }
             isInitializedRef.current = false;
-            coinBodiesRef.current.clear();
+            coinBodies.clear();
         };
     }, [initEngine]);
 

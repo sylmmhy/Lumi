@@ -380,8 +380,6 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     topicDetector,
     memoryPipeline,
     generateEmpathyMessage,
-    generateContextMessage,
-    injectMessageImmediately,
     sendClientContent,
   ])
 

@@ -9,7 +9,6 @@
  * - 结束按钮
  */
 
-import React from 'react';
 import { TalkingFire } from '../ai/TalkingFire';
 import { useCampfireSession } from '../../hooks/campfire';
 import { useAuth } from '../../hooks/useAuth';
@@ -124,11 +123,9 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
 
         <div className="flex items-center gap-4">
           {/* 状态指示器 */}
-          {session.status !== 'idle' && (
-            <div className="text-sm text-gray-400">
-              {getStatusText()}
-            </div>
-          )}
+          <div className="text-sm text-gray-400">
+            {getStatusText()}
+          </div>
 
           {/* 白噪音控制 */}
           <button

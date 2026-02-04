@@ -125,7 +125,7 @@ export function OnboardingAuthSheet({
           });
 
           if (googleButtonRef.current) {
-            googleButtonRef.current.innerHTML = '';
+            googleButtonRef.current.textContent = '';
             window.google.accounts.id.renderButton(googleButtonRef.current, {
               type: 'standard',
               theme: 'outline',

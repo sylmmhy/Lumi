@@ -132,7 +132,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
           });
 
           if (googleButtonRef.current) {
-            googleButtonRef.current.innerHTML = '';
+            googleButtonRef.current.textContent = '';
             // Google button width only accepts pixel values, calculate based on container
             const containerWidth = googleButtonRef.current.offsetWidth || 400;
             window.google.accounts.id.renderButton(googleButtonRef.current, {

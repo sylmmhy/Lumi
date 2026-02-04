@@ -391,8 +391,7 @@ export async function createReminder(task: Omit<Task, 'id'>, userId: string): Pr
 
   const { data, error } = await supabase
     .from('tasks') // 使用 tasks 表
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase types not generated
-    .insert([dbRecord] as any)
+    .insert(dbRecord)
     .select()
     .single();
 

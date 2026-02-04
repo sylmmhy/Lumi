@@ -1,10 +1,8 @@
 import { createClient, type SupabaseClient, type SupabaseClientOptions } from '@supabase/supabase-js'
 
 // TODO: Generate proper database types with `npx supabase gen types typescript`
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientType = SupabaseClient<any>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientConfig = SupabaseClientOptions<any> & { functions?: { url: string } }
+type SupabaseClientType = SupabaseClient
+type SupabaseClientConfig = SupabaseClientOptions<'public'> & { functions?: { url: string } }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -46,8 +44,7 @@ export function getSupabaseClient(): SupabaseClientType | null {
       },
       ...(functionsUrl ? { functions: { url: functionsUrl } } : {})
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    cachedClient = createClient<any>(supabaseUrl!, supabaseAnonKey!, options)
+    cachedClient = createClient(supabaseUrl!, supabaseAnonKey!, options)
   }
   return cachedClient
 }

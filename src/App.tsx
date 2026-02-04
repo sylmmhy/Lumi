@@ -14,6 +14,8 @@ import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PermissionProvider } from './context/PermissionContext'
 import { DevConsole } from './components/debug/DevConsole'
+import { initAmplitude } from './lib/amplitude'
+import { initPostHog } from './lib/posthog'
 
 /**
  * 延迟初始化分析工具，不阻塞首屏渲染
@@ -34,13 +36,11 @@ function initAnalyticsDeferred() {
   // 串行初始化：每个工具在前一个完成后、浏览器空闲时才启动
   scheduleIdle(async () => {
     // 1. Amplitude（最重要的分析工具，先初始化）
-    const { initAmplitude } = await import('./lib/amplitude')
     await initAmplitude()
 
     scheduleIdle(async () => {
       // 2. PostHog
-      const { initPostHog } = await import('./lib/posthog')
-      initPostHog()
+      await initPostHog()
     })
   })
 }

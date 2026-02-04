@@ -51,6 +51,12 @@ type ViewState = AppTab;
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
+const devLog = (...args: unknown[]) => {
+    if (import.meta.env.DEV) {
+        console.log(...args);
+    }
+};
+
 /**
  * 获取用户本地日期（YYYY-MM-DD 格式）
  * 使用本地时间而非 UTC，避免跨时区时日期不匹配的问题
@@ -77,7 +83,7 @@ export function AppTabsPage() {
 
     // 🔍 调试日志：追踪 tour 状态变化
     useEffect(() => {
-        console.log('🎯 [AppTabsPage] Tour 状态变化:', {
+        devLog('🎯 [AppTabsPage] Tour 状态变化:', {
             isActive: productTour.isActive,
             currentStep: productTour.currentStep?.step,
             stepNumber: productTour.stepNumber,
@@ -253,7 +259,7 @@ export function AppTabsPage() {
                     instance => instance.parentRoutineId === routine.id
                 );
                 if (hasSnoozedInstance) {
-                    console.log('🏷️ [loadTasks] 同步 snooze 状态到 routine:', routine.text);
+                    devLog('🏷️ [loadTasks] 同步 snooze 状态到 routine:', routine.text);
                     updatedRoutine = { ...updatedRoutine, isSnoozed: true };
                 }
 
@@ -262,7 +268,7 @@ export function AppTabsPage() {
                     instance => instance.parentRoutineId === routine.id
                 );
                 if (hasSkippedInstance) {
-                    console.log('🏷️ [loadTasks] 同步 skip 状态到 routine:', routine.text);
+                    devLog('🏷️ [loadTasks] 同步 skip 状态到 routine:', routine.text);
                     updatedRoutine = { ...updatedRoutine, isSkip: true };
                 }
 
@@ -296,7 +302,7 @@ export function AppTabsPage() {
     // 注册原生端刷新任务的回调（iOS Live Activity "later" 按钮触发）
     useEffect(() => {
         const unregister = registerNativeRefreshTasks(() => {
-            console.log('🔄 原生端请求刷新任务列表');
+            devLog('🔄 原生端请求刷新任务列表');
             void loadTasks();
         });
         return unregister;
@@ -304,7 +310,7 @@ export function AppTabsPage() {
 
     // 下拉刷新处理函数
     const handleRefresh = useCallback(async () => {
-        console.log('🔄 Pull to refresh triggered');
+        devLog('🔄 Pull to refresh triggered');
         await loadTasks();
         // 同时刷新统计数据
         setStatsRefreshTrigger(prev => prev + 1);
@@ -333,7 +339,7 @@ export function AppTabsPage() {
     // 防止登出后音视频数据继续发送到 Gemini，造成资源泄漏
     useEffect(() => {
         if (!auth.isLoggedIn && (aiCoach.isSessionActive || aiCoach.isConnecting)) {
-            console.log('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
+            devLog('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
             // 结束 AI 教练会话（内部会断开 Gemini 连接、释放麦克风/摄像头）
             aiCoach.endSession();
             // 确保摄像头关闭
@@ -358,13 +364,13 @@ export function AppTabsPage() {
         if (!usingLiveKit) return;
 
         const cleanupConnected = onLiveKitEvent('connected', () => {
-            console.log('🎙️ [AppTabsPage] LiveKit connected');
+            devLog('🎙️ [AppTabsPage] LiveKit connected');
             setLiveKitConnected(true);
             setLiveKitError(null);
         });
 
         const cleanupDisconnected = onLiveKitEvent('disconnected', () => {
-            console.log('🎙️ [AppTabsPage] LiveKit disconnected');
+            devLog('🎙️ [AppTabsPage] LiveKit disconnected');
             setLiveKitConnected(false);
         });
 
@@ -386,12 +392,12 @@ export function AppTabsPage() {
     useEffect(() => {
         if (!usingLiveKit || !liveKitConnected) return;
 
-        console.log('🎙️ [AppTabsPage] LiveKit 倒计时开始');
+        devLog('🎙️ [AppTabsPage] LiveKit 倒计时开始');
         liveKitTimerRef.current = setInterval(() => {
             setLiveKitTimeRemaining((prev) => {
                 if (prev <= 1) {
                     // 倒计时结束
-                    console.log('🎙️ [AppTabsPage] LiveKit 倒计时结束');
+                    devLog('🎙️ [AppTabsPage] LiveKit 倒计时结束');
                     if (liveKitTimerRef.current) {
                         clearInterval(liveKitTimerRef.current);
                         liveKitTimerRef.current = null;
@@ -441,11 +447,11 @@ export function AppTabsPage() {
             return;
         }
 
-        console.log('📝 addTask: 开始处理', { taskSignature, displayTime: newTask.displayTime, id: newTask.id });
+        devLog('📝 addTask: 开始处理', { taskSignature, displayTime: newTask.displayTime, id: newTask.id });
 
         // 如果会话还未验证完成，先挂起操作，等待验证完成后再处理
         if (!auth.isSessionValidated) {
-            console.log('⏳ 会话验证中，挂起 addTask 操作');
+            devLog('⏳ 会话验证中，挂起 addTask 操作');
             setPendingTask(newTask);
             setPendingAction('add-task');
             setPendingActionSource('session-validation');
@@ -507,7 +513,7 @@ export function AppTabsPage() {
                 } catch (e) {
                     console.error('Failed to check/set test version modal flag', e);
                 }
-                console.log('✅ addTask: 任务创建成功', { id: created.id, displayTime: created.displayTime });
+                devLog('✅ addTask: 任务创建成功', { id: created.id, displayTime: created.displayTime });
             }
         } catch (error) {
             console.error('Failed to create reminder:', error);
@@ -671,7 +677,7 @@ export function AppTabsPage() {
      * - 如果任务是临时任务（ID 是时间戳），先保存到数据库获取真实 UUID
      */
     const startAICoachForTask = useCallback(async (task: Task) => {
-        console.log('🤖 Starting AI Coach session for task:', task.text);
+        devLog('🤖 Starting AI Coach session for task:', task.text);
 
         let taskToUse = task;
         let taskId = task.id;
@@ -693,13 +699,13 @@ export function AppTabsPage() {
                 });
                 // 不创建新记录，但继续启动 AI Coach（使用临时 ID）
             } else {
-                console.log('📝 检测到临时任务 ID，先保存到数据库...', { taskSignature, displayTime: task.displayTime });
+                devLog('📝 检测到临时任务 ID，先保存到数据库...', { taskSignature, displayTime: task.displayTime });
                 try {
                     const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
                     if (sessionData?.session?.user?.id) {
                         const savedTask = await createReminder(task, sessionData.session.user.id);
                         if (savedTask) {
-                            console.log('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
+                            devLog('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
                             // 记录已创建的任务签名，防止重复创建
                             aiCoachTaskCreatedRef.current.add(taskSignature);
                             taskToUse = savedTask;
@@ -726,14 +732,14 @@ export function AppTabsPage() {
         }
 
         // 调试日志：检测 LiveKit 状态
-        console.log('🎙️ LiveKit 检测:', {
+        devLog('🎙️ LiveKit 检测:', {
             isLiveKitMode: isLiveKitMode(),
             voiceMode: localStorage.getItem('lumi_voice_mode'),
         });
 
         // 检测是否使用 LiveKit 模式
         if (isLiveKitMode()) {
-            console.log('🎙️ 使用 LiveKit 原生模式');
+            devLog('🎙️ 使用 LiveKit 原生模式');
             setUsingLiveKit(true);
             setLiveKitTimeRemaining(300);
             setLiveKitError(null);
@@ -748,7 +754,7 @@ export function AppTabsPage() {
             if (auth.userId && !isTemporaryId) {
                 try {
                     await updateReminder(taskId, { called: true });
-                    console.log('✅ Task called status persisted to database');
+                    devLog('✅ Task called status persisted to database');
                 } catch (updateError) {
                     console.error('⚠️ Failed to persist called status:', updateError);
                 }
@@ -767,7 +773,7 @@ export function AppTabsPage() {
                 taskId: taskId,  // 传入真实的 taskId 用于保存 actual_duration_minutes
                 callRecordId: currentCallRecordId ?? undefined,  // 🆕 传入 callRecordId 用于追踪麦克风连接
             });
-            console.log('✅ AI Coach session started successfully');
+            devLog('✅ AI Coach session started successfully');
 
             // 保存当前任务 ID 和类型，用于完成时更新数据库
             setCurrentTaskId(taskId);
@@ -779,7 +785,7 @@ export function AppTabsPage() {
                 // 临时任务已经在上面保存时处理了
                 try {
                     await updateReminder(taskId, { called: true });
-                    console.log('✅ Task called status persisted to database');
+                    devLog('✅ Task called status persisted to database');
                 } catch (updateError) {
                     console.error('⚠️ Failed to persist called status:', updateError);
                 }
@@ -796,12 +802,12 @@ export function AppTabsPage() {
      * @param {Task} task - 需要启动的任务
      */
     const ensureVoicePromptThenStart = useCallback((task: Task) => {
-        console.log('📋 ensureVoicePromptThenStart called:', { task: task.text, hasSeenVoicePrompt });
+        devLog('📋 ensureVoicePromptThenStart called:', { task: task.text, hasSeenVoicePrompt });
         // 跳过语音权限提示弹窗，直接启动 AI Coach
         if (!hasSeenVoicePrompt) {
             markVoicePromptSeen();
         }
-        console.log('✅ Starting AI Coach directly');
+        devLog('✅ Starting AI Coach directly');
         void startAICoachForTask(task);
     }, [hasSeenVoicePrompt, markVoicePromptSeen, startAICoachForTask]);
 
@@ -810,7 +816,7 @@ export function AppTabsPage() {
      * 当用户从 iOS Shield 界面点击按钮后，iOS 会发送事件到 Web 端
      */
     const handleScreenTimeAction = useCallback((event: ScreenTimeActionEvent) => {
-        console.log('🔓 [ScreenTime] 收到操作事件:', event);
+        devLog('🔓 [ScreenTime] 收到操作事件:', event);
 
         if (event.action === 'start_task') {
             // 用户选择"让 Lumi 陪我开始" - 直达 Gemini Live 开始任务
@@ -825,7 +831,7 @@ export function AppTabsPage() {
                 category: 'morning',
                 called: false,
             };
-            console.log('🚀 [ScreenTime] 启动任务:', task.text);
+            devLog('🚀 [ScreenTime] 启动任务:', task.text);
             // 跳转到 urgency 页面并启动任务
             handleChangeView('urgency', true);
             setTimeout(() => {
@@ -833,7 +839,7 @@ export function AppTabsPage() {
             }, 300);
         } else if (event.action === 'confirm_consequence') {
             // 用户选择"暂时不做，接受后果" - 显示后果确认界面
-            console.log('📝 [ScreenTime] 显示后果确认界面');
+            devLog('📝 [ScreenTime] 显示后果确认界面');
             setPledgeConfirmData({
                 taskName: event.taskName || '',
                 consequence: event.consequence || '',
@@ -858,7 +864,7 @@ export function AppTabsPage() {
     const handleQuickStart = (task: Task) => {
         // 如果会话还未验证完成，先挂起操作，等待验证完成后再处理
         if (!auth.isSessionValidated) {
-            console.log('⏳ 会话验证中，挂起 handleQuickStart 操作');
+            devLog('⏳ 会话验证中，挂起 handleQuickStart 操作');
             setPendingTask(task);
             setPendingAction('start-ai');
             setPendingActionSource('session-validation');
@@ -911,7 +917,7 @@ export function AppTabsPage() {
             return;
         }
 
-        console.log('✅ 会话验证完成，处理挂起操作:', { pendingAction, isLoggedIn: auth.isLoggedIn });
+        devLog('✅ 会话验证完成，处理挂起操作:', { pendingAction, isLoggedIn: auth.isLoggedIn });
 
         if (pendingAction === 'add-task') {
             if (auth.isLoggedIn) {
@@ -955,7 +961,7 @@ export function AppTabsPage() {
 
         // 🆕 如果有 callRecordId，记录 WebView 打开时间（表示用户点击了接听）
         if (callRecordIdParam && !currentCallRecordId) {
-            console.log('📞 检测到 callRecordId，记录 WebView 打开时间:', callRecordIdParam);
+            devLog('📞 检测到 callRecordId，记录 WebView 打开时间:', callRecordIdParam);
             setCurrentCallRecordId(callRecordIdParam);
 
             // 立即调用 API 记录 webview_opened_at
@@ -968,7 +974,7 @@ export function AppTabsPage() {
                 if (error) {
                     console.error('⚠️ 记录 webview_opened_at 失败:', error);
                 } else {
-                    console.log('✅ webview_opened_at 已记录');
+                    devLog('✅ webview_opened_at 已记录');
                 }
             });
         }
@@ -1001,7 +1007,7 @@ export function AppTabsPage() {
             // 标记已自动启动，防止重复触发
             setHasAutoStarted(true);
 
-            console.log('✅ Auto-starting task:', taskParam, 'taskId:', taskIdParam);
+            devLog('✅ Auto-starting task:', taskParam, 'taskId:', taskIdParam);
 
             // 尝试从现有任务列表中查找对应任务
             let taskToStart: Task | undefined;
@@ -1014,9 +1020,9 @@ export function AppTabsPage() {
                 // 如果有 taskId 参数，优先从任务列表中查找
                 taskToStart = tasks.find(t => t.id === taskIdParam);
                 if (taskToStart) {
-                    console.log('📋 Found existing task by ID:', taskIdParam);
+                    devLog('📋 Found existing task by ID:', taskIdParam);
                 } else if (auth.userId) {
-                    console.log('🔎 Task not found in list, fetching by ID:', taskIdParam);
+                    devLog('🔎 Task not found in list, fetching by ID:', taskIdParam);
                     const fetchedTask = await fetchReminderById(taskIdParam, auth.userId);
                     if (fetchedTask) {
                         taskToStart = fetchedTask;
@@ -1026,7 +1032,7 @@ export function AppTabsPage() {
                             }
                             return [...prev, fetchedTask];
                         });
-                        console.log('✅ Found task from database:', taskIdParam);
+                        devLog('✅ Found task from database:', taskIdParam);
                     } else {
                         console.warn('⚠️ Task not found by ID, aborting autostart to avoid duplicate task');
                         return;
@@ -1053,7 +1059,7 @@ export function AppTabsPage() {
 
             // 如果设置了 skipPrompt，自动标记为已看过权限提示
             if (skipPromptParam === 'true' && !hasSeenVoicePrompt) {
-                console.log('⏭️ Skipping voice prompt as requested');
+                devLog('⏭️ Skipping voice prompt as requested');
                 markVoicePromptSeen();
             }
 
@@ -1062,7 +1068,7 @@ export function AppTabsPage() {
                 handleChangeView('urgency', true);
                 // 等待页面切换完成后再启动任务
                 setTimeout(() => {
-                    console.log('🚀 Launching AI Coach after navigation');
+                    devLog('🚀 Launching AI Coach after navigation');
                     ensureVoicePromptThenStart(finalTask);
                     // 启动后清理 URL 参数
                     const newUrl = window.location.pathname + window.location.hash;
@@ -1071,7 +1077,7 @@ export function AppTabsPage() {
             } else {
                 // 延迟一小段时间确保所有组件已挂载
                 setTimeout(() => {
-                    console.log('🚀 Launching AI Coach directly');
+                    devLog('🚀 Launching AI Coach directly');
                     ensureVoicePromptThenStart(finalTask);
                     // 启动后清理 URL 参数
                     const newUrl = window.location.pathname + window.location.hash;
@@ -1125,12 +1131,12 @@ export function AppTabsPage() {
         // 检查是否是临时 ID（不更新数据库）
         const isTemporaryId = /^\d+$/.test(taskId) || taskId.startsWith('temp-');
         if (isTemporaryId) {
-            console.log('⚠️ 临时任务 ID，跳过数据库更新');
+            devLog('⚠️ 临时任务 ID，跳过数据库更新');
             return;
         }
 
         try {
-            console.log('✅ 标记任务完成:', { taskId, actualDurationMinutes, taskType });
+            devLog('✅ 标记任务完成:', { taskId, actualDurationMinutes, taskType });
 
             // 1. 更新 tasks 表
             await updateReminder(taskId, {
@@ -1142,7 +1148,7 @@ export function AppTabsPage() {
             if (taskType === 'routine' && auth.userId) {
                 const todayKey = getLocalDateString();
                 await markRoutineComplete(auth.userId, taskId, todayKey);
-                console.log('✅ 习惯打卡记录已保存:', { taskId, date: todayKey });
+                devLog('✅ 习惯打卡记录已保存:', { taskId, date: todayKey });
             }
 
             // 3. 同步更新前端任务列表
@@ -1150,7 +1156,7 @@ export function AppTabsPage() {
                 t.id === taskId ? { ...t, completed: true } : t
             ));
 
-            console.log('✅ 任务已标记为完成');
+            devLog('✅ 任务已标记为完成');
         } catch (error) {
             console.error('❌ 标记任务完成失败:', error);
         }
@@ -1183,25 +1189,25 @@ export function AppTabsPage() {
         // 4. 后台保存记忆（完全不阻塞 UI，使用快照数据）
         void (async () => {
             try {
-                console.log('🧠 [记忆保存] 开始后台保存记忆...');
-                console.log('🧠 [记忆保存] 消息快照数量:', messagesSnapshot.length);
-                console.log('🧠 [记忆保存] 用户ID:', auth.userId);
+                devLog('🧠 [记忆保存] 开始后台保存记忆...');
+                devLog('🧠 [记忆保存] 消息快照数量:', messagesSnapshot.length);
+                devLog('🧠 [记忆保存] 用户ID:', auth.userId);
 
                 // 直接调用 Supabase 保存记忆，不依赖 aiCoach 状态
                 if (messagesSnapshot.length > 0 && auth.userId) {
                     const supabaseClient = getSupabaseClient();
-                    console.log('🧠 [记忆保存] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
+                    devLog('🧠 [记忆保存] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
 
                     if (supabaseClient) {
                         const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
-                        console.log('🧠 [记忆保存] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
+                        devLog('🧠 [记忆保存] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
 
                         if (realMessages.length > 0) {
                             const mem0Messages = realMessages.map(msg => ({
                                 role: msg.role === 'ai' ? 'assistant' : 'user',
                                 content: msg.content,
                             }));
-                            console.log('🧠 [记忆保存] 调用 memory-extractor...');
+                            devLog('🧠 [记忆保存] 调用 memory-extractor...');
                             const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
                                 body: {
                                     action: 'extract',
@@ -1217,25 +1223,25 @@ export function AppTabsPage() {
                             if (error) {
                                 console.error('🧠 [记忆保存] memory-extractor 返回错误:', error);
                             } else {
-                                console.log('✅ [记忆保存] 记忆提取成功:', data);
+                                devLog('✅ [记忆保存] 记忆提取成功:', data);
                                 // 显示具体保存了哪些记忆
                                 if (data?.memories && Array.isArray(data.memories)) {
-                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                                    console.log('📝 [记忆保存] 保存的记忆内容:');
+                                    devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    devLog('📝 [记忆保存] 保存的记忆内容:');
                                     data.memories.forEach((mem: { content?: string; tag?: string }, idx: number) => {
-                                        console.log(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
+                                        devLog(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
                                     });
-                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                                 }
                             }
                         } else {
-                            console.log('⚠️ [记忆保存] 跳过：没有真实消息（所有消息都是虚拟消息）');
+                            devLog('⚠️ [记忆保存] 跳过：没有真实消息（所有消息都是虚拟消息）');
                         }
                     } else {
-                        console.log('⚠️ [记忆保存] 跳过：Supabase 客户端为空');
+                        devLog('⚠️ [记忆保存] 跳过：Supabase 客户端为空');
                     }
                 } else {
-                    console.log('⚠️ [记忆保存] 跳过：消息为空或用户ID为空');
+                    devLog('⚠️ [记忆保存] 跳过：消息为空或用户ID为空');
                 }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
@@ -1285,18 +1291,18 @@ export function AppTabsPage() {
         // 4. 后台保存记忆（完全不阻塞 UI）
         void (async () => {
             try {
-                console.log('🧠 [记忆保存-完成] 开始后台保存记忆（任务完成）...');
-                console.log('🧠 [记忆保存-完成] 消息快照数量:', messagesSnapshot.length);
-                console.log('🧠 [记忆保存-完成] 用户ID:', auth.userId);
-                console.log('🧠 [记忆保存-完成] 任务描述:', taskDescriptionSnapshot);
+                devLog('🧠 [记忆保存-完成] 开始后台保存记忆（任务完成）...');
+                devLog('🧠 [记忆保存-完成] 消息快照数量:', messagesSnapshot.length);
+                devLog('🧠 [记忆保存-完成] 用户ID:', auth.userId);
+                devLog('🧠 [记忆保存-完成] 任务描述:', taskDescriptionSnapshot);
 
                 if (messagesSnapshot.length > 0 && auth.userId) {
                     const supabaseClient = getSupabaseClient();
-                    console.log('🧠 [记忆保存-完成] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
+                    devLog('🧠 [记忆保存-完成] Supabase 客户端:', supabaseClient ? '已获取' : '为空');
 
                     if (supabaseClient) {
                         const realMessages = messagesSnapshot.filter(msg => !msg.isVirtual);
-                        console.log('🧠 [记忆保存-完成] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
+                        devLog('🧠 [记忆保存-完成] 真实消息数量:', realMessages.length, '/', messagesSnapshot.length);
 
                         if (realMessages.length > 0) {
                             const mem0Messages = realMessages.map(msg => ({
@@ -1307,7 +1313,7 @@ export function AppTabsPage() {
                                 role: 'system',
                                 content: `User was working on task: "${taskDescriptionSnapshot}"`,
                             });
-                            console.log('🧠 [记忆保存-完成] 调用 memory-extractor...');
+                            devLog('🧠 [记忆保存-完成] 调用 memory-extractor...');
                             const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
                                 body: {
                                     action: 'extract',
@@ -1326,25 +1332,25 @@ export function AppTabsPage() {
                             if (error) {
                                 console.error('🧠 [记忆保存-完成] memory-extractor 返回错误:', error);
                             } else {
-                                console.log('✅ [记忆保存-完成] 记忆提取成功:', data);
+                                devLog('✅ [记忆保存-完成] 记忆提取成功:', data);
                                 // 显示具体保存了哪些记忆
                                 if (data?.memories && Array.isArray(data.memories)) {
-                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                                    console.log('📝 [记忆保存-完成] 保存的记忆内容:');
+                                    devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    devLog('📝 [记忆保存-完成] 保存的记忆内容:');
                                     data.memories.forEach((mem: { content?: string; tag?: string }, idx: number) => {
-                                        console.log(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
+                                        devLog(`  ${idx + 1}. [${mem.tag || 'UNKNOWN'}] ${mem.content || '(无内容)'}`);
                                     });
-                                    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                                    devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                                 }
                             }
                         } else {
-                            console.log('⚠️ [记忆保存-完成] 跳过：没有真实消息');
+                            devLog('⚠️ [记忆保存-完成] 跳过：没有真实消息');
                         }
                     } else {
-                        console.log('⚠️ [记忆保存-完成] 跳过：Supabase 客户端为空');
+                        devLog('⚠️ [记忆保存-完成] 跳过：Supabase 客户端为空');
                     }
                 } else {
-                    console.log('⚠️ [记忆保存-完成] 跳过：消息为空或用户ID为空');
+                    devLog('⚠️ [记忆保存-完成] 跳过：消息为空或用户ID为空');
                 }
             } catch (error) {
                 console.error('⚠️ 后台保存记忆失败（不影响用户体验）:', error);
@@ -1630,12 +1636,12 @@ export function AppTabsPage() {
                 consequence={pledgeConfirmData.consequence}
                 pledge={pledgeConfirmData.pledge}
                 onUnlocked={() => {
-                    console.log('✅ [ScreenTime] 后果确认完成，应用已解锁');
+                    devLog('✅ [ScreenTime] 后果确认完成，应用已解锁');
                     setShowPledgeConfirm(false);
                     setPledgeConfirmData(null);
                 }}
                 onCancel={() => {
-                    console.log('❌ [ScreenTime] 用户取消后果确认');
+                    devLog('❌ [ScreenTime] 用户取消后果确认');
                     setShowPledgeConfirm(false);
                     setPledgeConfirmData(null);
                 }}

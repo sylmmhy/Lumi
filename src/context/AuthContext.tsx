@@ -58,6 +58,7 @@ declare global {
   interface Window {
     MindBoatNativeAuth?: NativeAuthPayload;
     __MindBoatAuthReady?: boolean;
+    refreshTasks?: () => void;
     AndroidBridge?: {
       // Permission-related methods (from PermissionsStep)
       isAndroid?: () => boolean;
@@ -72,6 +73,8 @@ declare global {
       onTaskCreated?: (taskJson: string) => void;
       cancelTaskReminder?: (taskId: string) => void;
       logMessage?: (message: string) => void;
+      // Onboarding-related methods
+      onOnboardingCompleted?: () => void;
       // Auth-related methods
       logout?: () => void;
       triggerGoogleSignIn?: () => void;

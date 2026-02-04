@@ -415,7 +415,7 @@ export function calculateOptimalBedtime(
 
   // 计算置信度
   let confidence = 0;
-  let suggestedTimes: number[] = [];
+  const suggestedTimes: number[] = [];
 
   // 心率最低点分析权重最高
   if (factors.heartRateNadir) {

@@ -157,7 +157,10 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
     };
 
     // 初始化时获取状态
-    getStatus();
+    // 注意：直接调用 sendMessage 而非 getStatus，避免在声明前访问
+    if (window.webkit?.messageHandlers?.screenTime) {
+      window.webkit.messageHandlers.screenTime.postMessage({ action: 'getStatus' });
+    }
 
     return () => {
       // 清理全局回调

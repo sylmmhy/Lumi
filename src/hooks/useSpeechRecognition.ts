@@ -90,7 +90,7 @@ function calculateSimilarity(str1: string, str2: string): number {
  */
 function normalizeText(text: string): string {
   return text
-    .replace(/[，。！？、；：""''（）【】《》\s,.!?;:'"()\[\]<>]/g, '')
+    .replace(/[，。！？、；：""''（）【】《》\s,.!?;:'"()[\]<>]/g, '')
     .toLowerCase();
 }
 

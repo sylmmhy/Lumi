@@ -27,6 +27,7 @@ import { FeedbackCard } from '../components/feedback/FeedbackCard';
 import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
 import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
+import { useCampfireSession } from '../hooks/campfire';
 
 type TestMode =
   | 'menu'
@@ -341,14 +342,21 @@ export function DevTestPage() {
           {/* Campfire Companion Mode */}
           <button
             onClick={() => setMode('campfire-companion')}
-            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold rounded-xl transition-all shadow-lg"
+            className="w-full py-4 px-6 bg-gradient-to-r from-orange-600 to-red-700 hover:from-orange-700 hover:to-red-800 text-white font-bold rounded-xl transition-all shadow-lg"
           >
-            🏕️ 篝火陪伴模式
+            🔥 篝火专注模式
             <span className="block text-xs font-normal opacity-70 mt-1">
-              森林夜景背景 + 火焰动画 + 陪伴 UI
+              Gemini Live + VAD 自动连接 + 计时器
             </span>
-            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
-              📄 测试篝火陪伴页面 UI
+            <div className="mt-2 flex flex-col gap-1">
+              <div className="px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all flex items-center gap-2">
+                <span className="text-purple-300">🧠 Logic</span>
+                src/hooks/campfire/useCampfireSession.ts
+              </div>
+              <div className="px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all flex items-center gap-2">
+                <span className="text-blue-300">🎨 UI</span>
+                DevTestPage (CampfireCompanionTest)
+              </div>
             </div>
           </button>
 
@@ -617,97 +625,72 @@ const CAMPFIRE_CONFIG = {
   /** 背景图片高度（从 companion-bg.png 元数据获取） */
   bgHeight: 1926,
   /** 火焰底部在图片中的垂直位置，0-1（从设计稿测量：篝火柴堆顶部） */
-  fireBottomY: 0.64
-  ,
+  fireBottomY: 0.64,
   /** 火焰宽度占图片宽度的比例，0-1（视觉调优得出） */
   fireWidthRatio: 0.5,
   /** 背景填充色（与图片底部边缘颜色一致，用于填充超出区域） */
   bgColor: '#1D1B3D',
 } as const;
 
-/**
- * 篝火陪伴模式测试组件
- *
- * 实现原理：
- * 1. 图片宽度铺满视窗（100vw），高度按比例自动计算
- * 2. 图片顶部和两侧对齐视窗边缘
- * 3. 火焰使用百分比定位，相对于图片容器，确保与背景同步缩放
- * 4. 如果屏幕比图片高，底部用背景色填充
- * 5. 支持播放篝火白噪音（循环播放）
- */
-/** 音频淡入淡出时长（毫秒） */
-const AUDIO_FADE_DURATION = 800;
-
 function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPlayingSound, setIsPlayingSound] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const fadeIntervalRef = useRef<number | null>(null);
-
-  const toggleSound = useCallback(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio('/campfire-sound.mp3');
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0;
-    }
-
-    // 清除之前的淡入淡出
-    if (fadeIntervalRef.current) {
-      clearInterval(fadeIntervalRef.current);
-      fadeIntervalRef.current = null;
-    }
-
-    const audio = audioRef.current;
-    const steps = 20;
-    const stepDuration = AUDIO_FADE_DURATION / steps;
-    const volumeStep = 1 / steps;
-
-    if (isPlayingSound) {
-      // 淡出
-      fadeIntervalRef.current = window.setInterval(() => {
-        if (audio.volume > volumeStep) {
-          audio.volume = Math.max(0, audio.volume - volumeStep);
-        } else {
-          audio.volume = 0;
-          audio.pause();
-          if (fadeIntervalRef.current) {
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
-          }
-        }
-      }, stepDuration);
-    } else {
-      // 淡入
-      audio.volume = 0;
-      audio.play();
-      fadeIntervalRef.current = window.setInterval(() => {
-        if (audio.volume < 1 - volumeStep) {
-          audio.volume = Math.min(1, audio.volume + volumeStep);
-        } else {
-          audio.volume = 1;
-          if (fadeIntervalRef.current) {
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
-          }
-        }
-      }, stepDuration);
-    }
-    setIsPlayingSound(!isPlayingSound);
-  }, [isPlayingSound]);
-
-  // 组件卸载时停止音频
-  useState(() => {
-    return () => {
-      if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
+  // 使用 useCampfireSession hook
+  const session = useCampfireSession({
+    userId: 'dev-test-user',
+    aiTone: 'gentle',
+    language: 'zh',
+    idleTimeout: 30,
+    vadThreshold: 25,
+    onSessionEnd: (stats) => {
+      console.log('Session ended:', stats);
+      alert(`专注结束！\n时长: ${Math.floor(stats.durationSeconds / 60)}分${stats.durationSeconds % 60}秒\n对话次数: ${stats.chatCount}`);
+      onBack();
+    },
   });
 
+
+
+  // 未开始状态 - 显示开始按钮
+  if (session.status === 'idle') {
+    return (
+      <div
+        className="fixed inset-0 w-full h-full overflow-hidden flex flex-col items-center justify-center"
+        style={{ backgroundColor: CAMPFIRE_CONFIG.bgColor }}
+      >
+        {/* 背景图片 */}
+        <div className="absolute inset-0 w-full">
+          <img
+            src="/companion-bg.png"
+            alt=""
+            className="w-full h-auto block"
+          />
+        </div>
+
+        {/* 开始按钮 */}
+        <div className="relative z-50 text-center">
+          <h1 className="text-4xl font-bold text-yellow-400 mb-4" style={{ fontFamily: 'Sansita, sans-serif' }}>
+            🔥 篝火专注模式
+          </h1>
+          <p className="text-white/80 text-lg mb-6">需要时随时可以和我说话</p>
+          <button
+            onClick={() => session.startSession('测试任务 - 专注工作')}
+            className="px-8 py-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold rounded-xl transition-all shadow-lg text-lg"
+          >
+            开始专注
+          </button>
+        </div>
+
+        {/* 返回按钮 */}
+        <button
+          onClick={onBack}
+          className="absolute top-4 left-4 z-50 px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-full hover:bg-black/60 transition-colors text-sm"
+        >
+          ← 返回
+        </button>
+      </div>
+    );
+  }
+
+  // 进行中状态 - 原来的 UI
   return (
     <div
       className="fixed inset-0 w-full h-full overflow-hidden"
@@ -728,50 +711,67 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
           style={{
             top: `${CAMPFIRE_CONFIG.fireBottomY * 100}%`,
             width: `${CAMPFIRE_CONFIG.fireWidthRatio * 100}%`,
-            transform: 'translateX(-50%) translateY(-100%)', // 水平居中，底部对齐到 top 位置
+            transform: 'translateX(-50%) translateY(-100%)',
           }}
         >
-          <TalkingFire isSpeaking={isSpeaking} size="100%" />
+          <TalkingFire isSpeaking={session.isSpeaking} size="100%" />
         </div>
       </div>
 
-      {/* 顶部控制区域 - 固定在视口，不随图片缩放 */}
+      {/* 顶部控制区域 */}
       <div className="absolute top-4 left-4 right-4 z-50 flex justify-between">
         {/* 返回按钮 */}
         <button
-          onClick={onBack}
+          onClick={() => session.endSession()}
           className="px-4 py-2 bg-black/40 backdrop-blur-sm text-white rounded-full hover:bg-black/60 transition-colors text-sm"
         >
-          ← 返回
+          ← 结束
         </button>
 
         {/* 右侧按钮组 */}
         <div className="flex gap-2">
           {/* 白噪音播放按钮 */}
           <button
-            onClick={toggleSound}
+            onClick={session.toggleAmbient}
             className={`px-4 py-2 rounded-full transition-colors text-sm ${
-              isPlayingSound
+              session.isAmbientPlaying
                 ? 'bg-orange-500/80 text-white'
                 : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
             }`}
           >
-            {isPlayingSound ? '🔥 Sound On' : '🔇 Sound Off'}
+            {session.isAmbientPlaying ? '🔥 Sound On' : '🔇 Sound Off'}
           </button>
 
-          {/* 说话切换按钮（调试用） */}
+          {/* 用户静音按钮 */}
           <button
-            onClick={() => setIsSpeaking(!isSpeaking)}
+            onClick={session.toggleMute}
             className={`px-4 py-2 rounded-full transition-colors text-sm ${
-              isSpeaking
-                ? 'bg-green-500/80 text-white'
+              session.isMuted
+                ? 'bg-red-500/80 text-white'
                 : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
             }`}
           >
-            {isSpeaking ? '🔊 Speaking' : '🔇 Silent'}
+            {session.isMuted ? '🚫 Muted' : '🎤 Mic On'}
           </button>
         </div>
       </div>
+
+      {/* 中间状态栏 - 计时器 */}
+      <div className="absolute top-1/2 left-0 right-0 z-50 -translate-y-1/2 text-center">
+        <div className="text-5xl font-bold text-yellow-400" style={{ fontFamily: 'monospace' }}>
+          {session.formattedTime}
+        </div>
+        <div className="text-white/80 text-sm mt-2">
+          🔥 专注中
+        </div>
+      </div>
+
+      {/* 错误提示 */}
+      {session.error && (
+        <div className="absolute bottom-20 left-4 right-4 z-50 bg-red-900/90 text-red-100 px-4 py-3 rounded-lg text-sm">
+          ❌ {session.error}
+        </div>
+      )}
     </div>
   );
 }

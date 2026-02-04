@@ -460,5 +460,24 @@
   "profile.healthKit.authStatus.notAuthorized": "Not Authorized",
   "profile.healthKit.authStatus.notAvailable": "Not Available",
   "profile.healthKit.authStatus.deniedHint": "Health access was denied. Please go to Settings > Lumi > Health to enable access.",
-  "profile.healthKit.authStatus.promptHint": "Tap 'Authorize' to allow Lumi to read your health data. A system dialog will appear asking for your permission."
+  "profile.healthKit.authStatus.promptHint": "Tap 'Authorize' to allow Lumi to read your health data. A system dialog will appear asking for your permission.",
+
+  "pledge.title": "Confirm Pledge",
+  "pledge.taskLabel": "Locked Task",
+  "pledge.pleaseRead": "Please speak or type the following pledge:",
+  "pledge.speakPledge": "Speak Pledge",
+  "pledge.typePledge": "Type Pledge",
+  "pledge.typeHere": "Type the pledge here...",
+  "pledge.listening": "Listening...",
+  "pledge.processing": "Processing...",
+  "pledge.tapToSpeak": "Tap to start speaking",
+  "pledge.youSaid": "You said:",
+  "pledge.stopRecording": "Stop Recording",
+  "pledge.tryAgain": "Try Again",
+  "pledge.confirm": "Confirm Pledge",
+  "pledge.unlocking": "Unlocking...",
+  "pledge.errorEmpty": "Please enter the pledge",
+  "pledge.errorMismatch": "Input doesn't match the pledge, please try again",
+  "pledge.errorUnlock": "Failed to unlock, please try again",
+  "pledge.similarityHint": "{{similarity}}% match, please ensure content matches"
 }

@@ -61,3 +61,15 @@ export type {
   SleepMusicTrack,
   SleepMusicTrackId,
 } from './useSleepMusic';
+
+// Screen Time（应用锁定）
+export { useScreenTime, isIOSNativeApp } from './useScreenTime';
+export type { ScreenTimeStatus } from './useScreenTime';
+
+// 语音识别
+export { useSpeechRecognition } from './useSpeechRecognition';
+export type {
+  SpeechRecognitionResult,
+  UseSpeechRecognitionOptions,
+  UseSpeechRecognitionReturn,
+} from './useSpeechRecognition';

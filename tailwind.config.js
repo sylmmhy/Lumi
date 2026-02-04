@@ -37,6 +37,7 @@ export default {
         inter: ['Inter', 'sans-serif'],
         serif: ['"DM Serif Display"', 'serif'],
         sans: ['"Quicksand"', 'system-ui', 'sans-serif'],
+        quicksand: ['"Quicksand"', 'sans-serif'],
         hand: ['"Caveat"', 'cursive'],
         sansita: ['"Sansita"', 'sans-serif'],
         'sansita-one': ['"Sansita One"', 'sans-serif'],

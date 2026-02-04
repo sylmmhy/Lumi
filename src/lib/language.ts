@@ -3,7 +3,13 @@
  *
  * Gemini Live Native Audio supports 24 languages for voice output.
  * This module manages user language preferences.
+ *
+ * 语言设置存储位置：
+ * - localStorage: 本地快速访问
+ * - users.preferences: 后端持久化，支持跨设备同步
  */
+
+import { getSupabaseClient } from './supabase';
 
 export interface SupportedLanguage {
   code: string;
@@ -212,4 +218,174 @@ export function getLanguagesDisplayText(codes: string[]): string {
     return firstTwo.join(', ');
   }
   return `${firstTwo.join(', ')} +${codes.length - 2}`;
+}
+
+// ============================================
+// 后端同步功能
+// ============================================
+
+/**
+ * 语言偏好设置接口（存储在 users.preferences 中）
+ */
+export interface LanguagePreferences {
+  ui_language?: string;           // UI 界面语言，如 'en', 'zh'
+  voice_languages?: string[];     // Lumi 语音语言列表，如 ['en-US', 'zh-CN']
+}
+
+/**
+ * 将语言设置同步到后端 users.preferences
+ * 使用 JSONB 合并，不会覆盖其他 preferences 字段
+ *
+ * @param preferences - 要同步的语言偏好设置
+ * @returns 是否同步成功
+ */
+export async function syncLanguagePreferencesToBackend(
+  preferences: LanguagePreferences
+): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      console.warn('⚠️ Supabase client not available, skipping backend sync');
+      return false;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('⚠️ No user logged in, skipping backend sync');
+      return false;
+    }
+
+    // 先获取当前的 preferences
+    const { data: userData, error: fetchError } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', user.id)
+      .single();
+
+    if (fetchError) {
+      console.error('❌ Failed to fetch user preferences:', fetchError);
+      return false;
+    }
+
+    // 合并新的语言设置到现有 preferences
+    const currentPreferences = userData?.preferences || {};
+    const updatedPreferences = {
+      ...currentPreferences,
+      ...preferences,
+    };
+
+    // 更新到数据库
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ preferences: updatedPreferences })
+      .eq('id', user.id);
+
+    if (updateError) {
+      console.error('❌ Failed to sync language preferences to backend:', updateError);
+      return false;
+    }
+
+    console.log('✅ Language preferences synced to backend:', preferences);
+    return true;
+  } catch (error) {
+    console.error('❌ Error syncing language preferences:', error);
+    return false;
+  }
+}
+
+/**
+ * 从后端加载语言设置到 localStorage
+ * 用于用户登录后同步设置
+ *
+ * @returns 加载的语言偏好设置，如果失败返回 null
+ */
+export async function loadLanguagePreferencesFromBackend(): Promise<LanguagePreferences | null> {
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return null;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return null;
+    }
+
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('preferences')
+      .eq('id', user.id)
+      .single();
+
+    if (error || !userData?.preferences) {
+      return null;
+    }
+
+    const preferences = userData.preferences as Record<string, unknown>;
+    const languagePrefs: LanguagePreferences = {};
+
+    // 提取语言相关设置
+    if (typeof preferences.ui_language === 'string') {
+      languagePrefs.ui_language = preferences.ui_language;
+      // 同步到 localStorage
+      localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, preferences.ui_language);
+    }
+
+    if (Array.isArray(preferences.voice_languages)) {
+      languagePrefs.voice_languages = preferences.voice_languages as string[];
+      // 同步到 localStorage
+      localStorage.setItem(LANGUAGES_STORAGE_KEY, JSON.stringify(preferences.voice_languages));
+      if (preferences.voice_languages.length > 0) {
+        localStorage.setItem(LANGUAGE_STORAGE_KEY, preferences.voice_languages[0] as string);
+      }
+    }
+
+    console.log('✅ Language preferences loaded from backend:', languagePrefs);
+    return languagePrefs;
+  } catch (error) {
+    console.error('❌ Error loading language preferences from backend:', error);
+    return null;
+  }
+}
+
+/**
+ * 设置 UI 语言并同步到后端
+ * 这是 setUILanguage 的增强版本
+ *
+ * @param languageCode - UI 语言代码
+ * @param syncToBackend - 是否同步到后端（默认 true）
+ */
+export async function setUILanguageWithSync(
+  languageCode: string,
+  syncToBackend = true
+): Promise<void> {
+  // 1. 保存到 localStorage（立即生效）
+  setUILanguage(languageCode);
+
+  // 2. 异步同步到后端
+  if (syncToBackend) {
+    syncLanguagePreferencesToBackend({ ui_language: languageCode });
+  }
+}
+
+/**
+ * 设置 Lumi 语音语言并同步到后端
+ * 这是 setPreferredLanguages 的增强版本
+ *
+ * @param languageCodes - 语音语言代码列表
+ * @param syncToBackend - 是否同步到后端（默认 true）
+ */
+export async function setPreferredLanguagesWithSync(
+  languageCodes: string[] | null,
+  syncToBackend = true
+): Promise<void> {
+  // 1. 保存到 localStorage（立即生效）
+  setPreferredLanguages(languageCodes);
+
+  // 2. 异步同步到后端
+  if (syncToBackend) {
+    syncLanguagePreferencesToBackend({
+      voice_languages: languageCodes || [],
+    });
+  }
 }

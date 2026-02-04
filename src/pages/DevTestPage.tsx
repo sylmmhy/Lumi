@@ -26,6 +26,7 @@ import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
 import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
 import { VoiceChatTest } from '../components/dev/VoiceChatTest';
+import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 
 type TestMode =
   | 'menu'
@@ -49,7 +50,8 @@ type TestMode =
   | 'task-complete-animation'
   | 'feedback-card'
   | 'voice-chat-test'
-  | 'campfire-companion';
+  | 'campfire-companion'
+  | 'pledge-confirm';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -420,6 +422,24 @@ export function DevTestPage() {
 
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🔒 Screen Time 解锁</p>
+
+          {/* 承诺确认测试 */}
+          <button
+            onClick={() => setMode('pledge-confirm')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🔐 承诺确认界面
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              语音/打字输入承诺内容解锁应用
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 src/components/ConsequencePledgeConfirm.tsx
+            </div>
+          </button>
+
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">任务卡片动画</p>
 
           {/* 任务完成动画 */}
@@ -510,6 +530,7 @@ export function DevTestPage() {
       {mode === 'habit-stacking' && <HabitStackingTest onBack={backToMenu} />}
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
       {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
+      {mode === 'pledge-confirm' && <PledgeConfirmTest onBack={backToMenu} />}
     </>
   );
 }
@@ -1602,6 +1623,97 @@ function FeedbackCardTest({ onBack }: { onBack: () => void }) {
       <button onClick={onBack} className="text-gray-500 hover:text-gray-700 text-sm underline">
         ← Back to Menu
       </button>
+    </div>
+  );
+}
+
+// ============================================
+// 测试 12: 承诺确认界面 (Screen Time 解锁)
+// ============================================
+function PledgeConfirmTest({ onBack }: { onBack: () => void }) {
+  const [showModal, setShowModal] = useState(false);
+
+  // 示例数据 (英文示例，匹配 Figma 设计稿)
+  const exampleData = {
+    taskName: 'Packing your luggage',
+    consequence: "I might miss my flight because I didn't finish packing on time.",
+    pledge: "I accept the consequence that I might miss my flight because I didn't finish packing on time.",
+    scheduledTime: '12:30 pm',
+  };
+
+  return (
+    <div className="min-h-screen bg-[#1e1e1e] flex flex-col items-center justify-center gap-6 p-6">
+      <h2 className="text-2xl font-bold text-yellow-400">🔐 承诺确认界面测试</h2>
+
+      <div className="text-center space-y-4 max-w-md">
+        <p className="text-gray-400">
+          这是 Screen Time 解锁时显示的承诺确认界面。
+        </p>
+        <p className="text-gray-500 text-sm">
+          用户需要通过<span className="text-blue-400">【语音】</span>或
+          <span className="text-green-400">【打字】</span>输入承诺内容才能解锁应用。
+        </p>
+      </div>
+
+      {/* 示例数据展示 */}
+      <div className="w-full max-w-md bg-[#2a2a2a] rounded-xl p-4 space-y-3">
+        <h3 className="text-white font-bold text-sm">📋 测试数据</h3>
+        <div className="space-y-2 text-sm">
+          <div>
+            <span className="text-gray-500">任务名称：</span>
+            <span className="text-white">{exampleData.taskName}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">后果提示：</span>
+            <span className="text-orange-400">{exampleData.consequence}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">承诺内容：</span>
+            <span className="text-blue-400">{exampleData.pledge}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 打开弹窗按钮 */}
+      <button
+        onClick={() => setShowModal(true)}
+        className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl transition-all shadow-lg"
+      >
+        🔓 打开承诺确认界面
+      </button>
+
+      {/* 提示 */}
+      <div className="text-center space-y-2 max-w-md">
+        <p className="text-gray-500 text-xs">
+          💡 提示：语音识别需要后端 speech-to-text 函数运行
+        </p>
+        <p className="text-gray-500 text-xs">
+          📝 打字输入会自动验证相似度（≥70% 通过）
+        </p>
+      </div>
+
+      {/* 返回按钮 */}
+      <button
+        onClick={onBack}
+        className="text-gray-500 hover:text-gray-300 text-sm underline"
+      >
+        ← 返回菜单
+      </button>
+
+      {/* 承诺确认弹窗 */}
+      {showModal && (
+        <ConsequencePledgeConfirm
+          taskName={exampleData.taskName}
+          consequence={exampleData.consequence}
+          pledge={exampleData.pledge}
+          scheduledTime={exampleData.scheduledTime}
+          onUnlocked={() => {
+            alert('🎉 验证通过！应用已解锁');
+            setShowModal(false);
+          }}
+          onCancel={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }

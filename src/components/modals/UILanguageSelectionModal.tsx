@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { SUPPORTED_UI_LANGUAGES, getUILanguage, setPreferredLanguages } from '../../lib/language';
+import {
+    SUPPORTED_UI_LANGUAGES,
+    getUILanguage,
+    setPreferredLanguagesWithSync,
+} from '../../lib/language';
 import { useTranslation } from '../../hooks/useTranslation';
 
 /**
@@ -38,12 +42,13 @@ export const UILanguageSelectionModal: React.FC<UILanguageSelectionModalProps> =
      */
     const handleSelectLanguage = (code: string) => {
         setSelectedLanguage(code);
-        setUILanguage(code);
+        setUILanguage(code); // 这个来自 LanguageContext，会自动同步到后端
 
         // Also update Lumi's language to match the UI language
         const lumiLanguageCode = UI_TO_LUMI_LANGUAGE_MAP[code];
         if (lumiLanguageCode) {
-            setPreferredLanguages([lumiLanguageCode]);
+            // 使用带后端同步的版本
+            setPreferredLanguagesWithSync([lumiLanguageCode]);
         }
 
         onClose();

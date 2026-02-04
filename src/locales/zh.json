@@ -462,5 +462,24 @@
   "profile.healthKit.authStatus.notAuthorized": "未授权",
   "profile.healthKit.authStatus.notAvailable": "不可用",
   "profile.healthKit.authStatus.deniedHint": "健康数据访问被拒绝。请前往「设置 → Lumi → 健康」开启权限。",
-  "profile.healthKit.authStatus.promptHint": "点击「授权」允许 Lumi 读取你的健康数据。系统会弹出权限请求对话框。"
+  "profile.healthKit.authStatus.promptHint": "点击「授权」允许 Lumi 读取你的健康数据。系统会弹出权限请求对话框。",
+
+  "pledge.title": "承诺确认",
+  "pledge.taskLabel": "锁定任务",
+  "pledge.pleaseRead": "请大声说出或输入以下承诺：",
+  "pledge.speakPledge": "语音输入承诺",
+  "pledge.typePledge": "打字输入承诺",
+  "pledge.typeHere": "在这里输入承诺内容...",
+  "pledge.listening": "正在聆听...",
+  "pledge.processing": "识别中...",
+  "pledge.tapToSpeak": "点击开始说话",
+  "pledge.youSaid": "你说的是：",
+  "pledge.stopRecording": "停止录音",
+  "pledge.tryAgain": "重新说",
+  "pledge.confirm": "确认承诺",
+  "pledge.unlocking": "解锁中...",
+  "pledge.errorEmpty": "请输入承诺内容",
+  "pledge.errorMismatch": "输入内容与承诺不匹配，请重试",
+  "pledge.errorUnlock": "解锁失败，请重试",
+  "pledge.similarityHint": "匹配度 {{similarity}}%，请确保内容一致"
 }

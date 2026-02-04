@@ -42,3 +42,7 @@ export { AssistantLoadingModal } from './modals/AssistantLoadingModal';
 // 任务流程控制器
 export { TaskFlowController } from './task-flow/TaskFlowController';
 export type { TaskFlowControllerProps } from './task-flow/TaskFlowController';
+
+// 承诺确认组件（Screen Time 解锁）
+export { ConsequencePledgeConfirm } from './ConsequencePledgeConfirm';
+export type { ConsequencePledgeConfirmProps } from './ConsequencePledgeConfirm';

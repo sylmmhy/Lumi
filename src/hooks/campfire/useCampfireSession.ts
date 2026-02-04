@@ -221,6 +221,13 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     }
   }, []);
 
+  const disconnectGemini = useCallback(() => {
+    clearIdleTimer();
+    geminiLive.disconnect();
+    setStatus('focusing');
+    console.log('🔌 [Campfire] Disconnected from Gemini, back to focusing');
+  }, [geminiLive, clearIdleTimer]);
+
   const startIdleTimer = useCallback(() => {
     clearIdleTimer();
     
@@ -228,7 +235,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       console.log('🕐 [Campfire] Idle timeout, disconnecting Gemini...');
       disconnectGemini();
     }, idleTimeout * 1000);
-  }, [idleTimeout, clearIdleTimer]);
+  }, [idleTimeout, clearIdleTimer, disconnectGemini]);
 
   // ==========================================
   // Gemini 连接管理
@@ -346,13 +353,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       reconnectLockRef.current = false;
     }
   }, [userId, sessionId, taskDescription, aiTone, language, geminiLive, startIdleTimer]);
-
-  const disconnectGemini = useCallback(() => {
-    clearIdleTimer();
-    geminiLive.disconnect();
-    setStatus('focusing');
-    console.log('🔌 [Campfire] Disconnected from Gemini, back to focusing');
-  }, [geminiLive, clearIdleTimer]);
 
   // ==========================================
   // VAD 触发自动重连

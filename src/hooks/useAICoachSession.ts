@@ -386,27 +386,30 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     },
   });
 
+  const geminiIsConnected = geminiLive.isConnected;
+  const sendGeminiTextMessage = geminiLive.sendTextMessage;
+
   // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
   // 🔧 修复语言污染：替换触发词中的 {LANG} 占位符为实际语言代码
   useEffect(() => {
     sendToneTriggerRef.current = (trigger: string) => {
-      if (geminiLive.isConnected && isSessionActive) {
+      if (geminiIsConnected && isSessionActive) {
         // 替换 {LANG} 占位符为实际语言代码
         const lang = preferredLanguagesRef.current?.[0] || 'en-US';
         const triggerWithLanguage = trigger.replace('{LANG}', lang);
-        geminiLive.sendTextMessage(triggerWithLanguage);
+        sendGeminiTextMessage(triggerWithLanguage);
         if (import.meta.env.DEV) {
           console.log('📤 发送语气切换触发词:', triggerWithLanguage);
         }
       } else if (import.meta.env.DEV) {
         console.log('⏸️ 跳过语气切换触发词:', {
-          isConnected: geminiLive.isConnected,
+          isConnected: geminiIsConnected,
           isSessionActive,
           trigger,
         });
       }
     };
-  }, [geminiLive.isConnected, geminiLive.sendTextMessage, isSessionActive]);
+  }, [geminiIsConnected, sendGeminiTextMessage, isSessionActive]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -898,7 +901,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       throw error;
     }
-  }, [initialTime, geminiLive, startCountdown, cleanup]);
+  }, [initialTime, geminiLive, startCountdown, cleanup, enableToneManager, toneManager]);
 
   /**
    * 立即停止音频播放（不断开连接、不清理资源）

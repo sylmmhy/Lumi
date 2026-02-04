@@ -5,7 +5,8 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { aiTools, handleToolCall } from './index';
+import { aiTools } from './toolDefinitions';
+import { handleToolCall } from './toolHandlers';
 import type { ToolCallContext, ToolCallResult } from './toolDefinitions';
 import type { FunctionDeclaration } from '@google/genai';
 

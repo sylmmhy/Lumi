@@ -314,8 +314,18 @@ function clearAuthStorage(): void {
  * 3. 恢复失败则清除 localStorage（以 Supabase 为准）
  * 4. Native 登录是特殊情况，允许没有 Supabase session
  */
-// DEV BACKDOOR: Test account user ID (q@q.com)
-const DEV_TEST_USER_ID = '31d5da79-2cfc-445d-9543-eefc5b8d31d7';
+/**
+ * DEV ONLY：测试账号免验证开关
+ *
+ * 风险说明：
+ * - 若在生产环境可触发，会导致认证状态被绕过（高风险）。
+ *
+ * 保护措施：
+ * - 仅在 `import.meta.env.DEV === true` 时生效；生产构建永远不会进入该分支。
+ */
+const DEV_TEST_USER_ID = import.meta.env.DEV
+  ? '31d5da79-2cfc-445d-9543-eefc5b8d31d7'
+  : null;
 
 async function validateSessionWithSupabase(): Promise<AuthState> {
   if (!supabase) {
@@ -328,8 +338,8 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   const isNativeLogin = stored[NATIVE_LOGIN_FLAG_KEY] === 'true';
   const storedUserId = stored['user_id'];
 
-  // DEV BACKDOOR: Skip validation for test account
-  if (storedUserId === DEV_TEST_USER_ID) {
+  // DEV ONLY：跳过测试账号的会话验证（生产环境不会触发）
+  if (import.meta.env.DEV && DEV_TEST_USER_ID && storedUserId === DEV_TEST_USER_ID) {
     console.log('🔓 Dev backdoor: skipping session validation for test account');
     return {
       isLoggedIn: true,
@@ -859,7 +869,7 @@ export function AuthProvider({
       // 【修复】释放互斥锁
       sessionCheckMutexRef.current = false;
     }
-  }, [supabase]);
+  }, []);
 
   /**
    * 缓存最新的会话检查函数，避免回调闭包引用旧的 Supabase 实例。
@@ -2210,7 +2220,7 @@ export function AuthProvider({
       clearInterval(intervalId);
       clearTimeout(initialCheckTimeoutId);
     };
-  }, [supabase, triggerSessionCheckNow]);
+  }, [triggerSessionCheckNow]);
 
   // ==========================================
   // Context Value

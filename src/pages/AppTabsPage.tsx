@@ -84,7 +84,7 @@ export function AppTabsPage() {
             totalSteps: productTour.totalSteps,
             url: window.location.href,
         });
-    }, [productTour.isActive, productTour.currentStep, productTour.stepNumber]);
+    }, [productTour.isActive, productTour.currentStep, productTour.stepNumber, productTour.totalSteps]);
 
     // 【已移除】onboarding 跳转逻辑
     // 网页端不再判断 hasCompletedHabitOnboarding，由端侧决定加载哪个 URL
@@ -788,7 +788,7 @@ export function AppTabsPage() {
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);
         }
-    }, [aiCoach, setTasks, auth.userId, auth.userName]);
+    }, [aiCoach, setTasks, auth.userId, auth.userName, currentCallRecordId]);
 
     /**
      * 确保首次显示语音/摄像头提示；用户确认后才真正启动 AI 教练。
@@ -1081,7 +1081,7 @@ export function AppTabsPage() {
         };
 
         void startFromUrl();
-    }, [auth.userId, currentView, fetchReminderById, handleChangeView, ensureVoicePromptThenStart, hasAutoStarted, hasSeenVoicePrompt, markVoicePromptSeen, tasks, tasksLoaded]);
+    }, [auth.userId, auth.isLoggedIn, auth.isSessionValidated, currentCallRecordId, currentView, handleChangeView, ensureVoicePromptThenStart, hasAutoStarted, hasSeenVoicePrompt, markVoicePromptSeen, tasks, tasksLoaded]);
 
     /**
      * 语音/摄像头提示点击「OK」后继续任务启动。

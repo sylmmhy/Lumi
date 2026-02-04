@@ -328,22 +328,26 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
   }, [videoIsEnabled, videoStart, videoStop, audioOutput, analytics]);
 
+  // 解构出需要的 session 字段，避免在 Hook deps 中依赖整个 session 对象
+  const sessionIsConnected = session.isConnected;
+  const sendRealtimeInput = session.sendRealtimeInput;
+  const sendClientContent = session.sendClientContent;
+
   /**
    * 发送文本消息
    * 注意：使用 session.isConnected 和 session.sendRealtimeInput 作为依赖
    * 而不是整个 session 对象，避免因对象引用变化导致函数频繁重建
    */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
   const sendTextMessage = useCallback((text: string) => {
-    if (session.isConnected) {
-      session.sendRealtimeInput({ text });
+    if (sessionIsConnected) {
+      sendRealtimeInput({ text });
       if (import.meta.env.DEV) {
         console.log('📤 [GeminiLive] 发送文本:', text.substring(0, 60) + (text.length > 60 ? '...' : ''));
       }
     } else if (import.meta.env.DEV) {
       console.warn('⚠️ [GeminiLive] 发送失败: 连接已断开');
     }
-  }, [session.isConnected, session.sendRealtimeInput]);
+  }, [sessionIsConnected, sendRealtimeInput]);
 
   // 同步 isSpeaking 状态到 ref（当 AI 开始说话时更新）
   useEffect(() => {
@@ -365,7 +369,6 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * @param options - 配置选项
    * @returns boolean - 是否成功注入
    */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 故意使用部分依赖避免频繁重建
   const injectContextSilently = useCallback((
     content: string,
     options: {
@@ -377,7 +380,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
   ): boolean => {
     const { force = false, safeWindowMs = 5000 } = options;
 
-    if (!session.isConnected) {
+    if (!sessionIsConnected) {
       if (import.meta.env.DEV) {
         console.warn('⚠️ [GeminiLive] 静默注入失败: 连接已断开');
       }
@@ -408,7 +411,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
 
     // 执行静默注入（sendClientContent 返回 void，所以我们用 try-catch 处理错误）
     try {
-      session.sendClientContent(content, false);
+      sendClientContent(content, false);
     } catch (error) {
       if (import.meta.env.DEV) {
         console.warn('⚠️ [GeminiLive] 静默注入失败:', error);
@@ -421,7 +424,7 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     }
 
     return true;
-  }, [session.isConnected, session.sendClientContent]);
+  }, [sessionIsConnected, sendClientContent]);
 
   /**
    * 设置 onTurnComplete 回调

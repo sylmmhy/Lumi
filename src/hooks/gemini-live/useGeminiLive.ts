@@ -406,12 +406,12 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
       }
     }
 
-    // 执行静默注入
-    const success = session.sendClientContent(content, false);
-
-    if (!success) {
+    // 执行静默注入（sendClientContent 返回 void，所以我们用 try-catch 处理错误）
+    try {
+      session.sendClientContent(content, false);
+    } catch (error) {
       if (import.meta.env.DEV) {
-        console.warn('⚠️ [GeminiLive] 静默注入失败: sendClientContent 返回 false');
+        console.warn('⚠️ [GeminiLive] 静默注入失败:', error);
       }
       return false;
     }

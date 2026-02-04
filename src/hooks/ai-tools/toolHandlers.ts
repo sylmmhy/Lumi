@@ -7,6 +7,9 @@
 
 import type { ToolCallResult, ToolCallContext } from './toolDefinitions';
 
+// 重新导出类型供其他模块使用
+export type { ToolCallResult, ToolCallContext };
+
 // ============================================================================
 // 工具处理器
 // ============================================================================

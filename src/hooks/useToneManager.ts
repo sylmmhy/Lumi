@@ -118,7 +118,7 @@ export interface ResistanceAnalysis {
   /** 情绪强度（0-1，仅当 type=emotional 时有意义） */
   emotionIntensity?: number;
   /** 检测到的情绪类型 */
-  emotion?: 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral';
+  emotion?: 'happy' | 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral';
   /** 分析依据 */
   reason: string;
 }

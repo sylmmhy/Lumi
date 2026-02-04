@@ -5,7 +5,7 @@
  * 实现 "Live 2.5 对话 + Gemini 3 Flash 决策" 的混合架构
  */
 
-import type { FunctionDeclaration } from '@google/genai';
+import { Type, type FunctionDeclaration } from '@google/genai';
 
 // ============================================================================
 // 工具定义
@@ -27,14 +27,14 @@ export const suggestHabitStackTool: FunctionDeclaration = {
 - "I want to build a habit of reading"
 - "How can I stick to exercising"`,
   parameters: {
-    type: 'object',
+    type: Type.OBJECT,
     properties: {
       new_habit: {
-        type: 'string',
+        type: Type.STRING,
         description: '用户想要养成的新习惯名称，如"吃维生素"、"冥想"、"运动"',
       },
       duration_minutes: {
-        type: 'number',
+        type: Type.NUMBER,
         description: '新习惯预计需要的时间（分钟），默认为5分钟',
       },
     },
@@ -57,10 +57,10 @@ export const getDailyReportTool: FunctionDeclaration = {
 - "How did I do today"
 - "Show me my progress"`,
   parameters: {
-    type: 'object',
+    type: Type.OBJECT,
     properties: {
       date: {
-        type: 'string',
+        type: Type.STRING,
         description: '报告日期，格式为 YYYY-MM-DD，默认为今天',
       },
     },
@@ -82,23 +82,23 @@ export const createHabitStackTool: FunctionDeclaration = {
 - "Yes, set it up"
 - "Sounds good, let's do it"`,
   parameters: {
-    type: 'object',
+    type: Type.OBJECT,
     properties: {
       anchor_task_id: {
-        type: 'string',
+        type: Type.STRING,
         description: '锚点任务的 UUID',
       },
       new_habit_title: {
-        type: 'string',
+        type: Type.STRING,
         description: '新习惯的名称',
       },
       position: {
-        type: 'string',
+        type: Type.STRING,
         enum: ['before', 'after'],
         description: '新习惯相对于锚点的位置',
       },
       reminder_message: {
-        type: 'string',
+        type: Type.STRING,
         description: '提醒消息文案',
       },
     },

@@ -40,8 +40,24 @@ export function ConsequencePledgeConfirm({
 }: ConsequencePledgeConfirmProps) {
   // onCancel 保留用于未来扩展（如添加返回按钮）
   void _onCancel;
-  const { t } = useTranslation();
+  const { t, uiLanguage } = useTranslation();
   const { acceptConsequence } = useScreenTime();
+
+  /**
+   * 将 UI 语言代码转换为语音识别 BCP-47 语言代码
+   */
+  const getSpeechLanguageCode = (uiLang: string): string => {
+    const languageMap: Record<string, string> = {
+      en: 'en-US',
+      zh: 'zh-CN',
+      ja: 'ja-JP',
+      ko: 'ko-KR',
+      es: 'es-ES',
+      it: 'it-IT',
+    };
+    return languageMap[uiLang] || 'en-US';
+  };
+
   const {
     isRecording,
     isProcessing,
@@ -54,7 +70,7 @@ export function ConsequencePledgeConfirm({
     reset: resetSpeech,
     validateTextInput,
   } = useSpeechRecognition({
-    language: 'zh-CN',
+    language: getSpeechLanguageCode(uiLanguage),
     expectedPledge: pledge,
   });
 
@@ -175,7 +191,7 @@ export function ConsequencePledgeConfirm({
     <div className="flex flex-col items-center gap-5 w-full px-6">
       {/* 说明文字 */}
       <p className="font-quicksand font-normal text-sm text-center text-[#6A6A7A] px-4">
-        Repeat the commitment above to unlock
+        {t('pledge.repeatToUnlock')}
       </p>
 
       {/* 语音输入按钮 */}
@@ -187,7 +203,7 @@ export function ConsequencePledgeConfirm({
         }}
       >
         <MicIcon className="w-5 h-5" />
-        SAY IT OUT LOUD
+        {t('pledge.sayItOutLoud')}
       </button>
 
       {/* 文字输入链接 - 简洁的文字样式 */}
@@ -195,14 +211,14 @@ export function ConsequencePledgeConfirm({
         onClick={handleSwitchToText}
         className="font-quicksand font-medium text-sm text-[#6A6A7A] hover:text-[#9A9AAA] transition-colors underline underline-offset-2"
       >
-        or type it
+        {t('pledge.orTypeIt')}
       </button>
     </div>
   );
 
   // 渲染语音模式覆盖层 - 布局与基础页面一致，只是顶部内容变化
   const renderVoiceOverlay = () => (
-    <div className="fixed inset-0 z-[60] flex flex-col" style={{ backgroundColor: '#1C1C28' }}>
+    <div className="fixed inset-0 z-[120] flex flex-col" style={{ backgroundColor: '#1C1C28' }}>
       {/* 关闭按钮 */}
       <button
         onClick={handleBack}
@@ -217,7 +233,7 @@ export function ConsequencePledgeConfirm({
           className="font-sansita font-bold text-[42px] leading-[1.2] italic"
           style={{ color: '#F5D76E' }}
         >
-          Please repeat the words below:
+          {t('pledge.pleaseRepeat')}
         </h1>
         {/* 错误提示 - 验证失败时显示 */}
         {(error || speechError) && (
@@ -255,7 +271,7 @@ export function ConsequencePledgeConfirm({
             </span>
             <div className="pt-8 pb-8 px-2">
               <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
-                I Accept The Consequence That
+                {t('pledge.iAcceptConsequence')}
               </p>
               <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">
                 {consequence}
@@ -274,7 +290,7 @@ export function ConsequencePledgeConfirm({
         <div className="w-full pb-6">
           <div className="flex flex-col items-center gap-5 w-full px-6">
             <p className="font-quicksand font-normal text-sm text-center text-[#6A6A7A] px-4">
-              Repeat the commitment above to unlock
+              {t('pledge.repeatToUnlock')}
             </p>
             <button
               onClick={isRecording ? handleStopVoice : handleStartVoice}
@@ -295,13 +311,13 @@ export function ConsequencePledgeConfirm({
                   ))}
                 </div>
               )}
-              {isRecording ? 'Stop Recording' : isProcessing ? 'Processing...' : 'Start Recording'}
+              {isRecording ? t('pledge.stopRecording') : isProcessing ? t('pledge.processing') : t('pledge.startRecording')}
             </button>
             <button
               onClick={handleSwitchToText}
               className="font-quicksand font-medium text-sm text-[#6A6A7A] hover:text-[#9A9AAA] transition-colors underline underline-offset-2"
             >
-              or type it
+              {t('pledge.orTypeIt')}
             </button>
           </div>
         </div>
@@ -311,7 +327,7 @@ export function ConsequencePledgeConfirm({
 
   // 渲染文字输入模式覆盖层
   const renderTextOverlay = () => (
-    <div className="fixed inset-0 z-[60] flex flex-col" style={{ backgroundColor: '#1C1C28' }}>
+    <div className="fixed inset-0 z-[120] flex flex-col" style={{ backgroundColor: '#1C1C28' }}>
       {/* 关闭按钮 */}
       <button
         onClick={handleBack}
@@ -326,7 +342,7 @@ export function ConsequencePledgeConfirm({
           className="font-sansita font-bold text-[28px] leading-[1.2] italic"
           style={{ color: '#F5D76E' }}
         >
-          Please enter the words below:
+          {t('pledge.pleaseEnter')}
         </h1>
       </div>
 
@@ -349,7 +365,7 @@ export function ConsequencePledgeConfirm({
           </span>
           <div className="pt-8 pb-8 px-2">
             <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
-              I Accept The Consequence That
+              {t('pledge.iAcceptConsequence')}
             </p>
             <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">
               {consequence}
@@ -372,7 +388,7 @@ export function ConsequencePledgeConfirm({
               setError(null);
               setValidationResult(null);
             }}
-            placeholder="Type the quote to accept this consequence..."
+            placeholder={t('pledge.enterPlaceholder')}
             className="w-full h-24 p-4 pr-16 rounded-xl text-base resize-none focus:outline-none font-quicksand text-white placeholder-[#6A6A7A]"
             style={{ backgroundColor: '#2C2C3C', border: '1px solid #3C3C4C' }}
             autoFocus
@@ -435,15 +451,15 @@ export function ConsequencePledgeConfirm({
         .sound-bar:nth-child(5) { animation-delay: 0s; }
       `}</style>
 
-      {/* 基础页面 - 始终渲染 */}
-      <div className="fixed inset-0 flex flex-col z-50" style={{ backgroundColor: '#1C1C28' }}>
+      {/* 基础页面 - 始终渲染，z-index 需要高于 BottomNavBar (z-[100]) */}
+      <div className="fixed inset-0 flex flex-col z-[110]" style={{ backgroundColor: '#1C1C28' }}>
         {/* 顶部深紫色区域 */}
         <div
           className="w-full pt-20 pb-12 px-10"
           style={{ backgroundColor: '#4A1D6A' }}
         >
           <p className="font-quicksand font-bold text-base text-white/80 mb-2">
-            {formatTimeDisplay()} · Time to
+            {formatTimeDisplay()} · {t('pledge.timeTo')}
           </p>
           <h1
             className="font-sansita font-bold text-[42px] leading-[1.2] italic"
@@ -475,7 +491,7 @@ export function ConsequencePledgeConfirm({
 
               <div className="pt-8 pb-8 px-2">
                 <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
-                  I Accept The Consequence That
+                  {t('pledge.iAcceptConsequence')}
                 </p>
                 <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">
                   {consequence}
@@ -504,19 +520,6 @@ export function ConsequencePledgeConfirm({
       {/* 文字输入模式覆盖层 */}
       {inputMode === 'text' && renderTextOverlay()}
     </>
-  );
-}
-
-// 图标组件
-function SoundWaveIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 48 48" fill="currentColor">
-      <rect x="6" y="16" width="4" height="16" rx="2" className="animate-pulse" />
-      <rect x="14" y="10" width="4" height="28" rx="2" className="animate-pulse" style={{ animationDelay: '0.1s' }} />
-      <rect x="22" y="6" width="4" height="36" rx="2" className="animate-pulse" style={{ animationDelay: '0.2s' }} />
-      <rect x="30" y="10" width="4" height="28" rx="2" className="animate-pulse" style={{ animationDelay: '0.1s' }} />
-      <rect x="38" y="16" width="4" height="16" rx="2" className="animate-pulse" />
-    </svg>
   );
 }
 

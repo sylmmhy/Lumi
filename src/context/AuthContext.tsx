@@ -113,6 +113,23 @@ declare global {
         onboardingCompleted?: { postMessage: (message: Record<string, never>) => void };
         // Ringtone settings
         setRingtoneType?: { postMessage: (message: { type: string }) => void };
+        // Screen Time handler
+        screenTime?: { postMessage: (message: unknown) => void };
+        // HomeKit handlers
+        isHomeKitAvailable?: { postMessage: (message: unknown) => void };
+        requestHomeKitAccess?: { postMessage: (message: unknown) => void };
+        getHomeKitDevices?: { postMessage: (message: unknown) => void };
+        getHomeKitLights?: { postMessage: (message: unknown) => void };
+        controlHomeKitLight?: { postMessage: (message: unknown) => void };
+        getHomeKitScenes?: { postMessage: (message: unknown) => void };
+        executeHomeKitScene?: { postMessage: (message: unknown) => void };
+        // Sleep Music handlers
+        playSleepMusic?: { postMessage: (message: unknown) => void };
+        stopSleepMusic?: { postMessage: (message: unknown) => void };
+        setSleepMusicVolume?: { postMessage: (message: unknown) => void };
+        showAirPlayPicker?: { postMessage: (message: unknown) => void };
+        getSleepMusicState?: { postMessage: (message: unknown) => void };
+        getSleepMusicTracks?: { postMessage: (message: unknown) => void };
       };
     };
   }

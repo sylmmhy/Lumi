@@ -23,6 +23,8 @@ import {
     taskToNativeReminder,
 } from '../remindMe/services/reminderService';
 import { isNativeApp, syncAllTasksToNative, registerNativeRefreshTasks } from '../utils/nativeTaskEvents';
+import { useScreenTime, type ScreenTimeActionEvent } from '../hooks/useScreenTime';
+import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { markRoutineComplete, unmarkRoutineComplete } from '../remindMe/services/routineCompletionService';
 import { supabase, getSupabaseClient } from '../lib/supabase';
 import { getPreferredLanguages } from '../lib/language';
@@ -127,6 +129,14 @@ export function AppTabsPage() {
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
     const [showTestVersionModal, setShowTestVersionModal] = useState(false);
+
+    // Screen Time 后果确认相关状态
+    const [showPledgeConfirm, setShowPledgeConfirm] = useState(false);
+    const [pledgeConfirmData, setPledgeConfirmData] = useState<{
+        taskName: string;
+        consequence: string;
+        pledge: string;
+    } | null>(null);
 
     // 庆祝流程相关状态
     const [showCelebration, setShowCelebration] = useState(false);
@@ -794,6 +804,49 @@ export function AppTabsPage() {
         console.log('✅ Starting AI Coach directly');
         void startAICoachForTask(task);
     }, [hasSeenVoicePrompt, markVoicePromptSeen, startAICoachForTask]);
+
+    /**
+     * Screen Time 事件处理
+     * 当用户从 iOS Shield 界面点击按钮后，iOS 会发送事件到 Web 端
+     */
+    const handleScreenTimeAction = useCallback((event: ScreenTimeActionEvent) => {
+        console.log('🔓 [ScreenTime] 收到操作事件:', event);
+
+        if (event.action === 'start_task') {
+            // 用户选择"让 Lumi 陪我开始" - 直达 Gemini Live 开始任务
+            const task: Task = {
+                id: event.taskId || `temp-${Date.now()}`,
+                text: event.taskName || '开始任务',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                displayTime: 'Now',
+                date: getLocalDateString(),
+                completed: false,
+                type: 'todo',
+                category: 'morning',
+                called: false,
+            };
+            console.log('🚀 [ScreenTime] 启动任务:', task.text);
+            // 跳转到 urgency 页面并启动任务
+            handleChangeView('urgency', true);
+            setTimeout(() => {
+                ensureVoicePromptThenStart(task);
+            }, 300);
+        } else if (event.action === 'confirm_consequence') {
+            // 用户选择"暂时不做，接受后果" - 显示后果确认界面
+            console.log('📝 [ScreenTime] 显示后果确认界面');
+            setPledgeConfirmData({
+                taskName: event.taskName || '',
+                consequence: event.consequence || '',
+                pledge: event.consequencePledge || '',
+            });
+            setShowPledgeConfirm(true);
+        }
+    }, [handleChangeView, ensureVoicePromptThenStart]);
+
+    // 使用 Screen Time Hook 监听 iOS 事件
+    useScreenTime({
+        onAction: handleScreenTimeAction,
+    });
 
     /**
      * 「Start」按钮点击：直接进入 AI 教练任务流程
@@ -1569,6 +1622,25 @@ export function AppTabsPage() {
             isOpen={showTestVersionModal}
             onClose={() => setShowTestVersionModal(false)}
         />
+
+        {/* Screen Time 后果确认界面 */}
+        {showPledgeConfirm && pledgeConfirmData && (
+            <ConsequencePledgeConfirm
+                taskName={pledgeConfirmData.taskName}
+                consequence={pledgeConfirmData.consequence}
+                pledge={pledgeConfirmData.pledge}
+                onUnlocked={() => {
+                    console.log('✅ [ScreenTime] 后果确认完成，应用已解锁');
+                    setShowPledgeConfirm(false);
+                    setPledgeConfirmData(null);
+                }}
+                onCancel={() => {
+                    console.log('❌ [ScreenTime] 用户取消后果确认');
+                    setShowPledgeConfirm(false);
+                    setPledgeConfirmData(null);
+                }}
+            />
+        )}
 
         {/* Product Tour 新用户引导蒙层 */}
         {productTour.isActive && productTour.currentStep && (

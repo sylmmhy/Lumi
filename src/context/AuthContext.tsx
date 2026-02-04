@@ -129,6 +129,69 @@ declare global {
 // 工具函数
 // ==========================================
 
+// ==========================================
+// 【修复】全局 setSession 互斥锁 - 防止并发 refresh token 竞态
+// ==========================================
+// 问题背景：
+// 当 iOS WebView 被挂起（如接电话）后恢复时，多处代码可能同时调用 setSession：
+// - triggerSessionCheckNow（定期会话检查）
+// - applyNativeLogin（原生登录）
+// - restoreSession（会话恢复）
+// - validateSessionWithSupabase（会话验证）
+// 并发调用会导致 refresh token 竞态：第一个请求成功轮换 token 后，
+// 后续请求使用旧 token 失败，触发 "refresh_token_already_used" 错误。
+//
+// 解决方案：
+// 使用模块级别的全局锁，确保同一时间只有一个 setSession 调用在执行。
+// ==========================================
+
+let globalSetSessionInProgress = false;
+let lastGlobalSetSessionTime = 0;
+const GLOBAL_SET_SESSION_DEBOUNCE_MS = 2000; // 2 秒内不重复调用
+
+/**
+ * 检查是否可以执行 setSession（全局互斥锁 + 防抖）
+ * @param caller - 调用者名称（用于日志）
+ * @returns true 如果可以执行，false 如果应该跳过
+ */
+function canExecuteSetSession(caller: string): boolean {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastGlobalSetSessionTime;
+
+  // 检查防抖
+  if (timeSinceLastCall < GLOBAL_SET_SESSION_DEBOUNCE_MS) {
+    console.log(`🔐 setSession (${caller}): 跳过，距上次调用仅 ${timeSinceLastCall}ms`);
+    return false;
+  }
+
+  // 检查互斥锁
+  if (globalSetSessionInProgress) {
+    console.log(`🔐 setSession (${caller}): 跳过，已有 setSession 正在执行`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 获取全局 setSession 锁
+ * @param caller - 调用者名称（用于日志）
+ */
+function acquireSetSessionLock(caller: string): void {
+  globalSetSessionInProgress = true;
+  lastGlobalSetSessionTime = Date.now();
+  console.log(`🔐 setSession (${caller}): 获取锁`);
+}
+
+/**
+ * 释放全局 setSession 锁
+ * @param caller - 调用者名称（用于日志）
+ */
+function releaseSetSessionLock(caller: string): void {
+  globalSetSessionInProgress = false;
+  console.log(`🔐 setSession (${caller}): 释放锁`);
+}
+
 /**
  * 批量读取 localStorage，减少同步 I/O 次数
  * iOS WebView 中每次 localStorage.getItem 都是昂贵的同步操作
@@ -315,16 +378,38 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   if (storedAccessToken && storedRefreshToken) {
     console.log('🔄 尝试用 localStorage token 恢复 Supabase session...');
 
+    // 【修复】使用全局互斥锁，防止与其他 setSession 并发
+    if (!canExecuteSetSession('initializeAuthState')) {
+      console.log('🔐 initializeAuthState: 跳过 setSession，已有其他调用正在执行');
+      // 返回当前 localStorage 状态，让后续的 setSession 处理
+      return {
+        isLoggedIn: true,
+        userId: stored['user_id'],
+        userEmail: stored['user_email'],
+        userName: stored['user_name'],
+        userPicture: stored['user_picture'],
+        isNewUser: stored['is_new_user'] === 'true',
+        sessionToken: storedAccessToken,
+        refreshToken: storedRefreshToken,
+        isNativeLogin,
+        isSessionValidated: false,
+        hasCompletedHabitOnboarding: false,
+      };
+    }
+
+    acquireSetSessionLock('initializeAuthState');
+
     // P0 修复：添加重试机制，避免临时错误导致过早登出
     const MAX_RETRY_ATTEMPTS = 3;
     const RETRY_DELAY_MS = 1000;
 
-    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-      try {
-        const { data: restored, error: restoreError } = await supabase.auth.setSession({
-          access_token: storedAccessToken,
-          refresh_token: storedRefreshToken,
-        });
+    try {
+      for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        try {
+          const { data: restored, error: restoreError } = await supabase.auth.setSession({
+            access_token: storedAccessToken,
+            refresh_token: storedRefreshToken,
+          });
 
         if (restoreError) {
           // 区分网络错误和 token 真正失效
@@ -458,7 +543,10 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
           continue;
         }
+        }
       }
+    } finally {
+      releaseSetSessionLock('initializeAuthState');
     }
 
     // 所有重试都失败且非网络错误，清除 localStorage
@@ -561,6 +649,9 @@ export function AuthProvider({
   // 追踪 setSession 是否成功触发了 onAuthStateChange
   const setSessionTriggeredAuthChangeRef = useRef(false);
 
+  // 注意：全局 setSession 互斥锁已移至模块级别（见文件顶部的 canExecuteSetSession, acquireSetSessionLock, releaseSetSessionLock）
+  // 这样可以确保跨组件重渲染的一致性
+
   useEffect(() => { loginPathRef.current = loginPath; }, [loginPath]);
   useEffect(() => { defaultRedirectRef.current = defaultRedirectPath; }, [defaultRedirectPath]);
 
@@ -624,6 +715,13 @@ export function AuthProvider({
     };
   }, []);
 
+  // 【修复】会话检查的互斥锁和防抖
+  // 原因：多个地方可能同时触发会话检查（定期检查、storage 事件、native login 等），
+  // 如果同时执行多个 setSession，会导致 refresh token 竞态
+  const sessionCheckMutexRef = useRef(false);
+  const lastSessionCheckTimeRef = useRef(0);
+  const SESSION_CHECK_DEBOUNCE_MS = 3000; // 3 秒内不重复检查
+
   /**
    * 立即触发会话检查与修复。
    *
@@ -634,6 +732,23 @@ export function AuthProvider({
   const triggerSessionCheckNow = useCallback(async (reason?: string): Promise<void> => {
     const client = supabase;
     if (!client) return;
+
+    // 【修复】互斥锁：同一时间只允许一个会话检查
+    if (sessionCheckMutexRef.current) {
+      console.log(`🔄 会话检查跳过: 已有检查正在执行 (${reason})`);
+      return;
+    }
+
+    // 【修复】防抖：短时间内不重复检查
+    const now = Date.now();
+    const timeSinceLastCheck = now - lastSessionCheckTimeRef.current;
+    if (timeSinceLastCheck < SESSION_CHECK_DEBOUNCE_MS) {
+      console.log(`🔄 会话检查跳过: 距上次检查仅 ${timeSinceLastCheck}ms (${reason})`);
+      return;
+    }
+
+    sessionCheckMutexRef.current = true;
+    lastSessionCheckTimeRef.current = now;
 
     const checkStartTime = Date.now();
     if (reason) {
@@ -668,34 +783,42 @@ export function AuthProvider({
         console.warn('🔄 定期检查：检测到 Supabase 会话丢失，尝试恢复...');
         console.log('🔄 localStorage 有 token，但 Supabase SDK 没有会话');
 
-        try {
-          const setSessionStartTime = Date.now();
-          const { data, error } = await client.auth.setSession({
-            access_token: storedAccessToken,
-            refresh_token: storedRefreshToken,
-          });
-          const setSessionDuration = Date.now() - setSessionStartTime;
+        // 【修复】使用全局互斥锁，防止并发 setSession
+        if (!canExecuteSetSession('triggerSessionCheckNow')) {
+          console.log('🔄 定期检查：跳过 setSession，已有其他调用正在执行');
+        } else {
+          acquireSetSessionLock('triggerSessionCheckNow');
+          try {
+            const setSessionStartTime = Date.now();
+            const { data, error } = await client.auth.setSession({
+              access_token: storedAccessToken,
+              refresh_token: storedRefreshToken,
+            });
+            const setSessionDuration = Date.now() - setSessionStartTime;
 
-          if (error) {
-            console.error(`❌ 定期检查：会话恢复失败 (耗时 ${setSessionDuration}ms):`, error.message);
-            // 如果是 token 真正失效（不是网络问题），可能需要登出
-            if (!isNetworkError(error) &&
-                (error.message?.includes('invalid') ||
-                 error.message?.includes('expired') ||
-                 error.message?.includes('Token'))) {
-              console.error('❌ token 已失效，需要重新登录');
-              // 不自动登出，让用户下次操作时发现并处理
+            if (error) {
+              console.error(`❌ 定期检查：会话恢复失败 (耗时 ${setSessionDuration}ms):`, error.message);
+              // 如果是 token 真正失效（不是网络问题），可能需要登出
+              if (!isNetworkError(error) &&
+                  (error.message?.includes('invalid') ||
+                   error.message?.includes('expired') ||
+                   error.message?.includes('Token'))) {
+                console.error('❌ token 已失效，需要重新登录');
+                // 不自动登出，让用户下次操作时发现并处理
+              }
+            } else if (data.session) {
+              console.log(`✅ 定期检查：会话恢复成功 (耗时 ${setSessionDuration}ms)，autoRefreshToken 已重新激活`);
+              // 更新 localStorage 中的 token
+              localStorage.setItem('session_token', data.session.access_token);
+              if (data.session.refresh_token) {
+                localStorage.setItem('refresh_token', data.session.refresh_token);
+              }
             }
-          } else if (data.session) {
-            console.log(`✅ 定期检查：会话恢复成功 (耗时 ${setSessionDuration}ms)，autoRefreshToken 已重新激活`);
-            // 更新 localStorage 中的 token
-            localStorage.setItem('session_token', data.session.access_token);
-            if (data.session.refresh_token) {
-              localStorage.setItem('refresh_token', data.session.refresh_token);
-            }
+          } catch (err) {
+            console.error('❌ 定期检查：会话恢复异常:', err);
+          } finally {
+            releaseSetSessionLock('triggerSessionCheckNow');
           }
-        } catch (err) {
-          console.error('❌ 定期检查：会话恢复异常:', err);
         }
       } else if (session) {
         // 会话正常，确保 localStorage 与 Supabase 同步
@@ -715,6 +838,9 @@ export function AuthProvider({
     } catch (err) {
       const totalDuration = Date.now() - checkStartTime;
       console.warn(`⚠️ 定期检查：获取会话状态失败 (耗时 ${totalDuration}ms):`, err);
+    } finally {
+      // 【修复】释放互斥锁
+      sessionCheckMutexRef.current = false;
     }
   }, [supabase]);
 
@@ -793,17 +919,27 @@ export function AuthProvider({
 
       if (accessToken && refreshToken) {
         console.log('🔐 Implicit flow: 使用 access_token 建立 session...');
-        const { data, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (sessionError) {
-          console.error('❌ setSession 失败:', sessionError);
-        } else if (data.session) {
-          console.log('✅ OAuth 登录成功:', data.session.user.email);
-          persistSessionToStorage(data.session);
-          checkLoginState();
-          triggerSessionCheckNowRef.current?.('oauth_implicit');
+        // 【修复】使用全局互斥锁，防止与其他 setSession 并发
+        if (!canExecuteSetSession('oauth_implicit')) {
+          console.log('🔐 OAuth implicit: 跳过 setSession，已有其他调用正在执行');
+          return;
+        }
+        acquireSetSessionLock('oauth_implicit');
+        try {
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) {
+            console.error('❌ setSession 失败:', sessionError);
+          } else if (data.session) {
+            console.log('✅ OAuth 登录成功:', data.session.user.email);
+            persistSessionToStorage(data.session);
+            checkLoginState();
+            triggerSessionCheckNowRef.current?.('oauth_implicit');
+          }
+        } finally {
+          releaseSetSessionLock('oauth_implicit');
         }
         return;
       }
@@ -1471,8 +1607,10 @@ export function AuthProvider({
     if (accessToken) localStorage.setItem('session_token', accessToken);
     if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
 
-    // 登录同时触发一次会话检查，避免等待定期检查
-    triggerSessionCheckNowRef.current?.('native_login');
+    // 【修复】移除 triggerSessionCheckNow 调用
+    // 原因：applyNativeLogin 下面会直接调用 setSession，
+    // 同时调用 triggerSessionCheckNow 会导致两个 setSession 并发，触发 refresh token 竞态
+    // triggerSessionCheckNowRef.current?.('native_login'); // 已移除
 
     // 追踪 setSession 是否成功（会触发 onAuthStateChange）
     let setSessionSucceeded = false;
@@ -1484,60 +1622,70 @@ export function AuthProvider({
       if (!isValidJwt(accessToken)) {
         console.warn('⚠️ 原生登录提供的 accessToken 不是有效的 JWT，已跳过 Supabase 会话设置');
       } else {
-        // 添加重试机制：确保 Supabase 会话成功建立，否则 autoRefreshToken 不会工作
-        const MAX_SET_SESSION_RETRIES = 3;
-        const SET_SESSION_RETRY_DELAY_MS = 1000;
-
-        for (let attempt = 1; attempt <= MAX_SET_SESSION_RETRIES; attempt++) {
+        // 【修复】使用全局互斥锁，防止与其他 setSession 调用并发
+        if (!canExecuteSetSession('applyNativeLogin')) {
+          console.log('🔐 applyNativeLogin: 跳过 setSession，已有其他调用正在执行');
+        } else {
+          acquireSetSessionLock('applyNativeLogin');
           try {
-            console.log(`🔐 applyNativeLogin: 调用 setSession (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES})...`);
-            const { data, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
+            // 添加重试机制：确保 Supabase 会话成功建立，否则 autoRefreshToken 不会工作
+            const MAX_SET_SESSION_RETRIES = 3;
+            const SET_SESSION_RETRY_DELAY_MS = 1000;
 
-            if (error) {
-              // 检查是否是可重试的错误（网络错误、临时服务器错误）
-              const isRetryable = isNetworkError(error) ||
-                error.message?.toLowerCase().includes('temporarily') ||
-                error.message?.toLowerCase().includes('500') ||
-                error.message?.toLowerCase().includes('502') ||
-                error.message?.toLowerCase().includes('503') ||
-                error.message?.toLowerCase().includes('504');
+            for (let attempt = 1; attempt <= MAX_SET_SESSION_RETRIES; attempt++) {
+              try {
+                console.log(`🔐 applyNativeLogin: 调用 setSession (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES})...`);
+                const { data, error } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
 
-              if (isRetryable && attempt < MAX_SET_SESSION_RETRIES) {
-                console.warn(`⚠️ setSession 临时失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
-                await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
-                continue;
+                if (error) {
+                  // 检查是否是可重试的错误（网络错误、临时服务器错误）
+                  const isRetryable = isNetworkError(error) ||
+                    error.message?.toLowerCase().includes('temporarily') ||
+                    error.message?.toLowerCase().includes('500') ||
+                    error.message?.toLowerCase().includes('502') ||
+                    error.message?.toLowerCase().includes('503') ||
+                    error.message?.toLowerCase().includes('504');
+
+                  if (isRetryable && attempt < MAX_SET_SESSION_RETRIES) {
+                    console.warn(`⚠️ setSession 临时失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
+                    await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
+                    continue;
+                  }
+
+                  console.error(`❌ setSession 最终失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
+                  console.error('❌ Supabase 会话未建立，token 自动刷新将不可用！用户可能在 1 小时后被登出。');
+                  break;
+                }
+
+                if (data.session) {
+                  setSessionSucceeded = true;
+                  localStorage.setItem('session_token', data.session.access_token);
+                  if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
+                  localStorage.setItem('user_email', data.session.user.email || email || '');
+                  console.log('✅ applyNativeLogin: setSession 成功，Supabase 会话已建立，autoRefreshToken 已激活');
+                  break;
+                }
+              } catch (err) {
+                const errorObj = err as { message?: string; code?: string };
+                if (attempt < MAX_SET_SESSION_RETRIES) {
+                  console.warn(`⚠️ setSession 异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
+                  await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
+                  continue;
+                }
+                console.error(`❌ setSession 最终异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
               }
-
-              console.error(`❌ setSession 最终失败 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, error.message);
-              console.error('❌ Supabase 会话未建立，token 自动刷新将不可用！用户可能在 1 小时后被登出。');
-              break;
             }
 
-            if (data.session) {
-              setSessionSucceeded = true;
-              localStorage.setItem('session_token', data.session.access_token);
-              if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
-              localStorage.setItem('user_email', data.session.user.email || email || '');
-              console.log('✅ applyNativeLogin: setSession 成功，Supabase 会话已建立，autoRefreshToken 已激活');
-              break;
+            if (!setSessionSucceeded) {
+              console.error('❌ 警告：经过多次重试后仍无法建立 Supabase 会话');
+              console.error('❌ 这意味着 token 自动刷新不可用，用户将在 access_token 过期后被登出');
             }
-          } catch (err) {
-            const errorObj = err as { message?: string; code?: string };
-            if (attempt < MAX_SET_SESSION_RETRIES) {
-              console.warn(`⚠️ setSession 异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
-              await new Promise(resolve => setTimeout(resolve, SET_SESSION_RETRY_DELAY_MS * attempt));
-              continue;
-            }
-            console.error(`❌ setSession 最终异常 (尝试 ${attempt}/${MAX_SET_SESSION_RETRIES}):`, errorObj.message);
+          } finally {
+            releaseSetSessionLock('applyNativeLogin');
           }
-        }
-
-        if (!setSessionSucceeded) {
-          console.error('❌ 警告：经过多次重试后仍无法建立 Supabase 会话');
-          console.error('❌ 这意味着 token 自动刷新不可用，用户将在 access_token 过期后被登出');
         }
       }
     } else if (accessToken && !refreshToken) {
@@ -1738,20 +1886,31 @@ export function AuthProvider({
           const { data: { session } } = await client.auth.getSession();
           if (session) return;
 
-          console.log('🔐 restoreSession: 启动阶段检测到会话缺失，尝试立即恢复...');
-          const { data, error } = await client.auth.setSession({
-            access_token: storedAccessToken,
-            refresh_token: storedRefreshToken,
-          });
-
-          if (error) {
-            console.warn('⚠️ restoreSession: 立即恢复会话失败:', error.message);
+          // 【修复】使用全局互斥锁，防止与其他 setSession 并发
+          if (!canExecuteSetSession('tryImmediateSessionRestore')) {
+            console.log('🔐 restoreSession: 跳过 setSession，已有其他调用正在执行');
             return;
           }
 
-          if (data.session) {
-            persistSessionToStorage(data.session);
-            console.log('✅ restoreSession: 启动阶段会话恢复成功');
+          console.log('🔐 restoreSession: 启动阶段检测到会话缺失，尝试立即恢复...');
+          acquireSetSessionLock('tryImmediateSessionRestore');
+          try {
+            const { data, error } = await client.auth.setSession({
+              access_token: storedAccessToken,
+              refresh_token: storedRefreshToken,
+            });
+
+            if (error) {
+              console.warn('⚠️ restoreSession: 立即恢复会话失败:', error.message);
+              return;
+            }
+
+            if (data.session) {
+              persistSessionToStorage(data.session);
+              console.log('✅ restoreSession: 启动阶段会话恢复成功');
+            }
+          } finally {
+            releaseSetSessionLock('tryImmediateSessionRestore');
           }
         } catch (err) {
           console.warn('⚠️ restoreSession: 立即恢复会话异常:', err);
@@ -1832,10 +1991,11 @@ export function AuthProvider({
 
     scheduleRestore();
 
-    // 用于防抖：记录上次查询的用户 ID 和时间
+    // 用于防抖：记录上次处理的用户 ID 和时间
     let lastQueryUserId: string | null = null;
     let lastQueryTime = 0;
-    const DEBOUNCE_MS = 500; // 500ms 内同一用户的重复查询会被跳过
+    // 【修复】增加防抖时间到 2 秒，覆盖 iOS WebView 恢复时的事件风暴
+    const DEBOUNCE_MS = 2000;
 
     // 监听 Supabase Auth 状态变化（这是权威来源）
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
@@ -1843,10 +2003,12 @@ export function AuthProvider({
       if (session) {
         const now = Date.now();
 
-        // 【防抖逻辑】USER_UPDATED 事件可能在短时间内多次触发（如 token 刷新）
-        // 如果是同一用户且在防抖时间内，跳过重复处理
-        if (event === 'USER_UPDATED' && lastQueryUserId === session.user.id && (now - lastQueryTime) < DEBOUNCE_MS) {
-          console.log('🔄 onAuthStateChange: 跳过重复的 USER_UPDATED 事件（防抖）');
+        // 【修复】扩展防抖逻辑，覆盖所有可能高频触发的事件
+        // 原因：iOS WebView 被挂起后恢复时，可能有大量 TOKEN_REFRESHED 事件同时触发
+        // 这会导致 refresh token 竞态：多个请求使用同一个 refresh token，后续请求失败
+        const isHighFrequencyEvent = event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED';
+        if (isHighFrequencyEvent && lastQueryUserId === session.user.id && (now - lastQueryTime) < DEBOUNCE_MS) {
+          console.log(`🔄 onAuthStateChange: 跳过重复的 ${event} 事件（防抖，距上次 ${now - lastQueryTime}ms）`);
           return;
         }
 
@@ -1859,8 +2021,11 @@ export function AuthProvider({
         // 标记 setSession 已触发 onAuthStateChange（用于与 applyNativeLogin 协调）
         setSessionTriggeredAuthChangeRef.current = true;
 
-        // 登录确认后立即触发一次会话检查，作为最终保险
-        triggerSessionCheckNowRef.current?.('auth_state_change');
+        // 【修复】移除 triggerSessionCheckNow 调用
+        // 原因：当 onAuthStateChange 已经收到有效 session 时，不需要再触发会话检查
+        // 之前的调用会导致：onAuthStateChange → triggerSessionCheckNow → setSession → TOKEN_REFRESHED → onAuthStateChange
+        // 形成循环，在 WebView 恢复时引发并发 refresh token 风暴
+        // triggerSessionCheckNowRef.current?.('auth_state_change'); // 已移除
 
         // Supabase 通知有有效 session，同步到 localStorage 并更新状态
         persistSessionToStorage(session);

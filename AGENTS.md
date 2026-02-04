@@ -56,7 +56,7 @@
 
 > **目录结构**：
 > ```
-> 父目录/                         # 如 "Lumi hackthon"
+> 父目录/                         # 如 "Lumi-hackathon"
 > ├── Lumi-front-end/             # 前端仓库（当前仓库）
 > ├── Lumi-backend/               # 后端仓库
 > ├── mindboat-ios-web-warpper/   # iOS 仓库

@@ -479,5 +479,14 @@
   "pledge.errorEmpty": "Please enter the pledge",
   "pledge.errorMismatch": "Input doesn't match the pledge, please try again",
   "pledge.errorUnlock": "Failed to unlock, please try again",
-  "pledge.similarityHint": "{{similarity}}% match, please ensure content matches"
+  "pledge.similarityHint": "{{similarity}}% match, please ensure content matches",
+  "pledge.repeatToUnlock": "Repeat the commitment above to unlock",
+  "pledge.sayItOutLoud": "SAY IT OUT LOUD",
+  "pledge.orTypeIt": "or type it",
+  "pledge.pleaseRepeat": "Please repeat the words below:",
+  "pledge.iAcceptConsequence": "I Accept The Consequence That",
+  "pledge.startRecording": "Start Recording",
+  "pledge.pleaseEnter": "Please enter the words below:",
+  "pledge.enterPlaceholder": "Type the quote to accept this consequence...",
+  "pledge.timeTo": "Time to"
 }

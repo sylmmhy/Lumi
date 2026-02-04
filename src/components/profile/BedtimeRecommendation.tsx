@@ -19,7 +19,7 @@ import {
  * - HRV 状态分析
  */
 export function BedtimeRecommendation() {
-  const { t, uiLanguage } = useTranslation();
+  const { uiLanguage } = useTranslation();
   const auth = useContext(AuthContext);
   const userId = auth?.userId;
 

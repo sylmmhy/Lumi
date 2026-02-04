@@ -79,6 +79,10 @@ export function useTopicDetector() {
     }
 
     try {
+      if (!supabase) {
+        console.error('🏷️ [TopicDetector] Supabase client not initialized')
+        return { success: false, topic: null, confidence: 0, error: 'Supabase not initialized' }
+      }
       const { data, error } = await supabase.functions.invoke('detect-topic', {
         body: { text },
       })

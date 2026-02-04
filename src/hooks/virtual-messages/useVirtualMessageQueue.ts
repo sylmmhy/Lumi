@@ -62,7 +62,12 @@ const PRIORITY_WEIGHT: Record<VirtualMessagePriority, number> = {
  * 消息类型权重映射
  */
 const TYPE_WEIGHT: Record<VirtualMessageType, number> = {
-  EMPATHY: 4,
+  EMPATHY: 5,        // 情绪响应（最高优先级）
+  LISTEN_FIRST: 5,   // 进入倾听模式（与 EMPATHY 同级）
+  ACCEPT_STOP: 4,    // 用户明确不想做，需要及时响应
+  GENTLE_REDIRECT: 4, // 情绪稳定后轻柔引导
+  PUSH_TINY_STEP: 3, // 推进小步骤
+  TONE_SHIFT: 3,     // 语气切换
   DIRECTIVE: 3,
   CHECKPOINT: 2,
   CONTEXT: 1,

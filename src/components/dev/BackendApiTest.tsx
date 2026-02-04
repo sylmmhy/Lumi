@@ -64,14 +64,14 @@ export function HabitStackingTest({ onBack }: { onBack: () => void }) {
     addLog('正在获取锚点习惯...');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase!.auth.getUser();
       if (!user) {
         throw new Error('用户未登录');
       }
 
       addLog(`用户 ID: ${user.id.substring(0, 8)}...`);
 
-      const { data, error } = await supabase.rpc('get_anchor_habits', {
+      const { data, error } = await supabase!.rpc('get_anchor_habits', {
         p_user_id: user.id
       });
 
@@ -101,7 +101,7 @@ export function HabitStackingTest({ onBack }: { onBack: () => void }) {
     addLog(`正在为「${newHabit}」获取挂载建议...`);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase!.auth.getSession();
       if (!session) {
         throw new Error('用户未登录');
       }
@@ -153,7 +153,7 @@ export function HabitStackingTest({ onBack }: { onBack: () => void }) {
     addLog(`检查「${newHabit}」与锚点的兼容性...`);
 
     try {
-      const { data, error } = await supabase.rpc('check_habit_stack_compatibility', {
+      const { data, error } = await supabase!.rpc('check_habit_stack_compatibility', {
         p_anchor_task_id: anchorTaskId,
         p_new_habit_keyword: newHabit,
         p_new_habit_duration_minutes: duration,
@@ -344,7 +344,7 @@ export function DailyReportTest({ onBack }: { onBack: () => void }) {
     addLog(`正在${force ? '强制' : ''}生成报告...`);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase!.auth.getSession();
       if (!session) {
         throw new Error('用户未登录');
       }
@@ -398,12 +398,12 @@ export function DailyReportTest({ onBack }: { onBack: () => void }) {
     addLog('正在获取历史报告...');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase!.auth.getUser();
       if (!user) {
         throw new Error('用户未登录');
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabase!
         .from('daily_goal_reports')
         .select('*')
         .eq('user_id', user.id)
@@ -427,13 +427,13 @@ export function DailyReportTest({ onBack }: { onBack: () => void }) {
     addLog('正在获取目标数据...');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase!.auth.getUser();
       if (!user) {
         throw new Error('用户未登录');
       }
 
       // 获取目标
-      const { data: goals, error: goalsError } = await supabase
+      const { data: goals, error: goalsError } = await supabase!
         .from('goals')
         .select('*')
         .eq('user_id', user.id)
@@ -450,7 +450,7 @@ export function DailyReportTest({ onBack }: { onBack: () => void }) {
 
       // 获取今天的 entries
       const today = new Date().toISOString().split('T')[0];
-      const { data: entries, error: entriesError } = await supabase
+      const { data: entries, error: entriesError } = await supabase!
         .from('goal_entries')
         .select('*, goals(name)')
         .eq('user_id', user.id)
@@ -622,7 +622,7 @@ export function VoiceChatTest({ onBack }: { onBack: () => void }) {
     setLoading(true); setError(null); setResponse(null);
     addLog(`正在调用 start-voice-chat API... 类型:${chatType} 阶段:${phase}`);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase!.auth.getSession();
       if (!session) throw new Error('用户未登录');
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start-voice-chat`, {
         method: 'POST',

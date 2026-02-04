@@ -192,21 +192,22 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     const result = await handleToolCall(tool, args, context);
 
     // 如果是 suggest_habit_stack 成功，保存推荐结果
-    if (tool === 'suggest_habit_stack' && result.success && result.data?.recommended) {
-      const rec = result.data.recommended;
+    const resultData = result.data as Record<string, unknown> | undefined;
+    if (tool === 'suggest_habit_stack' && result.success && resultData?.recommended) {
+      const rec = resultData.recommended as Record<string, unknown>;
       lastSuggestionRef.current = {
-        anchor_task_id: rec.anchor_task_id,
-        anchor_title: rec.anchor_title,
+        anchor_task_id: rec.anchor_task_id as string,
+        anchor_title: rec.anchor_title as string,
         new_habit: args.new_habit as string,
-        position: rec.position,
-        reminder_text: rec.reminder_text,
+        position: rec.position as 'before' | 'after',
+        reminder_text: rec.reminder_text as string,
       };
       console.log('💾 [IntentDetection] 保存推荐结果:', lastSuggestionRef.current);
     }
-    
+
     // 如果是 suggest_habit_stack 但需要用户输入时间（没有锚点）
-    if (tool === 'suggest_habit_stack' && result.success && result.data?.needsTimeInput) {
-      pendingHabitRef.current = result.data.habitName as string;
+    if (tool === 'suggest_habit_stack' && result.success && resultData?.needsTimeInput) {
+      pendingHabitRef.current = resultData.habitName as string;
       console.log('💾 [IntentDetection] 保存待创建习惯:', pendingHabitRef.current);
     }
 
@@ -270,25 +271,26 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           // 2. 如果检测到工具，执行它
           // 注意：AI 可能返回字符串 "null" 而不是真正的 null
           const hasTool = detection.tool && detection.tool !== 'null';
+          const toolName = detection.tool as string; // 已通过 hasTool 确保非 null
           if (detection.success && hasTool && detection.confidence >= 0.6) {
             // 检查工具是否已触发过（防重复）
-            if (triggeredToolsRef.current.has(detection.tool)) {
-              console.log(`⚠️ [IntentDetection] ${detection.tool} 已触发过，跳过`);
+            if (triggeredToolsRef.current.has(toolName)) {
+              console.log(`⚠️ [IntentDetection] ${toolName} 已触发过，跳过`);
             } else {
-              console.log(`🔧 [IntentDetection] 检测到工具调用: ${detection.tool} (置信度: ${detection.confidence})`);
-              
-              const toolResult = await executeToolCall(detection.tool, detection.args);
-              
+              console.log(`🔧 [IntentDetection] 检测到工具调用: ${toolName} (置信度: ${detection.confidence})`);
+
+              const toolResult = await executeToolCall(toolName, detection.args);
+
               // 标记已触发的工具（防止重复触发）
-              if (toolResult.success && ['save_goal_plan', 'create_simple_routine', 'create_habit_stack'].includes(detection.tool)) {
-                triggeredToolsRef.current.add(detection.tool);
-                console.log(`✅ [IntentDetection] 已标记 ${detection.tool} 触发`);
+              if (toolResult.success && ['save_goal_plan', 'create_simple_routine', 'create_habit_stack'].includes(toolName)) {
+                triggeredToolsRef.current.add(toolName);
+                console.log(`✅ [IntentDetection] 已标记 ${toolName} 触发`);
               }
               
               // 通知工具结果
               onToolResult?.({
                 ...toolResult,
-                tool: detection.tool,
+                tool: toolName,
               });
             }
           } else if (detection.tool && detection.tool !== 'null') {

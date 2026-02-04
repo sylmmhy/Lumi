@@ -16,6 +16,18 @@ export interface ScreenTimeStatus {
   isConfigured: boolean;
 }
 
+/**
+ * Screen Time 操作事件
+ * 从 iOS Shield 界面点击按钮后触发
+ */
+export interface ScreenTimeActionEvent {
+  action: 'start_task' | 'confirm_consequence';
+  taskName?: string;
+  taskId?: string;
+  consequence?: string;
+  consequencePledge?: string;
+}
+
 interface ScreenTimeCallback {
   action: string;
   status?: string;
@@ -39,18 +51,37 @@ export function isIOSNativeApp(): boolean {
 }
 
 /**
+ * useScreenTime Hook 配置选项
+ */
+export interface UseScreenTimeOptions {
+  /**
+   * Screen Time 操作事件回调
+   * 当用户从 Shield 界面点击按钮后触发
+   */
+  onAction?: (event: ScreenTimeActionEvent) => void;
+}
+
+/**
  * Screen Time 功能 Hook
  *
  * 使用方式:
  * ```tsx
- * const { status, requestAuthorization, showAppPicker, isAvailable } = useScreenTime();
+ * const { status, requestAuthorization, showAppPicker, isAvailable } = useScreenTime({
+ *   onAction: (event) => {
+ *     if (event.action === 'start_task') {
+ *       // 跳转到 Gemini Live 开始任务
+ *     } else if (event.action === 'confirm_consequence') {
+ *       // 显示后果确认界面
+ *     }
+ *   }
+ * });
  *
  * if (isAvailable) {
  *   // 显示 Screen Time 设置入口
  * }
  * ```
  */
-export function useScreenTime() {
+export function useScreenTime(options: UseScreenTimeOptions = {}) {
   const [status, setStatus] = useState<ScreenTimeStatus>({
     status: 'notDetermined',
     isAuthorized: false,
@@ -134,6 +165,24 @@ export function useScreenTime() {
     };
   }, [isAvailable]);
 
+  // 监听 iOS 发送的 screenTimeAction 事件
+  useEffect(() => {
+    const handleScreenTimeAction = (event: Event) => {
+      const customEvent = event as CustomEvent<ScreenTimeActionEvent>;
+      console.log('[ScreenTime] Action event received:', customEvent.detail);
+
+      if (options.onAction) {
+        options.onAction(customEvent.detail);
+      }
+    };
+
+    window.addEventListener('screenTimeAction', handleScreenTimeAction);
+
+    return () => {
+      window.removeEventListener('screenTimeAction', handleScreenTimeAction);
+    };
+  }, [options.onAction]);
+
   /**
    * 发送消息到 Native
    */
@@ -214,17 +263,6 @@ export function useScreenTime() {
   };
 }
 
-// 扩展 Window 接口
-declare global {
-  interface Window {
-    webkit?: {
-      messageHandlers?: {
-        screenTime?: {
-          postMessage: (message: unknown) => void;
-        };
-      };
-    };
-  }
-}
+// Window.webkit 类型定义在 src/context/AuthContext.tsx 中统一管理
 
 export default useScreenTime;

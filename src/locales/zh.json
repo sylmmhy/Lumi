@@ -481,5 +481,14 @@
   "pledge.errorEmpty": "请输入承诺内容",
   "pledge.errorMismatch": "输入内容与承诺不匹配，请重试",
   "pledge.errorUnlock": "解锁失败，请重试",
-  "pledge.similarityHint": "匹配度 {{similarity}}%，请确保内容一致"
+  "pledge.similarityHint": "匹配度 {{similarity}}%，请确保内容一致",
+  "pledge.repeatToUnlock": "复述上方承诺以解锁",
+  "pledge.sayItOutLoud": "大声说出来",
+  "pledge.orTypeIt": "或打字输入",
+  "pledge.pleaseRepeat": "请复述以下文字：",
+  "pledge.iAcceptConsequence": "我接受这个后果：",
+  "pledge.startRecording": "开始录音",
+  "pledge.pleaseEnter": "请输入以下文字：",
+  "pledge.enterPlaceholder": "输入上方内容以接受后果...",
+  "pledge.timeTo": "是时候"
 }

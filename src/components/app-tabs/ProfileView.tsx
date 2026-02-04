@@ -125,7 +125,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
      */
     const handleAIToneSelect = async (tone: AITone) => {
         setCurrentAITone(tone);
-        await setAITone(tone, auth?.userId);
+        await setAITone(tone, auth?.userId ?? undefined);
         setShowAIToneModal(false);
     };
 

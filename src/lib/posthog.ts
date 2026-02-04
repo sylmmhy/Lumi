@@ -1,6 +1,21 @@
-import posthog from 'posthog-js'
+type PostHogClient = typeof import('posthog-js')['default']
+
+let posthog: PostHogClient | null = null
+let posthogPromise: Promise<PostHogClient> | null = null
+
+async function loadPostHogClient(): Promise<PostHogClient> {
+  if (posthog) return posthog
+  if (!posthogPromise) {
+    posthogPromise = import('./posthogSdk').then((mod) => {
+      posthog = mod.posthog
+      return mod.posthog
+    })
+  }
+  return posthogPromise
+}
 
 let isPostHogInitialized = false
+let initPromise: Promise<void> | null = null
 
 /**
  * 生成永久设备用户 ID
@@ -39,53 +54,62 @@ const getOrCreatePermanentUserId = (): string => {
  * 
  * @returns {void}
  */
-export const initPostHog = () => {
+export const initPostHog = async () => {
   if (isPostHogInitialized) return
+  if (initPromise) return initPromise
 
-  try {
-    // 获取或创建永久设备用户 ID
-    const permanentUserId = getOrCreatePermanentUserId()
-    
-    posthog.init('phc_jvbFGqyv4KpwINXVBuARBL18Lx5OlyNlbCwYuinnX3j', {
-      api_host: 'https://us.i.posthog.com',
-      person_profiles: 'identified_only',
-      autocapture: true,
-      capture_pageview: true,
-      capture_pageleave: true,
-      // 移除 bootstrap，改用下面的主动 identify 逻辑，这样更可靠
-      // bootstrap: { distinctID: permanentUserId },
-    })
+  initPromise = (async () => {
+    try {
+      const client = await loadPostHogClient()
 
-    // 关键修正：关联 PostHog 原生匿名 ID 与我们的永久设备 ID
-    const currentDistinctId = posthog.get_distinct_id()
-    
-    // 如果当前 ID 不是 puid，说明可能是 PostHog 自动生成的匿名 ID
-    // 或者是之前的登录 ID。我们需要确保它与 puid 关联。
-    if (currentDistinctId && currentDistinctId !== permanentUserId) {
-      // 只有当当前 ID 不是已登录的用户 ID 时（简单判断：不包含 puid 且不像邮箱/UUID），才进行关联
-      // 但为了保险，我们在应用启动时，如果没有登录，就强制 identify 到 puid
-      const isUserLoggedIn = localStorage.getItem('user_id')
+      // 获取或创建永久设备用户 ID
+      const permanentUserId = getOrCreatePermanentUserId()
       
-      if (!isUserLoggedIn) {
-        // 未登录状态下，强制将当前会话归属到永久设备 ID
-        posthog.identify(permanentUserId)
-        if (import.meta.env.DEV) {
-          console.log('🔗 PostHog: 将原生匿名 ID 关联到 PUID:', currentDistinctId, '->', permanentUserId)
+      client.init('phc_jvbFGqyv4KpwINXVBuARBL18Lx5OlyNlbCwYuinnX3j', {
+        api_host: 'https://us.i.posthog.com',
+        person_profiles: 'identified_only',
+        autocapture: true,
+        capture_pageview: true,
+        capture_pageleave: true,
+        // 移除 bootstrap，改用下面的主动 identify 逻辑，这样更可靠
+        // bootstrap: { distinctID: permanentUserId },
+      })
+
+      // 关键修正：关联 PostHog 原生匿名 ID 与我们的永久设备 ID
+      const currentDistinctId = client.get_distinct_id()
+      
+      // 如果当前 ID 不是 puid，说明可能是 PostHog 自动生成的匿名 ID
+      // 或者是之前的登录 ID。我们需要确保它与 puid 关联。
+      if (currentDistinctId && currentDistinctId !== permanentUserId) {
+        // 只有当当前 ID 不是已登录的用户 ID 时（简单判断：不包含 puid 且不像邮箱/UUID），才进行关联
+        // 但为了保险，我们在应用启动时，如果没有登录，就强制 identify 到 puid
+        const isUserLoggedIn = localStorage.getItem('user_id')
+        
+        if (!isUserLoggedIn) {
+          // 未登录状态下，强制将当前会话归属到永久设备 ID
+          client.identify(permanentUserId)
+          if (import.meta.env.DEV) {
+            console.log('🔗 PostHog: 将原生匿名 ID 关联到 PUID:', currentDistinctId, '->', permanentUserId)
+          }
         }
       }
+      
+      // 确保设置设备属性
+      client.people.set({
+        device_user_id: permanentUserId,
+        first_seen_at: new Date().toISOString(),
+      })
+      
+      isPostHogInitialized = true
+      console.log('✅ PostHog initialized with permanent user ID:', permanentUserId)
+    } catch (error) {
+      console.error('Failed to initialize PostHog:', error)
+    } finally {
+      initPromise = null
     }
-    
-    // 确保设置设备属性
-    posthog.people.set({
-      device_user_id: permanentUserId,
-      first_seen_at: new Date().toISOString(),
-    })
-    
-    isPostHogInitialized = true
-    console.log('✅ PostHog initialized with permanent user ID:', permanentUserId)
-  } catch (error) {
-    console.error('Failed to initialize PostHog:', error)
-  }
+  })()
+
+  return initPromise
 }
 
 /**
@@ -95,7 +119,7 @@ export const initPostHog = () => {
  * @param {Record<string, unknown>} [properties] - 事件属性（可选）
  */
 export const trackPostHogEvent = (eventName: string, properties?: Record<string, unknown>) => {
-  if (!isPostHogInitialized) return
+  if (!isPostHogInitialized || !posthog) return
   posthog.capture(eventName, properties)
 }
 
@@ -115,7 +139,7 @@ export const trackPostHogEvent = (eventName: string, properties?: Record<string,
  * @param {string} userId - 用户账号 ID
  */
 export const setPostHogUserId = (userId: string) => {
-  if (!isPostHogInitialized) return
+  if (!isPostHogInitialized || !posthog) return
   
   // 获取当前的永久设备用户 ID
   const permanentUserId = localStorage.getItem('firego_permanent_user_id')
@@ -140,7 +164,7 @@ export const setPostHogUserId = (userId: string) => {
  * @param {Record<string, unknown>} properties - 用户属性
  */
 export const setPostHogUserProperties = (properties: Record<string, unknown>) => {
-  if (!isPostHogInitialized) return
+  if (!isPostHogInitialized || !posthog) return
   // PostHog 使用 people.set() 来设置用户属性
   posthog.people.set(properties)
 }
@@ -162,6 +186,3 @@ export const resetPostHogUser = () => {
     console.log('🔄 PostHog: 保留设备 ID，等待下次登录')
   }
 }
-
-export { posthog }
-

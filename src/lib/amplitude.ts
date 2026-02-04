@@ -1,7 +1,22 @@
-import * as amplitude from '@amplitude/analytics-browser'
+type AmplitudeSdk = typeof import('@amplitude/analytics-browser')
+
+let amplitudeSdk: AmplitudeSdk | null = null
+let amplitudeSdkPromise: Promise<AmplitudeSdk> | null = null
+
+async function loadAmplitudeSdk(): Promise<AmplitudeSdk> {
+  if (amplitudeSdk) return amplitudeSdk
+  if (!amplitudeSdkPromise) {
+    amplitudeSdkPromise = import('./amplitudeSdk').then((mod) => {
+      amplitudeSdk = mod.amplitude
+      return mod.amplitude
+    })
+  }
+  return amplitudeSdkPromise
+}
 
 let isInitialized = false
 let isTestMode = false // 测试模式标志
+let initPromise: Promise<void> | null = null
 
 /**
  * 生成或获取永久设备用户 ID
@@ -39,45 +54,54 @@ const getOrCreatePermanentUserId = (): string => {
  */
 export async function initAmplitude() {
   if (isInitialized) return
+  if (initPromise) return initPromise
 
-  // 检测 URL 参数，设置测试模式标志
-  const urlParams = new URLSearchParams(window.location.search)
-  isTestMode = urlParams.get('test') === 'true'
+  initPromise = (async () => {
+    // 检测 URL 参数，设置测试模式标志
+    const urlParams = new URLSearchParams(window.location.search)
+    isTestMode = urlParams.get('test') === 'true'
 
-  const apiKey = import.meta.env.VITE_AMPLITUDE_API_KEY
-  if (!apiKey) {
-    console.warn('Amplitude API key missing; analytics disabled.')
-    return
-  }
-
-  try {
-    // 获取永久设备用户 ID
-    const permanentUserId = getOrCreatePermanentUserId()
-    
-    await amplitude.init(apiKey, undefined, {
-      defaultTracking: { sessions: true, pageViews: true, formInteractions: false, fileDownloads: false },
-      logLevel: amplitude.Types.LogLevel.None,
-      // 使用永久设备用户 ID 作为 Device ID
-      deviceId: permanentUserId,
-    }).promise
-    isInitialized = true
-
-    // 设置设备级别的用户属性
-    const identify = new amplitude.Identify()
-    identify.set('device_user_id', permanentUserId)
-    identify.set('first_seen', new Date().toISOString())
-    
-    // 测试模式：设置用户属性以触发后台过滤规则
-    if (isTestMode) {
-      identify.set('is_test_session', true)
-      console.log('🧪 Test mode: is_test_session=true (data will be filtered by Amplitude backend)')
+    const apiKey = import.meta.env.VITE_AMPLITUDE_API_KEY
+    if (!apiKey) {
+      console.warn('Amplitude API key missing; analytics disabled.')
+      return
     }
-    
-    amplitude.identify(identify)
-    console.log('✅ Amplitude initialized with permanent user ID:', permanentUserId)
-  } catch (error) {
-    console.error('Failed to initialize Amplitude:', error)
-  }
+
+    try {
+      const amplitude = await loadAmplitudeSdk()
+
+      // 获取永久设备用户 ID
+      const permanentUserId = getOrCreatePermanentUserId()
+      
+      await amplitude.init(apiKey, undefined, {
+        defaultTracking: { sessions: true, pageViews: true, formInteractions: false, fileDownloads: false },
+        logLevel: amplitude.Types.LogLevel.None,
+        // 使用永久设备用户 ID 作为 Device ID
+        deviceId: permanentUserId,
+      }).promise
+      isInitialized = true
+
+      // 设置设备级别的用户属性
+      const identify = new amplitude.Identify()
+      identify.set('device_user_id', permanentUserId)
+      identify.set('first_seen', new Date().toISOString())
+      
+      // 测试模式：设置用户属性以触发后台过滤规则
+      if (isTestMode) {
+        identify.set('is_test_session', true)
+        console.log('🧪 Test mode: is_test_session=true (data will be filtered by Amplitude backend)')
+      }
+      
+      amplitude.identify(identify)
+      console.log('✅ Amplitude initialized with permanent user ID:', permanentUserId)
+    } catch (error) {
+      console.error('Failed to initialize Amplitude:', error)
+    } finally {
+      initPromise = null
+    }
+  })()
+
+  return initPromise
 }
 
 /**
@@ -87,11 +111,11 @@ export async function initAmplitude() {
  * @param {Record<string, unknown>} [eventProperties] - 附加属性
  */
 export function trackEvent(eventName: string, eventProperties?: Record<string, unknown>) {
-  if (!isInitialized) return // 未初始化时跳过事件发送
+  if (!isInitialized || !amplitudeSdk) return // 未初始化时跳过事件发送
   if (import.meta.env.DEV) {
     console.log('📊 Amplitude Event:', eventName, eventProperties || '')
   }
-  amplitude.track(eventName, eventProperties)
+  amplitudeSdk.track(eventName, eventProperties)
 }
 
 /**
@@ -102,13 +126,9 @@ export function trackEvent(eventName: string, eventProperties?: Record<string, u
  */
 export async function setUserId(userId: string) {
   if (!userId) return
-  let attempts = 0
-  while (!isInitialized && attempts < 50) {
-    await new Promise(resolve => setTimeout(resolve, 100))
-    attempts++
-  }
-  if (!isInitialized) return // 超时后仍未初始化则跳过
-  amplitude.setUserId(userId)
+  await initAmplitude()
+  if (!isInitialized || !amplitudeSdk) return
+  amplitudeSdk.setUserId(userId)
 }
 
 /**
@@ -118,13 +138,9 @@ export async function setUserId(userId: string) {
  * @returns {Promise<void>} 完成时的 Promise
  */
 export async function setUserProperties(properties: Record<string, unknown>) {
-  let attempts = 0
-  while (!isInitialized && attempts < 50) {
-    await new Promise(resolve => setTimeout(resolve, 100))
-    attempts++
-  }
-  if (!isInitialized) return // 超时后仍未初始化则跳过
-  const identify = new amplitude.Identify()
+  await initAmplitude()
+  if (!isInitialized || !amplitudeSdk) return
+  const identify = new amplitudeSdk.Identify()
   const isIdentifyValue = (value: unknown): value is string | number | boolean | string[] => {
     if (['string', 'number', 'boolean'].includes(typeof value)) return true
     return Array.isArray(value) && value.every((item) => typeof item === 'string')
@@ -141,7 +157,7 @@ export async function setUserProperties(properties: Record<string, unknown>) {
     }
     identify.set(key, value)
   })
-  amplitude.identify(identify)
+  amplitudeSdk.identify(identify)
 }
 
 /**
@@ -167,5 +183,3 @@ export function resetUser() {
     console.log('🔄 Amplitude: 保留所有身份信息，持续追踪同一个人')
   }
 }
-
-export { amplitude }

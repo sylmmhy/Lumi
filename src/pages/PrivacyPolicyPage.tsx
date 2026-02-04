@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 /**
  * 隐私政策页面
@@ -10,27 +10,10 @@ export function PrivacyPolicyPage() {
   }, [])
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#0b1220',
-      color: '#e2e8f0',
-      padding: '40px 20px',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      lineHeight: 1.7,
-    }}>
-      <div style={{
-        maxWidth: '800px',
-        margin: '0 auto',
-      }}>
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 700,
-          marginBottom: '8px',
-          color: '#fff',
-        }}>
-          Privacy Policy
-        </h1>
-        <p style={{ color: '#94a3b8', marginBottom: '32px' }}>
+    <div className="min-h-screen px-5 py-10 leading-relaxed">
+      <div className="mx-auto w-full max-w-3xl">
+        <h1 className="mb-2 text-3xl font-bold text-white">Privacy Policy</h1>
+        <p className="mb-8 text-slate-400">
           Last Updated: January 5, 2026
         </p>
 
@@ -52,8 +35,7 @@ export function PrivacyPolicyPage() {
         <Section title="2. Information We Collect">
           <SubSection title="2.1 Account Information">
             <p>When you create an account, we collect:</p>
-            <ul>
-              <li>Email address</li>
+            <ul className={listClassName}>              <li>Email address</li>
               <li>Name (optional)</li>
               <li>Profile picture (optional)</li>
               <li>Authentication credentials (securely hashed)</li>
@@ -62,8 +44,7 @@ export function PrivacyPolicyPage() {
 
           <SubSection title="2.2 Task and Usage Data">
             <p>To provide our core service, we collect:</p>
-            <ul>
-              <li>Tasks you create (descriptions, times, categories)</li>
+            <ul className={listClassName}>              <li>Tasks you create (descriptions, times, categories)</li>
               <li>Task completion status and history</li>
               <li>Routine and habit tracking data</li>
               <li>App usage patterns and preferences</li>
@@ -72,8 +53,7 @@ export function PrivacyPolicyPage() {
 
           <SubSection title="2.3 Device Information">
             <p>We automatically collect certain device information:</p>
-            <ul>
-              <li>Device type and operating system</li>
+            <ul className={listClassName}>              <li>Device type and operating system</li>
               <li>Unique device identifier (for analytics)</li>
               <li>Browser type (for web users)</li>
               <li>Timezone settings</li>
@@ -84,8 +64,7 @@ export function PrivacyPolicyPage() {
             <p>
               With your explicit permission, our AI coaching feature may access:
             </p>
-            <ul>
-              <li><strong>Microphone:</strong> For voice interaction with our AI assistant</li>
+            <ul className={listClassName}>              <li><strong>Microphone:</strong> For voice interaction with our AI assistant</li>
               <li><strong>Camera:</strong> Optional video feature for enhanced AI interaction</li>
             </ul>
             <p>
@@ -97,8 +76,7 @@ export function PrivacyPolicyPage() {
 
         <Section title="3. How We Use Your Information">
           <p>We use the collected information for the following purposes:</p>
-          <ul>
-            <li><strong>Service Delivery:</strong> To provide, maintain, and improve our task management and AI coaching features</li>
+          <ul className={listClassName}>            <li><strong>Service Delivery:</strong> To provide, maintain, and improve our task management and AI coaching features</li>
             <li><strong>Personalization:</strong> To customize your experience and provide relevant task suggestions</li>
             <li><strong>Communication:</strong> To send task reminders, updates, and support messages</li>
             <li><strong>Analytics:</strong> To understand how users interact with our Service and improve functionality</li>
@@ -122,36 +100,34 @@ export function PrivacyPolicyPage() {
               We use third-party AI services to power our coaching and interaction features.
               Audio, video, and text data may be processed by these providers during active sessions:
             </p>
-            <ul>
-              <li>
+            <ul className={listClassName}>              <li>
                 <strong>OpenAI</strong> - AI language models and processing
                 <br />
-                <a href="https://openai.com/privacy" style={linkStyle}>OpenAI Privacy Policy</a>
+                <a href="https://openai.com/privacy" className={linkClassName}>OpenAI Privacy Policy</a>
               </li>
               <li>
                 <strong>Anthropic</strong> - AI assistant and language processing
                 <br />
-                <a href="https://www.anthropic.com/privacy" style={linkStyle}>Anthropic Privacy Policy</a>
+                <a href="https://www.anthropic.com/privacy" className={linkClassName}>Anthropic Privacy Policy</a>
               </li>
               <li>
                 <strong>Google Cloud AI</strong> - AI and machine learning services
                 <br />
-                <a href="https://policies.google.com/privacy" style={linkStyle}>Google Privacy Policy</a>
+                <a href="https://policies.google.com/privacy" className={linkClassName}>Google Privacy Policy</a>
               </li>
             </ul>
           </SubSection>
 
           <SubSection title="4.3 Infrastructure Services">
-            <ul>
-              <li>
+            <ul className={listClassName}>              <li>
                 <strong>Supabase</strong> - Database hosting and user authentication
                 <br />
-                <a href="https://supabase.com/privacy" style={linkStyle}>Supabase Privacy Policy</a>
+                <a href="https://supabase.com/privacy" className={linkClassName}>Supabase Privacy Policy</a>
               </li>
               <li>
                 <strong>Stripe</strong> - Payment processing (we do not store your payment card details)
                 <br />
-                <a href="https://stripe.com/privacy" style={linkStyle}>Stripe Privacy Policy</a>
+                <a href="https://stripe.com/privacy" className={linkClassName}>Stripe Privacy Policy</a>
               </li>
             </ul>
           </SubSection>
@@ -162,8 +138,7 @@ export function PrivacyPolicyPage() {
             We implement appropriate technical and organizational security measures to protect
             your personal information, including:
           </p>
-          <ul>
-            <li>Encryption of data in transit (HTTPS/TLS)</li>
+          <ul className={listClassName}>            <li>Encryption of data in transit (HTTPS/TLS)</li>
             <li>Secure authentication with token-based sessions</li>
             <li>Regular security assessments</li>
             <li>Access controls and authentication for our systems</li>
@@ -177,8 +152,7 @@ export function PrivacyPolicyPage() {
 
         <Section title="6. Data Retention">
           <p>We retain your information for as long as:</p>
-          <ul>
-            <li>Your account remains active</li>
+          <ul className={listClassName}>            <li>Your account remains active</li>
             <li>Necessary to provide you with our services</li>
             <li>Required by applicable laws and regulations</li>
           </ul>
@@ -190,8 +164,7 @@ export function PrivacyPolicyPage() {
 
         <Section title="7. Your Rights">
           <p>You have the following rights regarding your personal data:</p>
-          <ul>
-            <li><strong>Access:</strong> Request information about the personal data we hold about you</li>
+          <ul className={listClassName}>            <li><strong>Access:</strong> Request information about the personal data we hold about you</li>
             <li><strong>Correction:</strong> Request correction of any inaccurate data</li>
             <li><strong>Deletion:</strong> Request deletion of your account and personal data</li>
           </ul>
@@ -203,27 +176,25 @@ export function PrivacyPolicyPage() {
             <p>
               You can request deletion of your account and all associated data by contacting us via email:
             </p>
-            <p style={{ marginTop: '12px', marginBottom: '12px' }}>
+            <p>
               <strong>Email:</strong>{' '}
-              <a href="mailto:yilun@meetlumi.org?subject=Account%20Deletion%20Request" style={linkStyle}>
+              <a href="mailto:yilun@meetlumi.org?subject=Account%20Deletion%20Request" className={linkClassName}>
                 yilun@meetlumi.org
               </a>
             </p>
             <p>Please include the following information in your request:</p>
-            <ul>
-              <li>The email address associated with your account</li>
+            <ul className={listClassName}>              <li>The email address associated with your account</li>
               <li>Subject line: "Account Deletion Request"</li>
             </ul>
-            <p style={{ marginTop: '12px' }}>
+            <p>
               <strong>What happens when you delete your account:</strong>
             </p>
-            <ul>
-              <li>All your personal information (email, name, profile picture) will be permanently deleted</li>
+            <ul className={listClassName}>              <li>All your personal information (email, name, profile picture) will be permanently deleted</li>
               <li>All your tasks, routines, and habit tracking data will be permanently deleted</li>
               <li>Your account credentials will be removed from our authentication system</li>
               <li>Analytics data associated with your account will be anonymized</li>
             </ul>
-            <p style={{ marginTop: '12px' }}>
+            <p>
               We will process your deletion request within <strong>30 days</strong> and send you a confirmation
               email once your account has been deleted.
             </p>
@@ -260,27 +231,20 @@ export function PrivacyPolicyPage() {
             If you have any questions about this Privacy Policy or our data practices,
             please contact us at:
           </p>
-          <p style={{ marginTop: '16px' }}>
+          <p>
             <strong>Meowgical LLC</strong>
           </p>
-          <p style={{ marginTop: '16px' }}>
+          <p>
             <strong>Email:</strong>{' '}
-            <a href="mailto:Yilun@meetlumi.org" style={linkStyle}>Yilun@meetlumi.org</a>
+            <a href="mailto:Yilun@meetlumi.org" className={linkClassName}>Yilun@meetlumi.org</a>
           </p>
-          <p style={{ marginTop: '16px' }}>
+          <p>
             <strong>Website:</strong>{' '}
-            <a href="https://meetlumi.org" style={linkStyle}>https://meetlumi.org</a>
+            <a href="https://meetlumi.org" className={linkClassName}>https://meetlumi.org</a>
           </p>
         </Section>
 
-        <div style={{
-          marginTop: '48px',
-          paddingTop: '24px',
-          borderTop: '1px solid #334155',
-          textAlign: 'center',
-          color: '#64748b',
-          fontSize: '0.875rem',
-        }}>
+        <div className="mt-12 border-t border-slate-700 pt-6 text-center text-sm text-slate-500">
           <p>&copy; {new Date().getFullYear()} Lumi. All rights reserved.</p>
         </div>
       </div>
@@ -288,39 +252,23 @@ export function PrivacyPolicyPage() {
   )
 }
 
-const linkStyle: React.CSSProperties = {
-  color: '#38bdf8',
-  textDecoration: 'underline',
-}
+const linkClassName = 'text-sky-400 underline hover:text-sky-300'
+const listClassName = 'list-disc space-y-1 pl-6'
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ marginBottom: '32px' }}>
-      <h2 style={{
-        fontSize: '1.25rem',
-        fontWeight: 600,
-        marginBottom: '16px',
-        color: '#fff',
-      }}>
-        {title}
-      </h2>
-      <div style={{ color: '#cbd5e1' }}>{children}</div>
+    <section className="mb-8">
+      <h2 className="mb-4 text-xl font-semibold text-white">{title}</h2>
+      <div className="space-y-4 text-slate-300">{children}</div>
     </section>
   )
 }
 
-function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SubSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ marginTop: '16px', marginBottom: '16px' }}>
-      <h3 style={{
-        fontSize: '1rem',
-        fontWeight: 600,
-        marginBottom: '8px',
-        color: '#e2e8f0',
-      }}>
-        {title}
-      </h3>
-      {children}
+    <div className="my-4">
+      <h3 className="mb-2 text-base font-semibold text-slate-200">{title}</h3>
+      <div className="space-y-4">{children}</div>
     </div>
   )
 }

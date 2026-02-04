@@ -251,8 +251,7 @@ export function notifyNativeTaskCalled(taskId: string, called: boolean): void {
  */
 export function registerNativeRefreshTasks(callback: () => void): () => void {
   // 暴露全局函数供 iOS 调用
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).refreshTasks = () => {
+  window.refreshTasks = () => {
     console.log('📱 [iOS] refreshTasks 被调用，刷新任务列表');
     callback();
   };
@@ -268,8 +267,7 @@ export function registerNativeRefreshTasks(callback: () => void): () => void {
 
   // 返回取消注册函数
   return () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (window as any).refreshTasks;
+    delete window.refreshTasks;
     window.removeEventListener('mindboat:tasksNeedRefresh', handleRefresh);
     console.log('📱 已取消注册 window.refreshTasks()');
   };
@@ -311,10 +309,8 @@ export function notifyNativeOnboardingCompleted(): boolean {
     }
 
     // Android: 调用 AndroidBridge 方法（未来实现）
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).AndroidBridge?.onOnboardingCompleted) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).AndroidBridge.onOnboardingCompleted();
+    if (window.AndroidBridge?.onOnboardingCompleted) {
+      window.AndroidBridge.onOnboardingCompleted();
       console.log('📱 [Android] 已调用 onOnboardingCompleted，等待原生端处理跳转');
       return true;
     }

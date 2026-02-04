@@ -4,6 +4,18 @@ import { useTranslation } from '../../hooks/useTranslation';
 type PermissionType = 'notification' | 'microphone' | 'camera' | 'sleepFocus';
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'prompt';
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
+const devDebug = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.debug(...args);
+  }
+};
+
 /**
  * Check if running in Android WebView
  */
@@ -32,35 +44,35 @@ function isIOSWebView(): boolean {
  */
 const iOSBridge = {
   requestNotificationPermission: () => {
-    console.log('[PermissionsSection] iOS: requesting notification permission');
+    devLog('[PermissionsSection] iOS: requesting notification permission');
     window.webkit?.messageHandlers?.requestNotificationPermission?.postMessage({});
   },
   requestMicrophonePermission: () => {
-    console.log('[PermissionsSection] iOS: requesting microphone permission');
+    devLog('[PermissionsSection] iOS: requesting microphone permission');
     window.webkit?.messageHandlers?.requestMicrophonePermission?.postMessage({});
   },
   requestCameraPermission: () => {
-    console.log('[PermissionsSection] iOS: requesting camera permission');
+    devLog('[PermissionsSection] iOS: requesting camera permission');
     window.webkit?.messageHandlers?.requestCameraPermission?.postMessage({});
   },
   hasNotificationPermission: () => {
-    console.log('[PermissionsSection] iOS: checking notification permission');
+    devLog('[PermissionsSection] iOS: checking notification permission');
     window.webkit?.messageHandlers?.hasNotificationPermission?.postMessage({});
   },
   hasMicrophonePermission: () => {
-    console.log('[PermissionsSection] iOS: checking microphone permission');
+    devLog('[PermissionsSection] iOS: checking microphone permission');
     window.webkit?.messageHandlers?.hasMicrophonePermission?.postMessage({});
   },
   hasCameraPermission: () => {
-    console.log('[PermissionsSection] iOS: checking camera permission');
+    devLog('[PermissionsSection] iOS: checking camera permission');
     window.webkit?.messageHandlers?.hasCameraPermission?.postMessage({});
   },
   openAppSettings: () => {
-    console.log('[PermissionsSection] iOS: opening app settings');
+    devLog('[PermissionsSection] iOS: opening app settings');
     window.webkit?.messageHandlers?.openAppSettings?.postMessage({});
   },
   openSleepFocusSettings: () => {
-    console.log('[PermissionsSection] iOS: opening sleep focus settings guide');
+    devLog('[PermissionsSection] iOS: opening sleep focus settings guide');
     window.webkit?.messageHandlers?.openSleepFocusSettings?.postMessage({});
   },
 };
@@ -113,7 +125,7 @@ export function PermissionsSection() {
     // 防抖检查：如果距离上次检查不足 500ms，跳过
     const now = Date.now();
     if (now - lastCheckTimeRef.current < CHECK_DEBOUNCE_MS) {
-      console.debug('[PermissionsSection] 跳过权限检查（防抖）');
+      devDebug('[PermissionsSection] 跳过权限检查（防抖）');
       return;
     }
     lastCheckTimeRef.current = now;
@@ -201,9 +213,9 @@ export function PermissionsSection() {
 
   // Check current permission status on mount
   useEffect(() => {
-    console.log('[PermissionsSection] Mount - isAndroidWebView:', isAndroidWebView(), 'isIOSWebView:', isIOSWebView());
-    console.log('[PermissionsSection] window.webkit:', !!window.webkit);
-    console.log('[PermissionsSection] window.webkit.messageHandlers:', !!window.webkit?.messageHandlers);
+    devLog('[PermissionsSection] Mount - isAndroidWebView:', isAndroidWebView(), 'isIOSWebView:', isIOSWebView());
+    devLog('[PermissionsSection] window.webkit:', !!window.webkit);
+    devLog('[PermissionsSection] window.webkit.messageHandlers:', !!window.webkit?.messageHandlers);
     checkAllPermissions();
   }, [checkAllPermissions]);
 
@@ -213,7 +225,7 @@ export function PermissionsSection() {
 
     const handlePermissionResult = (event: CustomEvent<{ type: PermissionType; granted: boolean; status?: string }>) => {
       const { type, granted, status } = event.detail;
-      console.log(`[PermissionsSection] Native permission result: ${type} = ${granted}, status = ${status}`);
+      devLog(`[PermissionsSection] Native permission result: ${type} = ${granted}, status = ${status}`);
 
       // Use status if available (iOS returns detailed status), otherwise fallback to granted boolean
       let permissionStatus: PermissionStatus;
@@ -241,7 +253,7 @@ export function PermissionsSection() {
    * Open app settings to let user manually enable permissions
    */
   const openAppSettings = useCallback(() => {
-    console.log('[PermissionsSection] openAppSettings called');
+    devLog('[PermissionsSection] openAppSettings called');
 
     if (isAndroidWebView()) {
       window.AndroidBridge?.openAppSettings?.();
@@ -264,9 +276,9 @@ export function PermissionsSection() {
    * If permission was previously denied, open app settings instead
    */
   const requestPermission = useCallback(async (type: PermissionType) => {
-    console.log(`[PermissionsSection] requestPermission called: ${type}`);
-    console.log(`[PermissionsSection] Platform: Android=${isAndroidWebView()}, iOS=${isIOSWebView()}`);
-    console.log(`[PermissionsSection] Current status: ${permissions[type]}`);
+    devLog(`[PermissionsSection] requestPermission called: ${type}`);
+    devLog(`[PermissionsSection] Platform: Android=${isAndroidWebView()}, iOS=${isIOSWebView()}`);
+    devLog(`[PermissionsSection] Current status: ${permissions[type]}`);
     setIsRequesting(type);
 
     // 特殊处理：睡眠模式免打扰（仅 iOS）
@@ -289,7 +301,7 @@ export function PermissionsSection() {
     // If permission was denied, open app settings instead of requesting again
     // On iOS and Android, once denied, the system won't show the permission dialog again
     if (permissions[type] === 'denied') {
-      console.log(`[PermissionsSection] Permission ${type} was denied, opening app settings`);
+      devLog(`[PermissionsSection] Permission ${type} was denied, opening app settings`);
       openAppSettings();
       return;
     }

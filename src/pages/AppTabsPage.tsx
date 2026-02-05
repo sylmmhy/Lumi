@@ -1406,8 +1406,20 @@ export function AppTabsPage() {
         setCurrentTaskType(null);
     }, []);
 
+    /**
+     * 测试承诺确认页面 (用于 UI 调整)
+     */
+    const handleTestPledge = useCallback(() => {
+        setPledgeConfirmData({
+            taskName: 'Focus for 45 mins',
+            consequence: 'No YouTube for 2 hours',
+            pledge: 'I Accept The Consequence That I will lose access to YouTube for 2 hours if I fail to focus for 45 minutes.'
+        });
+        setShowPledgeConfirm(true);
+    }, []);
+
     return (
-        <div className="fixed inset-0 w-full h-full bg-white md:bg-gray-100 flex flex-col items-center md:justify-center font-sans overflow-hidden">
+        <div className="fixed inset-0 w-full h-full bg-[#0B1220] md:bg-gray-100 flex flex-col items-center md:justify-center font-sans overflow-hidden">
 
             {showConfetti && (
                 <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center overflow-hidden">
@@ -1586,6 +1598,7 @@ export function AppTabsPage() {
                     <ProfileView
                         isPremium={isPremium}
                         onRequestLogin={() => setShowAuthModal(true)}
+                        onTestPledge={handleTestPledge}
                     />
                 )}
 
@@ -1601,76 +1614,76 @@ export function AppTabsPage() {
 
             <AuthModal
                 isOpen={showAuthModal}
-            onClose={() => {
-                setShowAuthModal(false);
-                setPendingTask(null);
-                setPendingAction(null);
-                setPendingActionSource(null);
-            }}
-            onSuccess={() => {
-                auth.checkLoginState();
-                if (pendingTask) {
-                    if (!auth.isSessionValidated) {
-                        // 会话尚未验证完成，延后处理，等待验证完成后再继续
-                        setPendingActionSource('session-validation');
-                        return;
-                    }
-                    // 根据 pendingAction 决定执行什么操作
-                    if (pendingAction === 'start-ai') {
-                        // 用户想启动 AI Coach
-                        ensureVoicePromptThenStart(pendingTask);
-                    } else if (pendingAction === 'add-task') {
-                        // 用户只想创建任务，不启动 AI
-                        void addTask(pendingTask);
-                    }
+                onClose={() => {
+                    setShowAuthModal(false);
                     setPendingTask(null);
                     setPendingAction(null);
                     setPendingActionSource(null);
-                }
-            }}
-        />
-        <VoicePermissionModal
-            isOpen={showVoicePrompt}
-            onConfirm={handleVoicePromptConfirm}
-            onCancel={handleVoicePromptCancel}
-        />
-        <TestVersionModal
-            isOpen={showTestVersionModal}
-            onClose={() => setShowTestVersionModal(false)}
-        />
-
-        {/* Screen Time 后果确认界面 */}
-        {showPledgeConfirm && pledgeConfirmData && (
-            <ConsequencePledgeConfirm
-                taskName={pledgeConfirmData.taskName}
-                consequence={pledgeConfirmData.consequence}
-                pledge={pledgeConfirmData.pledge}
-                onUnlocked={() => {
-                    devLog('✅ [ScreenTime] 后果确认完成，应用已解锁');
-                    setShowPledgeConfirm(false);
-                    setPledgeConfirmData(null);
                 }}
-                onCancel={() => {
-                    devLog('❌ [ScreenTime] 用户取消后果确认');
-                    setShowPledgeConfirm(false);
-                    setPledgeConfirmData(null);
+                onSuccess={() => {
+                    auth.checkLoginState();
+                    if (pendingTask) {
+                        if (!auth.isSessionValidated) {
+                            // 会话尚未验证完成，延后处理，等待验证完成后再继续
+                            setPendingActionSource('session-validation');
+                            return;
+                        }
+                        // 根据 pendingAction 决定执行什么操作
+                        if (pendingAction === 'start-ai') {
+                            // 用户想启动 AI Coach
+                            ensureVoicePromptThenStart(pendingTask);
+                        } else if (pendingAction === 'add-task') {
+                            // 用户只想创建任务，不启动 AI
+                            void addTask(pendingTask);
+                        }
+                        setPendingTask(null);
+                        setPendingAction(null);
+                        setPendingActionSource(null);
+                    }
                 }}
             />
-        )}
-
-        {/* Product Tour 新用户引导蒙层 */}
-        {productTour.isActive && productTour.currentStep && (
-            <TourOverlay
-                step={productTour.currentStep}
-                stepNumber={productTour.stepNumber}
-                totalSteps={productTour.totalSteps}
-                context={productTour.context}
-                onNext={productTour.nextStep}
-                onSkip={productTour.skipTour}
+            <VoicePermissionModal
+                isOpen={showVoicePrompt}
+                onConfirm={handleVoicePromptConfirm}
+                onCancel={handleVoicePromptCancel}
             />
-        )}
-    </div>
-);
+            <TestVersionModal
+                isOpen={showTestVersionModal}
+                onClose={() => setShowTestVersionModal(false)}
+            />
+
+            {/* Screen Time 后果确认界面 */}
+            {showPledgeConfirm && pledgeConfirmData && (
+                <ConsequencePledgeConfirm
+                    taskName={pledgeConfirmData.taskName}
+                    consequence={pledgeConfirmData.consequence}
+                    pledge={pledgeConfirmData.pledge}
+                    onUnlocked={() => {
+                        devLog('✅ [ScreenTime] 后果确认完成，应用已解锁');
+                        setShowPledgeConfirm(false);
+                        setPledgeConfirmData(null);
+                    }}
+                    onCancel={() => {
+                        devLog('❌ [ScreenTime] 用户取消后果确认');
+                        setShowPledgeConfirm(false);
+                        setPledgeConfirmData(null);
+                    }}
+                />
+            )}
+
+            {/* Product Tour 新用户引导蒙层 */}
+            {productTour.isActive && productTour.currentStep && (
+                <TourOverlay
+                    step={productTour.currentStep}
+                    stepNumber={productTour.stepNumber}
+                    totalSteps={productTour.totalSteps}
+                    context={productTour.context}
+                    onNext={productTour.nextStep}
+                    onSkip={productTour.skipTour}
+                />
+            )}
+        </div>
+    );
 }
 
 export default AppTabsPage;

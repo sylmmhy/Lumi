@@ -36,10 +36,8 @@ export function ConsequencePledgeConfirm({
   consequence,
   scheduledTime,
   onUnlocked,
-  onCancel: _onCancel,
+  onCancel,
 }: ConsequencePledgeConfirmProps) {
-  // onCancel 保留用于未来扩展（如添加返回按钮）
-  void _onCancel;
   const { t, uiLanguage } = useTranslation();
   const { acceptConsequence } = useScreenTime();
 
@@ -260,7 +258,7 @@ export function ConsequencePledgeConfirm({
             className={`w-full rounded-[14px] p-6 relative backdrop-blur-xl transition-all duration-300 ${isRecording ? 'recording-glow' : ''
               }`}
             style={{
-              backgroundColor: 'rgba(44, 44, 60, 0.5)',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
               border: isRecording ? '2px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
               boxShadow: isRecording
                 ? '0 0 20px rgba(154, 122, 184, 0.5), 0 0 40px rgba(154, 122, 184, 0.3), 0 0 60px rgba(154, 122, 184, 0.1)'
@@ -269,7 +267,7 @@ export function ConsequencePledgeConfirm({
           >
             <span
               className="font-sansita text-[40px] absolute top-4 left-4"
-              style={{ lineHeight: 1, color: '#5A5A6A' }}
+              style={{ lineHeight: 1, color: '#8A8A9A' }}
             >
               {'\u201C'}
             </span>
@@ -283,7 +281,7 @@ export function ConsequencePledgeConfirm({
             </div>
             <span
               className="font-sansita text-[40px] absolute bottom-4 right-4"
-              style={{ lineHeight: 1, color: '#5A5A6A' }}
+              style={{ lineHeight: 1, color: '#8A8A9A' }}
             >
               {'\u201D'}
             </span>
@@ -291,7 +289,7 @@ export function ConsequencePledgeConfirm({
         </div>
 
         {/* 底部输入区域 */}
-        <div className="w-full pb-6">
+        <div className="w-full" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex flex-col items-center gap-5 w-full px-6">
             <p className="font-quicksand font-normal text-sm text-center text-[#6A6A7A] px-4">
               {t('pledge.repeatToUnlock')}
@@ -335,39 +333,39 @@ export function ConsequencePledgeConfirm({
 
   // 渲染文字输入模式覆盖层
   const renderTextOverlay = () => (
-    <div className="fixed inset-0 z-[120] flex flex-col" style={{ backgroundColor: '#1C1C28' }}>
-      {/* 关闭按钮 */}
+    <div className="fixed inset-0 z-[120] overflow-y-auto" style={{ backgroundColor: '#1C1C28' }}>
+      {/* 关闭按钮 - 固定在右上角 */}
       <button
         onClick={handleBack}
-        className="absolute top-12 right-6 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors z-10"
+        className="fixed top-12 right-6 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors z-[130]"
       >
         <CloseIcon className="w-5 h-5 text-white" />
       </button>
 
-      {/* 顶部标题区域 */}
-      <div className="w-full pt-12 pb-4 px-6">
-        <h1
-          className="font-sansita font-bold text-[28px] leading-[1.2] italic"
-          style={{ color: '#F5D76E' }}
-        >
-          {t('pledge.pleaseEnter')}
-        </h1>
-      </div>
+      {/* 内容容器 - 自然流式布局，不用 flex 推底部 */}
+      <div className="px-6 pb-safe">
+        {/* 顶部标题区域 */}
+        <div className="w-full pt-20 pb-6">
+          <h1
+            className="font-sansita font-bold text-[28px] leading-[1.2] italic"
+            style={{ color: '#F5D76E' }}
+          >
+            {t('pledge.pleaseEnter')}
+          </h1>
+        </div>
 
-      {/* 中间内容区域 */}
-      <div className="flex-1 flex flex-col px-6 overflow-hidden">
         {/* 卡片 - 磨砂玻璃效果 */}
         <div
-          className="w-full rounded-[14px] p-6 relative mb-4 backdrop-blur-xl"
+          className="w-full rounded-[14px] p-6 relative backdrop-blur-xl"
           style={{
-            backgroundColor: 'rgba(44, 44, 60, 0.5)',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
             border: '1px solid rgba(255, 255, 255, 0.15)',
             boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
           }}
         >
           <span
             className="font-sansita text-[40px] absolute top-4 left-4"
-            style={{ lineHeight: 1, color: '#5A5A6A' }}
+            style={{ lineHeight: 1, color: '#8A8A9A' }}
           >
             {'\u201C'}
           </span>
@@ -381,7 +379,7 @@ export function ConsequencePledgeConfirm({
           </div>
           <span
             className="font-sansita text-[40px] absolute bottom-4 right-4"
-            style={{ lineHeight: 1, color: '#5A5A6A' }}
+            style={{ lineHeight: 1, color: '#8A8A9A' }}
           >
             {'\u201D'}
           </span>
@@ -389,7 +387,7 @@ export function ConsequencePledgeConfirm({
 
         {/* 错误提示 */}
         {(error || speechError) && (
-          <div className="mb-4 p-3 rounded-lg" style={{
+          <div className="mt-4 p-3 rounded-lg" style={{
             background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)',
             border: '1.211px solid rgba(190, 190, 190, 0.20)'
           }}>
@@ -400,8 +398,8 @@ export function ConsequencePledgeConfirm({
           </div>
         )}
 
-        {/* 输入框区域 */}
-        <div className="relative">
+        {/* 输入框区域 - 紧跟在卡片下方 */}
+        <div className="relative w-full mt-4 pb-4">
           <textarea
             value={textInput}
             onChange={(e) => {
@@ -410,21 +408,21 @@ export function ConsequencePledgeConfirm({
               setValidationResult(null);
             }}
             placeholder={t('pledge.enterPlaceholder')}
-            className="w-full h-24 p-4 pr-16 rounded-xl text-base resize-none focus:outline-none font-quicksand text-white placeholder-[#6A6A7A]"
+            className="w-full h-32 p-4 pr-16 rounded-xl text-base resize-none focus:outline-none font-quicksand text-white placeholder-[#6A6A7A]"
             style={{ backgroundColor: '#2C2C3C', border: '1px solid #3C3C4C' }}
             autoFocus
           />
           <button
             onClick={handleTextValidation}
             disabled={!textInput.trim() || isUnlocking}
-            className="absolute right-3 bottom-3 w-12 h-12 flex items-center justify-center transition-all disabled:opacity-50"
+            className="absolute right-3 bottom-7 w-10 h-10 flex items-center justify-center transition-all disabled:opacity-50 hover:scale-105 active:scale-95 shadow-lg"
             style={{
-              borderRadius: '121.098px',
-              border: '1.211px solid rgba(190, 190, 190, 0.20)',
-              background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)'
+              borderRadius: '50%',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: 'linear-gradient(135deg, #9D4EDD 0%, #7B19B7 100%)'
             }}
           >
-            <ArrowUpIcon className="w-6 h-6 text-white" />
+            <ArrowUpIcon className="w-5 h-5 text-white" />
           </button>
         </div>
       </div>
@@ -473,6 +471,15 @@ export function ConsequencePledgeConfirm({
           className="w-full pt-20 pb-12 px-10"
           style={{ background: 'linear-gradient(180deg, #421C57 0%, #1A2238 100%)' }}
         >
+          {/* 关闭按钮 - 仅在提供 onCancel 回调时显示 */}
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="absolute top-12 right-6 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors z-[115]"
+            >
+              <CloseIcon className="w-5 h-5 text-white" />
+            </button>
+          )}
           <p className="font-quicksand font-bold text-base text-white/80 mb-2">
             {formatTimeDisplay()} · {t('pledge.timeTo')}
           </p>
@@ -492,14 +499,14 @@ export function ConsequencePledgeConfirm({
             <div
               className="w-full rounded-[14px] p-6 relative backdrop-blur-xl"
               style={{
-                backgroundColor: 'rgba(44, 44, 60, 0.5)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
                 border: '1px solid rgba(255, 255, 255, 0.2)',
                 boxShadow: '0 0 15px rgba(154, 122, 184, 0.15), 0 0 30px rgba(154, 122, 184, 0.08), 0 4px 30px rgba(0, 0, 0, 0.1)',
               }}
             >
               <span
                 className="font-sansita text-[40px] absolute top-4 left-4"
-                style={{ lineHeight: 1, color: '#5A5A6A' }}
+                style={{ lineHeight: 1, color: '#8A8A9A' }}
               >
                 {'\u201C'}
               </span>
@@ -515,7 +522,7 @@ export function ConsequencePledgeConfirm({
 
               <span
                 className="font-sansita text-[40px] absolute bottom-4 right-4"
-                style={{ lineHeight: 1, color: '#5A5A6A' }}
+                style={{ lineHeight: 1, color: '#8A8A9A' }}
               >
                 {'\u201D'}
               </span>
@@ -523,7 +530,7 @@ export function ConsequencePledgeConfirm({
           </div>
 
           {/* 底部输入区域 */}
-          <div className="w-full pb-6">
+          <div className="w-full" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
             {renderChoiceMode()}
           </div>
         </div>

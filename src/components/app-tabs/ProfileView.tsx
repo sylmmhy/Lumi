@@ -23,6 +23,7 @@ import { useScreenTime } from '../../hooks/useScreenTime';
 interface ProfileViewProps {
     isPremium: boolean;
     onRequestLogin?: () => void;
+    onTestPledge?: () => void;
 }
 
 /**
@@ -31,7 +32,7 @@ interface ProfileViewProps {
  * @param props.isPremium - 当前用户是否为付费用户
  * @returns Profile 页面内容
  */
-export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLogin }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLogin, onTestPledge }) => {
     const { t } = useTranslation();
     const auth = useContext(AuthContext);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +42,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showAvatarPopup, setShowAvatarPopup] = useState(false);
     const [offerClaimed, setOfferClaimed] = useState(false); // Used to ensure one-time popup
     const isGuest = !auth?.isLoggedIn;
-    
+
     // Name editing state
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameInput, setNameInput] = useState('');
@@ -305,7 +306,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                 hash = auth.userId.charCodeAt(i) + ((hash << 5) - hash);
             }
         }
-        
+
         // 4. 取模得到固定索引（使用 Math.abs 确保正数）
         const index = Math.abs(hash) % AVATAR_OPTIONS.length;
         const consistentRandomAvatar = AVATAR_OPTIONS[index];
@@ -390,7 +391,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
     const handleJoinInterview = async (email?: string) => {
         setShowInterviewModal(false);
-        
+
         // Determine user ID and email to save
         const userIdToSave = auth?.userId;
         const emailToSave = email || auth?.userEmail || 'none'; // Fallback to 'none' if no email available
@@ -735,6 +736,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     </div>
                 )}
 
+                {/* Developer Shortcut Section - Only show in DEV mode or for testing */}
+                <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4 border-2 border-dashed border-orange-200">
+                    <button
+                        onClick={onTestPledge}
+                        className="w-full flex items-center justify-between p-4 hover:bg-orange-50 active:bg-orange-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-vial text-orange-600"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">UI Test: Pledge Confirm</p>
+                                <p className="text-sm text-gray-400">Preview and adjust the pledge UI</p>
+                            </div>
+                        </div>
+                        <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                    </button>
+                </div>
+
                 {/* Device Permissions Section */}
                 <PermissionsSection />
 
@@ -843,7 +863,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                     onUploadClick={handleUploadClick}
                 />
             )}
-            
+
             <FeedbackInterviewModal
                 isOpen={showInterviewModal}
                 onClose={() => setShowInterviewModal(false)}
@@ -972,11 +992,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                         {/* 右侧：选择按钮 */}
                                         <button
                                             onClick={() => handleVoiceSelect(voice.name)}
-                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                                currentVoiceName === voice.name
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${currentVoiceName === voice.name
                                                     ? 'bg-brand-blue'
                                                     : 'border-2 border-gray-300 hover:border-brand-blue'
-                                            }`}
+                                                }`}
                                         >
                                             {currentVoiceName === voice.name && (
                                                 <i className="fa-solid fa-check text-white text-xs"></i>
@@ -1020,11 +1039,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                         {/* 右侧：选择按钮 */}
                                         <button
                                             onClick={() => handleVoiceSelect(voice.name)}
-                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                                currentVoiceName === voice.name
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${currentVoiceName === voice.name
                                                     ? 'bg-brand-blue'
                                                     : 'border-2 border-gray-300 hover:border-brand-blue'
-                                            }`}
+                                                }`}
                                         >
                                             {currentVoiceName === voice.name && (
                                                 <i className="fa-solid fa-check text-white text-xs"></i>
@@ -1071,11 +1089,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                                     </div>
                                     {/* 右侧：选择指示器 */}
                                     <div
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                            currentAITone === toneConfig.id
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${currentAITone === toneConfig.id
                                                 ? 'bg-brand-blue'
                                                 : 'border-2 border-gray-300'
-                                        }`}
+                                            }`}
                                     >
                                         {currentAITone === toneConfig.id && (
                                             <i className="fa-solid fa-check text-white text-xs"></i>

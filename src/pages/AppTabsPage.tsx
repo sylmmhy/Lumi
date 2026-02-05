@@ -1178,8 +1178,9 @@ export function AppTabsPage() {
         aiCoach.stopAudioImmediately();
 
         // 2. 立即结束会话（释放摄像头、麦克风等资源）
-        // 注意：先复制 messages 快照用于后台保存
+        // 注意：先复制 messages 和 taskDescription 快照用于后台保存
         const messagesSnapshot = [...aiCoach.state.messages];
+        const taskDescriptionSnapshot = aiCoach.state.taskDescription;
         aiCoach.endSession();
 
         // 3. 重置任务状态，UI 立即切换回主页面
@@ -1207,12 +1208,21 @@ export function AppTabsPage() {
                                 role: msg.role === 'ai' ? 'assistant' : 'user',
                                 content: msg.content,
                             }));
+                            // 添加任务描述作为上下文（与完成任务时一致）
+                            if (taskDescriptionSnapshot) {
+                                mem0Messages.unshift({
+                                    role: 'system',
+                                    content: `User was working on task: "${taskDescriptionSnapshot}"`,
+                                });
+                            }
                             devLog('🧠 [记忆保存] 调用 memory-extractor...');
+                            devLog('🧠 [记忆保存] 任务描述:', taskDescriptionSnapshot);
                             const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
                                 body: {
                                     action: 'extract',
                                     userId: auth.userId,
                                     messages: mem0Messages,
+                                    taskDescription: taskDescriptionSnapshot,
                                     metadata: {
                                         source: 'ai_coach_session',
                                         timestamp: new Date().toISOString(),

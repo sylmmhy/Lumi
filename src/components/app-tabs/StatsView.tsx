@@ -26,40 +26,9 @@ import {
     useCheckInToast,
     buildDenseHistoryWithGaps,
     EnergyBall,
+    taskToHabit,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
-
-/**
- * 将 Task 和完成历史转换为 Habit 格式
- */
-const taskToHabit = (task: Task, completions: Set<string>, totalCompletions?: number): Habit => {
-    // 将 Set 转换为 history 对象
-    const history: { [key: string]: boolean } = {};
-    completions.forEach(date => {
-        history[date] = true;
-    });
-
-    // 根据时间分类选择主题颜色
-    let theme: HabitTheme = 'gold';
-    if (task.category === 'morning') theme = 'gold';
-    else if (task.category === 'noon') theme = 'gold';
-    else if (task.category === 'afternoon') theme = 'blue';
-    else if (task.category === 'evening') theme = 'pink';
-    else if (task.category === 'latenight') theme = 'pink';
-
-    // 获取时间图标
-    const icon = getTimeIcon(task.category || 'morning');
-
-    return {
-        id: task.id,
-        title: task.text,
-        timeLabel: `${task.displayTime} ${icon}`,
-        time: task.time || '',
-        theme,
-        history,
-        totalCompletions,
-    };
-};
 
 /**
  * StatsView Props

@@ -199,7 +199,9 @@ export function ConsequencePledgeConfirm({
         onClick={handleStartVoice}
         className="w-auto px-10 py-4 rounded-full text-white font-sansita font-bold text-[20px] transition-all hover:scale-105 active:scale-95 uppercase tracking-wide flex items-center gap-3"
         style={{
-          backgroundColor: '#6B4D7A',
+          background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)',
+          border: '1.211px solid rgba(190, 190, 190, 0.20)',
+          borderRadius: '121.098px',
         }}
       >
         <MicIcon className="w-5 h-5" />
@@ -237,7 +239,10 @@ export function ConsequencePledgeConfirm({
         </h1>
         {/* 错误提示 - 验证失败时显示 */}
         {(error || speechError) && (
-          <div className="mt-4 p-3 rounded-lg" style={{ backgroundColor: '#6B4D7A' }}>
+          <div className="mt-4 p-3 rounded-lg" style={{
+            background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)',
+            border: '1.211px solid rgba(190, 190, 190, 0.20)'
+          }}>
             <p className="text-white text-sm font-quicksand">
               <span className="mr-2">⚠️</span>
               {error || speechError}
@@ -252,9 +257,8 @@ export function ConsequencePledgeConfirm({
         <div className="flex-1 flex flex-col items-center justify-center">
           {/* 承诺卡片 - 磨砂玻璃效果，录音时发光闪烁 */}
           <div
-            className={`w-full rounded-[14px] p-6 relative backdrop-blur-xl transition-all duration-300 ${
-              isRecording ? 'recording-glow' : ''
-            }`}
+            className={`w-full rounded-[14px] p-6 relative backdrop-blur-xl transition-all duration-300 ${isRecording ? 'recording-glow' : ''
+              }`}
             style={{
               backgroundColor: 'rgba(44, 44, 60, 0.5)',
               border: isRecording ? '2px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
@@ -270,7 +274,7 @@ export function ConsequencePledgeConfirm({
               {'\u201C'}
             </span>
             <div className="pt-8 pb-8 px-2">
-              <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
+              <p className="font-sansita text-base mb-3 capitalize italic text-white">
                 {t('pledge.iAcceptConsequence')}
               </p>
               <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">
@@ -296,7 +300,11 @@ export function ConsequencePledgeConfirm({
               onClick={isRecording ? handleStopVoice : handleStartVoice}
               disabled={isProcessing}
               className="w-auto px-10 py-4 rounded-full font-sansita font-bold text-[20px] transition-all uppercase tracking-wide text-white hover:scale-105 active:scale-95 flex items-center gap-3"
-              style={{ backgroundColor: '#6B4D7A' }}
+              style={{
+                background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)',
+                border: '1.211px solid rgba(190, 190, 190, 0.20)',
+                borderRadius: '121.098px',
+              }}
             >
               {isRecording && (
                 <div className="flex items-center gap-[3px] h-6">
@@ -364,7 +372,7 @@ export function ConsequencePledgeConfirm({
             {'\u201C'}
           </span>
           <div className="pt-8 pb-8 px-2">
-            <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
+            <p className="font-sansita text-base mb-3 capitalize italic text-white">
               {t('pledge.iAcceptConsequence')}
             </p>
             <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">
@@ -378,6 +386,19 @@ export function ConsequencePledgeConfirm({
             {'\u201D'}
           </span>
         </div>
+
+        {/* 错误提示 */}
+        {(error || speechError) && (
+          <div className="mb-4 p-3 rounded-lg" style={{
+            background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)',
+            border: '1.211px solid rgba(190, 190, 190, 0.20)'
+          }}>
+            <p className="text-white text-sm font-quicksand">
+              <span className="mr-2">⚠️</span>
+              {error || speechError}
+            </p>
+          </div>
+        )}
 
         {/* 输入框区域 */}
         <div className="relative">
@@ -396,22 +417,16 @@ export function ConsequencePledgeConfirm({
           <button
             onClick={handleTextValidation}
             disabled={!textInput.trim() || isUnlocking}
-            className="absolute right-3 bottom-3 w-12 h-12 rounded-full flex items-center justify-center transition-all disabled:opacity-50"
-            style={{ backgroundColor: '#6B4D7A' }}
+            className="absolute right-3 bottom-3 w-12 h-12 flex items-center justify-center transition-all disabled:opacity-50"
+            style={{
+              borderRadius: '121.098px',
+              border: '1.211px solid rgba(190, 190, 190, 0.20)',
+              background: 'linear-gradient(180deg, #7B19B7 -94.27%, #510B32 228.57%)'
+            }}
           >
             <ArrowUpIcon className="w-6 h-6 text-white" />
           </button>
         </div>
-
-        {/* 错误提示 */}
-        {(error || speechError) && (
-          <div className="mt-4 p-3 rounded-lg" style={{ backgroundColor: '#6B4D7A' }}>
-            <p className="text-white text-sm font-quicksand">
-              <span className="mr-2">⚠️</span>
-              {error || speechError}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -452,11 +467,11 @@ export function ConsequencePledgeConfirm({
       `}</style>
 
       {/* 基础页面 - 始终渲染，z-index 需要高于 BottomNavBar (z-[100]) */}
-      <div className="fixed inset-0 flex flex-col z-[110]" style={{ backgroundColor: '#1C1C28' }}>
-        {/* 顶部深紫色区域 */}
+      <div className="fixed inset-0 flex flex-col z-[110]" style={{ backgroundColor: '#1A2238' }}>
+        {/* 顶部深紫色区域 - 渐变背景 */}
         <div
           className="w-full pt-20 pb-12 px-10"
-          style={{ backgroundColor: '#4A1D6A' }}
+          style={{ background: 'linear-gradient(180deg, #421C57 0%, #1A2238 100%)' }}
         >
           <p className="font-quicksand font-bold text-base text-white/80 mb-2">
             {formatTimeDisplay()} · {t('pledge.timeTo')}
@@ -490,7 +505,7 @@ export function ConsequencePledgeConfirm({
               </span>
 
               <div className="pt-8 pb-8 px-2">
-                <p className="font-sansita text-base mb-3 capitalize italic" style={{ color: '#9A7AB8' }}>
+                <p className="font-sansita text-base mb-3 capitalize italic text-white">
                   {t('pledge.iAcceptConsequence')}
                 </p>
                 <p className="font-sansita text-[28px] leading-[1.2] text-white capitalize italic">

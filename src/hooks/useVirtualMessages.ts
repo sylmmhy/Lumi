@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import type { VirtualMessageUserContext } from './virtual-messages/types';
 
 /**
  * Virtual Messages Hook - AI 消息调度
@@ -21,6 +22,24 @@ export interface SuccessRecordForVM {
   personalBest: number | null;
   hasOvercomeResistance: boolean;
   hasProudMoment: boolean;
+}
+
+/**
+ * 智能虚拟消息（小纸条）生成结果
+ *
+ * 说明：
+ * - `note` 是“要对用户说的话”（一整句话或 1-2 句），会被注入给 Gemini Live
+ * - 其它字段可选，主要用于后续扩展/调试
+ */
+export interface CoachGuidanceResult {
+  /** 要说的话（小纸条） */
+  note: string;
+  /** 建议的下一步动作（可选，调试用） */
+  nextAction?: string;
+  /** 是否应该提及任务（可选，调试用） */
+  shouldMentionTask?: boolean;
+  /** 应避免的话题（可选，调试用） */
+  avoidTopics?: string[];
 }
 
 export type VirtualMessageCategory =
@@ -50,6 +69,16 @@ export interface UseVirtualMessagesOptions {
   initialDuration?: number;
   /** 用户首选语言，用于触发词中携带语言信息，确保 AI 回复使用正确语言 */
   preferredLanguage?: string;
+  /**
+   * 获取当前对话上下文（给“智能小纸条”使用）
+   * 如果未提供，虚拟消息会回退到旧的 [CHECK_IN] 逻辑
+   */
+  getConversationContext?: () => VirtualMessageUserContext | null;
+  /**
+   * 调用后端生成“小纸条”
+   * 注意：实现方必须保证尽快返回；本 Hook 也会做 2 秒超时保护
+   */
+  fetchCoachGuidance?: (context: VirtualMessageUserContext) => Promise<CoachGuidanceResult | null>;
 }
 
 // 冷却时间：15秒
@@ -71,6 +100,8 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     successRecord,
     initialDuration = 300, // 默认5分钟
     preferredLanguage = 'en-US', // 默认英文，确保触发词携带语言信息
+    getConversationContext,
+    fetchCoachGuidance,
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -79,6 +110,10 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const lastUserSpeechRef = useRef(lastUserSpeechTime);
   const lastVirtualMessageTimeRef = useRef<number>(0);
   const lastTurnCompleteTimeRef = useRef<number>(0);
+
+  // 智能小纸条：外部依赖用 ref 防止 useEffect 循环
+  const getConversationContextRef = useRef(getConversationContext);
+  const fetchCoachGuidanceRef = useRef(fetchCoachGuidance);
 
   // 更新 refs
   useEffect(() => {
@@ -92,6 +127,14 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   useEffect(() => {
     lastUserSpeechRef.current = lastUserSpeechTime;
   }, [lastUserSpeechTime]);
+
+  useEffect(() => {
+    getConversationContextRef.current = getConversationContext;
+  }, [getConversationContext]);
+
+  useEffect(() => {
+    fetchCoachGuidanceRef.current = fetchCoachGuidance;
+  }, [fetchCoachGuidance]);
 
   /**
    * 记录 AI 完成回复的时间
@@ -264,6 +307,12 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
       // 默认 memory_boost：提供总体鼓励
       return `[MEMORY_BOOST] type=general total=${successRecord.totalCompletions} streak=${successRecord.currentStreak} current_time=${currentTime} language=${lang}`;
     }
+
+    // ==========================================
+    // 智能小纸条：暂时禁用
+    // 改为直接让台前 AI 根据对话上下文自行判断（system prompt 已更新 [CHECK_IN] 规则）
+    // ==========================================
+    // if (category === 'encouragement_focused') { ... }
 
     // encouragement_focused - 默认类型
     // 触发词包含详细时间信息、当前本地时间和语言

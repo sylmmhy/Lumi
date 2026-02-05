@@ -25,9 +25,9 @@ import type {
   VirtualMessageType,
   TopicInfo,
   EmotionalState,
+  VirtualMessageUserContext,
 } from './types'
 import { EMOTION_RESPONSE_THRESHOLD } from './constants'
-import type { SuggestedAction } from '../useToneManager'
 
 /**
  * 调度器配置（扩展基础配置）
@@ -80,16 +80,12 @@ interface VirtualMessageOrchestratorResult {
   triggerMemoryRetrieval: (topic: string, keywords?: string[]) => Promise<void>
   /** 获取当前对话上下文 */
   getContext: () => ReturnType<ReturnType<typeof useConversationContextTracker>['getContext']>
+  /** 获取定时虚拟消息系统用的上下文（给“智能小纸条”用） */
+  getVirtualMessageContext: () => VirtualMessageUserContext
   /** 重置调度器状态 */
   reset: () => void
   /** 话题检测器是否正在检测 */
   isDetecting: boolean
-  /**
-   * 根据抗拒分析结果发送对应的虚拟消息
-   * @param suggestedAction - 来自 analyzeResistance 的建议动作
-   * @returns 是否成功发送
-   */
-  sendMessageForAction: (suggestedAction: SuggestedAction) => boolean
   /**
    * 发送温柔引导消息（用于情绪稳定后引导回任务）
    */
@@ -199,18 +195,6 @@ action: 用过渡话开头（如 "I hear you..." 或 "That sounds tough..."）�
   }, [contextTracker, preferredLanguage])
 
   /**
-   * 生成倾听模式消息 [LISTEN_FIRST]
-   */
-  const generateListenFirstMessage = useCallback((): string => {
-    const context = contextTracker.getVirtualMessageContext()
-
-    return `[LISTEN_FIRST] language=${preferredLanguage}
-user_context: "${context.recentUserSpeech?.substring(0, 100) || '(无)'}"
-topic: ${context.currentTopic || '未知'}
-action: 用过渡话开头，然后进入倾听模式。用户在分享情感内容，暂停任务相关话题。`
-  }, [contextTracker, preferredLanguage])
-
-  /**
    * 生成温柔引导消息 [GENTLE_REDIRECT]
    */
   const generateGentleRedirectMessage = useCallback((): string => {
@@ -219,62 +203,6 @@ action: 用过渡话开头，然后进入倾听模式。用户在分享情感内
     return `[GENTLE_REDIRECT] elapsed=${elapsedMinutes}m language=${preferredLanguage}
 action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移注意力。`
   }, [taskStartTime, preferredLanguage])
-
-  /**
-   * 生成接受停止消息 [ACCEPT_STOP]
-   */
-  const generateAcceptStopMessage = useCallback((): string => {
-    return `[ACCEPT_STOP] language=${preferredLanguage}
-action: 用过渡话开头（如 "I get it..."），然后优雅接受用户的选择，不要试图说服。`
-  }, [preferredLanguage])
-
-  /**
-   * 生成推进小步骤消息 [PUSH_TINY_STEP]
-   */
-  const generatePushTinyStepMessage = useCallback((): string => {
-    const context = contextTracker.getVirtualMessageContext()
-
-    return `[PUSH_TINY_STEP] language=${preferredLanguage}
-user_said: "${context.recentUserSpeech?.substring(0, 80) || '(无)'}"
-task: ${taskDescription}
-action: 用过渡话开头，简短承认用户的借口，然后提供一个更小的步骤。`
-  }, [contextTracker, taskDescription, preferredLanguage])
-
-  /**
-   * 根据建议动作生成对应的虚拟消息
-   */
-  const generateMessageForAction = useCallback((
-    suggestedAction: SuggestedAction
-  ): { content: string; type: VirtualMessageType } | null => {
-    switch (suggestedAction) {
-      case 'empathy':
-        return null // 由 EMPATHY 逻辑处理
-
-      case 'listen':
-        return {
-          content: generateListenFirstMessage(),
-          type: 'LISTEN_FIRST',
-        }
-
-      case 'accept_stop':
-        return {
-          content: generateAcceptStopMessage(),
-          type: 'ACCEPT_STOP',
-        }
-
-      case 'tiny_step':
-        return {
-          content: generatePushTinyStepMessage(),
-          type: 'PUSH_TINY_STEP',
-        }
-
-      case 'tone_shift':
-        return null // 由 ToneManager 处理
-
-      default:
-        return null
-    }
-  }, [generateListenFirstMessage, generateAcceptStopMessage, generatePushTinyStepMessage])
 
   // =====================================================
   // 事件处理
@@ -462,6 +390,13 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
   }, [contextTracker])
 
   /**
+   * 获取定时虚拟消息系统用的上下文快照
+   */
+  const getVirtualMessageContext = useCallback(() => {
+    return contextTracker.getVirtualMessageContext()
+  }, [contextTracker])
+
+  /**
    * 重置调度器状态
    */
   const reset = useCallback(() => {
@@ -476,26 +411,6 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
       console.log(`🔄 [Orchestrator] 状态已重置（含记忆去重记录）`)
     }
   }, [contextTracker, topicDetector])
-
-  /**
-   * 根据抗拒分析结果发送对应的虚拟消息
-   */
-  const sendMessageForAction = useCallback((suggestedAction: SuggestedAction): boolean => {
-    const messageData = generateMessageForAction(suggestedAction)
-
-    if (!messageData) {
-      return false
-    }
-
-    // 🆕 方案 2：立即注入
-    injectMessageImmediately(messageData.content, messageData.type)
-
-    if (import.meta.env.DEV) {
-      console.log(`📤 [Orchestrator] 已发送 ${messageData.type} 消息 (action: ${suggestedAction})`)
-    }
-
-    return true
-  }, [generateMessageForAction, injectMessageImmediately])
 
   /**
    * 发送温柔引导消息
@@ -518,9 +433,9 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     onTurnComplete,
     triggerMemoryRetrieval,
     getContext,
+    getVirtualMessageContext,
     reset,
     isDetecting: topicDetector.isDetecting,
-    sendMessageForAction,
     sendGentleRedirect,
   }
 }

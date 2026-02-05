@@ -67,7 +67,6 @@ const TYPE_WEIGHT: Record<VirtualMessageType, number> = {
   ACCEPT_STOP: 4,    // 用户明确不想做，需要及时响应
   GENTLE_REDIRECT: 4, // 情绪稳定后轻柔引导
   PUSH_TINY_STEP: 3, // 推进小步骤
-  TONE_SHIFT: 3,     // 语气切换
   DIRECTIVE: 3,
   CHECKPOINT: 2,
   CONTEXT: 1,

@@ -10,6 +10,7 @@ import { DevTestPage } from './pages/DevTestPage'
 import { LandingPageWrapper } from './pages/LandingPageWrapper'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
+import { CampfireFocusPage } from './pages/CampfireFocusPage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 import { PermissionProvider } from './context/PermissionContext'
@@ -86,6 +87,7 @@ function App() {
           <Route path="/terms" element={<TermsOfUsePage />} />
           <Route path="/app" element={<Navigate to={DEFAULT_APP_PATH} replace />} />
           <Route path="/app/:tab" element={<AppTabsPage />} />
+          <Route path="/campfire" element={<CampfireFocusPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         {/* WebView 调试控制台 - 仅在原生 App 或开发模式下显示 */}

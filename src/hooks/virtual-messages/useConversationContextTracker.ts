@@ -66,6 +66,10 @@ export function useConversationContextTracker(options: ConversationContextTracke
     taskStartTime,
   } = options
 
+  // DEV: AI 消息 log 缓冲区，将流式碎片拼接后再输出
+  const aiLogBufferRef = useRef('')
+  const aiLogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // 使用 ref 存储上下文，避免频繁 re-render
   const contextRef = useRef<ConversationContext>({
     recentMessages: [],
@@ -152,7 +156,13 @@ export function useConversationContextTracker(options: ConversationContextTracke
     updatePhase(ctx)
 
     if (import.meta.env.DEV) {
-      console.log('🤖 [ContextTracker] 添加 AI 消息:', content.substring(0, 50))
+      // 累积流式碎片，500ms 无新消息后输出完整句子
+      aiLogBufferRef.current += content
+      if (aiLogTimerRef.current) clearTimeout(aiLogTimerRef.current)
+      aiLogTimerRef.current = setTimeout(() => {
+        console.log('🤖 [ContextTracker] 添加 AI 消息:', aiLogBufferRef.current)
+        aiLogBufferRef.current = ''
+      }, 500)
     }
   }, [maxRecentMessages, updatePhase])
 

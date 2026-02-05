@@ -5,7 +5,7 @@
  * 通过 WebView Bridge 调用原生 API
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface ScreenTimeStatus {
   status: 'notDetermined' | 'denied' | 'approved' | 'error';
@@ -22,11 +22,25 @@ export interface ScreenTimeStatus {
  */
 export interface ScreenTimeActionEvent {
   action: 'start_task' | 'confirm_consequence';
+  /**
+   * 事件唯一 id（由 iOS 端生成，通常等于通知 request.identifier）
+   * 用于去重与 ack，避免 WebView 重载/重复注入导致同一事件弹出多次。
+   */
+  actionId?: string;
+  /**
+   * 事件创建时间（毫秒时间戳）
+   * 用于丢弃过久的 pending 事件，避免很久以后突然弹出旧页面。
+   */
+  createdAtMs?: number;
   taskName?: string;
   taskId?: string;
   consequence?: string;
   consequencePledge?: string;
 }
+
+const PENDING_ACTION_STORAGE_KEY = 'lumi_pending_screen_time_action';
+const LAST_HANDLED_ACTION_ID_STORAGE_KEY = 'lumi_last_handled_screen_time_action_id';
+const ACTION_TTL_MS = 10 * 60 * 1000;
 
 interface ScreenTimeCallback {
   action: string;
@@ -95,6 +109,7 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
 
   const isAvailable = isIOSNativeApp();
   const onAction = options.onAction;
+  const lastHandledActionIdRef = useRef<string | null>(null);
 
   // 设置全局回调函数
   useEffect(() => {
@@ -171,13 +186,108 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
 
   // 监听 iOS 发送的 screenTimeAction 事件
   useEffect(() => {
+    // 只有传入 onAction 时，才消费/ack Screen Time action（避免被其它无 onAction 的 hook 实例“抢走”事件）
+    if (!onAction) return;
+
+    const safeGetStorage = (key: string) => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    };
+
+    const safeSetStorage = (key: string, value: string) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch {
+        // ignore
+      }
+    };
+
+    const safeRemoveStorage = (key: string) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    };
+
+    const getLastHandledActionId = () => {
+      return lastHandledActionIdRef.current || safeGetStorage(LAST_HANDLED_ACTION_ID_STORAGE_KEY);
+    };
+
+    const markHandled = (actionId: string) => {
+      lastHandledActionIdRef.current = actionId;
+      safeSetStorage(LAST_HANDLED_ACTION_ID_STORAGE_KEY, actionId);
+    };
+
+    const isExpired = (event: ScreenTimeActionEvent) => {
+      if (!event.createdAtMs) return false;
+      return Date.now() - event.createdAtMs > ACTION_TTL_MS;
+    };
+
+    const ackToNative = (actionId?: string) => {
+      if (!actionId) return;
+      if (!isAvailable) return;
+      try {
+        window.webkit?.messageHandlers?.screenTime?.postMessage({
+          action: 'ackScreenTimeAction',
+          actionId,
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleAction = (detail: ScreenTimeActionEvent, source: 'event' | 'storage') => {
+      const actionId = detail.actionId;
+      if (actionId) {
+        const lastHandled = getLastHandledActionId();
+        if (lastHandled && lastHandled === actionId) {
+          console.log(`[ScreenTime] Duplicate action ignored (${source}):`, detail);
+          // 兜底清理 pending key，避免下次 reload 再次触发
+          safeRemoveStorage(PENDING_ACTION_STORAGE_KEY);
+          return;
+        }
+        if (isExpired(detail)) {
+          console.log(`[ScreenTime] Expired action ignored (${source}):`, detail);
+          safeRemoveStorage(PENDING_ACTION_STORAGE_KEY);
+          return;
+        }
+      }
+
+      console.log(`[ScreenTime] Action handled (${source}):`, detail);
+      onAction(detail);
+
+      if (actionId) {
+        markHandled(actionId);
+        ackToNative(actionId);
+      }
+
+      // 注入脚本会同时写 localStorage + dispatchEvent；正常收到 event 后这里清掉，避免重复消费
+      safeRemoveStorage(PENDING_ACTION_STORAGE_KEY);
+    };
+
+    // 1) 先消费 localStorage 中的 pending（用于 WebView reload / 监听器未就绪时的兜底）
+    const pendingRaw = safeGetStorage(PENDING_ACTION_STORAGE_KEY);
+    if (pendingRaw) {
+      try {
+        const pending = JSON.parse(pendingRaw) as ScreenTimeActionEvent;
+        if (pending && typeof pending.action === 'string') {
+          handleAction(pending, 'storage');
+        } else {
+          safeRemoveStorage(PENDING_ACTION_STORAGE_KEY);
+        }
+      } catch {
+        safeRemoveStorage(PENDING_ACTION_STORAGE_KEY);
+      }
+    }
+
     const handleScreenTimeAction = (event: Event) => {
       const customEvent = event as CustomEvent<ScreenTimeActionEvent>;
       console.log('[ScreenTime] Action event received:', customEvent.detail);
-
-      if (onAction) {
-        onAction(customEvent.detail);
-      }
+      handleAction(customEvent.detail, 'event');
     };
 
     window.addEventListener('screenTimeAction', handleScreenTimeAction);
@@ -185,7 +295,7 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
     return () => {
       window.removeEventListener('screenTimeAction', handleScreenTimeAction);
     };
-  }, [onAction]);
+  }, [onAction, isAvailable]);
 
   /**
    * 发送消息到 Native

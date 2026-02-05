@@ -1,4 +1,5 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PremiumModal, SpecialOfferModal } from '../modals/PremiumModals';
 import { AvatarSelectionPopup } from '../modals/AvatarSelectionPopup';
 import { FeedbackInterviewModal } from '../modals/FeedbackInterviewModal';
@@ -19,6 +20,7 @@ import { getVoiceName, setVoiceName, getVoicesByGender, getVoicePreviewUrl, mapU
 import { getAITone, setAITone, getAvailableAITones, type AITone } from '../../lib/aiToneSettings';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useScreenTime } from '../../hooks/useScreenTime';
+import { VoiceChatTest } from '../dev/VoiceChatTest';
 
 interface ProfileViewProps {
     isPremium: boolean;
@@ -78,6 +80,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showVoiceSelectionModal, setShowVoiceSelectionModal] = useState(false);
     const [playingVoice, setPlayingVoice] = useState<VoiceName | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Voice habit creation state
+    const [showVoiceHabit, setShowVoiceHabit] = useState(false);
 
     // AI Tone state
     const [currentAITone, setCurrentAITone] = useState<AITone>(getAITone());
@@ -738,6 +743,45 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* Developer Shortcut Section - Only show in DEV mode or for testing */}
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4 border-2 border-dashed border-orange-200">
+                    {/* 语音习惯制定入口（使用真实用户 ID） */}
+                    <button
+                        onClick={() => {
+                            if (!auth?.userId) {
+                                alert('Please login first');
+                                return;
+                            }
+                            setShowVoiceHabit(true);
+                        }}
+                        className="w-full flex items-center justify-between p-4 hover:bg-purple-50 active:bg-purple-100 transition-colors border-b border-orange-200"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-microphone text-purple-600"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">Voice Habit Setup</p>
+                                <p className="text-sm text-gray-400">Create habits via voice (real user ID)</p>
+                            </div>
+                        </div>
+                        <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/campfire')}
+                        className="w-full flex items-center justify-between p-4 hover:bg-orange-50 active:bg-orange-100 transition-colors border-b border-orange-200"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                                <i className="fa-solid fa-fire text-amber-600"></i>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-medium text-gray-800">Campfire Focus</p>
+                                <p className="text-sm text-gray-400">Test campfire companion mode</p>
+                            </div>
+                        </div>
+                        <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+                    </button>
+
                     <button
                         onClick={onTestPledge}
                         className="w-full flex items-center justify-between p-4 hover:bg-orange-50 active:bg-orange-100 transition-colors"
@@ -1144,6 +1188,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Voice Habit Creation - Full Screen Overlay */}
+            {showVoiceHabit && auth?.userId && (
+                <div className="fixed inset-0 z-[300]">
+                    <VoiceChatTest
+                        onBack={() => setShowVoiceHabit(false)}
+                        userId={auth.userId}
+                    />
                 </div>
             )}
         </div>

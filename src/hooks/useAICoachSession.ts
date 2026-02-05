@@ -4,11 +4,11 @@ import { useVirtualMessages } from './useVirtualMessages';
 import type { SuccessRecordForVM } from './useVirtualMessages';
 import { useVoiceActivityDetection } from './useVoiceActivityDetection';
 import { useWaveformAnimation } from './useWaveformAnimation';
-import { useToneManager, analyzeResistance } from './useToneManager';
 import { useVirtualMessageOrchestrator } from './virtual-messages';
 import { getSupabaseClient } from '../lib/supabase';
 import { updateReminder } from '../remindMe/services/reminderService';
 import { getVoiceName } from '../lib/voiceSettings';
+import type { VirtualMessageUserContext } from './virtual-messages/types';
 
 // ==========================================
 // 配置常量
@@ -22,9 +22,6 @@ const MAX_CAMERA_RETRIES = 2;
 
 /** 摄像头重试间隔（毫秒） */
 const CAMERA_RETRY_DELAY_MS = 1000;
-
-/** Tone 切换触发词发送延迟（毫秒） */
-const TONE_TRIGGER_DELAY_MS = 500;
 
 // ==========================================
 // 工具函数
@@ -84,8 +81,6 @@ export interface UseAICoachSessionOptions {
   enableVirtualMessages?: boolean;
   /** 是否启用 VAD（用户说话检测），默认 true */
   enableVAD?: boolean;
-  /** 是否启用动态语气管理（检测用户抗拒并切换AI风格），默认 true */
-  enableToneManager?: boolean;
 }
 
 /**
@@ -104,7 +99,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onCountdownComplete,
     enableVirtualMessages = true,
     enableVAD = true,
-    enableToneManager = true,
   } = options;
 
   // ==========================================
@@ -147,52 +141,33 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于累积用户语音碎片，避免每个词都存为单独消息
   const userSpeechBufferRef = useRef<string>('');
 
-  // 🔧 修复流式响应问题：跟踪当前 AI 回复是否已检测到 [RESIST]
-  // 因为 AI 回复是分 chunks 发送的，[RESIST] 只在第一个 chunk
-  // 后续 chunks 不应该触发 recordAcceptance()
-  const currentTurnHasResistRef = useRef<boolean>(false);
-  // 跟踪上一条消息的角色，用于检测"新一轮"的开始
+  // 跟踪上一条消息的角色，用于检测角色切换
   const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
 
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
-  // 保存用户首选语言，用于语气切换和虚拟消息时保持语言一致性
+  // 保存用户首选语言，用于虚拟消息时保持语言一致性
   const preferredLanguagesRef = useRef<string[] | null>(null);
 
-  // ==========================================
-  // 动态语气管理（Tone Manager）
-  // ==========================================
-  const toneManager = useToneManager({
-    rejectionThreshold: 2,           // 连续2次抗拒后切换语气
-    minToneChangeInterval: 30000,    // 30秒内不重复切换
-    enableDebugLog: import.meta.env.DEV,
-  });
-
-  // 用于发送 tone 切换触发词的 ref（避免循环依赖）
-  const sendToneTriggerRef = useRef<(trigger: string) => void>(() => {});
+  // DEV: AI 语音 log 缓冲区，用于将流式碎片拼接成完整句子后再输出
+  const aiSpeechLogBufferRef = useRef<string>('');
+  const aiSpeechLogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 用于调用 messageOrchestrator 方法的 ref（避免循环依赖）
   const orchestratorRef = useRef<{
-    onUserSpeech: (text: string) => Promise<import('./virtual-messages/useVirtualMessageOrchestrator').TopicResultForResistance | null>;
+    onUserSpeech: (text: string) => Promise<unknown>;
     onAISpeech: (text: string) => void;
     onTurnComplete: () => void;
-    sendMessageForAction: (action: import('./useToneManager').SuggestedAction) => boolean;
     getContext: () => { currentTopic: { name: string } | null };
+    getVirtualMessageContext: () => VirtualMessageUserContext | null;
   }>({
     onUserSpeech: async () => null,
     onAISpeech: () => {},
     onTurnComplete: () => {},
-    sendMessageForAction: () => false,
     getContext: () => ({ currentTopic: null }),
+    getVirtualMessageContext: () => null,
   });
-
-  // 用于存储最近的话题检测结果（用于抗拒分析）
-  const lastTopicResultRef = useRef<{
-    topic: { id: string; name: string } | null;
-    emotion?: 'happy' | 'sad' | 'anxious' | 'frustrated' | 'tired' | 'neutral';
-    emotionIntensity?: number;
-  } | null>(null);
 
   // ==========================================
   // 消息管理（必须在其他 hooks 之前定义）
@@ -246,14 +221,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           }
           addMessageRef.current('user', fullUserMessage, false);
 
-          // 🆕 用完整的用户消息进行话题检测和记忆检索
-          // 必须在清空 buffer 之前调用，且使用完整句子而非碎片
-          // 保存话题检测结果，用于后续的抗拒分析
-          orchestratorRef.current.onUserSpeech(fullUserMessage).then((topicResult) => {
-            if (topicResult) {
-              lastTopicResultRef.current = topicResult;
-            }
-          }).catch((err) => {
+          // 用完整的用户消息进行话题检测和记忆检索
+          orchestratorRef.current.onUserSpeech(fullUserMessage).catch((err) => {
             if (import.meta.env.DEV) {
               console.warn('话题检测失败:', err);
             }
@@ -262,108 +231,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userSpeechBufferRef.current = '';
         }
 
-        // 🔧 检测新一轮 AI 回复的开始（上一条是用户消息）
-        const isNewAITurn = lastProcessedRoleRef.current === 'user';
-
-        // 动态语气管理：检测 AI 回复中的 [RESIST] 标记
-        let displayText = lastMessage.text;
-        if (enableToneManager) {
-          // 🔧 新一轮开始时，判断上一轮是否有抗拒
-          if (isNewAITurn) {
-            if (!currentTurnHasResistRef.current) {
-              // 上一轮没有 [RESIST]，说明用户在配合
-              toneManager.recordAcceptance();
-            }
-            // 重置 flag，准备新一轮的检测
-            currentTurnHasResistRef.current = false;
-          }
-
-          const hasResistTag = lastMessage.text.startsWith('[RESIST]');
-
-          if (hasResistTag) {
-            // 移除 [RESIST] 标记
-            displayText = lastMessage.text.replace(/^\[RESIST\]\s*/, '');
-
-            // 🔧 标记当前回复已检测到抗拒（防止后续 chunks 误触发 recordAcceptance）
-            currentTurnHasResistRef.current = true;
-
-            // 🆕 分析抗拒类型，决定响应策略
-            const topicResult = lastTopicResultRef.current;
-            const resistanceAnalysis = analyzeResistance(
-              userSpeechBufferRef.current || '', // 使用累积的用户消息
-              topicResult,
-              toneManager.toneState.consecutiveRejections
-            );
-
-            if (import.meta.env.DEV) {
-              console.log('🔍 [ToneManager] 抗拒分析:', {
-                type: resistanceAnalysis.type,
-                action: resistanceAnalysis.suggestedAction,
-                reason: resistanceAnalysis.reason,
-              });
-            }
-
-            // 根据分析结果决定是否发送虚拟消息或触发语气切换
-            if (resistanceAnalysis.suggestedAction === 'empathy' || resistanceAnalysis.suggestedAction === 'listen') {
-              // 情感相关的抗拒 → 发送对应的虚拟消息
-              setTimeout(() => {
-                orchestratorRef.current.sendMessageForAction(resistanceAnalysis.suggestedAction);
-              }, TONE_TRIGGER_DELAY_MS);
-            } else if (resistanceAnalysis.suggestedAction === 'accept_stop') {
-              // 明确拒绝 → 发送 ACCEPT_STOP 消息
-              setTimeout(() => {
-                orchestratorRef.current.sendMessageForAction('accept_stop');
-              }, TONE_TRIGGER_DELAY_MS);
-            } else if (resistanceAnalysis.suggestedAction === 'tiny_step') {
-              // 普通抗拒 → 发送 PUSH_TINY_STEP 消息
-              setTimeout(() => {
-                orchestratorRef.current.sendMessageForAction('tiny_step');
-              }, TONE_TRIGGER_DELAY_MS);
-            } else if (resistanceAnalysis.suggestedAction === 'tone_shift') {
-              // 连续抗拒 → 触发语气切换
-              const triggerString = toneManager.recordResistance('ai_detected');
-
-              if (triggerString) {
-                const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-                const triggerWithLanguage = triggerString.replace('{LANG}', lang);
-                setTimeout(() => {
-                  if (geminiLive.isConnected) {
-                    geminiLive.sendTextMessage(triggerWithLanguage);
-                    if (import.meta.env.DEV) {
-                      console.log('📤 发送语气切换触发词:', triggerWithLanguage);
-                    }
-                  }
-                }, TONE_TRIGGER_DELAY_MS);
-              }
-            } else {
-              // 其他情况：保持原有逻辑（记录抗拒次数）
-              const triggerString = toneManager.recordResistance('ai_detected');
-
-              if (import.meta.env.DEV) {
-                console.log('🚫 [ToneManager] AI 检测到用户抗拒');
-              }
-
-              // 如果触发了语气切换，稍后发送触发词
-              if (triggerString) {
-                const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-                const triggerWithLanguage = triggerString.replace('{LANG}', lang);
-                setTimeout(() => {
-                  if (geminiLive.isConnected) {
-                    geminiLive.sendTextMessage(triggerWithLanguage);
-                    if (import.meta.env.DEV) {
-                      console.log('📤 发送语气切换触发词:', triggerWithLanguage);
-                    }
-                  }
-                }, TONE_TRIGGER_DELAY_MS);
-              }
-            }
-          }
-        }
-
-        // 存储 AI 消息（使用处理后的文本）
+        // 存储 AI 消息
+        const displayText = lastMessage.text;
         addMessageRef.current('ai', displayText);
         if (import.meta.env.DEV) {
-          console.log('🤖 AI 说:', displayText);
+          // 累积流式碎片，500ms 无新消息后输出完整句子
+          aiSpeechLogBufferRef.current += displayText;
+          if (aiSpeechLogTimerRef.current) clearTimeout(aiSpeechLogTimerRef.current);
+          aiSpeechLogTimerRef.current = setTimeout(() => {
+            console.log('🤖 AI 说:', aiSpeechLogBufferRef.current);
+            aiSpeechLogBufferRef.current = '';
+          }, 500);
         }
 
         // 🆕 通知动态虚拟消息调度器（用于上下文追踪）
@@ -385,31 +263,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
     },
   });
-
-  const geminiIsConnected = geminiLive.isConnected;
-  const sendGeminiTextMessage = geminiLive.sendTextMessage;
-
-  // 更新 sendToneTrigger ref（使用 geminiLive.sendTextMessage）
-  // 🔧 修复语言污染：替换触发词中的 {LANG} 占位符为实际语言代码
-  useEffect(() => {
-    sendToneTriggerRef.current = (trigger: string) => {
-      if (geminiIsConnected && isSessionActive) {
-        // 替换 {LANG} 占位符为实际语言代码
-        const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-        const triggerWithLanguage = trigger.replace('{LANG}', lang);
-        sendGeminiTextMessage(triggerWithLanguage);
-        if (import.meta.env.DEV) {
-          console.log('📤 发送语气切换触发词:', triggerWithLanguage);
-        }
-      } else if (import.meta.env.DEV) {
-        console.log('⏸️ 跳过语气切换触发词:', {
-          isConnected: geminiIsConnected,
-          isSessionActive,
-          trigger,
-        });
-      }
-    };
-  }, [geminiIsConnected, sendGeminiTextMessage, isSessionActive]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -450,20 +303,60 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       onUserSpeech: messageOrchestrator.onUserSpeech,
       onAISpeech: messageOrchestrator.onAISpeech,
       onTurnComplete: messageOrchestrator.onTurnComplete,
-      sendMessageForAction: messageOrchestrator.sendMessageForAction,
       getContext: messageOrchestrator.getContext,
+      getVirtualMessageContext: messageOrchestrator.getVirtualMessageContext,
     };
   }, [
     messageOrchestrator.onUserSpeech,
     messageOrchestrator.onAISpeech,
     messageOrchestrator.onTurnComplete,
-    messageOrchestrator.sendMessageForAction,
     messageOrchestrator.getContext,
+    messageOrchestrator.getVirtualMessageContext,
   ]);
 
   // ==========================================
   // 虚拟消息（原有的定时触发系统）
   // ==========================================
+  /**
+   * 从 Orchestrator 获取当前对话上下文（给“智能小纸条”用）
+   */
+  const getConversationContext = useCallback((): VirtualMessageUserContext | null => {
+    return orchestratorRef.current.getVirtualMessageContext?.() ?? null;
+  }, []);
+
+  /**
+   * 调用后端 Edge Function，生成一条“小纸条”（一整句话）
+   *
+   * 注意：
+   * - 这里不做太多业务逻辑判断，把“如何说”交给后端的 Gemini
+   * - useVirtualMessages 内部会做 2 秒超时保护，失败会自动回退到 [CHECK_IN]
+   */
+  const fetchCoachGuidance = useCallback(async (context: VirtualMessageUserContext) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    const userPreferredLanguage = preferredLanguagesRef.current?.[0] || 'en-US';
+
+    const { data, error } = await supabase.functions.invoke('generate-coach-guidance', {
+      body: {
+        userId: currentUserIdRef.current,
+        ...context,
+        userPreferredLanguage,
+      },
+    });
+
+    if (error) {
+      console.error('⚠️ generate-coach-guidance 调用失败:', error);
+      return null;
+    }
+
+    if (data && typeof (data as { note?: unknown }).note === 'string') {
+      return { note: (data as { note: string }).note };
+    }
+
+    return null;
+  }, []);
+
   const virtualMessages = useVirtualMessages({
     enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected,
     taskStartTime,
@@ -477,6 +370,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     initialDuration: initialTime,
     // 🔧 修复语言污染：传入用户首选语言，确保虚拟消息触发词携带正确语言
     preferredLanguage: preferredLanguagesRef.current?.[0],
+    // 智能小纸条
+    getConversationContext,
+    fetchCoachGuidance,
   });
 
   const { setOnTurnComplete } = geminiLive;
@@ -657,8 +553,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     processedTranscriptRef.current.clear();
     currentUserIdRef.current = userId || null;
     currentTaskDescriptionRef.current = taskDescription;
-    // 🔧 重置流式响应相关的 refs
-    currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     currentTaskIdRef.current = taskId || null;
     currentCallRecordIdRef.current = callRecordId || null; // 保存来电记录 ID
@@ -666,11 +560,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     preferredLanguagesRef.current = preferredLanguages || null;
     setIsConnecting(true);
     setConnectionError(null); // 清除之前的错误
-
-    // 重置语气管理器状态（新会话从 friendly 开始）
-    if (enableToneManager) {
-      toneManager.resetToneState();
-    }
 
    try {
       if (import.meta.env.DEV) {
@@ -901,7 +790,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       throw error;
     }
-  }, [initialTime, geminiLive, startCountdown, cleanup, enableToneManager, toneManager]);
+  }, [initialTime, geminiLive, startCountdown, cleanup]);
 
   /**
    * 立即停止音频播放（不断开连接、不清理资源）
@@ -1125,8 +1014,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession();
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
-    // 🔧 重置流式响应相关的 refs
-    currentTurnHasResistRef.current = false;
     lastProcessedRoleRef.current = null;
     setConnectionError(null); // 清除错误状态
     setState({
@@ -1177,11 +1064,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     // 波形动画
     waveformHeights: waveformAnimation.heights,
 
-    // 动态语气管理状态
-    toneState: toneManager.toneState,
-    currentTone: toneManager.toneState.currentTone,
-    currentToneDescription: toneManager.currentToneDescription,
-
     // 操作
     startSession,
     endSession,
@@ -1191,10 +1073,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     sendTextMessage: geminiLive.sendTextMessage,
     toggleCamera: geminiLive.toggleCamera,
 
-    // 语气管理操作（高级用法，通常不需要手动调用）
-    forceToneChange: toneManager.forceToneChange,
-
-    // 动态虚拟消息调度器（方案 2：过渡话注入）
+    // 动态虚拟消息调度器
     orchestratorContext: messageOrchestrator.getContext,
     triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval, // 手动触发记忆检索（调试用）
 

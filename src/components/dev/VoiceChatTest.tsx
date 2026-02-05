@@ -19,6 +19,8 @@ import { useIntentDetection } from '../../hooks/ai-tools';
 
 interface VoiceChatTestProps {
   onBack: () => void;
+  /** 传入真实用户 ID，不传则使用硬编码测试 ID */
+  userId?: string;
 }
 
 type ChatType = 'intention_compile' | 'daily_chat';
@@ -36,7 +38,7 @@ const cleanNoiseMarkers = (text: string): string => {
     .trim();
 };
 
-export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
+export function VoiceChatTest({ onBack, userId: propUserId }: VoiceChatTestProps) {
   // 状态
   const [chatType, setChatType] = useState<ChatType | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -52,6 +54,9 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+  // 用户 ID：优先使用传入的真实 ID，否则使用测试 ID
+  const userId = propUserId || '11111111-1111-1111-1111-111111111111';
+
   // ==========================================
   // 消息处理相关 Refs
   // ==========================================
@@ -64,7 +69,7 @@ export function VoiceChatTest({ onBack }: VoiceChatTestProps) {
 
   // 意图检测 Hook（三层 AI 架构）
   const intentDetection = useIntentDetection({
-    userId: '11111111-1111-1111-1111-111111111111',
+    userId,
     chatType: chatType || 'daily_chat',
     preferredLanguage,
     onToolResult: (result) => {
@@ -230,7 +235,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
               'Authorization': `Bearer ${supabaseAnonKey}`,
             },
             body: JSON.stringify({
-              userId: '11111111-1111-1111-1111-111111111111',
+              userId,
             }),
           });
 
@@ -263,7 +268,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
           'Authorization': `Bearer ${supabaseAnonKey}`,
         },
         body: JSON.stringify({
-          userId: '11111111-1111-1111-1111-111111111111',
+          userId,
           chatType: type,
           context,
           aiTone: 'gentle',
@@ -293,7 +298,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
     } finally {
       setIsConnecting(false);
     }
-  }, [supabaseUrl, supabaseAnonKey, geminiLive]);
+  }, [supabaseUrl, supabaseAnonKey, geminiLive, userId]);
 
   // 断开连接（包含记忆保存）
   const handleDisconnect = useCallback(async () => {
@@ -316,7 +321,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
           },
           body: JSON.stringify({
             action: 'extract',
-            userId: '11111111-1111-1111-1111-111111111111', // TODO: 使用真实用户 ID
+            userId,
             messages: mem0Messages,
             taskDescription: '日常对话',
             localDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
@@ -353,7 +358,7 @@ action: 用你自己的话简短地告诉用户这个结果。不要直接照读
     setChatType(null);
     setMessages([]);
     intentDetection.clearHistory();
-  }, [geminiLive, intentDetection, chatType, messages, supabaseUrl, supabaseAnonKey]);
+  }, [geminiLive, intentDetection, chatType, messages, supabaseUrl, supabaseAnonKey, userId]);
 
   // 发送文字
   const handleSendText = useCallback(() => {

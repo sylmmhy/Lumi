@@ -44,16 +44,6 @@ export type {
   AICoachMessage 
 } from './useAICoachSession';
 
-// 语气管理（动态Tone切换）
-export { useToneManager } from './useToneManager';
-export type {
-  ToneStyle,
-  ToneState,
-  ResistanceSignal,
-  UseToneManagerOptions,
-  ToneTrigger,
-} from './useToneManager';
-
 // 助眠音乐
 export { useSleepMusic } from './useSleepMusic';
 export type {

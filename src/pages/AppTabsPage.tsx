@@ -114,6 +114,34 @@ export function AppTabsPage() {
     // 用于触发 StatsView 重新加载数据
     const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
     const [showAuthModal, setShowAuthModal] = useState(false);
+    /**
+     * Screen Time 自动解锁相关状态
+     *
+     * 原理：
+     * - Screen Time 的锁定/解锁是 iOS 本地状态（ManagedSettings）。
+     * - 仅仅把 tasks 标记为 completed（写 Supabase）不会影响 iOS 锁定状态。
+     * - 因此当用户“完成任务”（无论是 AI 会话内点击完成，还是手动勾选完成）时，需要通过 WebView bridge 显式调用 `unlockApps`。
+     */
+    const isScreenTimeLockedRef = useRef(false);
+    const shouldUnlockScreenTimeAfterTaskCompleteRef = useRef(false);
+    const unlockScreenTimeIfLocked = useCallback((source: string) => {
+        // 只在 iOS Native WebView 环境生效
+        if (!window.webkit?.messageHandlers?.screenTime) return;
+
+        const shouldUnlock = isScreenTimeLockedRef.current || shouldUnlockScreenTimeAfterTaskCompleteRef.current;
+        if (!shouldUnlock) return;
+
+        // 防止重复触发（回调延迟/多次点击等）
+        isScreenTimeLockedRef.current = false;
+        shouldUnlockScreenTimeAfterTaskCompleteRef.current = false;
+
+        devLog(`🔓 [ScreenTime] 任务完成触发解锁 (${source})`);
+        try {
+            window.webkit.messageHandlers.screenTime.postMessage({ action: 'unlockApps' });
+        } catch (error) {
+            console.error('[ScreenTime] unlockApps 发送失败:', error);
+        }
+    }, []);
     const [pendingTask, setPendingTask] = useState<Task | null>(null);
     /**
      * 区分 pendingTask 的来源：
@@ -587,6 +615,12 @@ export function AppTabsPage() {
             uiIdsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
         ));
 
+        // ✅ 用户手动标记“完成任务”时，如果当前处于 Screen Time 锁定状态，应立即解锁
+        // 注意：解锁不依赖数据库成功与否，避免离线/网络波动导致“已完成但仍被锁”
+        if (newCompletedStatus) {
+            unlockScreenTimeIfLocked('toggleComplete');
+        }
+
         try {
             // 只更新数据库中的 routine_instance（或 todo），不更新 routine 模板
             if (dbIdToUpdate) {
@@ -621,7 +655,10 @@ export function AppTabsPage() {
         setTasks(prev => prev.map(t =>
             t.id === id ? { ...t, completed } : t
         ));
-    }, []);
+        if (completed) {
+            unlockScreenTimeIfLocked('StatsView.toggle');
+        }
+    }, [unlockScreenTimeIfLocked]);
 
     const handleDeleteTask = async (id: string) => {
         // if (!window.confirm('Are you sure you want to delete this task?')) return;
@@ -819,6 +856,11 @@ export function AppTabsPage() {
         devLog('🔓 [ScreenTime] 收到操作事件:', event);
 
         if (event.action === 'start_task') {
+            // 从 Shield 锁定页进入 “start_task” 意味着用户处于解锁流程中。
+            // 这里先写一个兜底标记：即使 statusUpdate 尚未到达，也允许在“任务完成”时触发解锁。
+            isScreenTimeLockedRef.current = true;
+            shouldUnlockScreenTimeAfterTaskCompleteRef.current = true;
+
             // 用户选择"让 Lumi 陪我开始" - 直达 Gemini Live 开始任务
             const task: Task = {
                 id: event.taskId || `temp-${Date.now()}`,
@@ -834,9 +876,29 @@ export function AppTabsPage() {
             devLog('🚀 [ScreenTime] 启动任务:', task.text);
             // 跳转到 urgency 页面并启动任务
             handleChangeView('urgency', true);
-            setTimeout(() => {
-                ensureVoicePromptThenStart(task);
-            }, 300);
+
+            // 关键：不要用固定延迟直接启动。
+            // 原因：iOS WebView 回到前台时，Native 登录态注入 + Supabase session 恢复是异步的。
+            // 如果在会话未验证完成前就调用 startSession，会出现“偶发启动失败/页面不弹”的竞态。
+            // 这里复用与 Urgency 页按钮一致的 gate：先等会话验证完成，再启动 AI。
+            if (!auth.isSessionValidated) {
+                devLog('⏳ [ScreenTime] 会话验证中，挂起 start_task 操作');
+                setPendingTask(task);
+                setPendingAction('start-ai');
+                setPendingActionSource('session-validation');
+                return;
+            }
+
+            if (!auth.isLoggedIn) {
+                devLog('🔐 [ScreenTime] 未登录，挂起 start_task 并弹出登录框');
+                setPendingTask(task);
+                setPendingAction('start-ai');
+                setPendingActionSource('auth-required');
+                setShowAuthModal(true);
+                return;
+            }
+
+            ensureVoicePromptThenStart(task);
         } else if (event.action === 'confirm_consequence') {
             // 用户选择"暂时不做，接受后果" - 显示后果确认界面
             devLog('📝 [ScreenTime] 显示后果确认界面');
@@ -847,7 +909,7 @@ export function AppTabsPage() {
             });
             setShowPledgeConfirm(true);
         }
-    }, [handleChangeView, ensureVoicePromptThenStart]);
+    }, [auth.isLoggedIn, auth.isSessionValidated, ensureVoicePromptThenStart, handleChangeView]);
 
     // 使用 Screen Time Hook 监听 iOS 事件
     useScreenTime({
@@ -1294,6 +1356,9 @@ export function AppTabsPage() {
         setCelebrationFlow('success');
         setShowCelebration(true);
 
+        // ✅ 任务完成：如果仍处于 Screen Time 锁定状态，立即解锁应用
+        unlockScreenTimeIfLocked('GeminiLive.primaryButton');
+
         // 重置任务状态
         setCurrentTaskId(null);
         setCurrentTaskType(null);
@@ -1369,7 +1434,7 @@ export function AppTabsPage() {
 
         // 5. 后台标记任务为已完成
         void markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-    }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted, auth.userId]);
+    }, [aiCoach, currentTaskId, currentTaskType, markTaskAsCompleted, auth.userId, unlockScreenTimeIfLocked]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -1383,9 +1448,12 @@ export function AppTabsPage() {
         // 传入 currentTaskType 以便正确处理习惯任务的打卡记录
         await markTaskAsCompleted(currentTaskId, actualDurationMinutes, currentTaskType);
 
+        // ✅ 用户手动确认完成：如果仍处于 Screen Time 锁定状态，解锁应用
+        unlockScreenTimeIfLocked('Celebration.confirmYes');
+
         // 显示庆祝页面
         setCelebrationFlow('success');
-    }, [currentTaskId, currentTaskType, completionTime, markTaskAsCompleted]);
+    }, [currentTaskId, currentTaskType, completionTime, markTaskAsCompleted, unlockScreenTimeIfLocked]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -1457,6 +1525,7 @@ export function AppTabsPage() {
                             setCompletionTime(usedSeconds);
                             setCelebrationFlow('success');
                             setShowCelebration(true);
+                            unlockScreenTimeIfLocked('LiveKit.primaryButton');
                             setUsingLiveKit(false);
                             setLiveKitConnected(false);
                         },

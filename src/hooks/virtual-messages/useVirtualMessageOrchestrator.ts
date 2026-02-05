@@ -139,6 +139,12 @@ export function useVirtualMessageOrchestrator(
   const lastTopicRef = useRef<TopicInfo | null>(null)
   // 追踪 AI 说话状态
   const isSpeakingRef = useRef<boolean>(isSpeaking)
+  // 🔧 追踪本次会话已注入的记忆内容（用于去重）
+  const injectedMemoriesRef = useRef<Set<string>>(new Set())
+  // 🔧 追踪最后一次记忆注入时间（用于节流）
+  const lastMemoryInjectionTimeRef = useRef<number>(0)
+  // 🔧 记忆注入最小间隔（20 个来回约等于 60 秒）
+  const MEMORY_INJECTION_COOLDOWN_MS = 60000
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
@@ -333,35 +339,56 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     }
 
     // 🔧 方案 B：同步等待记忆检索，立即静默注入
+    // 🔧 修复：添加节流和去重逻辑
+    const now = Date.now()
+    const timeSinceLastInjection = now - lastMemoryInjectionTimeRef.current
+    const shouldSkipDueToThrottle = timeSinceLastInjection < MEMORY_INJECTION_COOLDOWN_MS
+
     if (enableMemoryRetrieval && userId && text.length > 5) {
-      console.log(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
-      console.log(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
+      // 🔧 节流检查：距离上次注入是否超过冷却时间
+      if (shouldSkipDueToThrottle) {
+        console.log(`🔎 [Orchestrator] 跳过记忆检索 - 距上次注入 ${Math.round(timeSinceLastInjection / 1000)}秒 (冷却: ${MEMORY_INJECTION_COOLDOWN_MS / 1000}秒)`)
+      } else {
+        console.log(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
+        console.log(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
 
-      // 同步等待记忆检索完成
-      const memories = await memoryPipeline.fetchMemoriesForTopic(
-        text,
-        [],
-        contextTracker.getContext().summary
-      )
-
-      if (memories.length > 0) {
-        console.log(`🔎 [Orchestrator] 找到 ${memories.length} 条记忆，立即静默注入`)
-        memories.forEach((m, i) => {
-          console.log(`   ${i + 1}. [${m.tag}] ${m.content}`)
-        })
-
-        const contextMessage = generateContextMessage(
-          memories,
-          result.topic?.name || '对话',
-          result.emotionalState.primary,
-          result.emotionalState.intensity
+        // 同步等待记忆检索完成
+        const memories = await memoryPipeline.fetchMemoriesForTopic(
+          text,
+          [],
+          contextTracker.getContext().summary
         )
 
-        // ✅ 静默注入（turnComplete=false），AI 回复时会自然引用
-        sendClientContent(contextMessage, false, 'user')
-        console.log(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
-      } else {
-        console.log(`🔎 [Orchestrator] 未找到相关记忆`)
+        if (memories.length > 0) {
+          // 🔧 去重检查：过滤掉本次会话已注入过的记忆
+          const newMemories = memories.filter(m => !injectedMemoriesRef.current.has(m.content))
+
+          if (newMemories.length === 0) {
+            console.log(`🔎 [Orchestrator] 所有 ${memories.length} 条记忆都已注入过，跳过`)
+          } else {
+            console.log(`🔎 [Orchestrator] 找到 ${newMemories.length} 条新记忆（过滤掉 ${memories.length - newMemories.length} 条已注入）`)
+            newMemories.forEach((m, i) => {
+              console.log(`   ${i + 1}. [${m.tag}] ${m.content}`)
+            })
+
+            const contextMessage = generateContextMessage(
+              newMemories,
+              result.topic?.name || '对话',
+              result.emotionalState.primary,
+              result.emotionalState.intensity
+            )
+
+            // ✅ 静默注入（turnComplete=false），AI 回复时会自然引用
+            sendClientContent(contextMessage, false, 'user')
+            console.log(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
+
+            // 🔧 更新已注入记忆的记录
+            newMemories.forEach(m => injectedMemoriesRef.current.add(m.content))
+            lastMemoryInjectionTimeRef.current = now
+          }
+        } else {
+          console.log(`🔎 [Orchestrator] 未找到相关记忆`)
+        }
       }
     }
 
@@ -441,9 +468,12 @@ action: 用过渡话开头，简短承认用户的借口，然后提供一个更
     contextTracker.resetContext()
     topicDetector.reset()
     lastTopicRef.current = null
+    // 🔧 清空已注入记忆的记录
+    injectedMemoriesRef.current.clear()
+    lastMemoryInjectionTimeRef.current = 0
 
     if (import.meta.env.DEV) {
-      console.log(`🔄 [Orchestrator] 状态已重置`)
+      console.log(`🔄 [Orchestrator] 状态已重置（含记忆去重记录）`)
     }
   }, [contextTracker, topicDetector])
 

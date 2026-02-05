@@ -1,54 +1,20 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Phone, Mic, Camera, AlertCircle } from 'lucide-react';
 import { useTranslation } from '../../../hooks/useTranslation';
+import {
+  iOSBridge,
+  isAndroidWebView,
+  isIOSWebView,
+  type PermissionStatus,
+  type PermissionType,
+  useInitialPermissionStatus,
+} from './permissionBridge';
 
 // AndroidBridge interface is declared in src/context/AuthContext.tsx
 
 interface PermissionsStepProps {
   onNext: () => void;
 }
-
-type PermissionType = 'notification' | 'microphone' | 'camera';
-type PermissionStatus = 'pending' | 'granted' | 'denied';
-
-/**
- * Check if running in Android WebView
- */
-function isAndroidWebView(): boolean {
-  return !!(window.AndroidBridge?.isAndroid?.());
-}
-
-/**
- * Check if running in iOS WebView (WKWebView)
- * iOS WebView uses webkit.messageHandlers for communication
- */
-function isIOSWebView(): boolean {
-  return !!(window.webkit?.messageHandlers?.nativeApp);
-}
-
-/**
- * iOS Bridge - sends messages to native iOS app via WKWebView
- */
-const iOSBridge = {
-  requestNotificationPermission: () => {
-    window.webkit?.messageHandlers?.requestNotificationPermission?.postMessage({});
-  },
-  requestMicrophonePermission: () => {
-    window.webkit?.messageHandlers?.requestMicrophonePermission?.postMessage({});
-  },
-  requestCameraPermission: () => {
-    window.webkit?.messageHandlers?.requestCameraPermission?.postMessage({});
-  },
-  hasNotificationPermission: () => {
-    window.webkit?.messageHandlers?.hasNotificationPermission?.postMessage({});
-  },
-  hasMicrophonePermission: () => {
-    window.webkit?.messageHandlers?.hasMicrophonePermission?.postMessage({});
-  },
-  hasCameraPermission: () => {
-    window.webkit?.messageHandlers?.hasCameraPermission?.postMessage({});
-  },
-};
 
 /**
  * Step 5: Permissions (3 sub-steps)
@@ -69,47 +35,7 @@ export function PermissionsStep({ onNext }: PermissionsStepProps) {
   const pendingPermissionRef = useRef<PermissionType | null>(null);
 
   // Check initial permission status on mount
-  useEffect(() => {
-    const checkInitialPermissions = async () => {
-      // Check notification
-      if (isAndroidWebView()) {
-        if (window.AndroidBridge?.hasNotificationPermission?.()) {
-          setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
-        }
-        if (window.AndroidBridge?.hasMicrophonePermission?.()) {
-          setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
-        }
-        if (window.AndroidBridge?.hasCameraPermission?.()) {
-          setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
-        }
-      } else if (isIOSWebView()) {
-        // iOS will respond via events
-        iOSBridge.hasNotificationPermission();
-        iOSBridge.hasMicrophonePermission();
-        iOSBridge.hasCameraPermission();
-      } else {
-        // Web browser
-        if ('Notification' in window && Notification.permission === 'granted') {
-          setPermissionStatus(prev => ({ ...prev, notification: 'granted' }));
-        }
-        if ('permissions' in navigator) {
-          try {
-            const micResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-            if (micResult.state === 'granted') {
-              setPermissionStatus(prev => ({ ...prev, microphone: 'granted' }));
-            }
-          } catch { /* ignore */ }
-          try {
-            const camResult = await navigator.permissions.query({ name: 'camera' as PermissionName });
-            if (camResult.state === 'granted') {
-              setPermissionStatus(prev => ({ ...prev, camera: 'granted' }));
-            }
-          } catch { /* ignore */ }
-        }
-      }
-    };
-    checkInitialPermissions();
-  }, []);
+  useInitialPermissionStatus(setPermissionStatus);
 
   // Handle skip - show warning first, then move to next sub-step or finish
   const handleSkipClick = useCallback(() => {

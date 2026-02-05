@@ -23,6 +23,7 @@ import {
   notifyNativeLogout,
   notifyAuthConfirmed,
   requestNativeAuth,
+  initNativeAuthBridge,
   parseNativeAuthPayload,
   isValidJwt,
   isValidSupabaseUuid,
@@ -30,6 +31,7 @@ import {
   notifyNativeLoginSuccess,
 } from './auth/nativeAuthBridge';
 import { updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
+import { fetchHabitOnboardingCompleted } from './auth/habitOnboarding';
 
 // ==========================================
 // 常量定义
@@ -368,25 +370,18 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
 
   // 2. Supabase 有有效会话 -> 以 Supabase 为准，同步到 localStorage
   if (session) {
-    console.log('✅ Supabase session 有效:', session.user.email);
-    persistSessionToStorage(session);
+	    console.log('✅ Supabase session 有效:', session.user.email);
+	    persistSessionToStorage(session);
 
-    // 查询用户的 habit onboarding 状态
-    let hasCompletedHabitOnboarding = false;
-    try {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('has_completed_habit_onboarding')
-        .eq('id', session.user.id)
-        .single();
-      hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-    } catch (err) {
-      console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-    }
+	    const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	      supabase,
+	      session.user.id,
+	      'validateSessionWithSupabase(session)'
+	    )) ?? false;
 
-    return {
-      isLoggedIn: true,
-      userId: session.user.id,
+	    return {
+	      isLoggedIn: true,
+	      userId: session.user.id,
       userEmail: session.user.email || null,
       // 优先使用用户自己设置的名字（localStorage），再用 OAuth 的名字
       userName: stored['user_name'] || session.user.user_metadata?.full_name || null,
@@ -485,15 +480,17 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
 
           // Token 真正失效（如已被撤销、过期等）
           console.warn('⚠️ localStorage token 无效:', restoreError.message);
-          // Token 无效，清除 localStorage（以 Supabase 为准）
-          clearAuthStorage();
-          // 在 WebView 环境中通知 Native 端 session 失效
-          if (isInNativeWebView()) {
-            console.log('📱 Session 验证失败，通知 Native 端');
-            notifyNativeLogout();
-          }
-          return {
-            isLoggedIn: false,
+	          // Token 无效，清除 localStorage（以 Supabase 为准）
+	          clearAuthStorage();
+	          // 在 WebView 环境中不要直接触发原生登出：
+	          // - iOS 的 userLogout 会清空 Keychain/UserDefaults，属于“硬登出”
+	          // - 这里更可能是“网页 token 不可用/不同步”，应先请求原生重新注入登录态
+	          if (isInNativeWebView()) {
+	            console.log('📱 Session 验证失败，尝试向 Native 端重新请求登录态（避免误触发原生登出）');
+	            requestNativeAuth();
+	          }
+	          return {
+	            isLoggedIn: false,
             userId: null,
             userEmail: null,
             userName: null,
@@ -507,27 +504,20 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
           };
         }
 
-        if (restored.session) {
-          console.log('✅ 成功用 localStorage token 恢复 session:', restored.session.user.email);
-          persistSessionToStorage(restored.session);
+	        if (restored.session) {
+	          console.log('✅ 成功用 localStorage token 恢复 session:', restored.session.user.email);
+	          persistSessionToStorage(restored.session);
 
-          // 查询用户的 habit onboarding 状态
-          let hasCompletedHabitOnboarding = false;
-          try {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('has_completed_habit_onboarding')
-              .eq('id', restored.session.user.id)
-              .single();
-            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-          } catch (err) {
-            console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-          }
+	          const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	            supabase,
+	            restored.session.user.id,
+	            'validateSessionWithSupabase(restore)'
+	          )) ?? false;
 
-          return {
-            isLoggedIn: true,
-            userId: restored.session.user.id,
-            userEmail: restored.session.user.email || null,
+	          return {
+	            isLoggedIn: true,
+	            userId: restored.session.user.id,
+	            userEmail: restored.session.user.email || null,
             // 优先使用用户自己设置的名字（localStorage），再用 OAuth 的名字
             userName: stored['user_name'] || restored.session.user.user_metadata?.full_name || null,
             // 优先使用用户自己设置的头像（localStorage），再用 OAuth 的头像
@@ -579,36 +569,29 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
       releaseSetSessionLock('initializeAuthState');
     }
 
-    // 所有重试都失败且非网络错误，清除 localStorage
-    console.warn('⚠️ 多次尝试后仍无法恢复 session，清除本地认证状态');
-    clearAuthStorage();
-    // 在 WebView 环境中通知 Native 端
-    if (isInNativeWebView()) {
-      console.log('📱 Session 恢复失败，通知 Native 端');
-      notifyNativeLogout();
-    }
-  }
+	    // 所有重试都失败且非网络错误，清除 localStorage
+	    console.warn('⚠️ 多次尝试后仍无法恢复 session，清除本地认证状态');
+	    clearAuthStorage();
+	    // 在 WebView 环境中不要直接触发原生登出，优先请求原生重新注入登录态
+	    if (isInNativeWebView()) {
+	      console.log('📱 Session 恢复失败，尝试向 Native 端重新请求登录态（避免误触发原生登出）');
+	      requestNativeAuth();
+	    }
+	  }
 
   // 4. Native 登录特殊处理：允许没有 Supabase session
-  if (isNativeLogin && storedUserId) {
-    console.log('📱 Native 登录模式，使用 localStorage 状态');
+	  if (isNativeLogin && storedUserId) {
+	    console.log('📱 Native 登录模式，使用 localStorage 状态');
 
-    // 查询用户的 habit onboarding 状态
-    let hasCompletedHabitOnboarding = false;
-    try {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('has_completed_habit_onboarding')
-        .eq('id', storedUserId)
-        .single();
-      hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-    } catch (err) {
-      console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-    }
+	    const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	      supabase,
+	      storedUserId,
+	      'validateSessionWithSupabase(native)'
+	    )) ?? false;
 
-    return {
-      isLoggedIn: true,
-      userId: storedUserId,
+	    return {
+	      isLoggedIn: true,
+	      userId: storedUserId,
       userEmail: stored['user_email'],
       userName: stored['user_name'],
       userPicture: stored['user_picture'],
@@ -670,14 +653,24 @@ export function AuthProvider({
    * 原理：用于补偿检查，避免事件丢失时重复触发 applyNativeLogin。
    */
   const hasHandledNativeLoginRef = useRef(false);
-  /**
-   * 记录最近一次原生登录开始时间（时间戳）。
-   * 原理：restoreSession 可能在 Supabase 会话尚未同步时返回空登录态，
-   * 通过短时间窗口保护避免覆盖原生登录刚写入的状态。
-   */
-  const lastNativeLoginStartedAtRef = useRef<number | null>(null);
-  // 追踪 setSession 是否成功触发了 onAuthStateChange
-  const setSessionTriggeredAuthChangeRef = useRef(false);
+	  /**
+	   * 记录最近一次原生登录开始时间（时间戳）。
+	   * 原理：restoreSession 可能在 Supabase 会话尚未同步时返回空登录态，
+	   * 通过短时间窗口保护避免覆盖原生登录刚写入的状态。
+	   */
+	  const lastNativeLoginStartedAtRef = useRef<number | null>(null);
+	  /**
+	   * 原生登录态注入的启动期等待窗口（截止时间戳）。
+	   *
+	   * 背景：App 打开后 Native 会通过 JS 注入/CustomEvent 把登录态传进 WebView。
+	   * 但注入与网页监听器初始化存在时序竞争，偶发会出现：
+	   * - 网页先判定“未登录” → 路由触发 `navigateToLogin()` → iOS `userLogout` 被调用 → 原生侧被清空登录态（自动登出）
+	   *
+	   * 这里用一个短窗口在启动期“先等一等”，避免把“还没注入”误判成“已登出”。
+	   */
+	  const nativeAuthBootstrapDeadlineRef = useRef<number | null>(null);
+	  // 追踪 setSession 是否成功触发了 onAuthStateChange
+	  const setSessionTriggeredAuthChangeRef = useRef(false);
 
   // 注意：全局 setSession 互斥锁已移至模块级别（见文件顶部的 canExecuteSetSession, acquireSetSessionLock, releaseSetSessionLock）
   // 这样可以确保跨组件重渲染的一致性
@@ -714,21 +707,17 @@ export function AuthProvider({
     });
 
     if (supabase && latest.isLoggedIn && latest.userId) {
+      const userId = latest.userId;
       void (async () => {
-        let fetchedHasCompletedHabitOnboarding: boolean | null = null;
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('has_completed_habit_onboarding')
-            .eq('id', latest.userId)
-            .single();
-          fetchedHasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-        } catch (err) {
-          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-        }
+        const fetchedHasCompletedHabitOnboarding = await fetchHabitOnboardingCompleted(
+          supabase,
+          userId,
+          'checkLoginState',
+          null
+        );
 
         setAuthState(prev => {
-          if (prev.userId !== latest.userId) return prev;
+          if (prev.userId !== userId) return prev;
           return {
             ...prev,
             hasCompletedHabitOnboarding: fetchedHasCompletedHabitOnboarding ?? prev.hasCompletedHabitOnboarding,
@@ -888,13 +877,25 @@ export function AuthProvider({
     };
   }, [triggerSessionCheckNow]);
 
-  const navigateToLogin = useCallback((redirectPath?: string) => {
-    // 在 WebView 环境中，通知 Native 端回到原生登录页
-    if (isInNativeWebView()) {
-      console.log('📱 WebView 环境，通知 Native 端跳转到原生登录页');
-      notifyNativeLogout();
-      return;
-    }
+	  const navigateToLogin = useCallback((redirectPath?: string) => {
+	    // 在 WebView 环境中，通知 Native 端回到原生登录页
+	    if (isInNativeWebView()) {
+	      const deadline = nativeAuthBootstrapDeadlineRef.current;
+	      const isBootstrapPending = Boolean(
+	        deadline
+	        && Date.now() < deadline
+	        && !hasHandledNativeLoginRef.current
+	        && !isApplyingNativeLoginRef.current
+	      );
+	      if (isBootstrapPending) {
+	        console.log('📱 WebView 环境：Native 登录态仍在注入窗口内，先请求 Native 注入（避免误触发原生登出）');
+	        requestNativeAuth();
+	        return;
+	      }
+	      console.log('📱 WebView 环境，通知 Native 端跳转到原生登录页');
+	      notifyNativeLogout();
+	      return;
+	    }
 
     // 非 WebView 环境，使用网页端登录页
     const target = redirectPath || defaultRedirectRef.current || DEFAULT_APP_PATH;
@@ -983,7 +984,7 @@ export function AuthProvider({
       clearOAuthCallbackParams();
       setIsOAuthProcessing(false);
     }
-  }, [checkLoginState]);
+	  }, [checkLoginState]);
 
   useEffect(() => { void handleOAuthCallback(); }, [handleOAuthCallback]);
 
@@ -1017,26 +1018,19 @@ export function AuthProvider({
       if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
       if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
 
-      console.log('✅ Login successful:', data.user.email);
-      await bindAnalyticsUserSync(data.user.id, data.user.email);
+	      console.log('✅ Login successful:', data.user.email);
+	      await bindAnalyticsUserSync(data.user.id, data.user.email);
 
-      // 查询用户的 habit onboarding 状态
-      let hasCompletedHabitOnboarding = false;
-      try {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('has_completed_habit_onboarding')
-          .eq('id', data.user.id)
-          .single();
-        hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-      } catch (err) {
-        console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-      }
+	      const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	        supabase,
+	        data.user.id,
+	        'loginWithEmail'
+	      )) ?? false;
 
-      // 登录成功后，设置验证状态为 true（Supabase 已确认）
-      setAuthState(prev => ({
-        ...prev,
-        isLoggedIn: true,
+	      // 登录成功后，设置验证状态为 true（Supabase 已确认）
+	      setAuthState(prev => ({
+	        ...prev,
+	        isLoggedIn: true,
         userId: data.user.id,
         userEmail: data.user.email || null,
         userName: userName || null,
@@ -1214,24 +1208,17 @@ export function AuthProvider({
           localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
           triggerSessionCheckNowRef.current?.('otp_backdoor');
 
-          console.log('✅ Dev backdoor: login successful');
+	          console.log('✅ Dev backdoor: login successful');
 
-          // 查询 habit onboarding 状态
-          let hasCompletedHabitOnboarding = false;
-          try {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('has_completed_habit_onboarding')
-              .eq('id', data.user.id)
-              .single();
-            hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-          } catch (err) {
-            console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-          }
+	          const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	            supabase,
+	            data.user.id,
+	            'verifyEmailOtp(dev_backdoor)'
+	          )) ?? false;
 
-          setAuthState(prev => ({
-            ...prev,
-            isLoggedIn: true,
+	          setAuthState(prev => ({
+	            ...prev,
+	            isLoggedIn: true,
             userId: data.user.id,
             userEmail: data.user.email || null,
             userName: data.user.user_metadata?.full_name || 'Test User',
@@ -1294,26 +1281,19 @@ export function AuthProvider({
         if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
         if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
 
-        console.log('✅ OTP 登录成功:', user.email);
-        await bindAnalyticsUserSync(user.id, user.email);
+	        console.log('✅ OTP 登录成功:', user.email);
+	        await bindAnalyticsUserSync(user.id, user.email);
 
-        // 查询用户的 habit onboarding 状态
-        let hasCompletedHabitOnboarding = false;
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('has_completed_habit_onboarding')
-            .eq('id', user.id)
-            .single();
-          hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-        } catch (err) {
-          console.warn('⚠️ 获取 habit onboarding 状态失败:', err);
-        }
+	        const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+	          supabase,
+	          user.id,
+	          'verifyEmailOtp'
+	        )) ?? false;
 
-        // 登录成功后，设置验证状态为 true（Supabase 已确认）
-        setAuthState(prev => ({
-          ...prev,
-          isLoggedIn: true,
+	        // 登录成功后，设置验证状态为 true（Supabase 已确认）
+	        setAuthState(prev => ({
+	          ...prev,
+	          isLoggedIn: true,
           userId: user.id,
           userEmail: user.email || null,
           userName: userName || null,
@@ -1751,18 +1731,13 @@ export function AuthProvider({
     // 如果 onAuthStateChange 没有接管，自己查询 hasCompletedHabitOnboarding
     let hasCompletedHabitOnboarding = false;
     if (supabase) {
-      try {
-        console.log('🔐 applyNativeLogin: 查询 hasCompletedHabitOnboarding...');
-        const { data: userData } = await supabase
-          .from('users')
-          .select('has_completed_habit_onboarding')
-          .eq('id', userId)
-          .single();
-        hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
-        console.log('🔐 applyNativeLogin: hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
-      } catch (err) {
-        console.warn('⚠️ applyNativeLogin: 获取 habit onboarding 状态失败:', err);
-      }
+      console.log('🔐 applyNativeLogin: 查询 hasCompletedHabitOnboarding...');
+      hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
+        supabase,
+        userId,
+        'applyNativeLogin'
+      )) ?? false;
+      console.log('🔐 applyNativeLogin: hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
     }
 
     await bindAnalyticsUserSync(userId, email);
@@ -1796,9 +1771,10 @@ export function AuthProvider({
       };
     });
 
-    // 清理标记
-    isOnAuthStateChangeProcessingRef.current = false;
-    isApplyingNativeLoginRef.current = false;
+	    // 清理标记
+	    nativeAuthBootstrapDeadlineRef.current = null;
+	    isOnAuthStateChangeProcessingRef.current = false;
+	    isApplyingNativeLoginRef.current = false;
 
     notifyAuthConfirmed('session_set');
     console.log('🔐 applyNativeLogin: 完成, userId:', userId, 'hasCompletedHabitOnboarding:', hasCompletedHabitOnboarding);
@@ -1813,72 +1789,122 @@ export function AuthProvider({
   // Native Auth Bridge 初始化
   // ==========================================
 
-  useEffect(() => {
-    const handleNativeLogin = (event: Event) => {
-      const nativeEvent = event as CustomEvent<NativeAuthPayload>;
-      void applyNativeLogin(nativeEvent.detail);
-    };
+	  useEffect(() => {
+	    const handleNativeLogin = (event: Event) => {
+	      const nativeEvent = event as CustomEvent<NativeAuthPayload>;
+	      void applyNativeLogin(nativeEvent.detail);
+	    };
 
-    const handleNativeLogout = () => void applyNativeLogout();
+	    const handleNativeLogout = () => void applyNativeLogout();
 
-    /**
-     * 补偿检查：事件丢失时，若已注入 MindBoatNativeAuth 则主动处理。
-     * 原理：iOS 注入脚本一定会设置 window.MindBoatNativeAuth，可用作兜底。
-     */
-    const scheduleNativeAuthFallback = (): number => {
-      return window.setTimeout(() => {
-        if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) {
-          return;
-        }
-        if (window.MindBoatNativeAuth) {
-          console.log('🔐 Web: 补偿处理已注入的登录态');
-          void applyNativeLogin(window.MindBoatNativeAuth);
-        }
-      }, 100);
-    };
+	    // 提前标记网页已就绪，避免 Native 端等待超时后才注入（减少时序竞争窗口）
+	    window.__MindBoatAuthReady = true;
 
-    const initNativeAuthBridge = () => {
-      window.__MindBoatAuthReady = true;
-      console.log('🔐 Web: Native Auth Bridge 已初始化');
+	    const NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS = 8_000;
+	    const NATIVE_AUTH_FALLBACK_POLL_INTERVAL_MS = 100;
+	    const NATIVE_AUTH_FALLBACK_MAX_WAIT_MS = 8_000;
 
-      if (window.MindBoatNativeAuth) {
-        console.log('🔐 Web: 发现已设置的登录态，立即处理');
-        void applyNativeLogin(window.MindBoatNativeAuth);
-      } else {
-        console.log('🔐 Web: 没有登录态，向 Native 请求...');
-        requestNativeAuth();
-      }
-    };
+	    /**
+	     * 开启/延长 Native 注入等待窗口（避免“尚未注入→误判未登录→触发原生硬登出”）。
+	     *
+	     * @param reason - 触发原因（用于日志定位）
+	     */
+	    const armNativeAuthBootstrapWindow = (reason: string): void => {
+	      if (!isInNativeWebView()) return;
+	      const now = Date.now();
+	      const nextDeadline = now + NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS;
+	      nativeAuthBootstrapDeadlineRef.current = Math.max(nativeAuthBootstrapDeadlineRef.current ?? 0, nextDeadline);
+	      if (import.meta.env.DEV) {
+	        console.log('🔐 NativeAuth bootstrap window armed:', reason, 'deadline=', nativeAuthBootstrapDeadlineRef.current);
+	      }
+	    };
 
-    window.addEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
-    window.addEventListener('mindboat:nativeLogout', handleNativeLogout);
+	    // ===== 兜底轮询：解决 CustomEvent 丢失 / 注入晚到 =====
+	    let fallbackIntervalId: number | undefined;
+	    let fallbackStopTimeoutId: number | undefined;
 
-    /** 补偿检查的定时器 ID，用于清理 */
-    let nativeAuthFallbackTimeoutId: number | undefined;
-    /**
-     * DOMContentLoaded 处理器：初始化 bridge 并触发一次补偿检查。
-     * 原理：确保监听器已注册后再初始化，避免事件丢失。
-     */
-    const handleDomContentLoaded = () => {
-      initNativeAuthBridge();
-      nativeAuthFallbackTimeoutId = scheduleNativeAuthFallback();
-    };
+	    const stopFallbackPolling = (): void => {
+	      if (fallbackIntervalId !== undefined) {
+	        window.clearInterval(fallbackIntervalId);
+	        fallbackIntervalId = undefined;
+	      }
+	      if (fallbackStopTimeoutId !== undefined) {
+	        window.clearTimeout(fallbackStopTimeoutId);
+	        fallbackStopTimeoutId = undefined;
+	      }
+	    };
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      handleDomContentLoaded();
-    } else {
-      document.addEventListener('DOMContentLoaded', handleDomContentLoaded);
-    }
+	    const pollNativeAuthOnce = (): void => {
+	      if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) {
+	        stopFallbackPolling();
+	        return;
+	      }
+	      if (window.MindBoatNativeAuth) {
+	        console.log('🔐 Web: 兜底轮询发现已注入的登录态，开始处理');
+	        void applyNativeLogin(window.MindBoatNativeAuth);
+	        stopFallbackPolling();
+	      }
+	    };
 
-    return () => {
-      window.removeEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
-      window.removeEventListener('mindboat:nativeLogout', handleNativeLogout);
-      document.removeEventListener('DOMContentLoaded', handleDomContentLoaded);
-      if (nativeAuthFallbackTimeoutId !== undefined) {
-        window.clearTimeout(nativeAuthFallbackTimeoutId);
-      }
-    };
-  }, [applyNativeLogin, applyNativeLogout]);
+	    const startFallbackPolling = (): void => {
+	      stopFallbackPolling();
+	      fallbackIntervalId = window.setInterval(pollNativeAuthOnce, NATIVE_AUTH_FALLBACK_POLL_INTERVAL_MS);
+	      fallbackStopTimeoutId = window.setTimeout(stopFallbackPolling, NATIVE_AUTH_FALLBACK_MAX_WAIT_MS);
+	      pollNativeAuthOnce();
+	    };
+
+	    /**
+	     * 初始化 Native Auth Bridge，并启动兜底轮询。
+	     *
+	     * 原理：
+	     * - 先注册事件监听，再 initBridge，避免丢事件
+	     * - 轮询 window.MindBoatNativeAuth，兜底处理“事件已触发但监听器错过”的情况
+	     */
+	    const startNativeAuthBridge = (): void => {
+	      armNativeAuthBootstrapWindow('startNativeAuthBridge');
+	      initNativeAuthBridge((payload) => {
+	        armNativeAuthBootstrapWindow('native_payload_found');
+	        void applyNativeLogin(payload);
+	      });
+	      startFallbackPolling();
+	    };
+
+	    window.addEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
+	    window.addEventListener('mindboat:nativeLogout', handleNativeLogout);
+
+	    /**
+	     * DOMContentLoaded 处理器：初始化 bridge 并启动兜底轮询。
+	     * 原理：确保监听器已注册后再初始化，避免事件丢失；并覆盖注入晚到的情况。
+	     */
+	    const handleDomContentLoaded = () => {
+	      startNativeAuthBridge();
+	    };
+
+	    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+	      handleDomContentLoaded();
+	    } else {
+	      document.addEventListener('DOMContentLoaded', handleDomContentLoaded);
+	    }
+
+	    /**
+	     * WebView 被挂起后恢复时，可能错过注入事件；在可见时触发一次兜底检查。
+	     * 仅在“尚未处理过 Native 登录”的情况下执行，避免重复 setSession 造成 refresh token 竞态。
+	     */
+	    const handleVisibilityChange = () => {
+	      if (document.visibilityState !== 'visible') return;
+	      if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) return;
+	      startNativeAuthBridge();
+	    };
+	    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+	    return () => {
+	      window.removeEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
+	      window.removeEventListener('mindboat:nativeLogout', handleNativeLogout);
+	      document.removeEventListener('DOMContentLoaded', handleDomContentLoaded);
+	      document.removeEventListener('visibilitychange', handleVisibilityChange);
+	      stopFallbackPolling();
+	    };
+	  }, [applyNativeLogin, applyNativeLogout]);
 
   // ==========================================
   // Session 恢复（以 Supabase 为权威来源）
@@ -1894,13 +1920,21 @@ export function AuthProvider({
      *
      * 重要：使用函数式更新避免覆盖 onAuthStateChange 正在处理的状态
      */
-    const restoreSession = async () => {
-      const NATIVE_LOGIN_GRACE_MS = 3000;
+	    const restoreSession = async () => {
+	      const NATIVE_LOGIN_GRACE_MS = 3000;
+	      const NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS = 8_000;
 
-      // 0. 如果正在处理原生登录，跳过 restoreSession（防止覆盖 applyNativeLogin 的状态）
-      if (isApplyingNativeLoginRef.current) {
-        console.log('🔄 restoreSession: 正在处理原生登录，跳过');
-        return;
+	      // Native WebView 启动期：先开启一个短等待窗口，避免“尚未注入→误判未登录→触发原生硬登出”。
+	      if (isInNativeWebView()) {
+	        const now = Date.now();
+	        const nextDeadline = now + NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS;
+	        nativeAuthBootstrapDeadlineRef.current = Math.max(nativeAuthBootstrapDeadlineRef.current ?? 0, nextDeadline);
+	      }
+
+	      // 0. 如果正在处理原生登录，跳过 restoreSession（防止覆盖 applyNativeLogin 的状态）
+	      if (isApplyingNativeLoginRef.current) {
+	        console.log('🔄 restoreSession: 正在处理原生登录，跳过');
+	        return;
       }
 
       /**
@@ -1949,22 +1983,61 @@ export function AuthProvider({
 
       await tryImmediateSessionRestore();
 
-      // 1. 以 Supabase 为权威来源验证会话
-      const validatedState = await validateSessionWithSupabase();
+	      // 1. 以 Supabase 为权威来源验证会话
+	      const validatedState = await validateSessionWithSupabase();
 
-      // 2. 使用函数式更新，避免覆盖 onAuthStateChange 正在处理的状态
-      let shouldSyncProfile = false;
-      setAuthState(prev => {
-        // 分支0: 原生登录仍在处理，避免在异步窗口内覆盖状态
-        if (isApplyingNativeLoginRef.current) {
-          console.log('🔄 restoreSession: 正在处理原生登录，跳过覆盖');
-          return prev;
-        }
+	      // 若在 Native WebView 启动期拿到“未登录”，先尝试请求 Native 重新注入（避免误触发 userLogout）。
+	      const shouldWaitForNativeAuthInjection = (() => {
+	        if (!isInNativeWebView()) return false;
+	        if (validatedState.isLoggedIn) return false;
+	        if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) return false;
+	        const deadline = nativeAuthBootstrapDeadlineRef.current;
+	        return Boolean(deadline && Date.now() < deadline);
+	      })();
 
-        // 分支1: onAuthStateChange 已完成同一用户验证，保留其结果
-        if (prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
-          console.log('🔄 restoreSession: onAuthStateChange 已完成验证，跳过覆盖');
-          return prev;
+	      if (validatedState.isLoggedIn) {
+	        nativeAuthBootstrapDeadlineRef.current = null;
+	      } else if (shouldWaitForNativeAuthInjection) {
+	        if (window.MindBoatNativeAuth) {
+	          console.log('🔄 restoreSession: 等待 Native 注入中，发现 MindBoatNativeAuth，立即补偿处理');
+	          void applyNativeLogin(window.MindBoatNativeAuth);
+	        } else {
+	          console.log('🔄 restoreSession: 等待 Native 注入中，向 Native 请求登录态...');
+	          requestNativeAuth();
+	        }
+	      }
+
+	      // 2. 使用函数式更新，避免覆盖 onAuthStateChange 正在处理的状态
+	      let shouldSyncProfile = false;
+	      setAuthState(prev => {
+	        // 分支0: 原生登录仍在处理，避免在异步窗口内覆盖状态
+	        if (isApplyingNativeLoginRef.current) {
+	          console.log('🔄 restoreSession: 正在处理原生登录，跳过覆盖');
+	          return prev;
+	        }
+
+	        // 分支0.5: Native 启动期等待注入，避免把“未注入”误判成“已登出”（会触发原生硬登出）
+	        if (shouldWaitForNativeAuthInjection) {
+	          console.log('🔄 restoreSession: Native 注入等待中，暂不将状态标记为已登出');
+	          return {
+	            isLoggedIn: false,
+	            userId: null,
+	            userEmail: null,
+	            userName: null,
+	            userPicture: null,
+	            isNewUser: false,
+	            sessionToken: null,
+	            refreshToken: null,
+	            isNativeLogin: false,
+	            isSessionValidated: false,
+	            hasCompletedHabitOnboarding: false,
+	          };
+	        }
+
+	        // 分支1: onAuthStateChange 已完成同一用户验证，保留其结果
+	        if (prev.isSessionValidated && prev.isLoggedIn && prev.userId === validatedState.userId) {
+	          console.log('🔄 restoreSession: onAuthStateChange 已完成验证，跳过覆盖');
+	          return prev;
         }
 
         // 分支2: onAuthStateChange 正在处理同一用户，避免并发写入
@@ -2105,27 +2178,27 @@ export function AuthProvider({
             const isOnOnboardingPage = window.location.pathname.includes('habit-onboarding');
             hasCompletedHabitOnboarding = !isOnOnboardingPage;
             console.log('📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
-          } else {
-            // 非原生环境：正常查询数据库
-            try {
-              console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
-              const { data: userData } = await client
-                .from('users')
-                .select('has_completed_habit_onboarding')
-                .eq('id', session.user.id)
-                .single();
-              hasCompletedHabitOnboarding = userData?.has_completed_habit_onboarding ?? false;
+	          } else {
+	            // 非原生环境：正常查询数据库
+	            console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
+	            const fetched = await fetchHabitOnboardingCompleted(
+	              client,
+	              session.user.id,
+	              'onAuthStateChange',
+	              null
+	            );
 
-              const queryDuration = Date.now() - queryStartTime;
-              if (queryDuration > 5000) {
-                console.warn(`⚠️ onAuthStateChange: 查询耗时过长 (${queryDuration}ms)，可能存在网络问题`);
-              }
-              console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
-            } catch (err) {
-              const queryDuration = Date.now() - queryStartTime;
-              console.warn(`⚠️ onAuthStateChange: 获取 habit onboarding 状态失败 (耗时 ${queryDuration}ms):`, err);
-            }
-          }
+	            const queryDuration = Date.now() - queryStartTime;
+	            if (fetched === null) {
+	              console.warn(`⚠️ onAuthStateChange: 获取 habit onboarding 状态失败 (耗时 ${queryDuration}ms)，已保持默认 false`);
+	            } else {
+	              hasCompletedHabitOnboarding = fetched;
+	              if (queryDuration > 5000) {
+	                console.warn(`⚠️ onAuthStateChange: 查询耗时过长 (${queryDuration}ms)，可能存在网络问题`);
+	              }
+	              console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
+	            }
+	          }
 
           // 查询完成后，同时设置 isSessionValidated、hasCompletedHabitOnboarding 和用户资料
           setAuthState(prev => {
@@ -2184,7 +2257,7 @@ export function AuthProvider({
     });
 
     return () => { subscription.unsubscribe(); };
-  }, [checkLoginState]);
+  }, [checkLoginState, applyNativeLogin]);
 
   // 监听其他标签页的登录状态变化
   useEffect(() => {

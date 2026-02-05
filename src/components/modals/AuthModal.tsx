@@ -3,17 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { useTranslation } from '../../hooks/useTranslation';
+import {
+  useGoogleIdentityButton,
+  type GoogleCredentialResponse,
+  type GoogleIdentityButtonOptions,
+} from '../../hooks/useGoogleIdentityButton';
 import { appleLogin } from '../../lib/apple-login';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
-import { loadGoogleScript } from '../../lib/google-script';
 import { AppleSignInButton } from '../common/AppleSignInButton';
 import { isGoogleLoginAvailable } from '../../utils/webviewDetection';
-
-interface GoogleCredentialResponse {
-  credential: string;
-  clientId?: string;
-  select_by?: string;
-}
 
 export interface AuthModalProps {
   /** 是否展示弹窗 */
@@ -30,6 +28,16 @@ export interface AuthModalProps {
 
 /** 邮箱登录步骤 */
 type EmailStep = 'email' | 'otp';
+
+const GOOGLE_BUTTON_OPTIONS: GoogleIdentityButtonOptions = {
+  type: 'standard',
+  theme: 'outline',
+  size: 'large',
+  text: 'continue_with',
+  shape: 'rectangular',
+  logo_alignment: 'left',
+  width: container => String(container.offsetWidth || 400),
+};
 
 /**
  * 登录/注册弹窗：复用现有邮箱与 Google 登录逻辑，但以模态形式呈现。
@@ -68,6 +76,38 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
     }
   }, [embedded, redirectPath, navigate, onSuccess, onClose]);
 
+  const handleGoogleCredential = useCallback(
+    async (response: GoogleCredentialResponse) => {
+      if (!response?.credential) return;
+      setIsGoogleLoading(true);
+      setError(null);
+      try {
+        const csrf = generateCSRFToken();
+        await googleLogin(response.credential, csrf);
+        auth?.checkLoginState();
+        handleSuccess();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : t('auth.authFailed');
+        setError(message);
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    [auth, handleSuccess, t],
+  );
+
+  const handleGoogleInitError = useCallback((err: unknown) => {
+    console.error('Google Sign-In initialization failed:', err);
+  }, []);
+
+  useGoogleIdentityButton({
+    enabled: isOpen && canShowGoogleLogin,
+    buttonRef: googleButtonRef,
+    onCredential: handleGoogleCredential,
+    buttonOptions: GOOGLE_BUTTON_OPTIONS,
+    onInitError: handleGoogleInitError,
+  });
+
   // 重置状态当弹窗关闭时
   useEffect(() => {
     if (!isOpen) {
@@ -93,70 +133,6 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
       otpInputRef.current.focus();
     }
   }, [emailStep]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    // 如果在 WebView 中，不初始化 Google 登录
-    if (!canShowGoogleLogin) return;
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) return;
-
-    let cancelled = false;
-
-    const setup = async () => {
-      try {
-        await loadGoogleScript();
-        if (cancelled) return;
-
-        if (window.google?.accounts?.id) {
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: async (response: GoogleCredentialResponse) => {
-              if (!response?.credential) return;
-              setIsGoogleLoading(true);
-              setError(null);
-              try {
-                const csrf = generateCSRFToken();
-                await googleLogin(response.credential, csrf);
-                auth?.checkLoginState();
-                handleSuccess();
-              } catch (e) {
-                const message = e instanceof Error ? e.message : t('auth.authFailed');
-                setError(message);
-              } finally {
-                setIsGoogleLoading(false);
-              }
-            },
-            auto_select: false,
-            cancel_on_tap_outside: true,
-          });
-
-          if (googleButtonRef.current) {
-            googleButtonRef.current.textContent = '';
-            // Google button width only accepts pixel values, calculate based on container
-            const containerWidth = googleButtonRef.current.offsetWidth || 400;
-            window.google.accounts.id.renderButton(googleButtonRef.current, {
-              type: 'standard',
-              theme: 'outline',
-              size: 'large',
-              text: 'continue_with',
-              shape: 'rectangular',
-              logo_alignment: 'left',
-              width: String(containerWidth),
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Google Sign-In initialization failed:', err);
-      }
-    };
-
-    void setup();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [auth, isOpen, t, canShowGoogleLogin, handleSuccess]);
 
   /** 发送验证码 */
   const handleSendOtp = async (e: React.FormEvent) => {

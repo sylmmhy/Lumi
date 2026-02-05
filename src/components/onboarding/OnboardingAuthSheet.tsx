@@ -1,49 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { DEFAULT_APP_PATH } from '../../constants/routes';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
+import {
+  useGoogleIdentityButton,
+  type GoogleCredentialResponse,
+  type GoogleIdentityButtonOptions,
+} from '../../hooks/useGoogleIdentityButton';
 import { generateCSRFToken, googleLogin } from '../../lib/google-login';
-import { loadGoogleScript } from '../../lib/google-script';
 import { appleLogin } from '../../lib/apple-login';
 import { AppleSignInButton } from '../common/AppleSignInButton';
 import { isGoogleLoginAvailable } from '../../utils/webviewDetection';
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: GoogleIdConfiguration) => void;
-          renderButton: (parent: HTMLElement, options: GsiButtonConfiguration) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
-interface GoogleIdConfiguration {
-  client_id: string;
-  callback: (response: GoogleCredentialResponse) => void;
-  auto_select?: boolean;
-  cancel_on_tap_outside?: boolean;
-}
-
-interface GsiButtonConfiguration {
-  type?: 'standard' | 'icon';
-  theme?: 'outline' | 'filled_blue' | 'filled_black';
-  size?: 'large' | 'medium' | 'small';
-  text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
-  shape?: 'rectangular' | 'pill' | 'circle' | 'square';
-  logo_alignment?: 'left' | 'center';
-  width?: string;
-}
-
-interface GoogleCredentialResponse {
-  credential: string;
-  clientId?: string;
-  select_by?: string;
-}
+const GOOGLE_BUTTON_OPTIONS: GoogleIdentityButtonOptions = {
+  type: 'standard',
+  theme: 'outline',
+  size: 'large',
+  text: 'continue_with',
+  shape: 'pill',
+  logo_alignment: 'left',
+  width: '340',
+};
 
 export interface OnboardingAuthSheetProps {
   /** 是否展示半屏登录弹窗 */
@@ -100,55 +77,21 @@ export function OnboardingAuthSheet({
     [auth, onLoginSuccess, t],
   );
 
-  useEffect(() => {
-    if (!isOpen) return;
-    // 如果在 WebView 中，不初始化 Google 登录
-    if (!canShowGoogleLogin) return;
+  const handleGoogleInitError = useCallback(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : t('onboarding.googleInitFailed');
+      setError(message);
+    },
+    [t],
+  );
 
-    let cancelled = false;
-    const setupGoogle = async () => {
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      if (!clientId) {
-        return;
-      }
-
-      try {
-        await loadGoogleScript();
-        if (cancelled) return;
-
-        if (window.google?.accounts?.id) {
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: handleCredential,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-          });
-
-          if (googleButtonRef.current) {
-            googleButtonRef.current.textContent = '';
-            window.google.accounts.id.renderButton(googleButtonRef.current, {
-              type: 'standard',
-              theme: 'outline',
-              size: 'large',
-              text: 'continue_with',
-              shape: 'pill',
-              logo_alignment: 'left',
-              width: '340',
-            });
-          }
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : t('onboarding.googleInitFailed');
-        setError(message);
-      }
-    };
-
-    void setupGoogle();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [handleCredential, isOpen, canShowGoogleLogin, t]);
+  useGoogleIdentityButton({
+    enabled: isOpen && canShowGoogleLogin,
+    buttonRef: googleButtonRef,
+    onCredential: handleCredential,
+    buttonOptions: GOOGLE_BUTTON_OPTIONS,
+    onInitError: handleGoogleInitError,
+  });
 
   const handleEmailLogin = () => {
     auth.navigateToLogin(DEFAULT_APP_PATH);

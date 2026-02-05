@@ -110,9 +110,10 @@ export const themeColorMap = {
  * 将 Task 和完成历史转换为 Habit 格式
  * @param task - 任务对象
  * @param completions - 完成日期集合
+ * @param totalCompletions - 可选：累计完成次数（用于里程碑进度条）
  * @returns Habit 对象
  */
-export const taskToHabit = (task: Task, completions: Set<string>): Habit => {
+export const taskToHabit = (task: Task, completions: Set<string>, totalCompletions?: number): Habit => {
 
     // 将 Set 转换为 history 对象
     const history: { [key: string]: boolean } = {};
@@ -138,5 +139,6 @@ export const taskToHabit = (task: Task, completions: Set<string>): Habit => {
         time: task.time || '',
         theme,
         history,
+        totalCompletions,
     };
 };

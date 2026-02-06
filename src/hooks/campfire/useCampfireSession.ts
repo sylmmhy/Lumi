@@ -17,6 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useGeminiLive, fetchGeminiToken } from '../gemini-live';
 import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
+import { useSessionContext } from '../useSessionContext';
 import { useAmbientAudio } from './useAmbientAudio';
 import { useFocusTimer } from './useFocusTimer';
 
@@ -24,16 +25,7 @@ import { useFocusTimer } from './useFocusTimer';
 // Types
 // ============================================================================
 
-interface CampfireContext {
-  /** 对话历史（最近 N 条） */
-  messages: Array<{ role: 'user' | 'ai'; text: string; timestamp: number }>;
-  /** 对话摘要 */
-  summary: string;
-  /** 聊过的话题 */
-  topics: string[];
-}
-
-type SessionStatus = 
+type SessionStatus =
   | 'idle'          // 待机（未开始）
   | 'starting'      // 正在开始会话
   | 'focusing'      // 专注中（Gemini 可能断开）
@@ -108,7 +100,6 @@ interface UseCampfireSessionReturn {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const MAX_CONTEXT_MESSAGES = 10; // 保留最近 10 条消息
 const IDLE_TIMEOUT_DEFAULT = 30; // 默认 30 秒无对话断开
 
 // ============================================================================
@@ -136,12 +127,8 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
   const [chatCount, setChatCount] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
 
-  // 上下文（内存中）
-  const contextRef = useRef<CampfireContext>({
-    messages: [],
-    summary: '',
-    topics: [],
-  });
+  // 上下文管理（通用 hook）
+  const sessionContext = useSessionContext({ maxMessages: 10 });
 
   // 计时器引用
   const idleTimerRef = useRef<number | null>(null);
@@ -167,7 +154,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     enableCamera: false,
     onTranscriptUpdate: (transcript) => {
       // 更新上下文消息
-      updateContextFromTranscript(transcript);
+      sessionContext.updateFromTranscript(transcript);
     },
   });
 
@@ -188,22 +175,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
   useEffect(() => {
     ambientAudio.setDucked(geminiLive.isSpeaking);
   }, [geminiLive.isSpeaking, ambientAudio]);
-
-  // ==========================================
-  // 更新上下文
-  // ==========================================
-
-  const updateContextFromTranscript = useCallback((transcript: Array<{ role: string; text: string }>) => {
-    const now = Date.now();
-    const messages = transcript.map(t => ({
-      role: t.role as 'user' | 'ai',
-      text: t.text,
-      timestamp: now,
-    }));
-
-    // 只保留最近 N 条
-    contextRef.current.messages = messages.slice(-MAX_CONTEXT_MESSAGES);
-  }, []);
 
   // ==========================================
   // 空闲计时器管理
@@ -266,11 +237,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
           userId,
           sessionId: sessionId || undefined,
           taskDescription,
-          context: isReconnect ? {
-            messages: contextRef.current.messages,
-            summary: contextRef.current.summary,
-            topics: contextRef.current.topics,
-          } : undefined,
+          context: isReconnect ? sessionContext.getContext() : undefined,
           isReconnect,
           aiTone,
           language,
@@ -422,11 +389,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     }
 
     // 重置上下文
-    contextRef.current = {
-      messages: [],
-      summary: '',
-      topics: [],
-    };
+    sessionContext.reset();
     hasGreetedRef.current = false; // 重置开场白标记
 
     try {
@@ -506,8 +469,8 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
               endedAt: new Date().toISOString(),
             },
             metadata: {
-              summary: contextRef.current.summary,
-              topics: contextRef.current.topics,
+              summary: sessionContext.getContext().summary,
+              topics: sessionContext.getContext().topics,
             },
           }),
         });

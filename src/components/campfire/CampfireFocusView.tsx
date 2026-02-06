@@ -18,7 +18,6 @@ interface SessionStats {
   taskDescription: string | null;
   durationSeconds: number;
   chatCount: number;
-  distractionCount: number;
 }
 
 interface CampfireFocusViewProps {
@@ -165,7 +164,6 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
         {import.meta.env.DEV && (
           <div className="text-xs text-gray-500 mb-4 space-y-1">
             <div>对话次数: {session.chatCount}</div>
-            <div>分心次数: {session.distractionCount}</div>
             <div>VAD 音量: {session.vadVolume}</div>
             <div>状态: {session.status}</div>
           </div>

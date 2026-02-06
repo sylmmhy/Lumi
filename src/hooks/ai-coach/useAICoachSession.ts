@@ -9,12 +9,13 @@ import { getSupabaseClient } from '../../lib/supabase';
 import { getVoiceName } from '../../lib/voiceSettings';
 import type { VirtualMessageUserContext } from '../virtual-messages/types';
 import { devError, devLog, devWarn } from '../gemini-live/utils';
-import type { AICoachMessage, AICoachSessionState, UseAICoachSessionOptions } from './types';
+import type { AICoachSessionState, UseAICoachSessionOptions } from './types';
 import { CONNECTION_TIMEOUT_MS, MAX_CAMERA_RETRIES, CAMERA_RETRY_DELAY_MS } from './types';
-import { withTimeout, isValidUserSpeech } from './utils';
+import { withTimeout } from './utils';
 import { useCampfireMode } from './useCampfireMode';
 import { useSessionTimer } from './useSessionTimer';
 import { useSessionMemory } from './useSessionMemory';
+import { useTranscriptProcessor } from './useTranscriptProcessor';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -35,10 +36,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   } = options;
 
   // ==========================================
-  // 状态管理（taskDescription + messages 独立管理，timeRemaining/isTimerRunning 由 useSessionTimer 管理）
+  // 状态管理
   // ==========================================
   const [taskDescription, setTaskDescription] = useState('');
-  const [messages, setMessages] = useState<AICoachMessage[]>([]);
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -48,8 +48,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const isCleaningUpRef = useRef(false); // 防止重复清理
   const sessionEpochRef = useRef(0); // 递增用于取消 in-flight 的 startSession / campfire reconnect
   const startSessionInFlightRef = useRef(false); // 幂等守卫：防止并发 startSession
-
-  const processedTranscriptRef = useRef<Set<string>>(new Set());
 
   /**
    * 保存最新的 cleanup 引用，供 handleTimerComplete 使用
@@ -65,30 +63,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     async () => false
   );
 
-  // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
-  const addMessageRef = useRef<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>(() => {});
-
   // 使用 ref 存储当前会话信息
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
   const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
   const currentCallRecordIdRef = useRef<string | null>(null); // 来电记录 ID，用于记录通话时长
 
-  // 用于累积用户语音碎片，避免每个词都存为单独消息
-  const userSpeechBufferRef = useRef<string>('');
-
-  // 跟踪上一条消息的角色，用于检测角色切换
-  const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
-
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
 
   // 保存用户首选语言，用于虚拟消息时保持语言一致性
   const preferredLanguagesRef = useRef<string[] | null>(null);
-
-  // DEV: AI 语音 log 缓冲区，用于将流式碎片拼接成完整句子后再输出
-  const aiSpeechLogBufferRef = useRef<string>('');
-  const aiSpeechLogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 用于调用 intentDetection 方法的 ref（避免闭包问题）
   const intentDetectionRef = useRef<{
@@ -115,91 +100,28 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // ==========================================
-  // 消息管理（必须在其他 hooks 之前定义）
+  // 转录处理（独立 Hook：消息状态 + 去重 + 缓冲）
   // ==========================================
-  const addMessage = useCallback((role: 'user' | 'ai', content: string, isVirtual = false) => {
-    setMessages(prev => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        role,
-        content,
-        timestamp: new Date(),
-        isVirtual,
-      },
-    ]);
-  }, []);
-
-  // 更新 addMessage ref
-  useEffect(() => {
-    addMessageRef.current = addMessage;
-  }, [addMessage]);
+  const transcript = useTranscriptProcessor({
+    onUserMessage: useCallback((text: string) => {
+      orchestratorRef.current.onUserSpeech(text).catch((err) => {
+        devWarn('话题检测失败:', err);
+      });
+    }, []),
+    onAIMessage: useCallback((text: string) => {
+      orchestratorRef.current.onAISpeech(text);
+      intentDetectionRef.current.processAIResponse(text);
+    }, []),
+    onUserSpeechFragment: useCallback((text: string) => {
+      intentDetectionRef.current.addUserMessage(text);
+    }, []),
+  });
 
   // ==========================================
   // Gemini Live
   // ==========================================
   const geminiLive = useGeminiLive({
-    onTranscriptUpdate: (newTranscript) => {
-      const lastMessage = newTranscript[newTranscript.length - 1];
-      if (!lastMessage) return;
-
-      const messageId = `${lastMessage.role}-${lastMessage.text.substring(0, 50)}`;
-      if (processedTranscriptRef.current.has(messageId)) {
-        return;
-      }
-      processedTranscriptRef.current.add(messageId);
-
-      if (lastMessage.role === 'assistant') {
-        // AI 开始说话前，先把累积的用户消息存储
-        if (userSpeechBufferRef.current.trim()) {
-          const fullUserMessage = userSpeechBufferRef.current.trim();
-          devLog('🎤 用户说:', fullUserMessage);
-          addMessageRef.current('user', fullUserMessage, false);
-
-          // 用完整的用户消息进行话题检测和记忆检索
-          orchestratorRef.current.onUserSpeech(fullUserMessage).catch((err) => {
-            devWarn('话题检测失败:', err);
-          });
-
-          userSpeechBufferRef.current = '';
-        }
-
-        // 存储 AI 消息
-        const displayText = lastMessage.text;
-        addMessageRef.current('ai', displayText);
-        if (import.meta.env.DEV) {
-          // 累积流式碎片，500ms 无新消息后输出完整句子
-          aiSpeechLogBufferRef.current += displayText;
-          if (aiSpeechLogTimerRef.current) clearTimeout(aiSpeechLogTimerRef.current);
-          aiSpeechLogTimerRef.current = setTimeout(() => {
-            devLog('🤖 AI 说:', aiSpeechLogBufferRef.current);
-            aiSpeechLogBufferRef.current = '';
-          }, 500);
-        }
-
-        // 通知动态虚拟消息调度器（用于上下文追踪）
-        orchestratorRef.current.onAISpeech(displayText);
-
-        // 喂意图检测（AI 回复）
-        intentDetectionRef.current.processAIResponse(displayText);
-
-        // 更新角色跟踪
-        lastProcessedRoleRef.current = 'assistant';
-      }
-
-      if (lastMessage.role === 'user') {
-        // 累积用户语音碎片，不立即存储
-        if (isValidUserSpeech(lastMessage.text)) {
-          userSpeechBufferRef.current += lastMessage.text;
-
-          // 喂意图检测（用户消息）
-          intentDetectionRef.current.addUserMessage(lastMessage.text);
-        }
-
-        // 更新角色跟踪
-        lastProcessedRoleRef.current = 'user';
-      }
-    },
+    onTranscriptUpdate: transcript.handleTranscriptUpdate,
   });
 
   // ==========================================
@@ -256,9 +178,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentUserIdRef,
     currentTaskDescriptionRef,
     currentTaskIdRef,
-    userSpeechBufferRef,
-    addMessageRef,
-    messages,
+    userSpeechBufferRef: transcript.userSpeechBufferRef,
+    addMessageRef: transcript.addMessageRef,
+    messages: transcript.messages,
     timeRemaining: timer.timeRemaining,
     initialTime,
   });
@@ -364,7 +286,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     isUserSpeaking: vad.isSpeaking,
     lastUserSpeechTime: vad.lastSpeakingTime,
     onSendMessage: (message) => geminiLive.sendTextMessage(message),
-    onAddMessage: (role, content, isVirtual) => addMessageRef.current(role, content, isVirtual),
+    onAddMessage: (role, content, isVirtual) => transcript.addMessageRef.current(role, content, isVirtual),
     successRecord: successRecordRef.current,
     initialDuration: initialTime,
     preferredLanguage: preferredLanguagesRef.current?.[0],
@@ -507,11 +429,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // capture epoch
       epochAtStart = sessionEpochRef.current;
 
-      processedTranscriptRef.current.clear();
+      transcript.reset();
       campfire.intentDetection.clearHistory();
       currentUserIdRef.current = userId || null;
       currentTaskDescriptionRef.current = taskDescription;
-      lastProcessedRoleRef.current = null;
       currentTaskIdRef.current = taskId || null;
       currentCallRecordIdRef.current = callRecordId || null;
       preferredLanguagesRef.current = preferredLanguages || null;
@@ -520,7 +441,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       // 更新任务描述并重置
       setTaskDescription(taskDescription);
-      setMessages([]);
       timer.resetTimer();
 
       devLog('🚀 全并行启动: 硬件初始化 + 网络请求同时进行...');
@@ -769,14 +689,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    */
   const resetSession = useCallback(() => {
     endSession();
-    processedTranscriptRef.current.clear();
-    userSpeechBufferRef.current = '';
-    lastProcessedRoleRef.current = null;
+    transcript.reset();
     setConnectionError(null);
     setTaskDescription('');
-    setMessages([]);
     timer.resetTimer();
-  }, [endSession, timer]);
+  }, [endSession, transcript, timer]);
 
   // 组件卸载时清理
   useEffect(() => {
@@ -799,7 +716,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     taskDescription,
     timeRemaining: timer.timeRemaining,
     isTimerRunning: timer.isTimerRunning,
-    messages,
+    messages: transcript.messages,
   };
 
   return {

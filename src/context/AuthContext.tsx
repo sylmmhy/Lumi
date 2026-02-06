@@ -40,6 +40,12 @@ import {
   persistSessionToStorage,
   clearAuthStorage,
 } from './auth/storage';
+import {
+  canExecuteSetSession,
+  acquireSetSessionLock,
+  releaseSetSessionLock,
+  isNetworkError,
+} from './auth/sessionLock';
 
 // ==========================================
 // 常量定义
@@ -47,99 +53,6 @@ import {
 
 const DEFAULT_LOGIN_PATH = '/login/mobile';
 
-
-// ==========================================
-// 【修复】全局 setSession 互斥锁 - 防止并发 refresh token 竞态
-// ==========================================
-// 问题背景：
-// 当 iOS WebView 被挂起（如接电话）后恢复时，多处代码可能同时调用 setSession：
-// - triggerSessionCheckNow（定期会话检查）
-// - applyNativeLogin（原生登录）
-// - restoreSession（会话恢复）
-// - validateSessionWithSupabase（会话验证）
-// 并发调用会导致 refresh token 竞态：第一个请求成功轮换 token 后，
-// 后续请求使用旧 token 失败，触发 "refresh_token_already_used" 错误。
-//
-// 解决方案：
-// 使用模块级别的全局锁，确保同一时间只有一个 setSession 调用在执行。
-// ==========================================
-
-let globalSetSessionInProgress = false;
-let lastGlobalSetSessionTime = 0;
-const GLOBAL_SET_SESSION_DEBOUNCE_MS = 2000; // 2 秒内不重复调用
-
-/**
- * 检查是否可以执行 setSession（全局互斥锁 + 防抖）
- * @param caller - 调用者名称（用于日志）
- * @returns true 如果可以执行，false 如果应该跳过
- */
-function canExecuteSetSession(caller: string): boolean {
-  const now = Date.now();
-  const timeSinceLastCall = now - lastGlobalSetSessionTime;
-
-  // 检查防抖
-  if (timeSinceLastCall < GLOBAL_SET_SESSION_DEBOUNCE_MS) {
-    console.log(`🔐 setSession (${caller}): 跳过，距上次调用仅 ${timeSinceLastCall}ms`);
-    return false;
-  }
-
-  // 检查互斥锁
-  if (globalSetSessionInProgress) {
-    console.log(`🔐 setSession (${caller}): 跳过，已有 setSession 正在执行`);
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * 获取全局 setSession 锁
- * @param caller - 调用者名称（用于日志）
- */
-function acquireSetSessionLock(caller: string): void {
-  globalSetSessionInProgress = true;
-  lastGlobalSetSessionTime = Date.now();
-  console.log(`🔐 setSession (${caller}): 获取锁`);
-}
-
-/**
- * 释放全局 setSession 锁
- * @param caller - 调用者名称（用于日志）
- */
-function releaseSetSessionLock(caller: string): void {
-  globalSetSessionInProgress = false;
-  console.log(`🔐 setSession (${caller}): 释放锁`);
-}
-
-
-/**
- * 判断错误是否是网络相关错误（而非 token 真正失效）
- * 网络错误时不应强制登出，应保留本地状态等待重试
- */
-function isNetworkError(error: { message?: string; code?: string } | null): boolean {
-  if (!error) return false;
-  const msg = (error.message || '').toLowerCase();
-  const code = (error.code || '').toLowerCase();
-
-  // 网络相关错误关键词
-  const networkErrorPatterns = [
-    'network',
-    'fetch',
-    'timeout',
-    'econnrefused',
-    'enotfound',
-    'connection',
-    'offline',
-    'internet',
-    'dns',
-    'socket',
-    'abort',
-    'etimedout',
-    'econnreset',
-  ];
-
-  return networkErrorPatterns.some(pattern => msg.includes(pattern) || code.includes(pattern));
-}
 
 
 

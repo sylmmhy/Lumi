@@ -10,12 +10,11 @@ import { updateReminder } from '../../remindMe/services/reminderService';
 import { getVoiceName } from '../../lib/voiceSettings';
 import type { VirtualMessageUserContext } from '../virtual-messages/types';
 import { devError, devLog, devWarn } from '../gemini-live/utils';
-import { useAmbientAudio } from '../campfire/useAmbientAudio';
-import { useFocusTimer } from '../campfire/useFocusTimer';
-import { useIntentDetection } from '../ai-tools';
 import type { AICoachMessage, AICoachSessionState, UseAICoachSessionOptions } from './types';
 import { CONNECTION_TIMEOUT_MS, MAX_CAMERA_RETRIES, CAMERA_RETRY_DELAY_MS } from './types';
 import { withTimeout, isValidUserSpeech } from './utils';
+import { useCampfireMode } from './useCampfireMode';
+import { useSessionTimer } from './useSessionTimer';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -24,6 +23,7 @@ import { withTimeout, isValidUserSpeech } from './utils';
  * 方便在不同场景中复用 AI 教练功能
  *
  * 类型定义见 ./types.ts，工具函数见 ./utils.ts
+ * 篝火模式见 ./useCampfireMode.ts
  */
 
 export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
@@ -35,38 +35,21 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   } = options;
 
   // ==========================================
-  // 状态管理
+  // 状态管理（taskDescription + messages 独立管理，timeRemaining/isTimerRunning 由 useSessionTimer 管理）
   // ==========================================
-  const [state, setState] = useState<AICoachSessionState>({
-    taskDescription: '',
-    timeRemaining: initialTime,
-    isTimerRunning: false,
-    messages: [],
-  });
+  const [taskDescription, setTaskDescription] = useState('');
+  const [messages, setMessages] = useState<AICoachMessage[]>([]);
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [taskStartTime, setTaskStartTime] = useState(0);
   const [isObserving, setIsObserving] = useState(false); // AI 正在观察用户
   const [connectionError, setConnectionError] = useState<string | null>(null); // 连接错误信息
 
-  // 篝火模式状态
-  const [isCampfireMode, setIsCampfireMode] = useState(false);
-  const [campfireSessionId, setCampfireSessionId] = useState<string | null>(null);
-  const [campfireChatCount, setCampfireChatCount] = useState(0);
-
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = useRef(false); // 防止重复清理
   const sessionEpochRef = useRef(0); // 递增用于取消 in-flight 的 startSession / campfire reconnect
   const startSessionInFlightRef = useRef(false); // 幂等守卫：防止并发 startSession
 
-  // 篝火模式 Refs
-  const campfireReconnectLockRef = useRef(false);
-  const campfireIdleTimerRef = useRef<number | null>(null);
-  const savedSystemInstructionRef = useRef<string>(''); // 保存原始 system prompt
-  const campfireMicStreamRef = useRef<MediaStream | null>(null);
   const processedTranscriptRef = useRef<Set<string>>(new Set());
-  const onCountdownCompleteRef = useRef(onCountdownComplete); // 用 ref 存储回调，避免 effect 依赖变化
 
   /**
    * 保存最新的 saveSessionMemory 引用，确保倒计时结束时可以稳定触发记忆保存
@@ -74,6 +57,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const saveSessionMemoryRef = useRef<(options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => Promise<boolean>>(
     async () => false
   );
+
+  /**
+   * 保存最新的 cleanup 引用，供 handleTimerComplete 使用
+   * 初始为空函数，在 cleanup 定义后由 effect 同步
+   */
+  const cleanupRef = useRef<() => void>(() => {});
 
   // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
   const addMessageRef = useRef<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>(() => {});
@@ -128,30 +117,22 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 消息管理（必须在其他 hooks 之前定义）
   // ==========================================
   const addMessage = useCallback((role: 'user' | 'ai', content: string, isVirtual = false) => {
-    setState(prev => ({
+    setMessages(prev => [
       ...prev,
-      messages: [
-        ...prev.messages,
-        {
-          id: Date.now().toString(),
-          role,
-          content,
-          timestamp: new Date(),
-          isVirtual,
-        },
-      ],
-    }));
+      {
+        id: Date.now().toString(),
+        role,
+        content,
+        timestamp: new Date(),
+        isVirtual,
+      },
+    ]);
   }, []);
 
   // 更新 addMessage ref
   useEffect(() => {
     addMessageRef.current = addMessage;
   }, [addMessage]);
-
-  // 更新 onCountdownComplete ref
-  useEffect(() => {
-    onCountdownCompleteRef.current = onCountdownComplete;
-  }, [onCountdownComplete]);
 
   // ==========================================
   // Gemini Live
@@ -195,10 +176,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           }, 500);
         }
 
-        // 🆕 通知动态虚拟消息调度器（用于上下文追踪）
+        // 通知动态虚拟消息调度器（用于上下文追踪）
         orchestratorRef.current.onAISpeech(displayText);
 
-        // 🆕 喂意图检测（AI 回复）
+        // 喂意图检测（AI 回复）
         intentDetectionRef.current.processAIResponse(displayText);
 
         // 更新角色跟踪
@@ -207,11 +188,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       if (lastMessage.role === 'user') {
         // 累积用户语音碎片，不立即存储
-        // 话题检测在用户说完整句话后进行（AI 开始说话前），见上方代码
         if (isValidUserSpeech(lastMessage.text)) {
           userSpeechBufferRef.current += lastMessage.text;
 
-          // 🆕 喂意图检测（用户消息）
+          // 喂意图检测（用户消息）
           intentDetectionRef.current.addUserMessage(lastMessage.text);
         }
 
@@ -222,33 +202,51 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // ==========================================
-  // 篝火模式子 Hooks
+  // 篝火模式（独立 Hook）
   // ==========================================
-
-  /** 白噪音（仅篝火模式启用） */
-  const ambientAudio = useAmbientAudio({ normalVolume: 0.5, duckedVolume: 0.1 });
-
-  /** 专注计时（仅篝火模式启用） */
-  const focusTimer = useFocusTimer();
-
-  /** 意图检测（检测 enter_campfire / exit_campfire） */
-  const intentDetection = useIntentDetection({
-    userId: currentUserIdRef.current || '',
-    chatType: 'daily_chat',
-    enabled: isSessionActive && !isCampfireMode,
-    onDetectionComplete: (result) => {
-      if (result.tool === 'enter_campfire' && result.confidence >= 0.6) {
-        // AI 已经在回复中说了告别语（system prompt 指导），跳过再发 CAMPFIRE_FAREWELL
-        enterCampfireModeRef.current({ skipFarewell: true });
-      } else if (result.tool === 'exit_campfire' && result.confidence >= 0.6) {
-        exitCampfireModeRef.current();
-      }
-    },
+  const campfire = useCampfireMode({
+    geminiLive,
+    sessionEpochRef,
+    currentUserId: currentUserIdRef.current,
+    currentTaskDescription: currentTaskDescriptionRef.current,
+    preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
+    isSessionActive,
   });
 
-  // 用 ref 存储篝火模式进入/退出函数（避免 useIntentDetection 闭包问题）
-  const enterCampfireModeRef = useRef<(options?: { skipFarewell?: boolean }) => void>(() => {});
-  const exitCampfireModeRef = useRef<() => void>(() => {});
+  // 更新 intentDetectionRef，避免 onTranscriptUpdate 闭包问题
+  useEffect(() => {
+    intentDetectionRef.current = {
+      processAIResponse: campfire.intentDetection.processAIResponse,
+      addUserMessage: campfire.intentDetection.addUserMessage,
+    };
+  }, [campfire.intentDetection.processAIResponse, campfire.intentDetection.addUserMessage]);
+
+  // ==========================================
+  // 倒计时（独立 Hook）
+  // ==========================================
+
+  /**
+   * 用 ref 存储 onCountdownComplete，避免 timer hook 因回调变化而重建 interval
+   */
+  const onCountdownCompleteRef = useRef(onCountdownComplete);
+  useEffect(() => {
+    onCountdownCompleteRef.current = onCountdownComplete;
+  }, [onCountdownComplete]);
+
+  /**
+   * 倒计时归零时的处理：保存记忆 → 清理会话 → 通知调用方
+   * 通过 ref 间接调用，确保 interval 回调总是拿到最新的函数引用
+   */
+  const handleTimerComplete = useCallback(() => {
+    void saveSessionMemoryRef.current();
+    cleanupRef.current();
+    onCountdownCompleteRef.current?.();
+  }, []);
+
+  const timer = useSessionTimer({
+    initialTime,
+    onComplete: handleTimerComplete,
+  });
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -275,10 +273,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     userId: currentUserIdRef.current,
     taskDescription: currentTaskDescriptionRef.current,
     initialDuration: initialTime,
-    taskStartTime,
+    taskStartTime: timer.taskStartTime,
     sendClientContent: geminiLive.sendClientContent,
     isSpeaking: geminiLive.isSpeaking,
-    enabled: isSessionActive && geminiLive.isConnected && !isCampfireMode,
+    enabled: isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
     enableMemoryRetrieval: true,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
   });
@@ -300,30 +298,18 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     messageOrchestrator.getVirtualMessageContext,
   ]);
 
-  // 更新 intentDetectionRef，避免 onTranscriptUpdate 闭包问题
-  useEffect(() => {
-    intentDetectionRef.current = {
-      processAIResponse: intentDetection.processAIResponse,
-      addUserMessage: intentDetection.addUserMessage,
-    };
-  }, [intentDetection.processAIResponse, intentDetection.addUserMessage]);
-
   // ==========================================
   // 虚拟消息（原有的定时触发系统）
   // ==========================================
   /**
-   * 从 Orchestrator 获取当前对话上下文（给“智能小纸条”用）
+   * 从 Orchestrator 获取当前对话上下文（给"智能小纸条"用）
    */
   const getConversationContext = useCallback((): VirtualMessageUserContext | null => {
     return orchestratorRef.current.getVirtualMessageContext?.() ?? null;
   }, []);
 
   /**
-   * 调用后端 Edge Function，生成一条“小纸条”（一整句话）
-   *
-   * 注意：
-   * - 这里不做太多业务逻辑判断，把“如何说”交给后端的 Gemini
-   * - useVirtualMessages 内部会做 2 秒超时保护，失败会自动回退到 [CHECK_IN]
+   * 调用后端 Edge Function，生成一条"小纸条"（一整句话）
    */
   const fetchCoachGuidance = useCallback(async (context: VirtualMessageUserContext) => {
     const supabase = getSupabaseClient();
@@ -352,19 +338,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, []);
 
   const virtualMessages = useVirtualMessages({
-    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected && !isCampfireMode,
-    taskStartTime,
+    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
+    taskStartTime: timer.taskStartTime,
     isAISpeaking: geminiLive.isSpeaking,
     isUserSpeaking: vad.isSpeaking,
     lastUserSpeechTime: vad.lastSpeakingTime,
     onSendMessage: (message) => geminiLive.sendTextMessage(message),
     onAddMessage: (role, content, isVirtual) => addMessageRef.current(role, content, isVirtual),
-    // Phase 3: Memory Boost - 传入成功记录用于动态记忆注入
     successRecord: successRecordRef.current,
     initialDuration: initialTime,
-    // 🔧 修复语言污染：传入用户首选语言，确保虚拟消息触发词携带正确语言
     preferredLanguage: preferredLanguagesRef.current?.[0],
-    // 智能小纸条
     getConversationContext,
     fetchCoachGuidance,
   });
@@ -372,13 +355,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const { setOnTurnComplete } = geminiLive;
   const { recordTurnComplete } = virtualMessages;
 
-  // 当 AI 说完话时（turnComplete），同时通知：
-  // 1. virtualMessages 系统（用于冷却期控制）
-  // 2. messageOrchestrator 系统（用于在安全窗口期注入记忆）
+  // 当 AI 说完话时（turnComplete），同时通知两套虚拟消息系统
   useEffect(() => {
     setOnTurnComplete(() => {
       recordTurnComplete(false);
-      // 🆕 方案 A：在 turnComplete 后尝试静默注入队列中的记忆
       orchestratorRef.current.onTurnComplete();
     });
     return () => setOnTurnComplete(null);
@@ -393,22 +373,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [geminiLive.isSpeaking, isObserving]);
 
   // ==========================================
-  // 倒计时
-  // ==========================================
-  const startCountdown = useCallback(() => {
-    setState(prev => ({ ...prev, isTimerRunning: true }));
-    setTaskStartTime(Date.now());
-  }, []);
-
-  const stopCountdown = useCallback(() => {
-    setState(prev => ({ ...prev, isTimerRunning: false }));
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  // ==========================================
   // 统一清理函数（解决断开连接逻辑重复问题）
   // ==========================================
   const cleanup = useCallback(() => {
@@ -417,7 +381,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 防止重复清理
     if (isCleaningUpRef.current) {
-      // cleanup 已在执行，仍然尽量保证底层连接被断开，避免残留 sessionRef 导致后续 connect 被忽略
       try {
         geminiLive.disconnect();
       } catch (e) {
@@ -429,10 +392,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     devLog('🧹 执行统一清理...');
 
-    // 🆕 记录通话结束时间和时长（如果有 callRecordId）
+    // 记录通话结束时间和时长（如果有 callRecordId）
     const callRecordId = currentCallRecordIdRef.current;
-    if (callRecordId && taskStartTime > 0) {
-      const durationSeconds = Math.round((Date.now() - taskStartTime) / 1000);
+    if (callRecordId && timer.taskStartTime > 0) {
+      const durationSeconds = Math.round((Date.now() - timer.taskStartTime) / 1000);
       devLog('📞 记录通话结束:', { callRecordId, durationSeconds });
 
       const supabaseForEndCall = getSupabaseClient();
@@ -452,12 +415,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           }
         });
       }
-      // 清除 callRecordId
       currentCallRecordIdRef.current = null;
     }
 
-    // 1. 停止计时器（复用 stopCountdown 逻辑）
-    stopCountdown();
+    // 1. 停止计时器
+    timer.stopTimer();
 
     // 2. 断开 Gemini 连接
     geminiLive.disconnect();
@@ -473,365 +435,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }, 100);
 
     devLog('✅ 统一清理完成');
-  }, [geminiLive, stopCountdown, taskStartTime]);
+  }, [geminiLive, timer.stopTimer, timer.taskStartTime]);
 
-  /**
-   * 保存最新的 cleanup 引用，避免倒计时 effect 依赖变化导致 interval 重建
-   */
-  const cleanupRef = useRef(cleanup);
-
+  // 同步 cleanup 到 ref，供 handleTimerComplete 使用
   useEffect(() => {
     cleanupRef.current = cleanup;
   }, [cleanup]);
-
-  // 倒计时 effect
-  // 注意：只依赖 isTimerRunning，不依赖 timeRemaining，避免每秒重建 interval
-  useEffect(() => {
-    if (state.isTimerRunning) {
-      timerRef.current = setInterval(() => {
-        setState(prev => {
-          const newTime = prev.timeRemaining - 1;
-
-          if (newTime <= 0) {
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            // 使用 ref 调用回调，避免闭包问题
-            // 使用 setTimeout 确保在 setState 完成后调用
-            setTimeout(() => {
-              void saveSessionMemoryRef.current();
-              cleanupRef.current();
-              onCountdownCompleteRef.current?.();
-            }, 0);
-            return {
-              ...prev,
-              timeRemaining: 0,
-              isTimerRunning: false,
-            };
-          }
-
-          return {
-            ...prev,
-            timeRemaining: newTime,
-          };
-        });
-      }, 1000);
-
-      return () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-      };
-    }
-  }, [state.isTimerRunning]);
-
-  // ==========================================
-  // 篝火模式 - 核心逻辑
-  // ==========================================
-
-  /** 清除篝火模式空闲计时器 */
-  const clearCampfireIdleTimer = useCallback(() => {
-    if (campfireIdleTimerRef.current) {
-      clearTimeout(campfireIdleTimerRef.current);
-      campfireIdleTimerRef.current = null;
-    }
-  }, []);
-
-  /** 篝火模式空闲超时 → 断开 Gemini */
-  const startCampfireIdleTimer = useCallback(() => {
-    clearCampfireIdleTimer();
-    campfireIdleTimerRef.current = window.setTimeout(() => {
-      if (isCampfireMode && geminiLive.isConnected) {
-        devLog('🕐 [Campfire] Idle timeout, disconnecting Gemini...');
-        geminiLive.disconnect();
-      }
-    }, 30_000); // 30 秒空闲断开
-  }, [isCampfireMode, geminiLive, clearCampfireIdleTimer]);
-
-  /**
-   * 调用后端 start-campfire-focus 获取篝火模式 system prompt
-   * @param isReconnect 是否是重连（影响开场语）
-   */
-  const callStartCampfireFocus = useCallback(async (isReconnect: boolean) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return null;
-
-    const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-    const { data, error } = await supabase.functions.invoke('start-campfire-focus', {
-      body: {
-        userId: currentUserIdRef.current || '',
-        sessionId: campfireSessionId || undefined,
-        taskDescription: currentTaskDescriptionRef.current || undefined,
-        isReconnect,
-        aiTone: 'gentle',
-        language: lang.startsWith('zh') ? 'zh' : 'en',
-      },
-    });
-
-    if (error) {
-      devWarn('❌ [Campfire] start-campfire-focus error:', error);
-      return null;
-    }
-
-    if (!isReconnect && data?.sessionId) {
-      setCampfireSessionId(data.sessionId);
-    }
-
-    return data;
-  }, [campfireSessionId]);
-
-  /**
-   * 篝火模式 VAD 触发 → 重连 Gemini
-   */
-  const campfireReconnectGemini = useCallback(async () => {
-    if (campfireReconnectLockRef.current) return;
-    campfireReconnectLockRef.current = true;
-    const epochAtStart = sessionEpochRef.current;
-
-    try {
-      devLog('🔌 [Campfire] VAD triggered, reconnecting Gemini...');
-      // 防止 sessionRef 残留导致 connect 被忽略
-      geminiLive.disconnect();
-
-      const token = await fetchGeminiToken();
-      const config = await callStartCampfireFocus(true);
-      if (epochAtStart !== sessionEpochRef.current) {
-        devLog('🔌 [Campfire] reconnect cancelled (stale epoch)');
-        return;
-      }
-      if (!config?.geminiConfig?.systemPrompt) {
-        devWarn('❌ [Campfire] No system prompt from backend');
-        return;
-      }
-
-      await geminiLive.connect(
-        config.geminiConfig.systemPrompt,
-        [],
-        token,
-        config.geminiConfig.voiceConfig?.voiceName || getVoiceName()
-      );
-
-      // reconnect 后确保麦克风重新启用（disconnect 会 stop mic）
-      if (!geminiLive.isRecording) {
-        try {
-          await geminiLive.toggleMicrophone();
-        } catch (e) {
-          devWarn('⚠️ [Campfire] Failed to re-enable microphone after reconnect:', e);
-        }
-      }
-
-      setCampfireChatCount(prev => prev + 1);
-      startCampfireIdleTimer();
-    } catch (err) {
-      devWarn('❌ [Campfire] Reconnect failed:', err);
-    } finally {
-      campfireReconnectLockRef.current = false;
-    }
-  }, [geminiLive, callStartCampfireFocus, startCampfireIdleTimer]);
-
-  /**
-   * 进入篝火模式
-   * @param options.skipFarewell 意图检测触发时为 true（AI 已在回复中说了告别语），按钮触发时为 false
-   */
-  const enterCampfireMode = useCallback(async (options?: { skipFarewell?: boolean }) => {
-    if (isCampfireMode) return;
-
-    const skipFarewell = options?.skipFarewell ?? false;
-    devLog('🏕️ Entering campfire mode...', { skipFarewell });
-
-    if (skipFarewell) {
-      // 意图检测触发：AI 已经说了告别语，等它说完就断开
-      devLog('🏕️ [Step 1] 等待 AI 说完...');
-      await new Promise<void>((resolve) => {
-        const check = setInterval(() => {
-          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
-        }, 300);
-        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
-      });
-      devLog('🏕️ [Step 1] AI 已说完（或超时）');
-    } else {
-      // 按钮触发：需要让 AI 先说一句告别语
-      const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-      geminiLive.sendTextMessage(`[CAMPFIRE_FAREWELL] language=${lang}`);
-
-      devLog('🏕️ [Step 1] 等待告别语说完...');
-      await new Promise<void>((resolve) => {
-        const check = setInterval(() => {
-          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
-        }, 300);
-        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
-      });
-      devLog('🏕️ [Step 1] 告别语已说完（或超时）');
-    }
-
-    // 断开 Gemini
-    devLog('🏕️ [Step 2] 断开 Gemini...');
-    geminiLive.disconnect();
-    devLog('🏕️ [Step 2] Gemini 已断开');
-
-    // 4. 获取麦克风流（用于 VAD）
-    devLog('🏕️ [Step 3] 获取麦克风流...');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      campfireMicStreamRef.current = stream;
-      devLog('🏕️ [Step 3] 麦克风流已获取', { active: stream.active, tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })) });
-    } catch (micErr) {
-      devWarn('⚠️ [Campfire] Failed to get mic stream for VAD:', micErr);
-    }
-
-    // 5. 切换状态
-    devLog('🏕️ [Step 4] 设置 isCampfireMode = true');
-    setIsCampfireMode(true);
-    setCampfireChatCount(0);
-
-    // 6. 启动白噪音和计时器
-    ambientAudio.play();
-    focusTimer.start();
-    devLog('🏕️ [Step 5] 篝火模式完全启动 ✅');
-
-    // 7. 调用后端创建 focus session（异步，不阻塞）
-    callStartCampfireFocus(false);
-  }, [isCampfireMode, geminiLive, ambientAudio, focusTimer, callStartCampfireFocus]);
-
-  /**
-   * 退出篝火模式
-   * - 停止白噪音和计时器
-   * - 重新连接 AI 教练
-   * - 返回统计数据
-   */
-  const exitCampfireMode = useCallback(async () => {
-    if (!isCampfireMode) return null;
-
-    devLog('🏕️ Exiting campfire mode...');
-
-    // 1. 停止篝火模式子系统
-    ambientAudio.stop();
-    focusTimer.stop();
-    clearCampfireIdleTimer();
-
-    // 2. 停止麦克风流
-    if (campfireMicStreamRef.current) {
-      campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-      campfireMicStreamRef.current = null;
-    }
-
-    // 3. 记录统计
-    const stats = {
-      sessionId: campfireSessionId || '',
-      taskDescription: currentTaskDescriptionRef.current,
-      durationSeconds: focusTimer.elapsedSeconds,
-      chatCount: campfireChatCount,
-    };
-
-    // 4. 切换状态
-    setIsCampfireMode(false);
-
-    // 5. 重新连接 AI 教练（用保存的原始 system prompt）
-    if (savedSystemInstructionRef.current) {
-      try {
-        const token = await fetchGeminiToken();
-        const voiceName = getVoiceName();
-        // 防止 sessionRef 残留导致 connect 被忽略（GeminiLive 的 connect 有幂等保护）
-        geminiLive.disconnect();
-        await geminiLive.connect(savedSystemInstructionRef.current, undefined, token, voiceName);
-        // reconnect 后确保麦克风重新启用（disconnect 会 stop mic）
-        if (!geminiLive.isRecording) {
-          try {
-            await geminiLive.toggleMicrophone();
-          } catch (e) {
-            devWarn('⚠️ [Campfire] Failed to re-enable microphone after exit:', e);
-          }
-        }
-      } catch (err) {
-        devWarn('❌ [Campfire] Failed to reconnect AI coach:', err);
-      }
-    }
-
-    // 6. 更新数据库（异步）
-    if (campfireSessionId) {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        supabase.functions.invoke('update-focus-session', {
-          body: {
-            sessionId: campfireSessionId,
-            durationSeconds: stats.durationSeconds,
-            endSession: {
-              status: 'completed',
-              endedAt: new Date().toISOString(),
-            },
-          },
-        }).catch(err => {
-          devWarn('Failed to update focus session:', err);
-        });
-      }
-    }
-
-    return stats;
-  }, [isCampfireMode, ambientAudio, focusTimer, campfireSessionId, campfireChatCount, geminiLive, clearCampfireIdleTimer]);
-
-  // 更新篝火模式进入/退出函数的 ref
-  useEffect(() => {
-    enterCampfireModeRef.current = enterCampfireMode;
-    exitCampfireModeRef.current = exitCampfireMode;
-  }, [enterCampfireMode, exitCampfireMode]);
-
-  // ==========================================
-  // 篝火模式 - VAD 触发重连
-  // ==========================================
-
-  /** 篝火模式独立的 VAD 实例：在 Gemini 断开时监听麦克风 */
-  const campfireVad = useVoiceActivityDetection(
-    isCampfireMode ? campfireMicStreamRef.current : null,
-    { threshold: 25, enabled: isCampfireMode && !geminiLive.isConnected }
-  );
-
-  /** VAD 触发 → 重连 Gemini */
-  useEffect(() => {
-    // 诊断日志：显示 VAD 条件状态
-    if (isCampfireMode) {
-      devLog('🔥 [Campfire VAD]', {
-        isSpeaking: campfireVad.isSpeaking,
-        volume: campfireVad.currentVolume,
-        isConnected: geminiLive.isConnected,
-        reconnectLock: campfireReconnectLockRef.current,
-        micStream: campfireMicStreamRef.current ? 'active' : 'null',
-      });
-    }
-    if (isCampfireMode && campfireVad.isSpeaking && !campfireReconnectLockRef.current && !geminiLive.isConnected) {
-      campfireReconnectGemini();
-    }
-  }, [isCampfireMode, campfireVad.isSpeaking, campfireVad.currentVolume, geminiLive.isConnected, campfireReconnectGemini]);
-
-  /** 空闲超时 → 断开 Gemini（对话中时重置计时器） */
-  useEffect(() => {
-    if (isCampfireMode && geminiLive.isConnected && !geminiLive.isSpeaking && !geminiLive.isRecording) {
-      startCampfireIdleTimer();
-    }
-  }, [isCampfireMode, geminiLive.isConnected, geminiLive.isSpeaking, geminiLive.isRecording, startCampfireIdleTimer]);
-
-  /** AI 说话时降低白噪音 */
-  useEffect(() => {
-    if (isCampfireMode) {
-      ambientAudio.setDucked(geminiLive.isSpeaking);
-    }
-  }, [isCampfireMode, geminiLive.isSpeaking, ambientAudio]);
-
-  /**
-   * 停止篝火模式相关资源（白噪音/计时器/麦克风流）
-   * 注意：不做 Gemini 连接处理，由 cleanup 统一负责。
-   */
-  const stopCampfireResources = useCallback(() => {
-    ambientAudio.stop();
-    focusTimer.stop();
-    clearCampfireIdleTimer();
-    if (campfireMicStreamRef.current) {
-      campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-      campfireMicStreamRef.current = null;
-    }
-    setIsCampfireMode(false);
-  }, [ambientAudio, focusTimer, clearCampfireIdleTimer]);
 
   // ==========================================
   // 会话管理
@@ -839,20 +448,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   /**
    * 开始 AI 教练会话
-   * @param taskDescription 任务描述
-   * @param options 可选配置
-   * @param options.userId 用户 ID（用于 Mem0 记忆检索和存储）
-   * @param options.customSystemInstruction 自定义系统指令
-   * @param options.userName 用户名字，Lumi 会用这个名字称呼用户
-   * @param options.preferredLanguages 首选语言数组，如 ["en-US", "ja-JP"]，不传则自动检测用户语言
-   * @param options.taskId 任务 ID（用于保存 actual_duration_minutes 到 tasks 表）
-   * @param options.callRecordId 来电记录 ID（用于追踪麦克风连接状态）
    */
   const startSession = useCallback(async (
     taskDescription: string,
     options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string; callRecordId?: string }
   ) => {
-    // 幂等守卫：避免用户快速连点导致多个并发连接请求（会触发 sessionRef 竞态）
+    // 幂等守卫
     if (startSessionInFlightRef.current) {
       devWarn('startSession ignored: another startSession is already in progress');
       return false;
@@ -865,54 +466,43 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
    try {
       devLog('🚀 开始 AI 教练会话...');
 
-      // 如果当前在篝火模式，先停掉篝火资源，避免白噪音/计时器泄露
-      if (isCampfireMode) {
-        stopCampfireResources();
+      // 如果当前在篝火模式，先停掉篝火资源
+      if (campfire.isCampfireMode) {
+        campfire.stopCampfireResources();
       }
 
-      // 防止 sessionRef 残留导致 connect 被忽略：
-      // - session.connect 只看 isConnected / sessionRef.current
-      // - isConnected=false 也可能 sessionRef 已存在（onopen 前窗口期）
-      // 所以开始前先断开一次底层连接（幂等）
+      // 防止 sessionRef 残留导致 connect 被忽略
       geminiLive.disconnect();
 
       // 如果存在旧会话/正在连接，先统一 cleanup
       if (isSessionActive || isConnecting || geminiLive.isConnected) {
         devLog('⚠️ 检测到旧会话/连接中，先清理...');
         cleanup();
-        // 等待一小段时间确保清理完成（释放媒体资源 + 让状态稳定）
         await new Promise(resolve => setTimeout(resolve, 150));
       }
 
-      // 重置清理标志，允许后续清理
+      // 重置清理标志
       isCleaningUpRef.current = false;
 
-      // capture epoch：从此刻开始，任何 endSession/cleanup 都会 bump epoch，从而取消本次 startSession
+      // capture epoch
       epochAtStart = sessionEpochRef.current;
 
       processedTranscriptRef.current.clear();
-      intentDetection.clearHistory(); // 🔧 修复：清空上一次会话的意图检测历史，防止误触发
+      campfire.intentDetection.clearHistory();
       currentUserIdRef.current = userId || null;
       currentTaskDescriptionRef.current = taskDescription;
       lastProcessedRoleRef.current = null;
       currentTaskIdRef.current = taskId || null;
-      currentCallRecordIdRef.current = callRecordId || null; // 保存来电记录 ID
-      // 保存首选语言，用于触发词生成时保持语言一致性
+      currentCallRecordIdRef.current = callRecordId || null;
       preferredLanguagesRef.current = preferredLanguages || null;
       setIsConnecting(true);
-      setConnectionError(null); // 清除之前的错误
+      setConnectionError(null);
 
-      // 更新任务描述
-      setState(prev => ({
-        ...prev,
-        taskDescription,
-        timeRemaining: initialTime,
-        messages: [],
-      }));
+      // 更新任务描述并重置
+      setTaskDescription(taskDescription);
+      setMessages([]);
+      timer.resetTimer();
 
-      // 🚀 性能优化：硬件初始化 + 网络请求全部并行执行
-      // 原来是：摄像头(~1s) → 麦克风(~1.2s) → [并行: 后端请求 + token]
-      // 现在是：全部同时发起，总耗时 = max(硬件, 后端请求) 而非 sum
       devLog('🚀 全并行启动: 硬件初始化 + 网络请求同时进行...');
 
       const supabaseClient = getSupabaseClient();
@@ -1037,7 +627,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         }
         systemInstruction = instructionResult.data.systemInstruction;
 
-        // 🔍 日志：显示检索到的记忆（方便诊断）
+        // 日志：显示检索到的记忆
         if (import.meta.env.DEV) {
           const retrievedMemories = instructionResult.data.retrievedMemories as string[] | undefined;
           console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1053,7 +643,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         }
 
-        // Phase 3: 提取成功记录，用于虚拟消息系统的 memory boost
+        // Phase 3: 提取成功记录
         if (instructionResult.data.successRecord) {
           successRecordRef.current = instructionResult.data.successRecord;
           if (import.meta.env.DEV) {
@@ -1063,13 +653,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           successRecordRef.current = null;
         }
       } else {
-        // 使用自定义 instruction 时，清空成功记录
         successRecordRef.current = null;
       }
 
       // 保存 system instruction 用于篝火模式退出后恢复
       if (systemInstruction) {
-        savedSystemInstructionRef.current = systemInstruction;
+        campfire.savedSystemInstructionRef.current = systemInstruction;
       }
 
       if (import.meta.env.DEV) {
@@ -1090,7 +679,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       );
 
       if (epochAtStart !== sessionEpochRef.current) {
-        // 会话已被取消（例如用户挂断），不要继续污染状态
         devLog('startSession cancelled after connect (stale epoch)');
         geminiLive.disconnect();
         return false;
@@ -1102,13 +690,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       setIsConnecting(false);
       setIsSessionActive(true);
-      setIsObserving(true); // AI 开始观察用户
+      setIsObserving(true);
 
       // 开始倒计时
-      startCountdown();
-
-      // 注意：AI 开场白由 useVirtualMessages 系统触发
-      // 不在这里发送消息，让虚拟消息系统统一处理
+      timer.startTimer();
 
       if (import.meta.env.DEV) {
         devLog('✨ AI 教练会话已成功开始');
@@ -1116,33 +701,27 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       return true;
     } catch (error) {
-      // 如果 epoch 已变，说明用户已经 endSession/cleanup，不要再打断新会话或弹错误
       if (epochAtStart !== sessionEpochRef.current) {
         devLog('startSession aborted (stale epoch), ignoring error:', error);
         return false;
       }
 
       const errorMessage = error instanceof Error ? error.message : '连接失败，请重试';
-      // 生产环境保留最小化错误信息，避免泄露调试细节；详细堆栈仅 DEV 输出
       console.error('❌ startSession 错误:', errorMessage);
       devError('❌ startSession 错误详情:', error);
       setIsConnecting(false);
       setConnectionError(errorMessage);
 
-      // 清理可能的残留状态
       cleanup();
 
       throw error;
     } finally {
       startSessionInFlightRef.current = false;
     }
-  }, [initialTime, geminiLive, startCountdown, cleanup, isSessionActive, isConnecting, isCampfireMode, stopCampfireResources]);
+  }, [initialTime, geminiLive, timer, cleanup, isSessionActive, isConnecting, campfire]);
 
   /**
    * 立即停止音频播放（不断开连接、不清理资源）
-   * 用于快速响应用户挂断操作，立即静音 AI
-   *
-   * 使用场景：用户点击挂断 -> 立即静音 -> 后台保存记忆 -> 清理资源
    */
   const stopAudioImmediately = useCallback(() => {
     devLog('🔇 立即停止音频播放...');
@@ -1151,27 +730,22 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   /**
    * 结束 AI 教练会话
-   * 使用统一的 cleanup 函数确保资源正确释放
    */
   const endSession = useCallback(() => {
     devLog('🔌 结束 AI 教练会话...');
 
     // 如果在篝火模式中直接挂电话，先清理篝火模式资源
-    if (isCampfireMode) {
-      stopCampfireResources();
+    if (campfire.isCampfireMode) {
+      campfire.stopCampfireResources();
     }
 
-    // 使用统一的清理函数
     cleanup();
 
     devLog('✅ AI 教练会话已结束');
-  }, [cleanup, isCampfireMode, stopCampfireResources]);
+  }, [cleanup, campfire]);
 
   /**
    * 保存会话记忆到 Mem0
-   * 调用此函数将当前会话的对话内容保存为长期记忆
-   * @param options.additionalContext 可选的额外上下文信息
-   * @param options.forceTaskCompleted 强制标记任务为已完成（用于用户主动点击完成按钮的场景）
    */
   const saveSessionMemory = useCallback(async (options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => {
     const { additionalContext, forceTaskCompleted } = options || {};
@@ -1183,14 +757,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       return false;
     }
 
-    // 复制当前消息列表（避免 setState 异步问题）
-    const messages = [...state.messages];
+    // 复制当前消息列表
+    const messagesCopy = [...messages];
 
     // 先把 buffer 中剩余的用户消息保存
     if (userSpeechBufferRef.current.trim()) {
       const fullUserMessage = userSpeechBufferRef.current.trim();
       devLog('🎤 保存剩余用户消息:', fullUserMessage);
-      // 同时添加到 state 和本地 messages 数组
       const newUserMessage: AICoachMessage = {
         id: Date.now().toString(),
         role: 'user',
@@ -1198,11 +771,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         timestamp: new Date(),
         isVirtual: false,
       };
-      messages.push(newUserMessage);
+      messagesCopy.push(newUserMessage);
       addMessageRef.current('user', fullUserMessage, false);
       userSpeechBufferRef.current = '';
     }
-    if (messages.length === 0) {
+    if (messagesCopy.length === 0) {
       devLog('⚠️ 无法保存记忆：没有对话消息');
       return false;
     }
@@ -1215,8 +788,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         throw new Error('Supabase 未配置');
       }
 
-      // 将消息转换为 Mem0 格式，过滤掉虚拟消息（只保存真实对话）
-      const realMessages = messages.filter(msg => !msg.isVirtual);
+      const realMessages = messagesCopy.filter(msg => !msg.isVirtual);
 
       if (realMessages.length === 0) {
         devLog('⚠️ 无法保存记忆：没有真实对话消息（全是虚拟消息）');
@@ -1228,7 +800,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         content: msg.content,
       }));
 
-      // 添加任务上下文作为第一条消息
       if (taskDescription) {
         mem0Messages.unshift({
           role: 'system',
@@ -1236,32 +807,27 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         });
       }
 
-      // 日志：查看传给 Mem0 的内容
       if (import.meta.env.DEV) {
         devLog('📤 [Mem0] 发送到 Mem0 的内容:', {
           userId,
           taskDescription,
-          totalMessages: messages.length,
-          virtualMessagesFiltered: messages.length - realMessages.length,
+          totalMessages: messagesCopy.length,
+          virtualMessagesFiltered: messagesCopy.length - realMessages.length,
           realMessagesCount: realMessages.length,
           mem0MessagesCount: mem0Messages.length,
           messages: mem0Messages,
         });
       }
 
-      // 判断任务是否完成
-      // 1. 倒计时结束 (timeRemaining === 0)
-      // 2. 用户主动点击完成按钮 (forceTaskCompleted === true)
-      const wasTaskCompleted = forceTaskCompleted === true || state.timeRemaining === 0;
-      // 计算实际完成时长（分钟）
-      const actualDurationMinutes = Math.round((initialTime - state.timeRemaining) / 60);
+      const wasTaskCompleted = forceTaskCompleted === true || timer.timeRemaining === 0;
+      const actualDurationMinutes = Math.round((initialTime - timer.timeRemaining) / 60);
 
       if (import.meta.env.DEV) {
         devLog('📊 任务完成状态:', {
           wasTaskCompleted,
           forceTaskCompleted,
           actualDurationMinutes,
-          timeRemaining: state.timeRemaining,
+          timeRemaining: timer.timeRemaining,
           initialTime,
         });
       }
@@ -1272,13 +838,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           userId,
           messages: mem0Messages,
           taskDescription,
-          // 新增：传入用户本地日期，用于将相对时间（明天、下周）转换为绝对日期
-          localDate: new Date().toISOString().split('T')[0], // 格式: YYYY-MM-DD
+          localDate: new Date().toISOString().split('T')[0],
           metadata: {
             source: 'ai_coach_session',
-            sessionDuration: initialTime - state.timeRemaining,
+            sessionDuration: initialTime - timer.timeRemaining,
             timestamp: new Date().toISOString(),
-            // 新增：任务完成状态，用于 SUCCESS 记忆提取
             task_completed: wasTaskCompleted,
             actual_duration_minutes: actualDurationMinutes,
           },
@@ -1289,7 +853,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         throw new Error(`保存记忆失败: ${error.message}`);
       }
 
-      // 🔍 日志：显示保存的记忆（方便诊断）
       if (import.meta.env.DEV) {
         devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         devLog('💾 [记忆保存] 本次会话存的记忆:');
@@ -1310,36 +873,31 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       }
 
-      // 🆕 如果任务完成且有 taskId，保存 actualDurationMinutes 到 tasks 表
       const taskId = currentTaskIdRef.current;
       if (wasTaskCompleted && taskId && actualDurationMinutes > 0) {
         try {
           await updateReminder(taskId, {
             actualDurationMinutes,
-            // 可以在这里添加其他成功元数据，例如 completionMood, difficultyPerception 等
-            // 这些可以通过 AI 从对话中推断，或者让用户在完成时选择
           });
           if (import.meta.env.DEV) {
             devLog('✅ 任务完成时长已保存到数据库:', { taskId, actualDurationMinutes });
           }
         } catch (updateError) {
           devWarn('⚠️ 保存任务完成时长失败:', updateError);
-          // 不影响整体流程，继续返回 true
         }
       }
 
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      // 生产环境保留最小化错误信息（不包含对话内容）
       console.error('❌ 保存会话记忆失败:', errorMessage);
       devWarn('❌ 保存会话记忆失败详情:', error);
       return false;
     }
-  }, [state.messages, state.timeRemaining, initialTime]);
+  }, [messages, timer.timeRemaining, initialTime]);
 
   /**
-   * 同步 saveSessionMemory 的最新实现，避免倒计时结束时拿到旧闭包
+   * 同步 saveSessionMemory 的最新实现
    */
   useEffect(() => {
     saveSessionMemoryRef.current = saveSessionMemory;
@@ -1353,38 +911,21 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
     lastProcessedRoleRef.current = null;
-    setConnectionError(null); // 清除错误状态
-    setState({
-      taskDescription: '',
-      timeRemaining: initialTime,
-      isTimerRunning: false,
-      messages: [],
-    });
-    setTaskStartTime(0);
-  }, [endSession, initialTime]);
+    setConnectionError(null);
+    setTaskDescription('');
+    setMessages([]);
+    timer.resetTimer();
+  }, [endSession, timer]);
 
-  // 组件卸载时使用统一清理函数
+  // 组件卸载时清理
   useEffect(() => {
     return () => {
-      sessionEpochRef.current += 1; // 组件卸载时取消 in-flight 操作
-      // 使用 cleanup 确保所有资源正确释放
-      // 注意：这里不能直接调用 cleanup()，因为它依赖于 geminiLive
-      // 所以我们直接执行清理逻辑
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      sessionEpochRef.current += 1;
+      timer.cleanupTimer();
       geminiLive.disconnect();
 
-      // 篝火模式资源清理
-      if (campfireIdleTimerRef.current) {
-        clearTimeout(campfireIdleTimerRef.current);
-        campfireIdleTimerRef.current = null;
-      }
-      if (campfireMicStreamRef.current) {
-        campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-        campfireMicStreamRef.current = null;
-      }
+      // 篝火模式资源清理（委托给子 Hook）
+      campfire.cleanupResources();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1392,13 +933,21 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // ==========================================
   // 返回值
   // ==========================================
+  // 组合 state 对象（向后兼容，调用方仍可用 state.timeRemaining 等）
+  const state: AICoachSessionState = {
+    taskDescription,
+    timeRemaining: timer.timeRemaining,
+    isTimerRunning: timer.isTimerRunning,
+    messages,
+  };
+
   return {
     // 状态
     state,
     isConnecting,
     isSessionActive,
-    isObserving, // AI 正在观察用户（开场前）
-    connectionError, // 连接错误信息（超时、网络问题等）
+    isObserving,
+    connectionError,
 
     // Gemini Live 状态
     isConnected: geminiLive.isConnected,
@@ -1426,22 +975,16 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 动态虚拟消息调度器
     orchestratorContext: messageOrchestrator.getContext,
-    triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval, // 手动触发记忆检索（调试用）
+    triggerMemoryRetrieval: messageOrchestrator.triggerMemoryRetrieval,
 
     // Refs（用于 UI）
     videoRef: geminiLive.videoRef,
     canvasRef: geminiLive.canvasRef,
 
     // 篝火模式
-    isCampfireMode,
-    enterCampfireMode,
-    exitCampfireMode,
-    campfireStats: {
-      elapsedSeconds: focusTimer.elapsedSeconds,
-      formattedTime: focusTimer.formattedTime,
-      chatCount: campfireChatCount,
-      isAmbientPlaying: ambientAudio.isPlaying,
-      toggleAmbient: ambientAudio.toggle,
-    },
+    isCampfireMode: campfire.isCampfireMode,
+    enterCampfireMode: campfire.enterCampfireMode,
+    exitCampfireMode: campfire.exitCampfireMode,
+    campfireStats: campfire.campfireStats,
   };
 }

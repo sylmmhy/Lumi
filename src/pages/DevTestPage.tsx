@@ -25,6 +25,7 @@ import { TalkingFire } from '../components/ai/TalkingFire';
 import { FireFromFigma } from '../components/ai/FireFromFigma';
 import { FeedbackCard } from '../components/feedback/FeedbackCard';
 import { HabitStackingTest, DailyReportTest } from '../components/dev/BackendApiTest';
+import { WeeklyReportTest } from '../components/dev/WeeklyReportTest';
 import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { useCampfireSession } from '../hooks/campfire';
@@ -52,7 +53,8 @@ type TestMode =
   | 'feedback-card'
   | 'voice-chat-test'
   | 'campfire-companion'
-  | 'pledge-confirm';
+  | 'pledge-confirm'
+  | 'weekly-report';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -410,6 +412,27 @@ export function DevTestPage() {
             </div>
           </button>
 
+          {/* 每周行为报告测试 */}
+          <button
+            onClick={() => setMode('weekly-report')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            📊 每周行为报告 (Weekly Report)
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              用户画像 + 跨数据关联 + 循证建议
+            </span>
+            <div className="mt-2 flex flex-col gap-1">
+              <div className="px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all flex items-center gap-2">
+                <span className="text-orange-300">🔧 Backend</span>
+                functions/weekly-behavior-analyzer
+              </div>
+              <div className="px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all flex items-center gap-2">
+                <span className="text-blue-300">🎨 UI</span>
+                src/components/dev/WeeklyReportTest.tsx
+              </div>
+            </div>
+          </button>
+
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">🎤 语音对话测试 (三层 AI 架构)</p>
@@ -539,6 +562,7 @@ export function DevTestPage() {
       {mode === 'daily-report' && <DailyReportTest onBack={backToMenu} />}
       {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
       {mode === 'pledge-confirm' && <PledgeConfirmTest onBack={backToMenu} />}
+      {mode === 'weekly-report' && <WeeklyReportTest onBack={backToMenu} />}
     </>
   );
 }

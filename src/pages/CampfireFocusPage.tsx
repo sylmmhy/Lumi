@@ -14,7 +14,6 @@ interface SessionStats {
   taskDescription: string | null;
   durationSeconds: number;
   chatCount: number;
-  distractionCount: number;
 }
 
 export function CampfireFocusPage() {

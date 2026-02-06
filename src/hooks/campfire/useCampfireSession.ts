@@ -31,8 +31,6 @@ interface CampfireContext {
   summary: string;
   /** 聊过的话题 */
   topics: string[];
-  /** 闲聊/分心次数 */
-  distractionCount: number;
 }
 
 type SessionStatus = 
@@ -64,7 +62,6 @@ interface SessionStats {
   taskDescription: string | null;
   durationSeconds: number;
   chatCount: number;
-  distractionCount: number;
 }
 
 interface UseCampfireSessionReturn {
@@ -85,7 +82,6 @@ interface UseCampfireSessionReturn {
   
   // 统计
   chatCount: number;
-  distractionCount: number;
   
   // 白噪音
   isAmbientPlaying: boolean;
@@ -145,7 +141,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     messages: [],
     summary: '',
     topics: [],
-    distractionCount: 0,
   });
 
   // 计时器引用
@@ -275,7 +270,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
             messages: contextRef.current.messages,
             summary: contextRef.current.summary,
             topics: contextRef.current.topics,
-            distractionCount: contextRef.current.distractionCount,
           } : undefined,
           isReconnect,
           aiTone,
@@ -314,13 +308,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       
       setChatCount(prev => {
         const newCount = prev + 1;
-        
-        // 更新分心计数（第 2 次连接开始算分心）
-        if (newCount >= 2) {
-          contextRef.current.distractionCount = newCount - 1;
-          console.log(`💡 [Campfire] Distraction count: ${contextRef.current.distractionCount}`);
-        }
-        
+
         // 异步更新数据库中的 chatCount
         if (effectiveSessionId) {
           fetch(`${SUPABASE_URL}/functions/v1/update-focus-session`, {
@@ -332,13 +320,12 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
             body: JSON.stringify({
               sessionId: effectiveSessionId,
               incrementChatCount: true,
-              incrementDistractionCount: newCount >= 2, // 第2次开始算分心
             }),
           }).catch(err => {
             console.warn('Failed to update chat count:', err);
           });
         }
-        
+
         return newCount;
       });
       startIdleTimer();
@@ -439,7 +426,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       messages: [],
       summary: '',
       topics: [],
-      distractionCount: 0,
     };
     hasGreetedRef.current = false; // 重置开场白标记
 
@@ -501,7 +487,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       taskDescription,
       durationSeconds: focusTimer.elapsedSeconds,
       chatCount,
-      distractionCount: contextRef.current.distractionCount,
     };
 
     // 更新数据库（使用 Edge Function）
@@ -576,7 +561,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
 
     // 统计
     chatCount,
-    distractionCount: contextRef.current.distractionCount,
 
     // 白噪音
     isAmbientPlaying: ambientAudio.isPlaying,

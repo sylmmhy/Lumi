@@ -9,7 +9,6 @@ interface SessionStats {
   taskDescription: string | null;
   durationSeconds: number;
   chatCount: number;
-  distractionCount: number;
 }
 
 interface FocusEndModalProps {
@@ -66,18 +65,10 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
           )}
 
           {/* 对话统计 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-900/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm mb-1">对话次数</div>
-              <div className="text-xl font-bold text-white">
-                {stats.chatCount}
-              </div>
-            </div>
-            <div className="bg-gray-900/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm mb-1">分心提醒</div>
-              <div className="text-xl font-bold text-white">
-                {stats.distractionCount}
-              </div>
+          <div className="bg-gray-900/50 rounded-lg p-4">
+            <div className="text-gray-400 text-sm mb-1">对话次数</div>
+            <div className="text-xl font-bold text-white">
+              {stats.chatCount}
             </div>
           </div>
         </div>

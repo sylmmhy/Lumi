@@ -21,6 +21,7 @@ interface CustomTaskFormProps {
     withBorder?: boolean;
     onQuickFill: (text: string) => void;
     onRegisterSubmit?: (handler: (() => void) | null) => void;
+    onTalkToLumi?: () => void;
 }
 
 /**
@@ -34,6 +35,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
     withBorder = false,
     onQuickFill,
     onRegisterSubmit,
+    onTalkToLumi,
 }) => {
     const { t } = useTranslation();
     const [showEmptyWarning, setShowEmptyWarning] = useState(false);
@@ -101,6 +103,16 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
             >
                 {t('urgency.helpMeStart')}
             </button>
+
+            {/* Talk to Lumi 按钮 - 不需要输入任务 */}
+            {onTalkToLumi && (
+                <button
+                    onClick={onTalkToLumi}
+                    className="w-full max-w-[320px] font-sansita italic font-bold text-[18px] px-8 py-2.5 rounded-[100px] border border-[rgba(190,190,190,0.2)] bg-white text-gray-700 shadow-md transform transition-all duration-300 hover:scale-105 active:scale-95 mt-3"
+                >
+                    {t('urgency.talkToLumi')}
+                </button>
+            )}
         </div>
     );
 };
@@ -134,6 +146,23 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
         });
         setCustomTask('');
     }, [customTask, onStartTask]);
+
+    /**
+     * 处理"Talk to Lumi"按钮点击 - 直接发起和 AI 的闲聊，不需要绑定具体任务
+     */
+    const handleTalkToLumi = useCallback(() => {
+        onStartTask({
+            id: Date.now().toString(),
+            text: t('urgency.justChat'), // 使用翻译文本作为任务描述
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            displayTime: 'Now',
+            date: getLocalDateString(),
+            completed: false,
+            type: 'todo',
+            category: 'morning',
+            called: false,
+        });
+    }, [onStartTask, t]);
 
     return (
         <div
@@ -181,6 +210,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
                         onSubmit={handleCustomTaskStart}
                         onQuickFill={setCustomTask}
                         onRegisterSubmit={onRegisterHelpMeStart}
+                        onTalkToLumi={handleTalkToLumi}
                     />
                 </div>
             </div>

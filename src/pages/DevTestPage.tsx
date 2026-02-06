@@ -799,7 +799,8 @@ function AICoachTest({ onBack }: { onBack: () => void }) {
 
   const handleStartTask = useCallback(async () => {
     try {
-      await aiCoach.startSession('Test Task - Get out of bed');
+      const started = await aiCoach.startSession('Test Task - Get out of bed');
+      if (!started) return;
       setStep('working');
     } catch (error) {
       alert('连接失败: ' + (error as Error).message);

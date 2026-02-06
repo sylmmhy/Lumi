@@ -719,8 +719,8 @@ export function AppTabsPage() {
     const startAICoachForTask = useCallback(async (task: Task) => {
         devLog('🤖 Starting AI Coach session for task:', task.text);
 
-        let taskToUse = task;
-        let taskId = task.id;
+        const taskToUse = task;
+        const taskId = task.id;
 
         // 检查任务 ID 是否是临时的（时间戳格式，全数字）
         // UUID 格式包含连字符，而时间戳是纯数字
@@ -810,13 +810,14 @@ export function AppTabsPage() {
         // WebView 模式：使用 Gemini Live
         try {
             const preferredLanguages = getPreferredLanguages();
-            await aiCoach.startSession(taskToUse.text, {
+            const started = await aiCoach.startSession(taskToUse.text, {
                 userId: auth.userId ?? undefined,  // 传入 userId 用于 Mem0 记忆保存
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
                 taskId: taskId,  // 传入真实的 taskId 用于保存 actual_duration_minutes
                 callRecordId: currentCallRecordId ?? undefined,  // 🆕 传入 callRecordId 用于追踪麦克风连接
             });
+            if (!started) return;
             devLog('✅ AI Coach session started successfully');
 
             // 保存当前任务 ID 和类型，用于完成时更新数据库
@@ -1656,7 +1657,7 @@ export function AppTabsPage() {
                         }}
                         onToggleCamera={aiCoach.toggleCamera}
                         aiStatus={{
-                            isConnected: aiCoach.isConnected,
+                            isConnected: aiCoach.isConnected || aiCoach.isCampfireMode,
                             error: aiCoach.error,
                             waveformHeights: aiCoach.waveformHeights,
                             isSpeaking: aiCoach.isSpeaking,

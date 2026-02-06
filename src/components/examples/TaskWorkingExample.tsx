@@ -44,7 +44,8 @@ export function AICoachTaskExample() {
   // 开始任务
   const handleStartTask = useCallback(async () => {
     try {
-      await aiCoach.startSession('Get out of bed');
+      const started = await aiCoach.startSession('Get out of bed');
+      if (!started) return;
       setStep('working');
     } catch {
       alert('连接失败，请重试');

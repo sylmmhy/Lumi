@@ -54,32 +54,38 @@ export function useAudioOutput(
    */
   const ensureReady = useCallback(async (): Promise<AudioContext> => {
     const startTime = performance.now();
+    console.log(`🔊 [ensureReady] 开始 | 现有 AudioContext 状态: ${audioContextRef.current?.state ?? 'null'}`);
 
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new AudioContext({ sampleRate });
+      try {
+        const createStart = performance.now();
+        audioContextRef.current = new AudioContext({ sampleRate });
+        console.log(`🔊 [ensureReady] AudioContext 创建完成 - 耗时: ${(performance.now() - createStart).toFixed(1)}ms, 状态: ${audioContextRef.current.state}`);
+      } catch (createErr) {
+        console.error('🔊 [ensureReady] ❌ AudioContext 创建失败:', createErr);
+        throw createErr;
+      }
       streamerRef.current = new AudioStreamer(audioContextRef.current);
 
       if (onPlaybackComplete) {
         streamerRef.current.onComplete = onPlaybackComplete;
       }
-
-      devLog('🔊 AudioContext created:', audioContextRef.current.state);
     }
 
     if (audioContextRef.current.state === 'suspended') {
       const resumeStart = performance.now();
-      await audioContextRef.current.resume();
-      if (import.meta.env.DEV) {
-        console.log(`🔊 AudioContext resumed - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms`);
+      console.log('🔊 [ensureReady] AudioContext.resume() 开始...');
+      try {
+        await audioContextRef.current.resume();
+        console.log(`🔊 [ensureReady] AudioContext.resume() 完成 - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms, 状态: ${audioContextRef.current.state}`);
+      } catch (resumeErr) {
+        console.error(`🔊 [ensureReady] ❌ AudioContext.resume() 失败 - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms, 错误:`, resumeErr);
+        throw resumeErr;
       }
     }
 
-    if (import.meta.env.DEV) {
-      const elapsed = performance.now() - startTime;
-      if (elapsed > 10) {
-        console.log(`⚠️ ensureReady 耗时较长: ${elapsed.toFixed(1)}ms`);
-      }
-    }
+    const totalElapsed = performance.now() - startTime;
+    console.log(`🔊 [ensureReady] 结束 - 总耗时: ${totalElapsed.toFixed(1)}ms, 最终状态: ${audioContextRef.current.state}`);
 
     return audioContextRef.current;
   }, [sampleRate, onPlaybackComplete]);

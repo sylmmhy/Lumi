@@ -69,6 +69,8 @@ declare global {
         setRingtoneType?: { postMessage: (message: { type: string }) => void };
         // Screen Time handler
         screenTime?: { postMessage: (message: unknown) => void };
+        // CallKit 诊断 handler（Web → iOS 强制结束 CallKit 通话）
+        forceEndCallKit?: { postMessage: (message: { reason: string }) => void };
         // HomeKit handlers
         isHomeKitAvailable?: { postMessage: (message: unknown) => void };
         requestHomeKitAccess?: { postMessage: (message: unknown) => void };
@@ -86,6 +88,10 @@ declare global {
         getSleepMusicTracks?: { postMessage: (message: unknown) => void };
       };
     };
+  }
+
+  interface WindowEventMap {
+    'callKitDiagnostic': CustomEvent<Record<string, unknown>>;
   }
 
   interface DocumentEventMap {

@@ -14,6 +14,7 @@ import { useSessionTimer } from './useSessionTimer';
 import { useSessionMemory } from './useSessionMemory';
 import { useTranscriptProcessor } from './useTranscriptProcessor';
 import { useSessionLifecycle } from './useSessionLifecycle';
+import { createAudioAnomalyDetector } from '../../lib/callkit-diagnostic';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -69,6 +70,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   // 保存用户首选语言，用于虚拟消息时保持语言一致性
   const preferredLanguagesRef = useRef<string[] | null>(null);
+
+  // 诊断：音频异常检测器 ref（VoIP 未挂断检测）
+  const audioAnomalyDetectorRef = useRef<ReturnType<typeof createAudioAnomalyDetector> | null>(null);
+  // 跟踪当前 callRecordId（用于诊断上报）
+  const callRecordIdForDiagRef = useRef<string | null>(null);
 
   // 用于调用 intentDetection 方法的 ref（避免闭包问题）
   const intentDetectionRef = useRef<{
@@ -217,12 +223,35 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // ==========================================
   // VAD (Voice Activity Detection)
   // ==========================================
+  // onVolumeReport 回调：将 VAD 每秒的音量上报给音频异常检测器
+  const handleVolumeReport = useCallback((volume: number) => {
+    audioAnomalyDetectorRef.current?.reportVolume(volume);
+  }, []);
+
   const vad = useVoiceActivityDetection(geminiLive.audioStream, {
     enabled: enableVAD && isSessionActive && geminiLive.isRecording,
     threshold: 30,
     smoothingTimeConstant: 0.8,
     fftSize: 2048,
+    onVolumeReport: handleVolumeReport,
   });
+
+  // 诊断：当 session 激活时创建音频异常检测器，session 结束时销毁
+  useEffect(() => {
+    if (isSessionActive) {
+      // 创建新的异常检测器
+      audioAnomalyDetectorRef.current = createAudioAnomalyDetector({
+        callRecordId: callRecordIdForDiagRef.current ?? undefined,
+        onAnomalyDetected: () => {
+          devLog('📊 [诊断] 音频异常检测器触发，已尝试 forceEndCallKit');
+        },
+      });
+    } else {
+      // session 结束时销毁
+      audioAnomalyDetectorRef.current?.dispose();
+      audioAnomalyDetectorRef.current = null;
+    }
+  }, [isSessionActive]);
 
   // ==========================================
   // 波形动画
@@ -371,7 +400,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     waveformHeights: waveformAnimation.heights,
 
     // 操作
-    startSession: lifecycle.startSession,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lifecycle.startSession 是稳定引用
+    startSession: useCallback(async (taskDescription: string, sessionOptions?: Parameters<typeof lifecycle.startSession>[1]) => {
+      // 诊断：在启动前记录 callRecordId，用于音频异常检测
+      callRecordIdForDiagRef.current = sessionOptions?.callRecordId ?? null;
+      return lifecycle.startSession(taskDescription, sessionOptions);
+    }, [lifecycle.startSession]),
     endSession: lifecycle.endSession,
     stopAudioImmediately: lifecycle.stopAudioImmediately,
     resetSession: lifecycle.resetSession,

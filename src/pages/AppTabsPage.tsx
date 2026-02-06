@@ -9,7 +9,6 @@ import { CelebrationView } from '../components/celebration/CelebrationView';
 import { AuthModal } from '../components/modals/AuthModal';
 import { VoicePermissionModal } from '../components/modals/VoicePermissionModal';
 import { TestVersionModal } from '../components/modals/TestVersionModal';
-import { useScreenTime, type ScreenTimeActionEvent } from '../hooks/useScreenTime';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 
 // Extracted Components
@@ -27,14 +26,11 @@ import { TourOverlay } from '../components/tour/TourOverlay';
 type ViewState = AppTab;
 
 import { devLog } from '../utils/devLog';
-import { getLocalDateString } from '../utils/timeUtils';
 import { useAppTasks } from '../hooks/useAppTasks';
 import { useCoachController } from '../hooks/useCoachController';
+import { useScreenTimeController } from '../hooks/useScreenTimeController';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
-
-const SCREEN_TIME_START_TASK_INTENT_KEY = 'lumi_pending_start_task_intent';
-const SCREEN_TIME_INTENT_TTL_MS = 10 * 60 * 1000;
 
 /**
  * 应用主入口页面，负责根据 URL tab 渲染对应视图，并复用 AI 教练、任务数据等共享逻辑。
@@ -81,34 +77,6 @@ export function AppTabsPage() {
     const appTasks = useAppTasks(auth.userId);
 
     const [showAuthModal, setShowAuthModal] = useState(false);
-    /**
-     * Screen Time 自动解锁相关状态
-     *
-     * 原理：
-     * - Screen Time 的锁定/解锁是 iOS 本地状态（ManagedSettings）。
-     * - 仅仅把 tasks 标记为 completed（写 Supabase）不会影响 iOS 锁定状态。
-     * - 因此当用户“完成任务”（无论是 AI 会话内点击完成，还是手动勾选完成）时，需要通过 WebView bridge 显式调用 `unlockApps`。
-     */
-    const isScreenTimeLockedRef = useRef(false);
-    const shouldUnlockScreenTimeAfterTaskCompleteRef = useRef(false);
-    const unlockScreenTimeIfLocked = useCallback((source: string) => {
-        // 只在 iOS Native WebView 环境生效
-        if (!window.webkit?.messageHandlers?.screenTime) return;
-
-        const shouldUnlock = isScreenTimeLockedRef.current || shouldUnlockScreenTimeAfterTaskCompleteRef.current;
-        if (!shouldUnlock) return;
-
-        // 防止重复触发（回调延迟/多次点击等）
-        isScreenTimeLockedRef.current = false;
-        shouldUnlockScreenTimeAfterTaskCompleteRef.current = false;
-
-        devLog(`🔓 [ScreenTime] 任务完成触发解锁 (${source})`);
-        try {
-            window.webkit.messageHandlers.screenTime.postMessage({ action: 'unlockApps' });
-        } catch (error) {
-            console.error('[ScreenTime] unlockApps 发送失败:', error);
-        }
-    }, []);
     const [pendingTask, setPendingTask] = useState<Task | null>(null);
     /**
      * 区分 pendingTask 的来源：
@@ -125,14 +93,6 @@ export function AppTabsPage() {
     const urgencyStartRef = useRef<(() => void) | null>(null);
     const [showVoicePrompt, setShowVoicePrompt] = useState(false);
     const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
-
-    // Screen Time 后果确认相关状态
-    const [showPledgeConfirm, setShowPledgeConfirm] = useState(false);
-    const [pledgeConfirmData, setPledgeConfirmData] = useState<{
-        taskName: string;
-        consequence: string;
-        pledge: string;
-    } | null>(null);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         navigate(`/app/${view}`, { replace });
@@ -151,6 +111,22 @@ export function AppTabsPage() {
         }
     }, [navigate, tab]);
 
+    const pendingCallbacks = {
+        setPendingTask,
+        setPendingAction,
+        setPendingActionSource,
+        setShowAuthModal,
+    };
+
+    // Screen Time 控制器（必须在 useCoachController 之前，提供 unlockScreenTimeIfLocked）
+    const screenTime = useScreenTimeController({
+        auth: { isLoggedIn: auth.isLoggedIn, isSessionValidated: auth.isSessionValidated },
+        hasPendingTask: !!pendingTask,
+        hasPendingAction: !!pendingAction,
+        handleChangeView,
+        pendingCallbacks,
+    });
+
     // AI 教练控制器（封装了会话生命周期、LiveKit、庆祝流程、URL autostart 等）
     const coach = useCoachController({
         auth: {
@@ -160,16 +136,17 @@ export function AppTabsPage() {
             isSessionValidated: auth.isSessionValidated,
         },
         appTasks,
-        unlockScreenTimeIfLocked,
+        unlockScreenTimeIfLocked: screenTime.unlockScreenTimeIfLocked,
         currentView,
         handleChangeView,
-        pendingCallbacks: {
-            setPendingTask,
-            setPendingAction,
-            setPendingActionSource,
-            setShowAuthModal,
-        },
+        pendingCallbacks,
     });
+
+    // 绑定 coach 回调到 screenTime（解决循环依赖）
+    screenTime.coachBindingsRef.current = {
+        ensureVoicePromptThenStart: coach.ensureVoicePromptThenStart,
+        isSessionOverlayVisible: coach.isSessionOverlayVisible,
+    };
 
     // Handle Stripe success return without setting state inside the effect body
     useEffect(() => {
@@ -213,166 +190,15 @@ export function AppTabsPage() {
 
     /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const toggleComplete = useCallback(async (id: string) => {
-        await appTasks.toggleComplete(id, auth.userId, unlockScreenTimeIfLocked);
-    }, [appTasks, auth.userId, unlockScreenTimeIfLocked]);
+        await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
+    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const handleStatsToggle = useCallback((id: string, completed: boolean) => {
-        appTasks.handleStatsToggle(id, completed, unlockScreenTimeIfLocked);
-    }, [appTasks, unlockScreenTimeIfLocked]);
+        appTasks.handleStatsToggle(id, completed, screenTime.unlockScreenTimeIfLocked);
+    }, [appTasks, screenTime.unlockScreenTimeIfLocked]);
 
 
-    /**
-     * Screen Time 事件处理
-     * 当用户从 iOS Shield 界面点击按钮后，iOS 会发送事件到 Web 端
-     */
-    const handleScreenTimeAction = useCallback((event: ScreenTimeActionEvent) => {
-        devLog('🔓 [ScreenTime] 收到操作事件:', event);
-
-        if (event.action === 'start_task') {
-            // 从 Shield 锁定页进入 “start_task” 意味着用户处于解锁流程中。
-            // 这里先写一个兜底标记：即使 statusUpdate 尚未到达，也允许在“任务完成”时触发解锁。
-            isScreenTimeLockedRef.current = true;
-            shouldUnlockScreenTimeAfterTaskCompleteRef.current = true;
-
-            // 用户选择"让 Lumi 陪我开始" - 直达 Gemini Live 开始任务
-            const task: Task = {
-                id: event.taskId || `temp-${Date.now()}`,
-                text: event.taskName || '开始任务',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                displayTime: 'Now',
-                date: getLocalDateString(),
-                completed: false,
-                type: 'todo',
-                category: 'morning',
-                called: false,
-            };
-            devLog('🚀 [ScreenTime] 启动任务:', task.text);
-            // 跳转到 urgency 页面并启动任务
-            handleChangeView('urgency', true);
-
-            // 关键：不要用固定延迟直接启动。
-            // 原因：iOS WebView 回到前台时，Native 登录态注入 + Supabase session 恢复是异步的。
-            // 如果在会话未验证完成前就调用 startSession，会出现“偶发启动失败/页面不弹”的竞态。
-            // 这里复用与 Urgency 页按钮一致的 gate：先等会话验证完成，再启动 AI。
-            if (!auth.isSessionValidated) {
-                devLog('⏳ [ScreenTime] 会话验证中，挂起 start_task 操作');
-                try {
-                    localStorage.setItem(
-                        SCREEN_TIME_START_TASK_INTENT_KEY,
-                        JSON.stringify({ event, savedAtMs: Date.now() })
-                    );
-                } catch {
-                    // ignore
-                }
-                setPendingTask(task);
-                setPendingAction('start-ai');
-                setPendingActionSource('session-validation');
-                return;
-            }
-
-            if (!auth.isLoggedIn) {
-                devLog('🔐 [ScreenTime] 未登录，挂起 start_task 并弹出登录框');
-                try {
-                    localStorage.setItem(
-                        SCREEN_TIME_START_TASK_INTENT_KEY,
-                        JSON.stringify({ event, savedAtMs: Date.now() })
-                    );
-                } catch {
-                    // ignore
-                }
-                setPendingTask(task);
-                setPendingAction('start-ai');
-                setPendingActionSource('auth-required');
-                setShowAuthModal(true);
-                return;
-            }
-
-            // 如果能走到这里，说明会话已恢复完成，清理可能残留的 pending intent
-            try {
-                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-            } catch {
-                // ignore
-            }
-            coach.ensureVoicePromptThenStart(task);
-        } else if (event.action === 'confirm_consequence') {
-            // 用户选择"暂时不做，接受后果" - 显示后果确认界面
-            devLog('📝 [ScreenTime] 显示后果确认界面');
-            setPledgeConfirmData({
-                taskName: event.taskName || '',
-                consequence: event.consequence || '',
-                pledge: event.consequencePledge || '',
-            });
-            setShowPledgeConfirm(true);
-        }
-    }, [auth.isLoggedIn, auth.isSessionValidated, coach.ensureVoicePromptThenStart, handleChangeView]);
-
-    // 使用 Screen Time Hook 监听 iOS 事件
-    const screenTime = useScreenTime({
-        onAction: handleScreenTimeAction,
-    });
-
-    // 同步 Screen Time 锁定状态到 ref，供“任务完成自动解锁”逻辑判断
-    useEffect(() => {
-        isScreenTimeLockedRef.current = screenTime.status.isLocked;
-    }, [screenTime.status.isLocked]);
-
-    // 兜底：如果 start_task 到达时 WebView 恰好 reload，React state 会丢失。
-    // 我们把意图持久化到 localStorage，并在会话恢复后自动续跑，避免“偶发不弹语音页”。
-    useEffect(() => {
-        if (!auth.isSessionValidated || !auth.isLoggedIn) return;
-        if (pendingTask || pendingAction) return;
-        if (coach.isSessionOverlayVisible) return;
-
-        let raw: string | null = null;
-        try {
-            raw = localStorage.getItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-        } catch {
-            return;
-        }
-
-        if (!raw) return;
-
-        try {
-            const parsed = JSON.parse(raw) as {
-                event?: ScreenTimeActionEvent;
-                savedAtMs?: number;
-            };
-
-            const pendingEvent = parsed?.event;
-            const savedAtMs = parsed?.savedAtMs;
-
-            if (!pendingEvent || pendingEvent.action !== 'start_task') {
-                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-                return;
-            }
-
-            if (typeof savedAtMs === 'number' && Date.now() - savedAtMs > SCREEN_TIME_INTENT_TTL_MS) {
-                devLog('🗑️ [ScreenTime] start_task intent 已过期，清理');
-                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-                return;
-            }
-
-            devLog('♻️ [ScreenTime] 恢复 start_task intent（可能发生了 WebView reload）:', pendingEvent);
-            // 先清理再处理，避免 handleScreenTimeAction 再次 return 时形成循环
-            localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-            handleScreenTimeAction(pendingEvent);
-        } catch (error) {
-            console.warn('[ScreenTime] 解析 start_task intent 失败，已清理:', error);
-            try {
-                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
-            } catch {
-                // ignore
-            }
-        }
-    }, [
-        auth.isSessionValidated,
-        auth.isLoggedIn,
-        pendingTask,
-        pendingAction,
-        coach.isSessionOverlayVisible,
-        handleScreenTimeAction,
-    ]);
 
     /**
      * 会话验证完成后处理挂起的操作
@@ -428,17 +254,6 @@ export function AppTabsPage() {
         setPendingVoiceTask(null);
     }, []);
 
-    /**
-     * 测试承诺确认页面 (用于 UI 调整)
-     */
-    const handleTestPledge = useCallback(() => {
-        setPledgeConfirmData({
-            taskName: 'Focus for 45 mins',
-            consequence: 'No YouTube for 2 hours',
-            pledge: 'I Accept The Consequence That I will lose access to YouTube for 2 hours if I fail to focus for 45 minutes.'
-        });
-        setShowPledgeConfirm(true);
-    }, []);
 
     return (
         <div className="fixed inset-0 w-full h-full bg-[#0B1220] md:bg-gray-100 flex flex-col items-center md:justify-center font-sans overflow-hidden">
@@ -594,7 +409,7 @@ export function AppTabsPage() {
                     <ProfileView
                         isPremium={isPremium}
                         onRequestLogin={() => setShowAuthModal(true)}
-                        onTestPledge={handleTestPledge}
+                        onTestPledge={screenTime.handleTestPledge}
                     />
                 )}
 
@@ -648,21 +463,13 @@ export function AppTabsPage() {
             />
 
             {/* Screen Time 后果确认界面 */}
-            {showPledgeConfirm && pledgeConfirmData && (
+            {screenTime.showPledgeConfirm && screenTime.pledgeConfirmData && (
                 <ConsequencePledgeConfirm
-                    taskName={pledgeConfirmData.taskName}
-                    consequence={pledgeConfirmData.consequence}
-                    pledge={pledgeConfirmData.pledge}
-                    onUnlocked={() => {
-                        devLog('✅ [ScreenTime] 后果确认完成，应用已解锁');
-                        setShowPledgeConfirm(false);
-                        setPledgeConfirmData(null);
-                    }}
-                    onCancel={() => {
-                        devLog('❌ [ScreenTime] 用户取消后果确认');
-                        setShowPledgeConfirm(false);
-                        setPledgeConfirmData(null);
-                    }}
+                    taskName={screenTime.pledgeConfirmData.taskName}
+                    consequence={screenTime.pledgeConfirmData.consequence}
+                    pledge={screenTime.pledgeConfirmData.pledge}
+                    onUnlocked={screenTime.handlePledgeUnlocked}
+                    onCancel={screenTime.handlePledgeCancel}
                 />
             )}
 

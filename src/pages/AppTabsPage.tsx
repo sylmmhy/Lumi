@@ -51,6 +51,8 @@ type ViewState = AppTab;
 
 import { devLog } from '../utils/devLog';
 import { getLocalDateString } from '../utils/timeUtils';
+import { useAppTasks } from '../hooks/useAppTasks';
+import { saveSessionMemory } from '../lib/saveSessionMemory';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
@@ -98,10 +100,9 @@ export function AppTabsPage() {
     const [isPremium] = useState(() => checkoutSuccess);
     const [showConfetti, setShowConfetti] = useState(() => checkoutSuccess);
 
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [tasksLoaded, setTasksLoaded] = useState(false);
-    // 用于触发 StatsView 重新加载数据
-    const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0);
+    // 任务 CRUD 和状态管理（提取到独立 hook）
+    const appTasks = useAppTasks(auth.userId);
+
     const [showAuthModal, setShowAuthModal] = useState(false);
     /**
      * Screen Time 自动解锁相关状态

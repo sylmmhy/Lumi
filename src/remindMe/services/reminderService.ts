@@ -1,4 +1,3 @@
-import { type User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import type { Task, RecurrencePattern } from '../types';
 import { notifyNativeTaskCreated, notifyNativeTaskDeleted, type TaskReminderData } from '../../utils/nativeTaskEvents';

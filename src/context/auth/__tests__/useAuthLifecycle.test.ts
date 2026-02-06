@@ -30,8 +30,20 @@ const {
   mockReadAuthFromStorage,
   LOGGED_OUT,
 } = vi.hoisted(() => {
-  const LOGGED_OUT = {
-    isLoggedIn: false as const,
+  const LOGGED_OUT: {
+    isLoggedIn: boolean;
+    userId: string | null;
+    userEmail: string | null;
+    userName: string | null;
+    userPicture: string | null;
+    isNewUser: boolean;
+    sessionToken: string | null;
+    refreshToken: string | null;
+    isNativeLogin: boolean;
+    isSessionValidated: boolean;
+    hasCompletedHabitOnboarding: boolean;
+  } = {
+    isLoggedIn: false,
     userId: null,
     userEmail: null,
     userName: null,
@@ -90,6 +102,7 @@ const {
   const mockReadAuthFromStorage = vi.fn();
 
   return {
+    LOGGED_OUT,
     mockGetSession,
     mockSetSession,
     mockOnAuthStateChange,
@@ -289,7 +302,7 @@ describe('useAuthLifecycle', () => {
     expect(setAuthState).toHaveBeenCalled();
 
     // One of the calls should resolve to the validated state
-    const resolvedStates = setAuthState.mock.calls.map((call: [unknown]) => {
+    const resolvedStates = setAuthState.mock.calls.map((call: unknown[]) => {
       if (typeof call[0] === 'function') {
         return (call[0] as (prev: AuthStateLike) => AuthStateLike)({ ...LOGGED_OUT });
       }
@@ -297,7 +310,10 @@ describe('useAuthLifecycle', () => {
     });
 
     const hasValidState = resolvedStates.some(
-      (s: AuthStateLike) => s?.isLoggedIn === true && s?.userId === 'user-123',
+      (s) => {
+        const state = s as AuthStateLike;
+        return state?.isLoggedIn === true && state?.userId === 'user-123';
+      },
     );
     expect(hasValidState).toBe(true);
   });
@@ -343,7 +359,7 @@ describe('useAuthLifecycle', () => {
 
     // The SIGNED_IN handler calls setAuthState twice (once immediate, once after async query)
     // Check that at least one functional update sets isLoggedIn=true with correct userId
-    const hasLoggedInCall = calls.some((call: [unknown]) => {
+    const hasLoggedInCall = calls.some((call: unknown[]) => {
       if (typeof call[0] === 'function') {
         const result = (call[0] as (prev: AuthStateLike) => AuthStateLike)({ ...LOGGED_OUT });
         return result.isLoggedIn === true && result.userId === 'user-signed-in';
@@ -520,7 +536,7 @@ describe('useAuthLifecycle', () => {
     expect(mockParseNativeAuth).toHaveBeenCalledWith(nativePayload);
 
     const setAuthState = params.setAuthState as ReturnType<typeof vi.fn>;
-    const hasNativeLoginCall = setAuthState.mock.calls.some((call: [unknown]) => {
+    const hasNativeLoginCall = setAuthState.mock.calls.some((call: unknown[]) => {
       if (typeof call[0] === 'function') {
         const result = (call[0] as (prev: AuthStateLike) => AuthStateLike)({ ...LOGGED_OUT });
         return result.isLoggedIn === true && result.userId === 'native-user-1';

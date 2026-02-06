@@ -101,8 +101,9 @@
         "All existing tests still pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Critical: top-level import in .d.ts will break declare global. Must use import() type syntax."
+      "passes": true,
+      "notes": "Critical: top-level import in .d.ts will break declare global. Must use import() type syntax.",
+      "implementationNotes": "Created src/types/mindboat-native.d.ts with the full declare global block (~90 lines) moved from AuthContext.tsx. Used import() type syntax for NativeAuthPayload references (2 places: Window.MindBoatNativeAuth and DocumentEventMap 'mindboat:nativeLogin'). Added export {} at end to make it a module. Deleted the declare global block from AuthContext.tsx. All Window and DocumentEventMap types still resolve correctly. Typecheck passes, all 17 tests pass."
     },
     {
       "id": "US-006",

@@ -263,8 +263,9 @@
         "All existing tests still pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Strictly move code - do NOT optimize any concurrency logic. The 8 refs are already in the hook from US-012, so closures work naturally."
+      "passes": true,
+      "notes": "Strictly move code - do NOT optimize any concurrency logic. The 8 refs are already in the hook from US-012, so closures work naturally.",
+      "implementationNotes": "Moved restoreSession+onAuthStateChange combined useEffect and periodic session check useEffect from AuthContext.tsx into useAuthLifecycle hook. Fixed checkLoginState destructuring from params. Cleaned up unused imports (notifyAuthConfirmed, notifyNativeLoginSuccess, syncUserProfileToStorage) from AuthContext.tsx. AuthContext.tsx reduced from 1314 to 956 lines. Hook now at 893 lines. All 41 tests pass, typecheck clean."
     },
     {
       "id": "US-014",

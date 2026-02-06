@@ -40,6 +40,7 @@ import {
 } from './auth/storage';
 import { canExecuteSetSession, acquireSetSessionLock, releaseSetSessionLock, isNetworkError } from './auth/sessionLock';
 import { validateSessionWithSupabase } from './auth/sessionValidation';
+import { syncAfterLogin } from './auth/postLoginSync';
 
 // ==========================================
 // 常量定义
@@ -425,33 +426,17 @@ export function AuthProvider({
     if (error) return { error: error.message };
 
     if (data.session && data.user) {
-      localStorage.setItem('session_token', data.session.access_token);
-      if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
-      localStorage.setItem('user_id', data.user.id);
-      localStorage.setItem('user_email', data.user.email || '');
       localStorage.setItem('is_new_user', 'false');
       localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
       triggerSessionCheckNowRef.current?.('password_login');
 
-      // 获取用户资料：优先使用用户自己设置的名字，再用 OAuth 的名字
-      // 先尝试从数据库同步用户资料到 localStorage
-      await syncUserProfileToStorage(supabase, data.user.id);
-      // 优先使用 localStorage（用户设置的），再用 OAuth 的
-      const userName = localStorage.getItem('user_name') || data.user.user_metadata?.full_name || '';
-      const userPicture = localStorage.getItem('user_picture') || data.user.user_metadata?.avatar_url || '';
-
-      // 只有在 localStorage 为空时才保存（避免覆盖用户设置的名字）
-      if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
-      if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
-
-	      console.log('✅ Login successful:', data.user.email);
-	      await bindAnalyticsUserSync(data.user.id, data.user.email);
-
-	      const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
-	        supabase,
-	        data.user.id,
-	        'loginWithEmail'
-	      )) ?? false;
+      console.log('✅ Login successful:', data.user.email);
+      const { userName, userPicture, hasCompletedHabitOnboarding } = await syncAfterLogin({
+        client: supabase,
+        session: data.session,
+        userId: data.user.id,
+        source: 'loginWithEmail',
+      });
 
 	      // 登录成功后，设置验证状态为 true（Supabase 已确认）
 	      setAuthState(prev => ({
@@ -626,29 +611,25 @@ export function AuthProvider({
         }
 
         if (data.session && data.user) {
-          localStorage.setItem('session_token', data.session.access_token);
-          if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
-          localStorage.setItem('user_id', data.user.id);
-          localStorage.setItem('user_email', data.user.email || '');
           localStorage.setItem('is_new_user', 'false');
           localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
           triggerSessionCheckNowRef.current?.('otp_backdoor');
 
 	          console.log('✅ Dev backdoor: login successful');
-
-	          const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
-	            supabase,
-	            data.user.id,
-	            'verifyEmailOtp(dev_backdoor)'
-	          )) ?? false;
+          const { userName, userPicture, hasCompletedHabitOnboarding } = await syncAfterLogin({
+            client: supabase,
+            session: data.session,
+            userId: data.user.id,
+            source: 'verifyEmailOtp(dev_backdoor)',
+          });
 
 	          setAuthState(prev => ({
 	            ...prev,
 	            isLoggedIn: true,
             userId: data.user.id,
             userEmail: data.user.email || null,
-            userName: data.user.user_metadata?.full_name || 'Test User',
-            userPicture: data.user.user_metadata?.avatar_url || null,
+            userName: userName || 'Test User',
+            userPicture: userPicture || null,
             sessionToken: data.session.access_token,
             refreshToken: data.session.refresh_token || null,
             isNewUser: false,
@@ -683,10 +664,6 @@ export function AuthProvider({
 
       const { session, user } = data;
       if (session && user) {
-        localStorage.setItem('session_token', session.access_token);
-        if (session.refresh_token) localStorage.setItem('refresh_token', session.refresh_token);
-        localStorage.setItem('user_id', user.id);
-        localStorage.setItem('user_email', user.email || '');
         localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
         triggerSessionCheckNowRef.current?.('otp_verify');
 
@@ -696,25 +673,13 @@ export function AuthProvider({
         const isNewUser = (now.getTime() - createdAt.getTime()) < 60000; // 1分钟内创建的视为新用户
         localStorage.setItem('is_new_user', isNewUser ? 'true' : 'false');
 
-        // 获取用户资料：优先使用用户自己设置的名字，再用 OAuth 的名字
-        // 先尝试从数据库同步用户资料到 localStorage
-        await syncUserProfileToStorage(supabase, user.id);
-        // 优先使用 localStorage（用户设置的），再用 OAuth 的
-        const userName = localStorage.getItem('user_name') || user.user_metadata?.full_name || '';
-        const userPicture = localStorage.getItem('user_picture') || user.user_metadata?.avatar_url || '';
-
-        // 只有在 localStorage 为空时才保存（避免覆盖用户设置的名字）
-        if (userName && !localStorage.getItem('user_name')) localStorage.setItem('user_name', userName);
-        if (userPicture && !localStorage.getItem('user_picture')) localStorage.setItem('user_picture', userPicture);
-
-	        console.log('✅ OTP 登录成功:', user.email);
-	        await bindAnalyticsUserSync(user.id, user.email);
-
-	        const hasCompletedHabitOnboarding = (await fetchHabitOnboardingCompleted(
-	          supabase,
-	          user.id,
-	          'verifyEmailOtp'
-	        )) ?? false;
+        console.log('✅ OTP 登录成功:', user.email);
+        const { userName, userPicture, hasCompletedHabitOnboarding } = await syncAfterLogin({
+          client: supabase,
+          session,
+          userId: user.id,
+          source: 'verifyEmailOtp',
+        });
 
 	        // 登录成功后，设置验证状态为 true（Supabase 已确认）
 	        setAuthState(prev => ({
@@ -1557,49 +1522,38 @@ export function AuthProvider({
 
         // 异步查询 hasCompletedHabitOnboarding 和同步用户资料，完成后再设置 isSessionValidated
         void (async () => {
+          let userName: string | null = null;
+          let userPicture: string | null = null;
           let hasCompletedHabitOnboarding = false;
-          const queryStartTime = Date.now();
-
-          // 【修复】同步用户资料到 localStorage，确保重新登录后用户名正确显示
-          // 这一步会从数据库读取用户名（如果 localStorage 为空）
-          await syncUserProfileToStorage(client, session.user.id);
-
-          // 获取用户名和头像（优先 localStorage，其次 user_metadata）
-          const userName = localStorage.getItem('user_name')
-            || session.user.user_metadata?.full_name
-            || session.user.user_metadata?.name
-            || null;
-          const userPicture = localStorage.getItem('user_picture')
-            || session.user.user_metadata?.avatar_url
-            || null;
 
           // 【原生 App 优化】在原生 App 中跳过数据库查询
-          // iOS/Android 端已经在登录时查询过状态并决定加载哪个 URL
-          // 根据当前 URL 推断状态：/habit-onboarding 表示未完成，其他表示已完成
           if (inNativeApp) {
+            await syncUserProfileToStorage(client, session.user.id);
+            userName = localStorage.getItem('user_name')
+              || session.user.user_metadata?.full_name
+              || session.user.user_metadata?.name
+              || null;
+            userPicture = localStorage.getItem('user_picture')
+              || session.user.user_metadata?.avatar_url
+              || null;
             const isOnOnboardingPage = window.location.pathname.includes('habit-onboarding');
             hasCompletedHabitOnboarding = !isOnOnboardingPage;
             console.log('📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
 	          } else {
-	            // 非原生环境：正常查询数据库
+	            // 非原生环境：使用统一的登录后同步管道
 	            console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
-	            const fetched = await fetchHabitOnboardingCompleted(
+	            const queryStartTime = Date.now();
+	            const result = await syncAfterLogin({
 	              client,
-	              session.user.id,
-	              'onAuthStateChange',
-	              null
-	            );
-
+	              session,
+	              userId: session.user.id,
+	              source: 'onAuthStateChange',
+	            });
+	            userName = result.userName;
+	            userPicture = result.userPicture;
+	            hasCompletedHabitOnboarding = result.hasCompletedHabitOnboarding;
 	            const queryDuration = Date.now() - queryStartTime;
-	            if (fetched === null) {
-	              console.warn(`⚠️ onAuthStateChange: 获取 habit onboarding 状态失败 (耗时 ${queryDuration}ms)，已保持默认 false`);
-	            } else {
-	              hasCompletedHabitOnboarding = fetched;
-	              if (queryDuration > 5000) {
-	                console.warn(`⚠️ onAuthStateChange: 查询耗时过长 (${queryDuration}ms)，可能存在网络问题`);
-	              }
-	              console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
-	            }
+	            console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
 	          }
 
           // 查询完成后，同时设置 isSessionValidated、hasCompletedHabitOnboarding 和用户资料
@@ -1613,9 +1567,9 @@ export function AuthProvider({
             return {
               ...prev,
               isLoggedIn: true,
-              userId: session.user.id, // 确保 userId 被设置
-              userName, // 【修复】设置用户名
-              userPicture, // 【修复】设置用户头像
+              userId: session.user.id,
+              userName,
+              userPicture,
               hasCompletedHabitOnboarding,
               isSessionValidated: true,
             };

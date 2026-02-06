@@ -1,0 +1,348 @@
+{
+  "project": "Lumi",
+  "branchName": "ralph/authcontext-refactor",
+  "description": "AuthContext.tsx refactor - split 2344-line monolith into 6 focused modules + global type declaration, reduce to ~300-400 lines while maintaining identical public API",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Configure Vitest test framework",
+      "description": "As a developer, I need Vitest + React Testing Library + jsdom configured so that all subsequent stories can include automated tests.",
+      "acceptanceCriteria": [
+        "Install vitest, @testing-library/react, @testing-library/jest-dom, jsdom as devDependencies",
+        "Create vitest.config.ts (or add test config to vite.config.ts) with jsdom environment",
+        "Add 'test' script to package.json: 'vitest run'",
+        "Add 'test:watch' script to package.json: 'vitest'",
+        "Create a trivial smoke test (e.g. src/__tests__/setup.test.ts) that passes",
+        "npm run test executes and passes",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "No test infrastructure exists in this project. This must be done first before any test-related stories.",
+      "implementationNotes": "Installed vitest@4, @testing-library/react@16, @testing-library/jest-dom@6, jsdom@25 (v28 had ESM compat issues). Created vitest.config.ts with jsdom env and globals. Added test setup file at src/test/setup.ts importing jest-dom matchers. Added test/test:watch scripts to package.json. Smoke test at src/__tests__/setup.test.ts passes. Typecheck and build pass."
+    },
+    {
+      "id": "US-002",
+      "title": "Write AuthContext baseline integration tests",
+      "description": "As a developer, I need integration tests for AuthContext's current behavior so I can verify no regressions during refactoring.",
+      "acceptanceCriteria": [
+        "Create src/context/__tests__/AuthContext.test.tsx",
+        "Mock Supabase client (auth.getSession, auth.signInWithPassword, auth.signOut, auth.onAuthStateChange)",
+        "Mock localStorage with getItem/setItem/removeItem",
+        "Test: successful login sets isLoggedIn=true, userId, userEmail, sessionToken in state",
+        "Test: logout resets state to logged-out defaults (isLoggedIn=false, userId=null, etc.)",
+        "Test: restoreSession with valid stored session restores logged-in state",
+        "Test: restoreSession with no stored session stays logged-out",
+        "Test: storage event from another tab triggers state sync",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "These tests serve as the regression safety net. They test the CURRENT behavior before any code is moved."
+    },
+    {
+      "id": "US-003",
+      "title": "Extract storage utilities to auth/storage.ts",
+      "description": "As a developer, I need localStorage constants and read/write functions centralized in auth/storage.ts so storage logic changes only require editing one file.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/storage.ts",
+        "Move AUTH_STORAGE_KEYS constant from AuthContext.tsx",
+        "Move NATIVE_LOGIN_FLAG_KEY constant from AuthContext.tsx",
+        "Move batchGetLocalStorage function from AuthContext.tsx",
+        "Move readAuthFromStorage function from AuthContext.tsx",
+        "Move persistSessionToStorage function from AuthContext.tsx",
+        "Move clearAuthStorage function from AuthContext.tsx",
+        "Add LOGGED_OUT_STATE exported constant with all logged-out defaults: { isLoggedIn: false, userId: null, userEmail: null, userName: null, userPicture: null, isNewUser: false, sessionToken: null, refreshToken: null, isNativeLogin: false, isSessionValidated: true, hasCompletedHabitOnboarding: false }",
+        "AuthContext.tsx imports all moved items from auth/storage.ts",
+        "Replace 4 inline logged-out state literals in AuthContext.tsx (logout, fullReset, SIGNED_OUT event, validateSessionWithSupabase) with { ...LOGGED_OUT_STATE } spread syntax",
+        "All exported functions have JSDoc comments",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Zero-risk move. Only changes import paths, no logic changes. LOGGED_OUT_STATE must always be spread ({ ...LOGGED_OUT_STATE }) to prevent reference mutation."
+    },
+    {
+      "id": "US-004",
+      "title": "Write unit tests for auth/storage.ts",
+      "description": "As a developer, I need unit tests for the storage module to verify localStorage operations work correctly in isolation.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/__tests__/storage.test.ts",
+        "Test: batchGetLocalStorage returns correct values for given keys",
+        "Test: readAuthFromStorage returns null values when localStorage is empty",
+        "Test: readAuthFromStorage returns stored values when localStorage has data",
+        "Test: persistSessionToStorage writes session token and refresh token to correct keys",
+        "Test: clearAuthStorage removes all AUTH_STORAGE_KEYS from localStorage",
+        "Test: LOGGED_OUT_STATE has all expected fields with correct default values",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Move global type declarations to mindboat-native.d.ts",
+      "description": "As a developer, I need Window/DocumentEventMap type declarations in a dedicated .d.ts file so AuthContext.tsx only contains business logic.",
+      "acceptanceCriteria": [
+        "Create src/types/mindboat-native.d.ts",
+        "Move entire declare global block (~90 lines) from AuthContext.tsx to the new file",
+        "Use import() type references for NativeAuthPayload (not top-level import): e.g. import('../context/AuthContextDefinition').NativeAuthPayload",
+        "Add export {} at end of file to ensure TypeScript treats it as a module",
+        "Delete the declare global block from AuthContext.tsx",
+        "All Window and DocumentEventMap type references across the codebase still resolve correctly",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Critical: top-level import in .d.ts will break declare global. Must use import() type syntax."
+    },
+    {
+      "id": "US-006",
+      "title": "Extract session lock to auth/sessionLock.ts",
+      "description": "As a developer, I need the refresh token race-condition protection logic isolated in auth/sessionLock.ts so concurrency controls are centrally managed.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/sessionLock.ts",
+        "Move globalSetSessionInProgress, lastGlobalSetSessionTime, GLOBAL_SET_SESSION_DEBOUNCE_MS from AuthContext.tsx",
+        "Move canExecuteSetSession, acquireSetSessionLock, releaseSetSessionLock functions from AuthContext.tsx",
+        "Move isNetworkError function from AuthContext.tsx",
+        "AuthContext.tsx imports all moved items from auth/sessionLock.ts",
+        "All exported functions have JSDoc comments",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Write unit tests for auth/sessionLock.ts",
+      "description": "As a developer, I need unit tests for the session lock module to verify mutex and debounce behavior.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/__tests__/sessionLock.test.ts",
+        "Test: acquireSetSessionLock returns true when lock is free",
+        "Test: acquireSetSessionLock returns false when lock is already held",
+        "Test: releaseSetSessionLock frees the lock for next acquisition",
+        "Test: canExecuteSetSession returns false within GLOBAL_SET_SESSION_DEBOUNCE_MS window",
+        "Test: canExecuteSetSession returns true after debounce window expires",
+        "Test: isNetworkError returns true for TypeError('Failed to fetch')",
+        "Test: isNetworkError returns true for 'NetworkError' message",
+        "Test: isNetworkError returns false for regular Error",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Extract validateSessionWithSupabase to auth/sessionValidation.ts",
+      "description": "As a developer, I need the ~290-line validateSessionWithSupabase pure async function in its own module since it has no React dependencies.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/sessionValidation.ts",
+        "Move validateSessionWithSupabase function (~290 lines) from AuthContext.tsx",
+        "Move DEV_TEST_USER_ID constant from AuthContext.tsx",
+        "Import dependencies from auth/storage.ts and auth/sessionLock.ts",
+        "AuthContext.tsx imports validateSessionWithSupabase from auth/sessionValidation.ts",
+        "All exported functions have JSDoc comments",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Write unit tests for auth/sessionValidation.ts",
+      "description": "As a developer, I need unit tests for session validation covering success, refresh, network-down, and no-session paths.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/__tests__/sessionValidation.test.ts",
+        "Mock Supabase client (auth.getSession, auth.setSession, auth.getUser)",
+        "Test: valid session returns isLoggedIn=true with correct userId/email/tokens",
+        "Test: expired session triggers refresh via setSession and returns refreshed state",
+        "Test: network error preserves local login state with isSessionValidated=false",
+        "Test: no session (null) returns LOGGED_OUT_STATE",
+        "Test: DEV_TEST_USER_ID bypass returns valid state when matching",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Extract post-login sync pipeline to auth/postLoginSync.ts",
+      "description": "As a developer, I need the repeated login-success data sync logic unified in a single syncAfterLogin function to eliminate 4+ duplicated pipelines.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/postLoginSync.ts",
+        "Export syncAfterLogin function that accepts { client: SupabaseClient, session: Session, userId: string, source: string }",
+        "syncAfterLogin performs in order: persistSessionToStorage, syncUserProfileToStorage, compute userName/userPicture (localStorage priority then user_metadata), bindAnalyticsUserSync, fetchHabitOnboardingCompleted",
+        "syncAfterLogin returns { userName: string|null, userPicture: string|null, hasCompletedHabitOnboarding: boolean } - does NOT call setAuthState",
+        "Refactor loginWithEmail to call syncAfterLogin and use returned data for setAuthState",
+        "Refactor verifyEmailOtp (including dev backdoor path) to call syncAfterLogin",
+        "Refactor onAuthStateChange SIGNED_IN handler to call syncAfterLogin",
+        "Refactor applyNativeLogin to call syncAfterLogin",
+        "Each call site retains its own special logic (isNewUser check, race-condition guards, functional state updates)",
+        "All exported functions have JSDoc comments",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "This is the highest-value dedup story. syncAfterLogin must NOT take setAuthState as parameter - each caller handles state differently due to different concurrency requirements."
+    },
+    {
+      "id": "US-011",
+      "title": "Write unit tests for auth/postLoginSync.ts",
+      "description": "As a developer, I need unit tests for the unified post-login sync pipeline.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/__tests__/postLoginSync.test.ts",
+        "Mock Supabase client, localStorage, analyticsSync, userProfile, habitOnboarding",
+        "Test: syncAfterLogin calls persistSessionToStorage with correct session",
+        "Test: syncAfterLogin calls syncUserProfileToStorage",
+        "Test: syncAfterLogin returns userName from localStorage when available",
+        "Test: syncAfterLogin falls back to user_metadata for userName when localStorage is empty",
+        "Test: syncAfterLogin returns correct hasCompletedHabitOnboarding value",
+        "Test: syncAfterLogin calls bindAnalyticsUserSync with userId and email",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Extract auth lifecycle refs and applyNativeLogin/Logout to useAuthLifecycle hook (part 1)",
+      "description": "As a developer, I need the 8+ shared refs and applyNativeLogin/applyNativeLogout moved into useAuthLifecycle as the first half of the largest extraction.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/useAuthLifecycle.ts",
+        "Move all 8 ref declarations into the hook: hasHandledNativeLoginRef, isApplyingNativeLoginRef, lastNativeLoginStartedAtRef, nativeAuthBootstrapDeadlineRef, isOnAuthStateChangeProcessingRef, setSessionTriggeredAuthChangeRef, sessionCheckMutexRef, lastSessionCheckTimeRef",
+        "Move applyNativeLogin function into the hook",
+        "Move applyNativeLogout function into the hook",
+        "Hook accepts { setAuthState, checkLoginState, logout, navigateToLogin } as parameters",
+        "Hook returns { triggerSessionCheckNow } (placeholder that will be filled in US-013)",
+        "AuthContext.tsx calls useAuthLifecycle and uses returned values",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "This is part 1 of the useAuthLifecycle extraction. Strictly move code - do NOT optimize any logic. navigateToLogin is passed as a parameter from AuthProvider (which owns useNavigate), not defined inside the hook."
+    },
+    {
+      "id": "US-013",
+      "title": "Move restoreSession, onAuthStateChange, and triggerSessionCheckNow into useAuthLifecycle (part 2)",
+      "description": "As a developer, I need the session restoration, auth state change subscription, and periodic session check logic moved into useAuthLifecycle.",
+      "acceptanceCriteria": [
+        "Move restoreSession logic and its useEffect into useAuthLifecycle",
+        "Move onAuthStateChange subscription useEffect into useAuthLifecycle",
+        "Move triggerSessionCheckNow function and its periodic check useEffect into useAuthLifecycle",
+        "Hook now returns a real triggerSessionCheckNow function (not placeholder)",
+        "AuthContext.tsx no longer contains these useEffects",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Strictly move code - do NOT optimize any concurrency logic. The 8 refs are already in the hook from US-012, so closures work naturally."
+    },
+    {
+      "id": "US-014",
+      "title": "Move Native Bridge and storage event listeners into useAuthLifecycle (part 3)",
+      "description": "As a developer, I need the Native Bridge event useEffect and storage sync useEffect moved into useAuthLifecycle to complete the extraction.",
+      "acceptanceCriteria": [
+        "Move Native Bridge useEffect (event listener + fallback polling + visibility recovery) into useAuthLifecycle",
+        "Move storage event listener useEffect (cross-tab sync) into useAuthLifecycle",
+        "AuthContext.tsx no longer contains any useEffect for native bridge or storage events",
+        "AuthContext.tsx is now ~300-400 lines, containing only: state declarations, useAuthLifecycle call, login/signup/logout methods, context value construction",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Final extraction step. After this, AuthProvider is a thin orchestration shell."
+    },
+    {
+      "id": "US-015",
+      "title": "Write tests for useAuthLifecycle hook",
+      "description": "As a developer, I need tests for the useAuthLifecycle hook covering session restore, native login, tab sync, and visibility recovery.",
+      "acceptanceCriteria": [
+        "Create src/context/auth/__tests__/useAuthLifecycle.test.ts",
+        "Use renderHook from @testing-library/react",
+        "Mock Supabase client, localStorage, document events, window events",
+        "Test: hook calls restoreSession on mount and sets auth state from stored session",
+        "Test: hook subscribes to onAuthStateChange and handles SIGNED_IN event",
+        "Test: hook subscribes to onAuthStateChange and handles SIGNED_OUT event",
+        "Test: triggerSessionCheckNow validates and refreshes session",
+        "Test: storage event from another tab triggers state update",
+        "Test: native login event (mindboat:nativeLogin) triggers applyNativeLogin",
+        "All tests pass via npm run test",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Deduplicate ensureUserProfileExists in reminderService.ts",
+      "description": "As a developer, I need to remove the duplicate ensureUserProfileExists from reminderService.ts and use the canonical version from auth/userProfile.ts.",
+      "acceptanceCriteria": [
+        "Delete the local ensureUserProfileExists function (lines ~76-108) from src/remindMe/services/reminderService.ts",
+        "Add import { ensureUserProfileExists } from '../../context/auth/userProfile' to reminderService.ts",
+        "Update the call site in createReminder to pass the supabase client as first argument: ensureUserProfileExists(supabase, user)",
+        "Verify ensureUserProfileExists in auth/userProfile.ts accepts (supabase, user) parameters",
+        "Typecheck passes",
+        "All existing tests still pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add JSDoc to all new modules and verify final line count",
+      "description": "As a developer, I need all new modules to have JSDoc comments and AuthContext.tsx to meet the target line count.",
+      "acceptanceCriteria": [
+        "All exported functions in storage.ts have JSDoc with @param and @returns",
+        "All exported functions in sessionLock.ts have JSDoc with @param and @returns",
+        "All exported functions in sessionValidation.ts have JSDoc with @param and @returns",
+        "All exported functions in postLoginSync.ts have JSDoc with @param and @returns",
+        "useAuthLifecycle.ts has JSDoc on the hook and its parameter type",
+        "AuthContext.tsx is <= 400 lines",
+        "npm run lint passes",
+        "npm run build passes",
+        "npm run test passes",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Update architecture documentation",
+      "description": "As a developer, I need the architecture docs updated to reflect the new AuthContext module structure so future contributors understand the layout.",
+      "acceptanceCriteria": [
+        "Update or create docs/architecture/auth-context-modules.md documenting the final file structure",
+        "Document each module's responsibility in a table format",
+        "Document the dependency graph between modules",
+        "Document the useAuthLifecycle hook's parameter and return types",
+        "Create docs/implementation-log/authcontext-refactor.md with summary of what was done and why",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

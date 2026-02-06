@@ -9,6 +9,9 @@ interface UseVoiceActivityDetectionOptions {
   /** 最短持续时间（ms），持续超过此时间才认定为"说话"，默认 250ms。
    * 篝火模式等需要快速响应的场景可设为更低值（如 100ms） */
   minSpeechDuration?: number;
+  /** 音量上报回调，每秒调用一次（与诊断日志同频率）。
+   * 用于外部音频异常检测（如 VoIP 未挂断导致的 volume=0 持续异常）。 */
+  onVolumeReport?: (volume: number) => void;
 }
 
 /**
@@ -32,6 +35,7 @@ export function useVoiceActivityDetection(
     smoothingTimeConstant = 0.8,
     fftSize = 2048,
     minSpeechDuration = 250,
+    onVolumeReport,
   } = options;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -133,7 +137,7 @@ export function useVoiceActivityDetection(
       }
       const average = sum / passbandBinCount;
 
-      // 诊断日志：每 60 帧（约 1 秒）输出一次 VAD 状态
+      // 诊断日志 + 音量上报：每 60 帧（约 1 秒）
       frameCount++;
       if (frameCount % 60 === 1) {
         console.log('🔊 [VAD Loop]', {
@@ -143,6 +147,8 @@ export function useVoiceActivityDetection(
           threshold: risingThreshold,
           isSpeaking: speakingRef.current,
         });
+        // 音量上报回调（用于外部音频异常检测）
+        onVolumeReport?.(Math.round(average));
       }
 
       // Update current volume for UI display
@@ -198,6 +204,7 @@ export function useVoiceActivityDetection(
       speakingRef.current = false;
       speechStartRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onVolumeReport 是回调，不应触发 effect 重建
   }, [enabled, mediaStream, threshold, smoothingTimeConstant, fftSize, minSpeechDuration]);
 
   return {

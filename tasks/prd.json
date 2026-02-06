@@ -318,8 +318,9 @@
         "All existing tests still pass"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "",
+      "implementationNotes": "Deleted the local ensureUserProfileExists function (lines 76-108) from reminderService.ts. Added import from '../../context/auth/userProfile'. Updated call site at createReminder to pass supabase client as first argument: ensureUserProfileExists(supabase, sessionUser). The canonical version in auth/userProfile.ts already accepts (supabase: SupabaseClient, user: User). Typecheck passes, all 47 tests pass."
     },
     {
       "id": "US-017",

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import type { Task, RecurrencePattern } from '../types';
 import { notifyNativeTaskCreated, notifyNativeTaskDeleted, type TaskReminderData } from '../../utils/nativeTaskEvents';
 import { devLog } from '../../utils/devLog';
+import { ensureUserProfileExists } from '../../context/auth/userProfile';
 
 /**
  * Database representation of a task (merged with reminder functionality)
@@ -65,46 +66,6 @@ const getBrowserTimezone = (): string | null => {
     console.warn('⚠️ Timezone detection failed, fallback to null', error);
   }
   return null;
-};
-
-/**
- * 确保 public.users 表存在当前会话用户行，避免 tasks.user_id 外键约束报错。
- *
- * @param {User} user - Supabase Auth 返回的用户对象
- * @returns {Promise<boolean>} 成功确保存在返回 true，失败返回 false
- */
-const ensureUserProfileExists = async (user: User): Promise<boolean> => {
-  if (!supabase) return false;
-
-  const { data: existingUser, error: queryError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (queryError) {
-    console.warn('⚠️ 检查 users 表时出错，尝试继续创建', queryError);
-  }
-
-  if (existingUser?.id) {
-    return true;
-  }
-
-  const { error: upsertError } = await supabase
-    .from('users')
-    .upsert({
-      id: user.id,
-      email: user.email ?? null,
-      name: (user.user_metadata?.full_name as string) ?? null,
-      picture_url: (user.user_metadata?.avatar_url as string) ?? null,
-    }, { onConflict: 'id' });
-
-  if (upsertError) {
-    console.error('❌ 创建/同步 users 表记录失败', upsertError);
-    return false;
-  }
-
-  return true;
 };
 
 /**
@@ -372,7 +333,7 @@ export async function createReminder(task: Omit<Task, 'id'>, userId: string): Pr
   }
 
   // 确保 public.users 表有对应记录，避免 tasks.user_id 外键冲突
-  const ensured = await ensureUserProfileExists(sessionUser);
+  const ensured = await ensureUserProfileExists(supabase, sessionUser);
   if (!ensured) {
     console.error('❌ 无法同步用户到 users 表，任务创建已中止');
     return null;

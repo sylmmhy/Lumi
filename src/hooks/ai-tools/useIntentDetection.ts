@@ -85,6 +85,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
 
   // 对话历史
   const userMessagesRef = useRef<string[]>([]);
+  const aiMessageHistoryRef = useRef<string[]>([]);
   const lastSuggestionRef = useRef<LastSuggestion | null>(null);
   
   // 防抖定时器
@@ -130,9 +131,10 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
    */
   const clearHistory = useCallback(() => {
     userMessagesRef.current = [];
+    aiMessageHistoryRef.current = [];
     lastSuggestionRef.current = null;
-    pendingHabitRef.current = null; // 清空待创建习惯
-    triggeredToolsRef.current.clear(); // 重置已触发工具记录
+    pendingHabitRef.current = null;
+    triggeredToolsRef.current.clear();
   }, []);
 
   /**
@@ -151,7 +153,8 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           aiResponse,
           chatType,
           lastSuggestion: lastSuggestionRef.current,
-          pendingHabit: pendingHabitRef.current, // 待创建的习惯名称
+          pendingHabit: pendingHabitRef.current,
+          previousAIMessages: aiMessageHistoryRef.current.slice(-3),
         }),
       });
 
@@ -241,6 +244,12 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     // 清除之前的防抖定时器
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+    }
+
+    // 存储 AI 消息历史（用于在确认阶段提供上下文）
+    aiMessageHistoryRef.current.push(aiResponse);
+    if (aiMessageHistoryRef.current.length > 5) {
+      aiMessageHistoryRef.current = aiMessageHistoryRef.current.slice(-5);
     }
 
     // 防抖处理

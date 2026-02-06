@@ -7,7 +7,6 @@ import { useAuth } from '../hooks/useAuth';
 import { SessionOverlay } from '../components/overlays/SessionOverlay';
 import { CelebrationOverlay } from '../components/overlays/CelebrationOverlay';
 import { AuthModal } from '../components/modals/AuthModal';
-import { VoicePermissionModal } from '../components/modals/VoicePermissionModal';
 import { TestVersionModal } from '../components/modals/TestVersionModal';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 
@@ -91,8 +90,6 @@ export function AppTabsPage() {
      */
     const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
-    const [showVoicePrompt, setShowVoicePrompt] = useState(false);
-    const [pendingVoiceTask, setPendingVoiceTask] = useState<Task | null>(null);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         navigate(`/app/${view}`, { replace });
@@ -234,25 +231,6 @@ export function AppTabsPage() {
         }
     }, [addTask, auth.isSessionValidated, auth.isLoggedIn, pendingTask, pendingAction, pendingActionSource, coach.ensureVoicePromptThenStart]);
 
-    /**
-     * 语音/摄像头提示点击「OK」后继续任务启动。
-     */
-    const handleVoicePromptConfirm = useCallback(() => {
-        coach.markVoicePromptSeen();
-        setShowVoicePrompt(false);
-        if (pendingVoiceTask) {
-            void coach.startAICoachForTask(pendingVoiceTask);
-            setPendingVoiceTask(null);
-        }
-    }, [coach, pendingVoiceTask]);
-
-    /**
-     * 用户取消提示，则终止本次启动流程。
-     */
-    const handleVoicePromptCancel = useCallback(() => {
-        setShowVoicePrompt(false);
-        setPendingVoiceTask(null);
-    }, []);
 
 
     return (
@@ -356,12 +334,7 @@ export function AppTabsPage() {
                     }
                 }}
             />
-            <VoicePermissionModal
-                isOpen={showVoicePrompt}
-                onConfirm={handleVoicePromptConfirm}
-                onCancel={handleVoicePromptCancel}
-            />
-            <TestVersionModal
+<TestVersionModal
                 isOpen={appTasks.showTestVersionModal}
                 onClose={() => appTasks.setShowTestVersionModal(false)}
             />

@@ -280,8 +280,8 @@
         "All existing tests still pass"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "Final extraction step. After this, AuthProvider is a thin orchestration shell."
+      "passes": true,
+      "notes": "Moved Native Bridge useEffect, storage event useEffect, OAuth callback useEffect, checkLoginState, navigateToLogin, handleOAuthCallback, bindOnboardingToUser, isOAuthProcessing state, loginPathRef/defaultRedirectRef/hasHandledOAuthRef/triggerSessionCheckNowRef into useAuthLifecycle. AuthContext.tsx reduced from 956→555 lines (no useEffect/useRef left). useAuthLifecycle.ts grew to ~1300 lines. All 41 tests pass, typecheck clean."
     },
     {
       "id": "US-015",

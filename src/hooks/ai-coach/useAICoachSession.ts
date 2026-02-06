@@ -1,21 +1,19 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useGeminiLive, fetchGeminiToken } from '../useGeminiLive';
+import { useGeminiLive } from '../useGeminiLive';
 import { useVirtualMessages } from '../useVirtualMessages';
 import type { SuccessRecordForVM } from '../useVirtualMessages';
 import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
 import { useWaveformAnimation } from '../useWaveformAnimation';
 import { useVirtualMessageOrchestrator } from '../virtual-messages';
 import { getSupabaseClient } from '../../lib/supabase';
-import { getVoiceName } from '../../lib/voiceSettings';
 import type { VirtualMessageUserContext } from '../virtual-messages/types';
-import { devError, devLog, devWarn } from '../gemini-live/utils';
+import { devLog, devWarn } from '../gemini-live/utils';
 import type { AICoachSessionState, UseAICoachSessionOptions } from './types';
-import { CONNECTION_TIMEOUT_MS, MAX_CAMERA_RETRIES, CAMERA_RETRY_DELAY_MS } from './types';
-import { withTimeout } from './utils';
 import { useCampfireMode } from './useCampfireMode';
 import { useSessionTimer } from './useSessionTimer';
 import { useSessionMemory } from './useSessionMemory';
 import { useTranscriptProcessor } from './useTranscriptProcessor';
+import { useSessionLifecycle } from './useSessionLifecycle';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -45,13 +43,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const [isObserving, setIsObserving] = useState(false); // AI 正在观察用户
   const [connectionError, setConnectionError] = useState<string | null>(null); // 连接错误信息
 
-  const isCleaningUpRef = useRef(false); // 防止重复清理
   const sessionEpochRef = useRef(0); // 递增用于取消 in-flight 的 startSession / campfire reconnect
-  const startSessionInFlightRef = useRef(false); // 幂等守卫：防止并发 startSession
 
   /**
    * 保存最新的 cleanup 引用，供 handleTimerComplete 使用
-   * 初始为空函数，在 cleanup 定义后由 effect 同步
+   * 初始为空函数，在 lifecycle hook 定义后由 effect 同步
    */
   const cleanupRef = useRef<() => void>(() => {});
 
@@ -67,7 +63,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
   const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
-  const currentCallRecordIdRef = useRef<string | null>(null); // 来电记录 ID，用于记录通话时长
 
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);
@@ -189,6 +184,35 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   useEffect(() => {
     saveSessionMemoryRef.current = memory.saveSessionMemory;
   }, [memory.saveSessionMemory]);
+
+  // ==========================================
+  // 会话生命周期（独立 Hook）
+  // ==========================================
+  const lifecycle = useSessionLifecycle({
+    geminiLive,
+    campfire,
+    timer,
+    transcript,
+    initialTime,
+    isSessionActive,
+    isConnecting,
+    setIsConnecting,
+    setIsSessionActive,
+    setIsObserving,
+    setConnectionError,
+    setTaskDescription,
+    sessionEpochRef,
+    currentUserIdRef,
+    currentTaskDescriptionRef,
+    currentTaskIdRef,
+    preferredLanguagesRef,
+    successRecordRef,
+  });
+
+  // 同步 cleanup 到 ref，供 handleTimerComplete 使用
+  useEffect(() => {
+    cleanupRef.current = lifecycle.cleanup;
+  }, [lifecycle.cleanup]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -315,400 +339,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [geminiLive.isSpeaking, isObserving]);
 
   // ==========================================
-  // 统一清理函数（解决断开连接逻辑重复问题）
-  // ==========================================
-  const cleanup = useCallback(() => {
-    // bump epoch: 任何 cleanup 都会让 in-flight 的 startSession/campfire reconnect 作废
-    sessionEpochRef.current += 1;
-
-    // 防止重复清理
-    if (isCleaningUpRef.current) {
-      try {
-        geminiLive.disconnect();
-      } catch (e) {
-        devWarn('cleanup: geminiLive.disconnect() failed (ignored)', e);
-      }
-      return;
-    }
-    isCleaningUpRef.current = true;
-
-    devLog('🧹 执行统一清理...');
-
-    // 记录通话结束时间和时长（如果有 callRecordId）
-    const callRecordId = currentCallRecordIdRef.current;
-    if (callRecordId && timer.taskStartTime > 0) {
-      const durationSeconds = Math.round((Date.now() - timer.taskStartTime) / 1000);
-      devLog('📞 记录通话结束:', { callRecordId, durationSeconds });
-
-      const supabaseForEndCall = getSupabaseClient();
-      if (supabaseForEndCall) {
-        supabaseForEndCall.functions.invoke('manage-call-records', {
-          body: {
-            action: 'end_call',
-            call_record_id: callRecordId,
-            end_at: new Date().toISOString(),
-            duration_seconds: durationSeconds,
-          },
-        }).then(({ error }) => {
-          if (error) {
-            devWarn('⚠️ 记录通话结束失败:', error);
-          } else {
-            devLog('✅ 通话结束已记录');
-          }
-        });
-      }
-      currentCallRecordIdRef.current = null;
-    }
-
-    // 1. 停止计时器
-    timer.stopTimer();
-
-    // 2. 断开 Gemini 连接
-    geminiLive.disconnect();
-
-    // 3. 重置状态
-    setIsSessionActive(false);
-    setIsObserving(false);
-    setIsConnecting(false);
-
-    // 重置清理标志（延迟重置，确保当前清理完成）
-    setTimeout(() => {
-      isCleaningUpRef.current = false;
-    }, 100);
-
-    devLog('✅ 统一清理完成');
-  }, [geminiLive, timer.stopTimer, timer.taskStartTime]);
-
-  // 同步 cleanup 到 ref，供 handleTimerComplete 使用
-  useEffect(() => {
-    cleanupRef.current = cleanup;
-  }, [cleanup]);
-
-  // ==========================================
-  // 会话管理
-  // ==========================================
-
-  /**
-   * 开始 AI 教练会话
-   */
-  const startSession = useCallback(async (
-    taskDescription: string,
-    options?: { userId?: string; customSystemInstruction?: string; userName?: string; preferredLanguages?: string[]; taskId?: string; callRecordId?: string }
-  ) => {
-    // 幂等守卫
-    if (startSessionInFlightRef.current) {
-      devWarn('startSession ignored: another startSession is already in progress');
-      return false;
-    }
-    startSessionInFlightRef.current = true;
-
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId } = options || {};
-    let epochAtStart = sessionEpochRef.current;
-
-   try {
-      devLog('🚀 开始 AI 教练会话...');
-
-      // 如果当前在篝火模式，先停掉篝火资源
-      if (campfire.isCampfireMode) {
-        campfire.stopCampfireResources();
-      }
-
-      // 防止 sessionRef 残留导致 connect 被忽略
-      geminiLive.disconnect();
-
-      // 如果存在旧会话/正在连接，先统一 cleanup
-      if (isSessionActive || isConnecting || geminiLive.isConnected) {
-        devLog('⚠️ 检测到旧会话/连接中，先清理...');
-        cleanup();
-        await new Promise(resolve => setTimeout(resolve, 150));
-      }
-
-      // 重置清理标志
-      isCleaningUpRef.current = false;
-
-      // capture epoch
-      epochAtStart = sessionEpochRef.current;
-
-      transcript.reset();
-      campfire.intentDetection.clearHistory();
-      currentUserIdRef.current = userId || null;
-      currentTaskDescriptionRef.current = taskDescription;
-      currentTaskIdRef.current = taskId || null;
-      currentCallRecordIdRef.current = callRecordId || null;
-      preferredLanguagesRef.current = preferredLanguages || null;
-      setIsConnecting(true);
-      setConnectionError(null);
-
-      // 更新任务描述并重置
-      setTaskDescription(taskDescription);
-      timer.resetTimer();
-
-      devLog('🚀 全并行启动: 硬件初始化 + 网络请求同时进行...');
-
-      const supabaseClient = getSupabaseClient();
-      if (!supabaseClient) {
-        throw new Error('Supabase 未配置');
-      }
-
-      const needFetchInstruction = !customSystemInstruction;
-
-      const [, , instructionResult, token] = await withTimeout(
-        Promise.all([
-          // 任务A：摄像头初始化（带重试机制）
-          (async () => {
-            devLog('🎬 [并行] 摄像头初始化...', { cameraEnabled: geminiLive.cameraEnabled });
-            if (!geminiLive.cameraEnabled) {
-              let cameraRetries = 0;
-              let cameraSuccess = false;
-
-              while (cameraRetries < MAX_CAMERA_RETRIES && !cameraSuccess) {
-                devLog(`📹 摄像头尝试 #${cameraRetries + 1}，调用 toggleCamera()...`);
-                try {
-                  await geminiLive.toggleCamera();
-                  cameraSuccess = true;
-                  devLog('✅ 摄像头启用成功');
-                } catch (cameraError) {
-                  cameraRetries++;
-                  const errorMessage = cameraError instanceof Error ? cameraError.message : String(cameraError);
-                  devWarn('❌ 摄像头启用异常:', cameraError);
-                  devLog('❌ 摄像头错误详情:', errorMessage);
-
-                  if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowed')) {
-                    devLog('⚠️ 摄像头权限被拒绝，跳过重试');
-                    break;
-                  }
-
-                  if (cameraRetries < MAX_CAMERA_RETRIES) {
-                    devLog(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
-                    await new Promise(resolve => setTimeout(resolve, CAMERA_RETRY_DELAY_MS));
-                    devLog(`🔄 重试等待结束，开始第 ${cameraRetries + 1} 次尝试...`);
-                  } else {
-                    devLog('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
-                  }
-                }
-              }
-              devLog(`📹 摄像头初始化循环结束: cameraSuccess=${cameraSuccess}, cameraEnabled=${geminiLive.cameraEnabled}`);
-            }
-          })(),
-
-          // 任务B：麦克风初始化 + callRecordId 记录
-          (async () => {
-            devLog('🎤 [并行] 麦克风初始化...');
-            if (!geminiLive.isRecording) {
-              devLog('🎤 调用 toggleMicrophone()...');
-              await geminiLive.toggleMicrophone();
-              devLog('🎤 toggleMicrophone() 完成');
-            } else {
-              devLog('🎤 麦克风已启用，跳过');
-            }
-
-            // 麦克风连接成功后，记录 callRecordId（fire-and-forget）
-            if (callRecordId) {
-              devLog('📞 记录 mic_connected_at:', callRecordId);
-              const supabaseForMic = getSupabaseClient();
-              if (supabaseForMic) {
-                supabaseForMic.functions.invoke('manage-call-records', {
-                  body: {
-                    action: 'mark_mic_connected',
-                    call_record_id: callRecordId,
-                  },
-                }).then(({ error }) => {
-                  if (error) {
-                    devWarn('⚠️ 记录 mic_connected_at 失败:', error);
-                  } else {
-                    devLog('✅ mic_connected_at 已记录');
-                  }
-                });
-              }
-            }
-          })(),
-
-          // 任务C：获取系统指令（后端记忆检索）
-          needFetchInstruction
-            ? supabaseClient.functions.invoke('get-system-instruction', {
-                body: {
-                  taskInput: taskDescription,
-                  userName,
-                  preferredLanguages,
-                  userId,
-                  localTime: (() => {
-                    const now = new Date();
-                    const hours = now.getHours();
-                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                    return `${hours}:${minutes} (24-hour format)`;
-                  })(),
-                  localDate: new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'short',
-                    day: 'numeric'
-                  }),
-                  localDateISO: new Date().toISOString().split('T')[0]
-                }
-              })
-            : Promise.resolve(null),
-
-          // 任务D：获取 Gemini token
-          fetchGeminiToken(),
-        ]),
-        CONNECTION_TIMEOUT_MS,
-        '获取配置超时，请检查网络连接后重试'
-      );
-
-      if (epochAtStart !== sessionEpochRef.current) {
-        devLog('startSession cancelled after parallel init (stale epoch)');
-        return false;
-      }
-
-      // 处理 system instruction 结果
-      let systemInstruction = customSystemInstruction;
-      if (instructionResult) {
-        if (instructionResult.error) {
-          throw new Error(`获取系统指令失败: ${instructionResult.error.message}`);
-        }
-        systemInstruction = instructionResult.data.systemInstruction;
-
-        // 日志：显示检索到的记忆
-        if (import.meta.env.DEV) {
-          const retrievedMemories = instructionResult.data.retrievedMemories as string[] | undefined;
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('🧠 [记忆检索] 本次会话取到的记忆:');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          if (retrievedMemories && retrievedMemories.length > 0) {
-            retrievedMemories.forEach((memory, index) => {
-              console.log(`  ${index + 1}. ${memory}`);
-            });
-          } else {
-            console.log('  (无记忆 - 这可能是新用户或没有相关记忆)');
-          }
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        }
-
-        // Phase 3: 提取成功记录
-        if (instructionResult.data.successRecord) {
-          successRecordRef.current = instructionResult.data.successRecord;
-          if (import.meta.env.DEV) {
-            console.log('📊 获取到用户成功记录:', successRecordRef.current);
-          }
-        } else {
-          successRecordRef.current = null;
-        }
-      } else {
-        successRecordRef.current = null;
-      }
-
-      // 保存 system instruction 用于篝火模式退出后恢复
-      if (systemInstruction) {
-        campfire.savedSystemInstructionRef.current = systemInstruction;
-      }
-
-      if (import.meta.env.DEV) {
-        devLog('✅ 并行获取完成，正在连接 Gemini Live...');
-      }
-
-      // 获取用户选择的 AI 声音
-      const voiceName = getVoiceName();
-      if (import.meta.env.DEV) {
-        devLog('🎤 使用 AI 声音:', voiceName);
-      }
-
-      // 使用预获取的 token 连接（带超时保护）
-      await withTimeout(
-        geminiLive.connect(systemInstruction, undefined, token, voiceName),
-        CONNECTION_TIMEOUT_MS,
-        '连接 AI 服务超时，请检查网络连接后重试'
-      );
-
-      if (epochAtStart !== sessionEpochRef.current) {
-        devLog('startSession cancelled after connect (stale epoch)');
-        geminiLive.disconnect();
-        return false;
-      }
-
-      if (import.meta.env.DEV) {
-        devLog('✅ 连接已建立');
-      }
-
-      setIsConnecting(false);
-      setIsSessionActive(true);
-      setIsObserving(true);
-
-      // 开始倒计时
-      timer.startTimer();
-
-      if (import.meta.env.DEV) {
-        devLog('✨ AI 教练会话已成功开始');
-      }
-
-      return true;
-    } catch (error) {
-      if (epochAtStart !== sessionEpochRef.current) {
-        devLog('startSession aborted (stale epoch), ignoring error:', error);
-        return false;
-      }
-
-      const errorMessage = error instanceof Error ? error.message : '连接失败，请重试';
-      console.error('❌ startSession 错误:', errorMessage);
-      devError('❌ startSession 错误详情:', error);
-      setIsConnecting(false);
-      setConnectionError(errorMessage);
-
-      cleanup();
-
-      throw error;
-    } finally {
-      startSessionInFlightRef.current = false;
-    }
-  }, [initialTime, geminiLive, timer, cleanup, isSessionActive, isConnecting, campfire]);
-
-  /**
-   * 立即停止音频播放（不断开连接、不清理资源）
-   */
-  const stopAudioImmediately = useCallback(() => {
-    devLog('🔇 立即停止音频播放...');
-    geminiLive.stopAudio();
-  }, [geminiLive]);
-
-  /**
-   * 结束 AI 教练会话
-   */
-  const endSession = useCallback(() => {
-    devLog('🔌 结束 AI 教练会话...');
-
-    // 如果在篝火模式中直接挂电话，先清理篝火模式资源
-    if (campfire.isCampfireMode) {
-      campfire.stopCampfireResources();
-    }
-
-    cleanup();
-
-    devLog('✅ AI 教练会话已结束');
-  }, [cleanup, campfire]);
-
-  /**
-   * 重置会话
-   */
-  const resetSession = useCallback(() => {
-    endSession();
-    transcript.reset();
-    setConnectionError(null);
-    setTaskDescription('');
-    timer.resetTimer();
-  }, [endSession, transcript, timer]);
-
-  // 组件卸载时清理
-  useEffect(() => {
-    return () => {
-      sessionEpochRef.current += 1;
-      timer.cleanupTimer();
-      geminiLive.disconnect();
-
-      // 篝火模式资源清理（委托给子 Hook）
-      campfire.cleanupResources();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ==========================================
   // 返回值
   // ==========================================
   // 组合 state 对象（向后兼容，调用方仍可用 state.timeRemaining 等）
@@ -741,10 +371,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     waveformHeights: waveformAnimation.heights,
 
     // 操作
-    startSession,
-    endSession,
-    stopAudioImmediately,
-    resetSession,
+    startSession: lifecycle.startSession,
+    endSession: lifecycle.endSession,
+    stopAudioImmediately: lifecycle.stopAudioImmediately,
+    resetSession: lifecycle.resetSession,
     saveSessionMemory: memory.saveSessionMemory,
     /** 更新当前任务 ID（用于后台保存临时任务后替换为真实 UUID） */
     updateTaskId: (newTaskId: string) => { currentTaskIdRef.current = newTaskId; },

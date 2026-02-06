@@ -301,8 +301,9 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "",
+      "implementationNotes": "Created src/context/auth/__tests__/useAuthLifecycle.test.ts with 6 tests using renderHook. Used vi.hoisted() for all mock variables (including LOGGED_OUT object) to avoid hoisting issues with vi.mock factories. Mocked all hook dependencies: supabase, sessionValidation, postLoginSync, analyticsSync, oauthCallback, nativeAuthBridge, userProfile, habitOnboarding, storage, sessionLock, routes. Tests cover: restoreSession on mount, onAuthStateChange SIGNED_IN/SIGNED_OUT handling, triggerSessionCheckNow session refresh, storage event cross-tab sync, native login CustomEvent dispatch. All 47 tests pass (41 existing + 6 new). Typecheck passes."
     },
     {
       "id": "US-016",

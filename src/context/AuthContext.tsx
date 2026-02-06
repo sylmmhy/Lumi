@@ -10,7 +10,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AuthContext, type AuthContextValue, type AuthState, type NativeAuthPayload } from './AuthContextDefinition';
-import type { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_APP_PATH } from '../constants/routes';
@@ -32,25 +31,21 @@ import {
 } from './auth/nativeAuthBridge';
 import { updateUserProfile, syncUserProfileToStorage } from './auth/userProfile';
 import { fetchHabitOnboardingCompleted } from './auth/habitOnboarding';
+import {
+  AUTH_STORAGE_KEYS,
+  NATIVE_LOGIN_FLAG_KEY,
+  LOGGED_OUT_STATE,
+  batchGetLocalStorage,
+  readAuthFromStorage,
+  persistSessionToStorage,
+  clearAuthStorage,
+} from './auth/storage';
 
 // ==========================================
 // 常量定义
 // ==========================================
 
 const DEFAULT_LOGIN_PATH = '/login/mobile';
-const NATIVE_LOGIN_FLAG_KEY = 'native_login';
-
-// 需要读取的 localStorage keys
-const AUTH_STORAGE_KEYS = [
-  'session_token',
-  'user_id',
-  'user_email',
-  'user_name',
-  'user_picture',
-  'is_new_user',
-  'refresh_token',
-  NATIVE_LOGIN_FLAG_KEY,
-] as const;
 
 // ==========================================
 // 全局类型声明
@@ -147,9 +142,6 @@ declare global {
   }
 }
 
-// ==========================================
-// 工具函数
-// ==========================================
 
 // ==========================================
 // 【修复】全局 setSession 互斥锁 - 防止并发 refresh token 竞态
@@ -214,17 +206,6 @@ function releaseSetSessionLock(caller: string): void {
   console.log(`🔐 setSession (${caller}): 释放锁`);
 }
 
-/**
- * 批量读取 localStorage，减少同步 I/O 次数
- * iOS WebView 中每次 localStorage.getItem 都是昂贵的同步操作
- */
-function batchGetLocalStorage<T extends readonly string[]>(keys: T): Record<T[number], string | null> {
-  const result = {} as Record<T[number], string | null>;
-  for (const key of keys) {
-    result[key as T[number]] = localStorage.getItem(key);
-  }
-  return result;
-}
 
 /**
  * 判断错误是否是网络相关错误（而非 token 真正失效）
@@ -255,59 +236,8 @@ function isNetworkError(error: { message?: string; code?: string } | null): bool
   return networkErrorPatterns.some(pattern => msg.includes(pattern) || code.includes(pattern));
 }
 
-/**
- * 从 localStorage 读取认证状态（仅作为缓存，需通过 Supabase 验证）
- * 注意：isSessionValidated 初始为 false，需通过 validateSessionWithSupabase 验证后才为 true
- */
-function readAuthFromStorage(): AuthState {
-  const stored = batchGetLocalStorage(AUTH_STORAGE_KEYS);
 
-  const sessionToken = stored['session_token'];
-  const userId = stored['user_id'];
-  const isNativeLogin = stored[NATIVE_LOGIN_FLAG_KEY] === 'true';
-  // 初始状态：根据 localStorage 判断，但标记为未验证
-  const isLoggedIn = (!!sessionToken && !!userId) || (isNativeLogin && !!userId);
 
-  return {
-    isLoggedIn,
-    userId,
-    userEmail: stored['user_email'],
-    userName: stored['user_name'],
-    userPicture: stored['user_picture'],
-    isNewUser: stored['is_new_user'] === 'true',
-    sessionToken,
-    refreshToken: stored['refresh_token'],
-    isNativeLogin,
-    isSessionValidated: false, // 初始未验证，需通过 Supabase 确认
-    hasCompletedHabitOnboarding: false, // 从数据库查询后更新
-  };
-}
-
-/**
- * 将 Supabase session 同步到本地存储
- */
-function persistSessionToStorage(session: Session): void {
-  localStorage.setItem('session_token', session.access_token);
-  if (session.refresh_token) {
-    localStorage.setItem('refresh_token', session.refresh_token);
-  }
-  localStorage.setItem('user_id', session.user.id);
-  localStorage.setItem('user_email', session.user.email || '');
-  localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
-}
-
-/**
- * 清理所有认证相关的 localStorage
- */
-function clearAuthStorage(): void {
-  localStorage.removeItem('session_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user_id');
-  localStorage.removeItem('user_email');
-  localStorage.removeItem('user_name');
-  localStorage.removeItem('user_picture');
-  localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
-}
 
 /**
  * 以 Supabase Auth 为权威来源验证会话
@@ -489,19 +419,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
 	            console.log('📱 Session 验证失败，尝试向 Native 端重新请求登录态（避免误触发原生登出）');
 	            requestNativeAuth();
 	          }
-	          return {
-	            isLoggedIn: false,
-            userId: null,
-            userEmail: null,
-            userName: null,
-            userPicture: null,
-            isNewUser: false,
-            sessionToken: null,
-            refreshToken: null,
-            isNativeLogin: false,
-            isSessionValidated: true,
-            hasCompletedHabitOnboarding: false,
-          };
+	          return { ...LOGGED_OUT_STATE };
         }
 
 	        if (restored.session) {
@@ -607,19 +525,7 @@ async function validateSessionWithSupabase(): Promise<AuthState> {
   // 5. 没有任何有效会话
   // 注意：这里不通知 Native，因为可能是首次加载（localStorage 本来就没有数据）
   // 只有在 localStorage 有数据但验证失败时才需要通知
-  return {
-    isLoggedIn: false,
-    userId: null,
-    userEmail: null,
-    userName: null,
-    userPicture: null,
-    isNewUser: false,
-    sessionToken: null,
-    refreshToken: null,
-    isNativeLogin: false,
-    isSessionValidated: true,
-    hasCompletedHabitOnboarding: false,
-  };
+  return { ...LOGGED_OUT_STATE };
 }
 
 // ==========================================
@@ -1392,19 +1298,7 @@ export function AuthProvider({
     notifyNativeLogout();
     resetAnalyticsUser();
     // 登出后，设置已验证的登出状态
-    setAuthState({
-      isLoggedIn: false,
-      userId: null,
-      userEmail: null,
-      userName: null,
-      userPicture: null,
-      isNewUser: false,
-      sessionToken: null,
-      refreshToken: null,
-      isNativeLogin: false,
-      isSessionValidated: true,
-      hasCompletedHabitOnboarding: false,
-    });
+    setAuthState({ ...LOGGED_OUT_STATE });
   }, []);
 
   // ==========================================
@@ -1456,19 +1350,7 @@ export function AuthProvider({
     localStorage.clear();
     if (import.meta.env.DEV) console.log('🗑️ 完全重置 - 所有 localStorage 已清除');
     // 完全重置后，设置已验证的登出状态
-    setAuthState({
-      isLoggedIn: false,
-      userId: null,
-      userEmail: null,
-      userName: null,
-      userPicture: null,
-      isNewUser: false,
-      sessionToken: null,
-      refreshToken: null,
-      isNativeLogin: false,
-      isSessionValidated: true,
-      hasCompletedHabitOnboarding: false,
-    });
+    setAuthState({ ...LOGGED_OUT_STATE });
   }, []);
 
   const markOnboardingCompleted = useCallback((
@@ -2240,19 +2122,7 @@ export function AuthProvider({
         // Supabase 通知已登出，清除 localStorage 并更新状态
         clearAuthStorage();
         resetAnalyticsUser();
-        setAuthState({
-          isLoggedIn: false,
-          userId: null,
-          userEmail: null,
-          userName: null,
-          userPicture: null,
-          isNewUser: false,
-          sessionToken: null,
-          refreshToken: null,
-          isNativeLogin: false,
-          isSessionValidated: true, // 已验证：确定是登出状态
-          hasCompletedHabitOnboarding: false,
-        });
+        setAuthState({ ...LOGGED_OUT_STATE });
       }
     });
 

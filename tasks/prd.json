@@ -62,8 +62,9 @@
         "All existing tests still pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Zero-risk move. Only changes import paths, no logic changes. LOGGED_OUT_STATE must always be spread ({ ...LOGGED_OUT_STATE }) to prevent reference mutation."
+      "passes": true,
+      "notes": "Zero-risk move. Only changes import paths, no logic changes. LOGGED_OUT_STATE must always be spread ({ ...LOGGED_OUT_STATE }) to prevent reference mutation.",
+      "implementationNotes": "Created src/context/auth/storage.ts with AUTH_STORAGE_KEYS, NATIVE_LOGIN_FLAG_KEY, LOGGED_OUT_STATE, batchGetLocalStorage, readAuthFromStorage, persistSessionToStorage, clearAuthStorage. All have JSDoc. Removed moved code from AuthContext.tsx (reduced ~75 lines). Replaced 5 inline logged-out state literals (validateSessionWithSupabase x2, logout, fullReset, SIGNED_OUT handler) with { ...LOGGED_OUT_STATE }. Removed unused Session type import from AuthContext.tsx."
     },
     {
       "id": "US-004",

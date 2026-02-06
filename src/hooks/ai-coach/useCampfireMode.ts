@@ -453,21 +453,15 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     }
   }, [isCampfireMode, geminiLive.isConnected, geminiLive, preferredLanguage]);
 
-  // VAD 触发 → 重连 Gemini
+  // VAD 触发 → 重连 Gemini（只在 isSpeaking 变化时执行，不依赖 currentVolume 避免刷屏）
   useEffect(() => {
-    if (isCampfireMode) {
-      devLog('🔥 [Campfire VAD]', {
-        isSpeaking: campfireVad.isSpeaking,
-        volume: campfireVad.currentVolume,
-        isConnected: geminiLive.isConnected,
-        reconnectLock: campfireReconnectLockRef.current,
-        micStream: campfireMicStreamRef.current ? 'active' : 'null',
-      });
+    if (isCampfireMode && campfireVad.isSpeaking) {
+      devLog('🔥 [Campfire VAD] Speaking detected, isConnected:', geminiLive.isConnected);
+      if (!campfireReconnectLockRef.current && !geminiLive.isConnected) {
+        campfireReconnectGemini();
+      }
     }
-    if (isCampfireMode && campfireVad.isSpeaking && !campfireReconnectLockRef.current && !geminiLive.isConnected) {
-      campfireReconnectGemini();
-    }
-  }, [isCampfireMode, campfireVad.isSpeaking, campfireVad.currentVolume, geminiLive.isConnected, campfireReconnectGemini]);
+  }, [isCampfireMode, campfireVad.isSpeaking, geminiLive.isConnected, campfireReconnectGemini]);
 
   // 空闲超时 → 断开 Gemini
   useEffect(() => {
@@ -476,12 +470,16 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     }
   }, [isCampfireMode, geminiLive.isConnected, geminiLive.isSpeaking, geminiLive.isRecording, startCampfireIdleTimer]);
 
-  // AI 说话时降低白噪音
+  // Gemini 连接时关闭白噪音，断开后（回到篝火等待状态）恢复播放
   useEffect(() => {
     if (isCampfireMode) {
-      ambientAudio.setDucked(geminiLive.isSpeaking);
+      if (geminiLive.isConnected) {
+        ambientAudio.stop();
+      } else {
+        ambientAudio.play();
+      }
     }
-  }, [isCampfireMode, geminiLive.isSpeaking, ambientAudio]);
+  }, [isCampfireMode, geminiLive.isConnected, ambientAudio]);
 
   /**
    * 清理篝火模式硬件资源（供组件卸载时调用）

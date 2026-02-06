@@ -225,8 +225,6 @@ export function DevConsole() {
 
   // 拦截 console 方法
   useEffect(() => {
-    if (!isEnabled) return
-
     const originalConsole = {
       log: console.log,
       info: console.info,
@@ -285,7 +283,7 @@ export function DevConsole() {
       window.removeEventListener('error', handleError)
       window.removeEventListener('unhandledrejection', handleUnhandledRejection)
     }
-  }, [isEnabled, addLog, webViewInfo.type, webViewInfo.userAgent])
+  }, [addLog, webViewInfo.type, webViewInfo.userAgent])
 
   // 保存开关状态到本地存储
   useEffect(() => {

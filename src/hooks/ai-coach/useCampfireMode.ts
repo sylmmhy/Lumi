@@ -107,6 +107,8 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   // 用 ref 存储进入/退出函数（避免 useIntentDetection 闭包问题）
   const enterCampfireModeRef = useRef<(options?: { skipFarewell?: boolean }) => void>(() => {});
   const exitCampfireModeRef = useRef<() => void>(() => {});
+  /** 🔧 修复闭包过期：标记"篝火重连刚完成，需要发送触发消息" */
+  const campfireNeedsTriggerRef = useRef(false);
 
   // ==========================================
   // 子 Hooks
@@ -132,10 +134,12 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     },
   });
 
-  /** 篝火模式独立的 VAD 实例：在 Gemini 断开时监听麦克风 */
+  /** 篝火模式独立的 VAD 实例：在 Gemini 断开时监听麦克风
+   * minSpeechDuration=100ms：比默认 250ms 更灵敏，适配篝火模式的快速唤醒场景。
+   * 即使误触，30 秒空闲超时会自动断开 Gemini，代价很小。 */
   const campfireVad = useVoiceActivityDetection(
     isCampfireMode ? campfireMicStreamRef.current : null,
-    { threshold: 25, enabled: isCampfireMode && !geminiLive.isConnected }
+    { threshold: 25, enabled: isCampfireMode && !geminiLive.isConnected, minSpeechDuration: 100 }
   );
 
   // ==========================================
@@ -214,8 +218,11 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       // 防止 sessionRef 残留导致 connect 被忽略
       geminiLive.disconnect();
 
-      const token = await fetchGeminiToken();
-      const config = await callStartCampfireFocus(true);
+      // 并行获取 token 和 system prompt，减少重连耗时
+      const [token, config] = await Promise.all([
+        fetchGeminiToken(),
+        callStartCampfireFocus(true),
+      ]);
       if (epochAtStart !== sessionEpochRef.current) {
         devLog('🔌 [Campfire] reconnect cancelled (stale epoch)');
         return;
@@ -225,11 +232,13 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
         return;
       }
 
+      // 🔧 修复：始终使用用户偏好的声音（getVoiceName），不用后端返回的 voiceConfig
+      // 后端 start-campfire-focus 固定返回 Aoede（女声），但用户之前选的是 Puck（男声）
       await geminiLive.connect(
         config.geminiConfig.systemPrompt,
         [],
         token,
-        config.geminiConfig.voiceConfig?.voiceName || getVoiceName()
+        getVoiceName()
       );
 
       // reconnect 后确保麦克风重新启用（disconnect 会 stop mic）
@@ -240,6 +249,11 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
           devWarn('⚠️ [Campfire] Failed to re-enable microphone after reconnect:', e);
         }
       }
+
+      // 🔧 修复闭包过期：不在这里直接调用 sendTextMessage
+      // 因为 sendTextMessage 是 useCallback，闭包里的 sessionIsConnected 还是旧值 false
+      // 改为设置 ref 标记，由 useEffect 在 isConnected 变 true 后发送
+      campfireNeedsTriggerRef.current = true;
 
       setCampfireChatCount(prev => prev + 1);
       startCampfireIdleTimer();
@@ -420,6 +434,24 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     enterCampfireModeRef.current = enterCampfireMode;
     exitCampfireModeRef.current = exitCampfireMode;
   }, [enterCampfireMode, exitCampfireMode]);
+
+  // 🔧 修复闭包过期：当 Gemini 连接建立后，发送篝火重连触发消息
+  // 为什么不在 campfireReconnectGemini 里直接调用 sendTextMessage？
+  // 因为 sendTextMessage 是 useCallback([sessionIsConnected])，
+  // 在 async 函数中 await connect() 后，闭包捕获的 sessionIsConnected 还是旧值 false，
+  // 导致消息被丢弃。useEffect 在 isConnected 变化后执行，拿到的是最新的 sendTextMessage。
+  useEffect(() => {
+    if (isCampfireMode && geminiLive.isConnected && campfireNeedsTriggerRef.current) {
+      campfireNeedsTriggerRef.current = false;
+      // 延迟 500ms 确保连接完全稳定（与 dev 版本一致）
+      const timer = setTimeout(() => {
+        const lang = preferredLanguage?.startsWith('zh') ? 'zh' : 'en';
+        devLog('📤 [Campfire] Sending reconnect trigger message...');
+        geminiLive.sendTextMessage(`[CAMPFIRE_RECONNECT] language=${lang}`);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isCampfireMode, geminiLive.isConnected, geminiLive, preferredLanguage]);
 
   // VAD 触发 → 重连 Gemini
   useEffect(() => {

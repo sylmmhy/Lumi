@@ -2,6 +2,7 @@ import { type User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import type { Task, RecurrencePattern } from '../types';
 import { notifyNativeTaskCreated, notifyNativeTaskDeleted, type TaskReminderData } from '../../utils/nativeTaskEvents';
+import { devLog } from '../../utils/devLog';
 
 /**
  * Database representation of a task (merged with reminder functionality)
@@ -203,16 +204,8 @@ export function taskToNativeReminder(task: Task, userId: string): TaskReminderDa
   };
 }
 
-/**
- * 获取用户本地日期（YYYY-MM-DD 格式）
- * 使用本地时间而非 UTC，避免跨时区时日期不匹配的问题
- */
-function getLocalDateString(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+// getLocalDateString 从 timeUtils 导入
+import { getLocalDateString } from '../../utils/timeUtils';
 
 /**
  * 判断指定日期和时间是否在未来
@@ -280,7 +273,7 @@ export async function fetchReminders(userId: string, date: string = getLocalDate
 
   // 调试日志：检查 is_snoozed 字段
   if (data && data.length > 0) {
-    console.log('🔍 [DEBUG] fetchReminders 返回的任务:', data.map((t: TaskRecord) => ({
+    devLog('🔍 [DEBUG] fetchReminders 返回的任务:', data.map((t: TaskRecord) => ({
       id: t.id,
       title: t.title,
       is_snoozed: t.is_snoozed,
@@ -517,20 +510,20 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
       .gte('reminder_date', today) // 只更新今天及未来的实例
       .select('id, title, time, reminder_date');
 
-    if (syncError) {
-      console.warn('⚠️ Failed to sync routine_instance:', syncError);
-    } else {
-      const count = updatedInstances?.length || 0;
-      const syncedFields = [];
-      if (hasTimeChange) syncedFields.push(`time=${updates.time}`);
-      if (hasNameChange) syncedFields.push(`title="${updates.text}"`);
-      console.log(`✅ Synced ${count} routine_instance(s):`, syncedFields.join(', '));
-      if (updatedInstances && updatedInstances.length > 0) {
-        console.log('   Updated instances:', updatedInstances.map(i => `${i.id} (${i.reminder_date})`).join(', '));
+	    if (syncError) {
+	      console.warn('⚠️ Failed to sync routine_instance:', syncError);
+	    } else {
+	      const count = updatedInstances?.length || 0;
+	      const syncedFields = [];
+	      if (hasTimeChange) syncedFields.push(`time=${updates.time}`);
+	      if (hasNameChange) syncedFields.push(`title="${updates.text}"`);
+	      devLog(`✅ Synced ${count} routine_instance(s):`, syncedFields.join(', '));
+	      if (updatedInstances && updatedInstances.length > 0) {
+	        devLog('   Updated instances:', updatedInstances.map(i => `${i.id} (${i.reminder_date})`).join(', '));
 
-        // 为更新后的实例发送原生通知
-        updatedInstances.forEach(instance => {
-          const instanceTask: Task = {
+	        // 为更新后的实例发送原生通知
+	        updatedInstances.forEach(instance => {
+	          const instanceTask: Task = {
             id: instance.id,
             text: instance.title,
             time: instance.time || '',
@@ -575,15 +568,15 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
       .eq('reminder_date', today)
       .select('id, title, reminder_date');
 
-    if (syncError) {
-      console.warn('⚠️ Failed to sync called=true to routine_instance:', syncError);
-    } else {
-      const count = updatedInstances?.length || 0;
-      console.log(`✅ Skipped routine: only updated ${count} routine_instance(s) for today (routine template unchanged)`);
-      if (updatedInstances && updatedInstances.length > 0) {
-        console.log('   Skipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
-      }
-    }
+	    if (syncError) {
+	      console.warn('⚠️ Failed to sync called=true to routine_instance:', syncError);
+	    } else {
+	      const count = updatedInstances?.length || 0;
+	      devLog(`✅ Skipped routine: only updated ${count} routine_instance(s) for today (routine template unchanged)`);
+	      if (updatedInstances && updatedInstances.length > 0) {
+	        devLog('   Skipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
+	      }
+	    }
 
     // 更新返回的任务对象
     // 模板本身 isSkip=false，前端乐观更新会临时显示标签
@@ -612,15 +605,15 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
       .eq('reminder_date', today)
       .select('id, title, reminder_date');
 
-    if (syncError) {
-      console.warn('⚠️ Failed to sync unskip to routine_instance:', syncError);
-    } else {
-      const count = updatedInstances?.length || 0;
-      console.log(`✅ Unskipped routine: updated ${count} routine_instance(s) for today`);
-      if (updatedInstances && updatedInstances.length > 0) {
-        console.log('   Unskipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
-      }
-    }
+	    if (syncError) {
+	      console.warn('⚠️ Failed to sync unskip to routine_instance:', syncError);
+	    } else {
+	      const count = updatedInstances?.length || 0;
+	      devLog(`✅ Unskipped routine: updated ${count} routine_instance(s) for today`);
+	      if (updatedInstances && updatedInstances.length > 0) {
+	        devLog('   Unskipped instances:', updatedInstances.map(i => `${i.id}`).join(', '));
+	      }
+	    }
 
     // 更新返回的任务对象
     updatedTask.called = false;
@@ -652,13 +645,13 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
         .eq('id', id)
         .eq('user_id', sessionUser.id);
 
-      if (resetCalledError) {
-        console.warn('⚠️ Failed to reset called status:', resetCalledError);
-      } else {
-        console.log('✅ Reset called=false and push_attempts=0 for task after time change:', id);
-        updatedTask.called = false;
-      }
-    }
+	      if (resetCalledError) {
+	        console.warn('⚠️ Failed to reset called status:', resetCalledError);
+	      } else {
+	        devLog('✅ Reset called=false and push_attempts=0 for task after time change:', id);
+	        updatedTask.called = false;
+	      }
+	    }
 
     // 发送原生通知（仅当时间在未来时）
     if (shouldTriggerNativeReminder(updatedTask)) {
@@ -839,14 +832,14 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
     const instancesToCreate = routineTemplates
       .filter(template => {
         // 跳过已有今日实例的
-        if (existingParentIds.has(template.id)) return false;
-        // 🆕 跳过今天时间已过的任务（避免立即触发电话）
-        if (!isTimeInFuture(template.time, today)) {
-          console.log(`⏭️ Skipping routine "${template.title}" - time ${template.time} has passed for today`);
-          return false;
-        }
-        return true;
-      })
+	        if (existingParentIds.has(template.id)) return false;
+	        // 🆕 跳过今天时间已过的任务（避免立即触发电话）
+	        if (!isTimeInFuture(template.time, today)) {
+	          devLog(`⏭️ Skipping routine "${template.title}" - time ${template.time} has passed for today`);
+	          return false;
+	        }
+	        return true;
+	      })
       .map(template => ({
         user_id: userId,
         title: template.title,
@@ -886,9 +879,9 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
       }
     });
 
-    console.log(`✅ Generated ${createdTasks.length} routine instances for ${today}`);
-    return createdTasks;
-  } catch (error) {
+	    devLog(`✅ Generated ${createdTasks.length} routine instances for ${today}`);
+	    return createdTasks;
+	  } catch (error) {
     console.error('Error generating routine instances:', error);
     return [];
   }

@@ -30,6 +30,19 @@ import type {
 import { EMOTION_RESPONSE_THRESHOLD } from './constants'
 
 /**
+ * 虚拟消息系统调试日志。
+ *
+ * 注意：
+ * - 本模块会处理用户原始输入与记忆内容，生产环境默认不输出任何日志，
+ *   避免泄露用户隐私或污染控制台。
+ */
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args)
+  }
+}
+
+/**
  * 调度器配置（扩展基础配置）
  */
 interface UseVirtualMessageOrchestratorOptions extends Omit<VirtualMessageOrchestratorOptions, 'onSendMessage' | 'cooldownMs'> {
@@ -158,14 +171,14 @@ export function useVirtualMessageOrchestrator(
    */
   const injectMessageImmediately = useCallback((content: string, type: VirtualMessageType) => {
     const timestamp = new Date().toLocaleTimeString()
-    console.log(`\n💉 [${timestamp}] ========== 立即注入 ${type} ==========`)
-    console.log(`💉 [Orchestrator] 内容预览: ${content.substring(0, 100)}...`)
+    devLog(`\n💉 [${timestamp}] ========== 立即注入 ${type} ==========`)
+    devLog(`💉 [Orchestrator] 内容预览: ${content.substring(0, 100)}...`)
 
     // Gemini Live API 只支持 role='user'，所以用 [CONTEXT] 标签让 AI 识别这是系统指令
     // turnComplete=true 触发 AI 响应（AI 会用过渡话开头）
     sendClientContent(content, true, 'user')
 
-    console.log(`💉 [Orchestrator] ✅ 已注入，等待 AI 响应`)
+    devLog(`💉 [Orchestrator] ✅ 已注入，等待 AI 响应`)
   }, [sendClientContent])
 
   // =====================================================
@@ -215,17 +228,17 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     if (!enabled) return null
 
     const timestamp = new Date().toLocaleTimeString()
-    console.log(`\n🎤 [${timestamp}] ========== 用户说话 ==========`)
-    console.log(`🎤 [Orchestrator] 内容: "${text.substring(0, 50)}..."`)
+    devLog(`\n🎤 [${timestamp}] ========== 用户说话 ==========`)
+    devLog(`🎤 [Orchestrator] 内容: "${text.substring(0, 50)}..."`)
 
     // 更新上下文
     contextTracker.addUserMessage(text)
 
     // 异步检测话题和情绪（向量匹配）
-    console.log(`🔍 [Orchestrator] 开始话题检测...`)
+    devLog(`🔍 [Orchestrator] 开始话题检测...`)
     const result = await topicDetector.detectFromMessage(text)
 
-    console.log(`🔍 [Orchestrator] 话题检测完成:`, {
+    devLog(`🔍 [Orchestrator] 话题检测完成:`, {
       topic: result.topic?.name || '无',
       confidence: result.confidence ? `${(result.confidence * 100).toFixed(1)}%` : 'N/A',
       emotion: result.emotionalState.primary,
@@ -242,7 +255,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
       result.emotionalState.intensity >= EMOTION_RESPONSE_THRESHOLD &&
       result.emotionalState.primary !== 'neutral'
     ) {
-      console.log(`\n💗 [${timestamp}] ========== 触发情绪响应 ==========`)
+      devLog(`\n💗 [${timestamp}] ========== 触发情绪响应 ==========`)
 
       const empathyMessage = generateEmpathyMessage(
         result.emotionalState.primary,
@@ -252,7 +265,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
 
       // 🆕 方案 2：静默注入
       sendClientContent(empathyMessage, false, 'user')
-      console.log(`✅ [Orchestrator] EMPATHY 已静默注入`) 
+      devLog(`✅ [Orchestrator] EMPATHY 已静默注入`) 
     }
 
     // 处理话题变化（用于上下文追踪）
@@ -260,8 +273,8 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
       contextTracker.updateTopic(result.topic)
 
       if (result.isTopicChanged) {
-        console.log(`\n🏷️ [${timestamp}] ========== 话题变化 ==========`)
-        console.log(`🏷️ [Orchestrator] 新话题: "${result.topic.name}"`)
+        devLog(`\n🏷️ [${timestamp}] ========== 话题变化 ==========`)
+        devLog(`🏷️ [Orchestrator] 新话题: "${result.topic.name}"`)
         lastTopicRef.current = result.topic
       }
     }
@@ -275,10 +288,10 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     if (enableMemoryRetrieval && userId && text.length > 5) {
       // 🔧 节流检查：距离上次注入是否超过冷却时间
       if (shouldSkipDueToThrottle) {
-        console.log(`🔎 [Orchestrator] 跳过记忆检索 - 距上次注入 ${Math.round(timeSinceLastInjection / 1000)}秒 (冷却: ${MEMORY_INJECTION_COOLDOWN_MS / 1000}秒)`)
+        devLog(`🔎 [Orchestrator] 跳过记忆检索 - 距上次注入 ${Math.round(timeSinceLastInjection / 1000)}秒 (冷却: ${MEMORY_INJECTION_COOLDOWN_MS / 1000}秒)`)
       } else {
-        console.log(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
-        console.log(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
+        devLog(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
+        devLog(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
 
         // 同步等待记忆检索完成
         const memories = await memoryPipeline.fetchMemoriesForTopic(
@@ -292,12 +305,14 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
           const newMemories = memories.filter(m => !injectedMemoriesRef.current.has(m.content))
 
           if (newMemories.length === 0) {
-            console.log(`🔎 [Orchestrator] 所有 ${memories.length} 条记忆都已注入过，跳过`)
+            devLog(`🔎 [Orchestrator] 所有 ${memories.length} 条记忆都已注入过，跳过`)
           } else {
-            console.log(`🔎 [Orchestrator] 找到 ${newMemories.length} 条新记忆（过滤掉 ${memories.length - newMemories.length} 条已注入）`)
-            newMemories.forEach((m, i) => {
-              console.log(`   ${i + 1}. [${m.tag}] ${m.content}`)
-            })
+            devLog(`🔎 [Orchestrator] 找到 ${newMemories.length} 条新记忆（过滤掉 ${memories.length - newMemories.length} 条已注入）`)
+            if (import.meta.env.DEV) {
+              newMemories.forEach((m, i) => {
+                devLog(`   ${i + 1}. [${m.tag}] ${m.content}`)
+              })
+            }
 
             const contextMessage = generateContextMessage(
               newMemories,
@@ -308,14 +323,14 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
 
             // ✅ 静默注入（turnComplete=false），AI 回复时会自然引用
             sendClientContent(contextMessage, false, 'user')
-            console.log(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
+            devLog(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
 
             // 🔧 更新已注入记忆的记录
             newMemories.forEach(m => injectedMemoriesRef.current.add(m.content))
             lastMemoryInjectionTimeRef.current = now
           }
         } else {
-          console.log(`🔎 [Orchestrator] 未找到相关记忆`)
+          devLog(`🔎 [Orchestrator] 未找到相关记忆`)
         }
       }
     }
@@ -353,10 +368,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     if (!enabled) return
 
     const timestamp = new Date().toLocaleTimeString()
-
-    if (import.meta.env.DEV) {
-      console.log(`\n✅ [${timestamp}] ========== AI 说完话 (turnComplete) ==========`)
-    }
+    devLog(`\n✅ [${timestamp}] ========== AI 说完话 (turnComplete) ==========`)
   }, [enabled])
 
   /**
@@ -406,10 +418,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     // 🔧 清空已注入记忆的记录
     injectedMemoriesRef.current.clear()
     lastMemoryInjectionTimeRef.current = 0
-
-    if (import.meta.env.DEV) {
-      console.log(`🔄 [Orchestrator] 状态已重置（含记忆去重记录）`)
-    }
+    devLog(`🔄 [Orchestrator] 状态已重置（含记忆去重记录）`)
   }, [contextTracker, topicDetector])
 
   /**
@@ -419,10 +428,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     const content = generateGentleRedirectMessage()
 
     injectMessageImmediately(content, 'GENTLE_REDIRECT')
-
-    if (import.meta.env.DEV) {
-      console.log(`📤 [Orchestrator] 已发送 GENTLE_REDIRECT 消息`)
-    }
+    devLog(`📤 [Orchestrator] 已发送 GENTLE_REDIRECT 消息`)
 
     return true
   }, [generateGentleRedirectMessage, injectMessageImmediately])

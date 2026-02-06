@@ -51,25 +51,11 @@ type ViewState = AppTab;
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
-const devLog = (...args: unknown[]) => {
-    if (import.meta.env.DEV) {
-        console.log(...args);
-    }
-};
+import { devLog } from '../utils/devLog';
+import { getLocalDateString } from '../utils/timeUtils';
 
 const SCREEN_TIME_START_TASK_INTENT_KEY = 'lumi_pending_start_task_intent';
 const SCREEN_TIME_INTENT_TTL_MS = 10 * 60 * 1000;
-
-/**
- * 获取用户本地日期（YYYY-MM-DD 格式）
- * 使用本地时间而非 UTC，避免跨时区时日期不匹配的问题
- */
-function getLocalDateString(date: Date = new Date()): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
 
 /**
  * 应用主入口页面，负责根据 URL tab 渲染对应视图，并复用 AI 教练、任务数据等共享逻辑。

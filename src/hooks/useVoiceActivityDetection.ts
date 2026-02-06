@@ -6,6 +6,9 @@ interface UseVoiceActivityDetectionOptions {
   threshold?: number;
   smoothingTimeConstant?: number; // 0-1, default 0.8
   fftSize?: number; // Must be power of 2, default 2048
+  /** 最短持续时间（ms），持续超过此时间才认定为"说话"，默认 250ms。
+   * 篝火模式等需要快速响应的场景可设为更低值（如 100ms） */
+  minSpeechDuration?: number;
 }
 
 /**
@@ -28,6 +31,7 @@ export function useVoiceActivityDetection(
     threshold = 30,
     smoothingTimeConstant = 0.8,
     fftSize = 2048,
+    minSpeechDuration = 250,
   } = options;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -111,7 +115,7 @@ export function useVoiceActivityDetection(
       passbandBins: `${lowBin}-${highBin} (${passbandBinCount} bins)`,
     });
 
-    const minSpeechDurationMs = 250; // 最短持续时间：过滤短促噪音
+    const minSpeechDurationMs = minSpeechDuration; // 最短持续时间：过滤短促噪音
     const risingThreshold = threshold; // 上升阈值：进入说话状态
     const fallingThreshold = Math.max(5, threshold - 12); // 下降阈值：退出说话状态，避免抖动
 
@@ -194,7 +198,7 @@ export function useVoiceActivityDetection(
       speakingRef.current = false;
       speechStartRef.current = null;
     };
-  }, [enabled, mediaStream, threshold, smoothingTimeConstant, fftSize]);
+  }, [enabled, mediaStream, threshold, smoothingTimeConstant, fftSize, minSpeechDuration]);
 
   return {
     isSpeaking,

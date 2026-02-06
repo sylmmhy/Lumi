@@ -1,14 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { devLog } from '../../utils/devLog';
 
 type PermissionType = 'notification' | 'microphone' | 'camera' | 'sleepFocus';
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'prompt';
-
-const devLog = (...args: unknown[]) => {
-  if (import.meta.env.DEV) {
-    console.log(...args);
-  }
-};
 
 const devDebug = (...args: unknown[]) => {
   if (import.meta.env.DEV) {

@@ -118,6 +118,18 @@ export class AudioRecorder extends EventEmitter {
           console.log('Microphone access granted');
         }
         this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
+
+        // 修复 iOS WebView 中 AudioContext 可能处于 suspended 状态的问题
+        if (this.audioContext.state === 'suspended') {
+          if (import.meta.env.DEV) {
+            console.log('🎤 [AudioRecorder] AudioContext is suspended, resuming...');
+          }
+          await this.audioContext.resume();
+          if (import.meta.env.DEV) {
+            console.log('🎤 [AudioRecorder] AudioContext resumed:', this.audioContext.state);
+          }
+        }
+
         this.source = this.audioContext.createMediaStreamSource(this.stream);
 
         // Add audio recording worklet

@@ -1,3 +1,5 @@
+import { getOrCreatePermanentUserId } from './permanentUserId'
+
 type AmplitudeSdk = typeof import('@amplitude/analytics-browser')
 
 let amplitudeSdk: AmplitudeSdk | null = null
@@ -17,29 +19,6 @@ async function loadAmplitudeSdk(): Promise<AmplitudeSdk> {
 let isInitialized = false
 let isTestMode = false // 测试模式标志
 let initPromise: Promise<void> | null = null
-
-/**
- * 生成或获取永久设备用户 ID
- * 这个 ID 在 localStorage 中永久存储，用于跨账号、跨会话的身份关联
- * 
- * @returns {string} 永久设备用户 ID
- */
-const getOrCreatePermanentUserId = (): string => {
-  const STORAGE_KEY = 'firego_permanent_user_id'
-  
-  let permanentUserId = localStorage.getItem(STORAGE_KEY)
-  
-  if (!permanentUserId) {
-    permanentUserId = `puid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem(STORAGE_KEY, permanentUserId)
-    
-    if (import.meta.env.DEV) {
-      console.log('🆕 生成永久设备用户 ID:', permanentUserId)
-    }
-  }
-  
-  return permanentUserId
-}
 
 /**
  * 初始化 Amplitude SDK
@@ -89,11 +68,15 @@ export async function initAmplitude() {
       // 测试模式：设置用户属性以触发后台过滤规则
       if (isTestMode) {
         identify.set('is_test_session', true)
-        console.log('🧪 Test mode: is_test_session=true (data will be filtered by Amplitude backend)')
+        if (import.meta.env.DEV) {
+          console.log('🧪 Test mode: is_test_session=true (data will be filtered by Amplitude backend)')
+        }
       }
       
       amplitude.identify(identify)
-      console.log('✅ Amplitude initialized with permanent user ID:', permanentUserId)
+      if (import.meta.env.DEV) {
+        console.log('✅ Amplitude initialized with permanent user ID:', permanentUserId)
+      }
     } catch (error) {
       console.error('Failed to initialize Amplitude:', error)
     } finally {

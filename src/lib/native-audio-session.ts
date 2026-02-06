@@ -23,6 +23,19 @@ export function isAudioSessionReady(): boolean {
 }
 
 /**
+ * 重置音频会话就绪标记为 false。
+ *
+ * 使用场景：
+ * - AudioContext.resume() 失败时调用，强制下次 ensureAudioSessionReady()
+ *   实际等待 iOS 的 nativeAudioSessionReady 事件，而非因过期标记跳过等待。
+ */
+export function resetAudioSessionReady(): void {
+  if (!isInNativeWebView()) return;
+  (window as unknown as { __nativeAudioSessionReady?: boolean }).__nativeAudioSessionReady = false;
+  console.log('🎤 Audio session ready flag 已重置');
+}
+
+/**
  * 初始化 iOS Native WebView 的音频会话桥接监听器。
  *
  * 作用：
@@ -53,11 +66,14 @@ export function initNativeAudioSessionBridge(): void {
   // 如果原生已写入粘性标记，不需要再监听事件
   if (nativeWindow.__nativeAudioSessionReady) return;
 
-  /** 标记音频会话就绪并移除监听，避免重复触发。 */
+  /**
+   * 标记音频会话就绪。
+   * 不移除监听器 —— 保持持久化，以便 iOS 端在 CallKit 结束后
+   * 重新发送 nativeAudioSessionReady 事件时能被接收。
+   */
   const markReady = () => {
     nativeWindow.__nativeAudioSessionReady = true;
-    window.removeEventListener('nativeAudioSessionReady', markReady);
-    document.removeEventListener('nativeAudioSessionReady', markReady);
+    console.log('🎤 nativeAudioSessionReady 事件已接收，标记已更新');
   };
 
   window.addEventListener('nativeAudioSessionReady', markReady);

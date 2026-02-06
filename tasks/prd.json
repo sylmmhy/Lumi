@@ -38,8 +38,9 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "These tests serve as the regression safety net. They test the CURRENT behavior before any code is moved."
+      "passes": true,
+      "notes": "These tests serve as the regression safety net. They test the CURRENT behavior before any code is moved.",
+      "implementationNotes": "Created src/context/__tests__/AuthContext.test.tsx with 5 integration tests. Used vi.hoisted() for mock variables referenced in vi.mock factories. Mocked Supabase client (auth.getSession, signInWithPassword, signOut, onAuthStateChange), localStorage via Storage.prototype spies, and all auth submodules. onAuthStateChange mock simulates real Supabase behavior by firing SIGNED_IN callback via queueMicrotask. Tests cover: login sets state correctly, logout resets to defaults, restoreSession with valid session, restoreSession with no session, storage event cross-tab sync."
     },
     {
       "id": "US-003",

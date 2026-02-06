@@ -77,15 +77,9 @@ export class AudioRecorder extends EventEmitter {
   }
 
   async start() {
-    const recorderStartTime = performance.now();
-    console.log('🎤 [AudioRecorder.start] ====== 开始 ======');
-
     // 在 iOS Native WebView 中，先等待音频会话就绪
     // 这是为了解决 CallKit 来电接听后音频会话冲突的问题
-    const audioSessionStart = performance.now();
-    console.log('🎤 [AudioRecorder.start] 步骤1: ensureAudioSessionReady() 开始...');
     await ensureAudioSessionReady();
-    console.log(`🎤 [AudioRecorder.start] 步骤1: ensureAudioSessionReady() 完成 - 耗时: ${(performance.now() - audioSessionStart).toFixed(1)}ms`);
 
     // Check if getUserMedia is available
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -111,28 +105,18 @@ export class AudioRecorder extends EventEmitter {
     }
 
     if (this.starting) {
-      console.log('🎤 [AudioRecorder.start] 已有 starting Promise，等待中...');
       return this.starting;
     }
 
     this.starting = (async () => {
       try {
-        const getUserMediaStart = performance.now();
-        console.log('🎤 [AudioRecorder.start] 步骤2: getUserMedia({audio: true}) 开始...');
         this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log(`🎤 [AudioRecorder.start] 步骤2: getUserMedia({audio: true}) 完成 - 耗时: ${(performance.now() - getUserMediaStart).toFixed(1)}ms`);
 
-        const ctxCreateStart = performance.now();
-        console.log('🎤 [AudioRecorder.start] 步骤3: 创建 AudioContext...');
         this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
-        console.log(`🎤 [AudioRecorder.start] 步骤3: AudioContext 创建完成 - 耗时: ${(performance.now() - ctxCreateStart).toFixed(1)}ms, 状态: ${this.audioContext.state}`);
 
         // 修复 iOS WebView 中 AudioContext 可能处于 suspended 状态的问题
         if (this.audioContext.state === 'suspended') {
-          const resumeStart = performance.now();
-          console.log('🎤 [AudioRecorder.start] 步骤3b: AudioContext.resume() 开始...');
           await this.audioContext.resume();
-          console.log(`🎤 [AudioRecorder.start] 步骤3b: AudioContext.resume() 完成 - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms, 状态: ${this.audioContext.state}`);
         }
 
         this.source = this.audioContext.createMediaStreamSource(this.stream);
@@ -140,11 +124,7 @@ export class AudioRecorder extends EventEmitter {
         // Add audio recording worklet
         const workletName = "audio-recorder-worklet";
         const src = createWorkletFromSource(workletName, audioProcessorSource);
-
-        const workletStart = performance.now();
-        console.log('🎤 [AudioRecorder.start] 步骤4: 加载 audio worklet...');
         await this.audioContext.audioWorklet.addModule(src);
-        console.log(`🎤 [AudioRecorder.start] 步骤4: audio worklet 加载完成 - 耗时: ${(performance.now() - workletStart).toFixed(1)}ms`);
 
         this.recordingWorklet = new AudioWorkletNode(
           this.audioContext,
@@ -173,7 +153,6 @@ export class AudioRecorder extends EventEmitter {
 
         this.source.connect(this.vuWorklet);
         this.recording = true;
-        console.log(`🎤 [AudioRecorder.start] ====== 全部完成 - 总耗时: ${(performance.now() - recorderStartTime).toFixed(1)}ms ======`);
       } finally {
         // always clear starting so subsequent calls can proceed even after failure
         this.starting = null;

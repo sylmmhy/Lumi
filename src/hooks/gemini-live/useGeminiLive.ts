@@ -302,25 +302,14 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * 使用解构的稳定字段作为依赖，避免每次渲染都重建函数
    */
   const toggleMicrophone = useCallback(async () => {
-    const t0 = performance.now();
-    console.log(`🎤 [toggleMicrophone] 开始 | isRecording=${audioIsRecording}`);
     if (audioIsRecording) {
       audioStop();
       analytics.trackMicToggle(false);
-      console.log(`🎤 [toggleMicrophone] 已停止 - 耗时: ${(performance.now() - t0).toFixed(1)}ms`);
     } else {
-      // 确保 AudioContext 已准备
-      console.log('🎤 [toggleMicrophone] 步骤1: ensureReady()...');
+      // 确保 AudioContext 已准备（会等待 iOS 音频会话就绪）
       await audioOutput.ensureReady();
-      console.log(`🎤 [toggleMicrophone] 步骤1 完成 - 耗时: ${(performance.now() - t0).toFixed(1)}ms`);
-
-      console.log('🎤 [toggleMicrophone] 步骤2: audioStart()...');
-      const startT = performance.now();
       await audioStart();
-      console.log(`🎤 [toggleMicrophone] 步骤2 完成 - 耗时: ${(performance.now() - startT).toFixed(1)}ms`);
-
       analytics.trackMicToggle(true);
-      console.log(`🎤 [toggleMicrophone] 全部完成 - 总耗时: ${(performance.now() - t0).toFixed(1)}ms`);
     }
   }, [audioIsRecording, audioStart, audioStop, audioOutput, analytics]);
 
@@ -329,29 +318,14 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
    * 使用解构的稳定字段作为依赖，避免每次渲染都重建函数
    */
   const toggleCamera = useCallback(async () => {
-    const t0 = performance.now();
-    console.log(`📹 [toggleCamera] 开始 | isEnabled=${videoIsEnabled}`);
     if (videoIsEnabled) {
       videoStop();
       analytics.trackCameraToggle(false);
-      console.log(`📹 [toggleCamera] 已停止 - 耗时: ${(performance.now() - t0).toFixed(1)}ms`);
     } else {
-      console.log('📹 [toggleCamera] 步骤1: ensureReady()...');
-      try {
-        await audioOutput.ensureReady();
-        console.log(`📹 [toggleCamera] 步骤1 完成 - 耗时: ${(performance.now() - t0).toFixed(1)}ms`);
-      } catch (err) {
-        console.error(`📹 [toggleCamera] ❌ 步骤1 ensureReady() 失败 - 耗时: ${(performance.now() - t0).toFixed(1)}ms, 错误:`, err);
-        throw err;
-      }
-
-      console.log('📹 [toggleCamera] 步骤2: videoStart()...');
-      const startT = performance.now();
+      // 确保 AudioContext 已准备（会等待 iOS 音频会话就绪）
+      await audioOutput.ensureReady();
       await videoStart();
-      console.log(`📹 [toggleCamera] 步骤2 完成 - 耗时: ${(performance.now() - startT).toFixed(1)}ms`);
-
       analytics.trackCameraToggle(true);
-      console.log(`📹 [toggleCamera] 全部完成 - 总耗时: ${(performance.now() - t0).toFixed(1)}ms`);
     }
   }, [videoIsEnabled, videoStart, videoStop, audioOutput, analytics]);
 

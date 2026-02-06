@@ -310,7 +310,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     enabled: isSessionActive && !isCampfireMode,
     onDetectionComplete: (result) => {
       if (result.tool === 'enter_campfire' && result.confidence >= 0.6) {
-        enterCampfireModeRef.current();
+        // AI 已经在回复中说了告别语（system prompt 指导），跳过再发 CAMPFIRE_FAREWELL
+        enterCampfireModeRef.current({ skipFarewell: true });
       } else if (result.tool === 'exit_campfire' && result.confidence >= 0.6) {
         exitCampfireModeRef.current();
       }
@@ -318,7 +319,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // 用 ref 存储篝火模式进入/退出函数（避免 useIntentDetection 闭包问题）
-  const enterCampfireModeRef = useRef<() => void>(() => {});
+  const enterCampfireModeRef = useRef<(options?: { skipFarewell?: boolean }) => void>(() => {});
   const exitCampfireModeRef = useRef<() => void>(() => {});
 
   // ==========================================
@@ -684,29 +685,36 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
   /**
    * 进入篝火模式
-   * - AI 说告别语
-   * - 断开 Gemini
-   * - 启动白噪音 + 计时器
-   * - 获取麦克风流（用于 VAD）
+   * @param options.skipFarewell 意图检测触发时为 true（AI 已在回复中说了告别语），按钮触发时为 false
    */
-  const enterCampfireMode = useCallback(async () => {
+  const enterCampfireMode = useCallback(async (options?: { skipFarewell?: boolean }) => {
     if (isCampfireMode) return;
 
-    console.log('🏕️ Entering campfire mode...');
+    const skipFarewell = options?.skipFarewell ?? false;
+    console.log('🏕️ Entering campfire mode...', { skipFarewell });
 
-    // 1. 让 AI 说告别语
-    const lang = preferredLanguagesRef.current?.[0] || 'en-US';
-    geminiLive.sendTextMessage(`[CAMPFIRE_FAREWELL] language=${lang}`);
+    if (skipFarewell) {
+      // 意图检测触发：AI 已经说了告别语，等它说完就断开
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
+        }, 300);
+        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      });
+    } else {
+      // 按钮触发：需要让 AI 先说一句告别语
+      const lang = preferredLanguagesRef.current?.[0] || 'en-US';
+      geminiLive.sendTextMessage(`[CAMPFIRE_FAREWELL] language=${lang}`);
 
-    // 2. 等 AI 说完（最多 5 秒）
-    await new Promise<void>((resolve) => {
-      const check = setInterval(() => {
-        if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
-      }, 300);
-      setTimeout(() => { clearInterval(check); resolve(); }, 5000);
-    });
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
+        }, 300);
+        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      });
+    }
 
-    // 3. 断开 Gemini
+    // 断开 Gemini
     geminiLive.disconnect();
 
     // 4. 获取麦克风流（用于 VAD）

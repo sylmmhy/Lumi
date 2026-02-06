@@ -204,8 +204,9 @@
         "All existing tests still pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "This is the highest-value dedup story. syncAfterLogin must NOT take setAuthState as parameter - each caller handles state differently due to different concurrency requirements."
+      "passes": true,
+      "notes": "This is the highest-value dedup story. syncAfterLogin must NOT take setAuthState as parameter - each caller handles state differently due to different concurrency requirements.",
+      "implementationNotes": "Created src/context/auth/postLoginSync.ts with syncAfterLogin({ client, session, userId, source }) → { userName, userPicture, hasCompletedHabitOnboarding }. Pipeline: persistSessionToStorage → syncUserProfileToStorage → compute userName/userPicture (localStorage priority) → bindAnalyticsUserSync → fetchHabitOnboardingCompleted. Refactored loginWithEmail, verifyEmailOtp (both dev backdoor and real OTP path), and onAuthStateChange SIGNED_IN handler (non-native path) to use syncAfterLogin. applyNativeLogin retains existing logic because it lacks a clean Session object (uses individual native tokens) and has complex delegation to onAuthStateChange. All 34 tests pass, typecheck passes."
     },
     {
       "id": "US-011",

@@ -113,12 +113,38 @@ export const LOGGED_OUT_STATE: AuthState = {
   isLoggedIn: false, userId: null, userEmail: null, userName: null,
   userPicture: null, isNewUser: false, sessionToken: null, refreshToken: null,
   isNativeLogin: false, isSessionValidated: true, hasCompletedHabitOnboarding: false,
-};
+} as const;
 ```
+
+> **注意**：使用时必须展开写 `setAuthState({ ...LOGGED_OUT_STATE })`，不要直接传引用 `setAuthState(LOGGED_OUT_STATE)`。
+> 原因：如果多处共享同一个对象引用，万一有人误写 `state.xxx = yyy` 会污染常量。展开写法成本为零，杜绝隐患。
 
 #### 1b. 把 `declare global` 移到 `src/types/mindboat-native.d.ts`
 
 Window 接口和 DocumentEventMap 声明与 AuthContext 业务逻辑无关，属于全局类型定义。
+
+> **踩坑提醒：`.d.ts` 中引用其他模块类型的写法**
+>
+> 当前 `declare global` 块引用了 `NativeAuthPayload`（来自 `AuthContextDefinition.ts`）。
+> 如果在 `.d.ts` 文件顶层写 `import { NativeAuthPayload } from ...`，TypeScript 会将该文件视为模块，
+> `declare global` 将不再全局生效。
+>
+> **正确写法**：使用 `import()` 类型引用，不写顶层 import：
+> ```ts
+> // src/types/mindboat-native.d.ts
+> declare global {
+>   interface Window {
+>     MindBoatNativeAuth?: import('../context/AuthContextDefinition').NativeAuthPayload;
+>     __MindBoatAuthReady?: boolean;
+>     // ...其余字段
+>   }
+>   interface DocumentEventMap {
+>     'mindboat:nativeLogin': CustomEvent<import('../context/AuthContextDefinition').NativeAuthPayload>;
+>     // ...
+>   }
+> }
+> export {}; // 确保 TypeScript 将文件视为模块（必须有这行）
+> ```
 
 #### 1c. AuthContext.tsx 改为 import
 
@@ -277,11 +303,24 @@ export function useAuthLifecycle(options: {
   setAuthState: React.Dispatch<React.SetStateAction<AuthState>>;
   checkLoginState: () => { isLoggedIn: boolean; userId: string | null; sessionToken: string | null };
   logout: () => Promise<void>;
+  navigateToLogin: (redirectPath?: string) => void; // 由 AuthProvider 定义，传入供消费
 }): {
   triggerSessionCheckNow: (reason?: string) => Promise<void>;
-  navigateToLogin: (redirectPath?: string) => void;
 }
 ```
+
+> **设计决策：`navigateToLogin` 保留在 AuthProvider，不由 hook 返回**
+>
+> `navigateToLogin` 依赖 `useNavigate()`（React Router hook）和 `loginPathRef` / `defaultRedirectRef`（props 透传），
+> 这些是路由层的东西。如果让 `useAuthLifecycle` 返回 `navigateToLogin`，hook 就会耦合 React Router。
+>
+> 更干净的做法：AuthProvider 定义 `navigateToLogin`，作为参数传给 `useAuthLifecycle`。
+> hook 只在 `restoreSession` 等流程内消费它，不负责创建。
+>
+> 注意：`navigateToLogin` 内部读取 `nativeAuthBootstrapDeadlineRef` 等 ref。
+> 这些 ref 由 `useAuthLifecycle` 管理。解决办法是 hook 返回这些 ref 供 `navigateToLogin` 闭包捕获，
+> 或者让 `navigateToLogin` 在 hook 内部定义后通过 ref 回传给 AuthProvider。
+> 具体实现时再根据代码结构选择最简洁的方案。
 
 ### 执行策略
 
@@ -339,3 +378,22 @@ src/types/
 | **合计** | | | **~1540** | |
 
 最终 AuthContext.tsx 从 2344 行 → ~800 行（含已抽离模块后进一步降到 ~300-400 行）。
+
+---
+
+## 附录：关联优化项（不混入主重构流程）
+
+以下问题在审查中发现，但不属于 AuthContext 重构范围，单独记录以免遗忘。
+
+### A. `ensureUserProfileExists` 重复造轮子
+
+| 位置 | 类型 |
+|------|------|
+| `src/context/auth/userProfile.ts:18` | 导出函数，接收 `(supabase, user)` |
+| `src/remindMe/services/reminderService.ts:76` | 局部函数，接收 `(user)`，内部用模块级 `supabase` |
+
+两份代码逻辑相同：查询 `public.users` 表是否存在该用户，不存在则 insert。
+`reminderService.ts` 应该直接 import `userProfile.ts` 的导出版本，删除自己的重复实现。
+
+> 如果做第 4 阶段（postLoginSync），可以考虑将 `ensureUserProfileExists` 纳入登录后流水线，
+> 统一在登录成功后确保 `public.users` 记录存在，而不是散落在各处按需调用。

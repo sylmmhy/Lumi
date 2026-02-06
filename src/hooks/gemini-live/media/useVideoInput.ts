@@ -85,16 +85,11 @@ export function useVideoInput(
     }
 
     isStartingRef.current = true;
-    const t0 = performance.now();
-    console.log('📹 [videoInput.start] ====== 开始 ======');
 
     try {
       // 在 iOS Native WebView 中，先等待音频会话就绪
       // 这是为了解决 CallKit 来电接听后音频会话冲突的问题
-      const audioSessionStart = performance.now();
-      console.log('📹 [videoInput.start] 步骤1: ensureAudioSessionReady()...');
       await ensureAudioSessionReady();
-      console.log(`📹 [videoInput.start] 步骤1 完成 - 耗时: ${(performance.now() - audioSessionStart).toFixed(1)}ms`);
 
       // 如果有旧的 stream，先停止它（防止资源泄漏）
       if (currentStreamRef.current) {
@@ -102,8 +97,6 @@ export function useVideoInput(
         currentStreamRef.current = null;
       }
 
-      const getUserMediaStart = performance.now();
-      console.log('📹 [videoInput.start] 步骤2: getUserMedia({video})...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -111,16 +104,15 @@ export function useVideoInput(
           height: { ideal: resolution.height },
         },
       });
-      console.log(`📹 [videoInput.start] 步骤2 完成 - 耗时: ${(performance.now() - getUserMediaStart).toFixed(1)}ms`);
 
       currentStreamRef.current = stream;
       setVideoStream(stream);
       setIsEnabled(true);
       setError(null);
 
-      console.log(`📹 [videoInput.start] ====== 全部完成 - 总耗时: ${(performance.now() - t0).toFixed(1)}ms ======`);
+      devLog('📹 Camera started');
     } catch (err) {
-      console.error(`📹 [videoInput.start] ❌ 失败 - 耗时: ${(performance.now() - t0).toFixed(1)}ms, 错误:`, err);
+      console.error('📹 [videoInput.start] ❌ 摄像头启动失败:', err);
       const errorMessage = 'Camera access denied. Please allow camera access in Settings.';
       setError(errorMessage);
       onError?.(errorMessage);

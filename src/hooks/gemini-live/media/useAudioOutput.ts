@@ -14,6 +14,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { AudioStreamer } from '../../../lib/audio-streamer';
 import { base64ToArrayBuffer, devLog } from '../utils';
+import { ensureAudioSessionReady } from '../../../lib/native-audio-session';
 
 interface UseAudioOutputOptions {
   sampleRate?: number;
@@ -49,45 +50,98 @@ export function useAudioOutput(
   const streamerRef = useRef<AudioStreamer | null>(null);
 
   /**
+   * 带超时的 AudioContext.resume()
+   * 防止 iOS WebKit 中 resume() 永远不返回的 bug
+   * @param ctx - 要 resume 的 AudioContext
+   * @param timeoutMs - 超时时间（毫秒）
+   */
+  const resumeWithTimeout = async (ctx: AudioContext, timeoutMs = 3000): Promise<void> => {
+    return Promise.race([
+      ctx.resume(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`AudioContext.resume() 超时 (${timeoutMs}ms)`)), timeoutMs)
+      ),
+    ]);
+  };
+
+  /**
+   * 创建新的 AudioContext 并绑定 AudioStreamer
+   */
+  const createAudioContext = (rate: number, completeCb?: () => void): AudioContext => {
+    const ctx = new AudioContext({ sampleRate: rate });
+    audioContextRef.current = ctx;
+    streamerRef.current = new AudioStreamer(ctx);
+    if (completeCb) {
+      streamerRef.current.onComplete = completeCb;
+    }
+    return ctx;
+  };
+
+  /**
    * 确保 AudioContext 已准备就绪
    * 必须在用户交互上下文中调用
+   *
+   * 两层防护：
+   * 1. 先等待 iOS 原生音频会话就绪（ensureAudioSessionReady）
+   * 2. 为 AudioContext.resume() 加超时，超时后销毁重建
    */
   const ensureReady = useCallback(async (): Promise<AudioContext> => {
     const startTime = performance.now();
-    console.log(`🔊 [ensureReady] 开始 | 现有 AudioContext 状态: ${audioContextRef.current?.state ?? 'null'}`);
+    devLog(`🔊 [ensureReady] 开始 | 现有 AudioContext 状态: ${audioContextRef.current?.state ?? 'null'}`);
 
+    // 第 1 层防护：等待 iOS 音频会话就绪
+    // 解决密码解锁场景下 CallKit 还占用音频设备的问题
+    devLog('🔊 [ensureReady] 等待 iOS 音频会话就绪...');
+    await ensureAudioSessionReady();
+
+    // 创建 AudioContext（如果需要）
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       try {
-        const createStart = performance.now();
-        audioContextRef.current = new AudioContext({ sampleRate });
-        console.log(`🔊 [ensureReady] AudioContext 创建完成 - 耗时: ${(performance.now() - createStart).toFixed(1)}ms, 状态: ${audioContextRef.current.state}`);
+        createAudioContext(sampleRate, onPlaybackComplete);
+        devLog(`🔊 [ensureReady] AudioContext 创建完成, 状态: ${audioContextRef.current!.state}`);
       } catch (createErr) {
         console.error('🔊 [ensureReady] ❌ AudioContext 创建失败:', createErr);
         throw createErr;
       }
-      streamerRef.current = new AudioStreamer(audioContextRef.current);
-
-      if (onPlaybackComplete) {
-        streamerRef.current.onComplete = onPlaybackComplete;
-      }
     }
 
-    if (audioContextRef.current.state === 'suspended') {
-      const resumeStart = performance.now();
-      console.log('🔊 [ensureReady] AudioContext.resume() 开始...');
+    // 第 2 层防护：resume() 加超时 + 销毁重建
+    if (audioContextRef.current!.state === 'suspended') {
+      devLog('🔊 [ensureReady] AudioContext.resume() 开始...');
       try {
-        await audioContextRef.current.resume();
-        console.log(`🔊 [ensureReady] AudioContext.resume() 完成 - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms, 状态: ${audioContextRef.current.state}`);
+        await resumeWithTimeout(audioContextRef.current!);
+        devLog(`🔊 [ensureReady] AudioContext.resume() 完成, 状态: ${audioContextRef.current!.state}`);
       } catch (resumeErr) {
-        console.error(`🔊 [ensureReady] ❌ AudioContext.resume() 失败 - 耗时: ${(performance.now() - resumeStart).toFixed(1)}ms, 错误:`, resumeErr);
-        throw resumeErr;
+        // resume() 失败或超时 → 销毁旧的，重建新的
+        console.warn('🔊 [ensureReady] ⚠️ AudioContext.resume() 失败/超时，销毁重建...', resumeErr);
+        try {
+          audioContextRef.current!.close();
+        } catch { /* 忽略关闭错误 */ }
+
+        // 再次等待音频会话就绪（可能 iOS 端还在切换中）
+        await ensureAudioSessionReady();
+
+        // 重建 AudioContext
+        createAudioContext(sampleRate, onPlaybackComplete);
+        devLog(`🔊 [ensureReady] 重建 AudioContext, 状态: ${audioContextRef.current!.state}`);
+
+        // 重试 resume
+        if (audioContextRef.current!.state === 'suspended') {
+          try {
+            await resumeWithTimeout(audioContextRef.current!);
+            devLog(`🔊 [ensureReady] 重建后 resume() 成功, 状态: ${audioContextRef.current!.state}`);
+          } catch (retryErr) {
+            console.error('🔊 [ensureReady] ❌ 重建后 resume() 仍然失败:', retryErr);
+            throw retryErr;
+          }
+        }
       }
     }
 
     const totalElapsed = performance.now() - startTime;
-    console.log(`🔊 [ensureReady] 结束 - 总耗时: ${totalElapsed.toFixed(1)}ms, 最终状态: ${audioContextRef.current.state}`);
+    devLog(`🔊 [ensureReady] 结束 - 总耗时: ${totalElapsed.toFixed(1)}ms, 最终状态: ${audioContextRef.current!.state}`);
 
-    return audioContextRef.current;
+    return audioContextRef.current!;
   }, [sampleRate, onPlaybackComplete]);
 
   /**

@@ -587,79 +587,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         messages: [],
       }));
 
-      // 步骤1：尝试启用摄像头（带重试机制）
-      console.log('🎬 步骤1: 尝试启用摄像头...', { cameraEnabled: geminiLive.cameraEnabled });
-      if (!geminiLive.cameraEnabled) {
-        let cameraRetries = 0;
-        let cameraSuccess = false;
-
-        while (cameraRetries < MAX_CAMERA_RETRIES && !cameraSuccess) {
-          console.log(`📹 摄像头尝试 #${cameraRetries + 1}，调用 toggleCamera()...`);
-          try {
-            await geminiLive.toggleCamera();
-            cameraSuccess = true;
-            console.log('✅ 摄像头启用成功');
-          } catch (cameraError) {
-            cameraRetries++;
-            const errorMessage = cameraError instanceof Error ? cameraError.message : String(cameraError);
-
-            // 🔍 调试：打印具体错误信息
-            console.error('❌ 摄像头启用异常:', cameraError);
-            console.log('❌ 摄像头错误详情:', errorMessage);
-
-            // 如果是权限被拒绝，不重试
-            if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowed')) {
-              if (import.meta.env.DEV) {
-                console.log('⚠️ 摄像头权限被拒绝，跳过重试');
-              }
-              break;
-            }
-
-            if (cameraRetries < MAX_CAMERA_RETRIES) {
-              console.log(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
-              await new Promise(resolve => setTimeout(resolve, CAMERA_RETRY_DELAY_MS));
-              console.log(`🔄 重试等待结束，开始第 ${cameraRetries + 1} 次尝试...`);
-            } else {
-              console.log('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
-            }
-          }
-        }
-        // 摄像头循环结束后的状态
-        console.log(`📹 摄像头初始化循环结束: cameraSuccess=${cameraSuccess}, cameraEnabled=${geminiLive.cameraEnabled}`);
-      }
-
-      // 步骤2：启用麦克风
-      console.log('🎤 步骤2: 启用麦克风...');
-      if (!geminiLive.isRecording) {
-        console.log('🎤 步骤2: 调用 toggleMicrophone()...');
-        await geminiLive.toggleMicrophone();
-        console.log('🎤 步骤2: toggleMicrophone() 完成');
-      } else {
-        console.log('🎤 步骤2: 麦克风已启用，跳过');
-      }
-
-      // 🆕 步骤2.1：如果有 callRecordId，记录麦克风连接成功
-      if (callRecordId) {
-        console.log('📞 记录 mic_connected_at:', callRecordId);
-        const supabaseForMic = getSupabaseClient();
-        if (supabaseForMic) {
-          supabaseForMic.functions.invoke('manage-call-records', {
-            body: {
-              action: 'mark_mic_connected',
-              call_record_id: callRecordId,
-            },
-          }).then(({ error }) => {
-            if (error) {
-              console.error('⚠️ 记录 mic_connected_at 失败:', error);
-            } else {
-              console.log('✅ mic_connected_at 已记录');
-            }
-          });
-        }
-      }
-
-      // 步骤3：并行获取系统指令和 Gemini token（带超时保护）
-      console.log('⚡ 步骤3: 并行获取系统指令和 token...');
+      // 🚀 性能优化：硬件初始化 + 网络请求全部并行执行
+      // 原来是：摄像头(~1s) → 麦克风(~1.2s) → [并行: 后端请求 + token]
+      // 现在是：全部同时发起，总耗时 = max(硬件, 后端请求) 而非 sum
+      console.log('🚀 全并行启动: 硬件初始化 + 网络请求同时进行...');
 
       const supabaseClient = getSupabaseClient();
       if (!supabaseClient) {
@@ -668,9 +599,80 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       const needFetchInstruction = !customSystemInstruction;
 
-      const [instructionResult, token] = await withTimeout(
+      const [, , instructionResult, token] = await withTimeout(
         Promise.all([
-          // 如果已有自定义 instruction 则返回 null
+          // 任务A：摄像头初始化（带重试机制）
+          (async () => {
+            console.log('🎬 [并行] 摄像头初始化...', { cameraEnabled: geminiLive.cameraEnabled });
+            if (!geminiLive.cameraEnabled) {
+              let cameraRetries = 0;
+              let cameraSuccess = false;
+
+              while (cameraRetries < MAX_CAMERA_RETRIES && !cameraSuccess) {
+                console.log(`📹 摄像头尝试 #${cameraRetries + 1}，调用 toggleCamera()...`);
+                try {
+                  await geminiLive.toggleCamera();
+                  cameraSuccess = true;
+                  console.log('✅ 摄像头启用成功');
+                } catch (cameraError) {
+                  cameraRetries++;
+                  const errorMessage = cameraError instanceof Error ? cameraError.message : String(cameraError);
+                  console.error('❌ 摄像头启用异常:', cameraError);
+                  console.log('❌ 摄像头错误详情:', errorMessage);
+
+                  if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowed')) {
+                    if (import.meta.env.DEV) {
+                      console.log('⚠️ 摄像头权限被拒绝，跳过重试');
+                    }
+                    break;
+                  }
+
+                  if (cameraRetries < MAX_CAMERA_RETRIES) {
+                    console.log(`⚠️ 摄像头启用失败，${CAMERA_RETRY_DELAY_MS}ms 后重试 (${cameraRetries}/${MAX_CAMERA_RETRIES})...`);
+                    await new Promise(resolve => setTimeout(resolve, CAMERA_RETRY_DELAY_MS));
+                    console.log(`🔄 重试等待结束，开始第 ${cameraRetries + 1} 次尝试...`);
+                  } else {
+                    console.log('⚠️ 摄像头启用失败，已达最大重试次数，继续流程');
+                  }
+                }
+              }
+              console.log(`📹 摄像头初始化循环结束: cameraSuccess=${cameraSuccess}, cameraEnabled=${geminiLive.cameraEnabled}`);
+            }
+          })(),
+
+          // 任务B：麦克风初始化 + callRecordId 记录
+          (async () => {
+            console.log('🎤 [并行] 麦克风初始化...');
+            if (!geminiLive.isRecording) {
+              console.log('🎤 调用 toggleMicrophone()...');
+              await geminiLive.toggleMicrophone();
+              console.log('🎤 toggleMicrophone() 完成');
+            } else {
+              console.log('🎤 麦克风已启用，跳过');
+            }
+
+            // 麦克风连接成功后，记录 callRecordId（fire-and-forget）
+            if (callRecordId) {
+              console.log('📞 记录 mic_connected_at:', callRecordId);
+              const supabaseForMic = getSupabaseClient();
+              if (supabaseForMic) {
+                supabaseForMic.functions.invoke('manage-call-records', {
+                  body: {
+                    action: 'mark_mic_connected',
+                    call_record_id: callRecordId,
+                  },
+                }).then(({ error }) => {
+                  if (error) {
+                    console.error('⚠️ 记录 mic_connected_at 失败:', error);
+                  } else {
+                    console.log('✅ mic_connected_at 已记录');
+                  }
+                });
+              }
+            }
+          })(),
+
+          // 任务C：获取系统指令（后端记忆检索）
           needFetchInstruction
             ? supabaseClient.functions.invoke('get-system-instruction', {
                 body: {
@@ -678,27 +680,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
                   userName,
                   preferredLanguages,
                   userId,
-                  // 注入用户本地时间，让 AI 知道当前是几点
-                  // 使用 24 小时制避免 AM/PM 误解
                   localTime: (() => {
                     const now = new Date();
                     const hours = now.getHours();
                     const minutes = now.getMinutes().toString().padStart(2, '0');
-                    // 24小时制更清晰，不会有 AM/PM 误解
                     return `${hours}:${minutes} (24-hour format)`;
                   })(),
-                  // 人类可读的日期，显示给 AI 用于自然对话
                   localDate: new Date().toLocaleDateString('en-US', {
                     weekday: 'long',
                     month: 'short',
                     day: 'numeric'
                   }),
-                  // ISO 格式日期 (YYYY-MM-DD)，用于记忆系统处理 event_date
                   localDateISO: new Date().toISOString().split('T')[0]
                 }
               })
             : Promise.resolve(null),
-          // 获取 Gemini token
+
+          // 任务D：获取 Gemini token
           fetchGeminiToken(),
         ]),
         CONNECTION_TIMEOUT_MS,
@@ -1070,6 +1068,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     stopAudioImmediately,
     resetSession,
     saveSessionMemory,
+    /** 更新当前任务 ID（用于后台保存临时任务后替换为真实 UUID） */
+    updateTaskId: (newTaskId: string) => { currentTaskIdRef.current = newTaskId; },
     sendTextMessage: geminiLive.sendTextMessage,
     toggleCamera: geminiLive.toggleCamera,
 

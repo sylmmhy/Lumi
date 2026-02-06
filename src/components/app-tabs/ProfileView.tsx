@@ -36,6 +36,7 @@ interface ProfileViewProps {
  */
 export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLogin, onTestPledge }) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const auth = useContext(AuthContext);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);

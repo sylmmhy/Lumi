@@ -57,6 +57,9 @@ const devLog = (...args: unknown[]) => {
     }
 };
 
+const SCREEN_TIME_START_TASK_INTENT_KEY = 'lumi_pending_start_task_intent';
+const SCREEN_TIME_INTENT_TTL_MS = 10 * 60 * 1000;
+
 /**
  * 获取用户本地日期（YYYY-MM-DD 格式）
  * 使用本地时间而非 UTC，避免跨时区时日期不匹配的问题
@@ -736,35 +739,39 @@ export function AppTabsPage() {
                 });
                 // 不创建新记录，但继续启动 AI Coach（使用临时 ID）
             } else {
-                devLog('📝 检测到临时任务 ID，先保存到数据库...', { taskSignature, displayTime: task.displayTime });
-                try {
-                    const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
-                    if (sessionData?.session?.user?.id) {
-                        const savedTask = await createReminder(task, sessionData.session.user.id);
-                        if (savedTask) {
-                            devLog('✅ 任务已保存到数据库，真实 ID:', savedTask.id);
-                            // 记录已创建的任务签名，防止重复创建
-                            aiCoachTaskCreatedRef.current.add(taskSignature);
-                            taskToUse = savedTask;
-                            taskId = savedTask.id;
-                            // 更新前端任务列表中的任务（用真实 ID 替换临时 ID）
-                            setTasks(prev => {
-                                // 如果临时任务已在列表中，替换它
-                                const existingIndex = prev.findIndex(t => t.id === task.id);
-                                if (existingIndex >= 0) {
-                                    const newTasks = [...prev];
-                                    newTasks[existingIndex] = savedTask;
-                                    return newTasks;
-                                }
-                                // 否则添加新任务
-                                return [...prev, savedTask];
-                            });
+                // 🚀 性能优化：不阻塞 AI Coach 启动，后台保存任务
+                // taskId 只在会话结束时用于保存 actualDurationMinutes，
+                // 后台保存通常在 1-2 秒内完成，远早于会话结束
+                devLog('📝 检测到临时任务 ID，后台保存到数据库...', { taskSignature, displayTime: task.displayTime });
+                aiCoachTaskCreatedRef.current.add(taskSignature);
+
+                // fire-and-forget：后台保存，完成后更新 taskId
+                (async () => {
+                    try {
+                        const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
+                        if (sessionData?.session?.user?.id) {
+                            const savedTask = await createReminder(task, sessionData.session.user.id);
+                            if (savedTask) {
+                                devLog('✅ 任务已后台保存到数据库，真实 ID:', savedTask.id);
+                                // 更新 AI Coach session 内部的 taskId ref，确保会话结束时用真实 ID 保存 duration
+                                aiCoach.updateTaskId(savedTask.id);
+                                setCurrentTaskId(savedTask.id);
+                                // 更新前端任务列表中的任务（用真实 ID 替换临时 ID）
+                                setTasks(prev => {
+                                    const existingIndex = prev.findIndex(t => t.id === task.id);
+                                    if (existingIndex >= 0) {
+                                        const newTasks = [...prev];
+                                        newTasks[existingIndex] = savedTask;
+                                        return newTasks;
+                                    }
+                                    return [...prev, savedTask];
+                                });
+                            }
                         }
+                    } catch (saveError) {
+                        console.error('⚠️ 后台保存临时任务失败:', saveError);
                     }
-                } catch (saveError) {
-                    console.error('⚠️ 保存临时任务失败，继续使用临时 ID:', saveError);
-                    // 继续使用临时 ID，但 actual_duration_minutes 将无法保存
-                }
+                })();
             }
         }
 
@@ -883,6 +890,14 @@ export function AppTabsPage() {
             // 这里复用与 Urgency 页按钮一致的 gate：先等会话验证完成，再启动 AI。
             if (!auth.isSessionValidated) {
                 devLog('⏳ [ScreenTime] 会话验证中，挂起 start_task 操作');
+                try {
+                    localStorage.setItem(
+                        SCREEN_TIME_START_TASK_INTENT_KEY,
+                        JSON.stringify({ event, savedAtMs: Date.now() })
+                    );
+                } catch {
+                    // ignore
+                }
                 setPendingTask(task);
                 setPendingAction('start-ai');
                 setPendingActionSource('session-validation');
@@ -891,6 +906,14 @@ export function AppTabsPage() {
 
             if (!auth.isLoggedIn) {
                 devLog('🔐 [ScreenTime] 未登录，挂起 start_task 并弹出登录框');
+                try {
+                    localStorage.setItem(
+                        SCREEN_TIME_START_TASK_INTENT_KEY,
+                        JSON.stringify({ event, savedAtMs: Date.now() })
+                    );
+                } catch {
+                    // ignore
+                }
                 setPendingTask(task);
                 setPendingAction('start-ai');
                 setPendingActionSource('auth-required');
@@ -898,6 +921,12 @@ export function AppTabsPage() {
                 return;
             }
 
+            // 如果能走到这里，说明会话已恢复完成，清理可能残留的 pending intent
+            try {
+                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+            } catch {
+                // ignore
+            }
             ensureVoicePromptThenStart(task);
         } else if (event.action === 'confirm_consequence') {
             // 用户选择"暂时不做，接受后果" - 显示后果确认界面
@@ -912,9 +941,73 @@ export function AppTabsPage() {
     }, [auth.isLoggedIn, auth.isSessionValidated, ensureVoicePromptThenStart, handleChangeView]);
 
     // 使用 Screen Time Hook 监听 iOS 事件
-    useScreenTime({
+    const screenTime = useScreenTime({
         onAction: handleScreenTimeAction,
     });
+
+    // 同步 Screen Time 锁定状态到 ref，供“任务完成自动解锁”逻辑判断
+    useEffect(() => {
+        isScreenTimeLockedRef.current = screenTime.status.isLocked;
+    }, [screenTime.status.isLocked]);
+
+    // 兜底：如果 start_task 到达时 WebView 恰好 reload，React state 会丢失。
+    // 我们把意图持久化到 localStorage，并在会话恢复后自动续跑，避免“偶发不弹语音页”。
+    useEffect(() => {
+        if (!auth.isSessionValidated || !auth.isLoggedIn) return;
+        if (pendingTask || pendingAction) return;
+        if (aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit) return;
+
+        let raw: string | null = null;
+        try {
+            raw = localStorage.getItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+        } catch {
+            return;
+        }
+
+        if (!raw) return;
+
+        try {
+            const parsed = JSON.parse(raw) as {
+                event?: ScreenTimeActionEvent;
+                savedAtMs?: number;
+            };
+
+            const pendingEvent = parsed?.event;
+            const savedAtMs = parsed?.savedAtMs;
+
+            if (!pendingEvent || pendingEvent.action !== 'start_task') {
+                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+                return;
+            }
+
+            if (typeof savedAtMs === 'number' && Date.now() - savedAtMs > SCREEN_TIME_INTENT_TTL_MS) {
+                devLog('🗑️ [ScreenTime] start_task intent 已过期，清理');
+                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+                return;
+            }
+
+            devLog('♻️ [ScreenTime] 恢复 start_task intent（可能发生了 WebView reload）:', pendingEvent);
+            // 先清理再处理，避免 handleScreenTimeAction 再次 return 时形成循环
+            localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+            handleScreenTimeAction(pendingEvent);
+        } catch (error) {
+            console.warn('[ScreenTime] 解析 start_task intent 失败，已清理:', error);
+            try {
+                localStorage.removeItem(SCREEN_TIME_START_TASK_INTENT_KEY);
+            } catch {
+                // ignore
+            }
+        }
+    }, [
+        auth.isSessionValidated,
+        auth.isLoggedIn,
+        pendingTask,
+        pendingAction,
+        aiCoach.isSessionActive,
+        aiCoach.isConnecting,
+        usingLiveKit,
+        handleScreenTimeAction,
+    ]);
 
     /**
      * 「Start」按钮点击：直接进入 AI 教练任务流程

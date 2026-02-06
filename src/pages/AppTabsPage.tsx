@@ -4,8 +4,8 @@ import { APP_TABS, DEFAULT_APP_PATH, DEFAULT_APP_TAB } from '../constants/routes
 import type { AppTab } from '../constants/routes';
 import type { Task } from '../remindMe/types';
 import { useAuth } from '../hooks/useAuth';
-import { TaskWorkingView } from '../components/task/TaskWorkingView';
-import { CelebrationView } from '../components/celebration/CelebrationView';
+import { SessionOverlay } from '../components/overlays/SessionOverlay';
+import { CelebrationOverlay } from '../components/overlays/CelebrationOverlay';
 import { AuthModal } from '../components/modals/AuthModal';
 import { VoicePermissionModal } from '../components/modals/VoicePermissionModal';
 import { TestVersionModal } from '../components/modals/TestVersionModal';
@@ -265,107 +265,11 @@ export function AppTabsPage() {
                 </div>
             )}
 
-            {/* LiveKit 模式：使用原生音频，不显示摄像头 */}
-            {coach.usingLiveKit && !coach.showCelebration && (
-                <TaskWorkingView
-                    taskDescription={coach.currentTaskDescription}
-                    time={coach.liveKitTimeRemaining}
-                    timeMode="countdown"
-                    aiStatus={{
-                        isConnected: coach.liveKitConnected,
-                        error: coach.liveKitError,
-                        waveformHeights: coach.liveKitConnected ? [0.5, 0.7, 0.6, 0.8, 0.5] : undefined,
-                        isSpeaking: coach.liveKitConnected,
-                        isObserving: false,
-                    }}
-                    primaryButton={{
-                        label: "I'M DOING IT!",
-                        emoji: '✅',
-                        onClick: coach.handleLiveKitPrimaryClick,
-                    }}
-                    secondaryButton={{
-                        label: 'END CALL',
-                        emoji: '🛑',
-                        onClick: coach.handleLiveKitSecondaryClick,
-                    }}
-                    hasBottomNav={false}
-                />
-            )}
-
-            {/* WebView 模式（Gemini Live）：显示摄像头和 AI 状态 */}
-            {(coach.aiCoach.isSessionActive || coach.aiCoach.isConnecting) && !coach.showCelebration && !coach.usingLiveKit && (
-                <>
-                    <canvas ref={coach.aiCoach.canvasRef} className="hidden" />
-                    <TaskWorkingView
-                        taskDescription={coach.aiCoach.state.taskDescription}
-                        time={coach.aiCoach.state.timeRemaining}
-                        timeMode="countdown"
-                        camera={{
-                            enabled: coach.aiCoach.cameraEnabled,
-                            videoRef: coach.aiCoach.videoRef,
-                        }}
-                        onToggleCamera={coach.aiCoach.toggleCamera}
-                        aiStatus={{
-                            isConnected: coach.aiCoach.isConnected || coach.aiCoach.isCampfireMode,
-                            error: coach.aiCoach.error,
-                            waveformHeights: coach.aiCoach.waveformHeights,
-                            isSpeaking: coach.aiCoach.isSpeaking,
-                            isObserving: coach.aiCoach.isObserving,
-                        }}
-                        primaryButton={{
-                            label: "I'M DOING IT!",
-                            emoji: '✅',
-                            onClick: coach.handleEndAICoachSession,
-                        }}
-                        secondaryButton={{
-                            label: 'END CALL',
-                            emoji: '🛑',
-                            onClick: coach.handleEndCall,
-                        }}
-                        hasBottomNav={false}
-                    />
-                </>
-            )}
+            {/* AI 会话全屏遮罩（LiveKit + Gemini Live 两种模式） */}
+            <SessionOverlay coach={coach} />
 
             {/* 任务完成确认 & 庆祝页面 */}
-            {coach.showCelebration && (
-                <div className="fixed inset-0 z-[200]">
-                    <CelebrationView
-                        flow={coach.celebrationFlow}
-                        onFlowChange={coach.setCelebrationFlow}
-                        success={{
-                            scene: coach.celebrationAnimation.scene,
-                            coins: coach.celebrationAnimation.coins,
-                            progressPercent: coach.celebrationAnimation.progressPercent,
-                            showConfetti: coach.celebrationAnimation.showConfetti,
-                            completionTime: coach.completionTime,
-                            taskDescription: coach.currentTaskDescription,
-                            ctaButton: {
-                                label: 'TAKE MORE CHALLENGE',
-                                onClick: coach.handleCloseCelebration,
-                            },
-                        }}
-                        failure={{
-                            button: {
-                                label: 'TRY AGAIN',
-                                onClick: coach.handleCloseCelebration,
-                            },
-                        }}
-                        confirm={{
-                            title: "Time's Up!",
-                            subtitle: 'Did you complete your task?',
-                            yesButton: {
-                                label: '✅ YES, I DID IT!',
-                                onClick: coach.handleConfirmTaskComplete,
-                            },
-                            noButton: {
-                                label: "✕ NO, NOT YET",
-                                onClick: coach.handleConfirmTaskIncomplete,
-                            },
-                        }}
-                    />
-                </div>
-            )}
+            {coach.showCelebration && <CelebrationOverlay coach={coach} />}
 
             {/* Main App Shell */}
             <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(coach.showCelebration || coach.isSessionOverlayVisible) ? 'hidden' : ''}`}>

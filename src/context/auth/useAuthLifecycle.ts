@@ -1,16 +1,18 @@
 /**
  * auth/useAuthLifecycle.ts - 认证生命周期 Hook
  *
- * 封装认证相关的 refs、applyNativeLogin/Logout、triggerSessionCheckNow、
- * restoreSession、onAuthStateChange 订阅和定期会话检查。
- *
- * Part 3 (US-014) 将移入 Native Bridge 和 storage 事件监听器。
+ * 封装认证的完整生命周期逻辑：
+ * - refs、applyNativeLogin/Logout、triggerSessionCheckNow
+ * - restoreSession、onAuthStateChange 订阅、定期会话检查
+ * - Native Bridge 事件监听、storage 跨标签页同步
+ * - checkLoginState、navigateToLogin、handleOAuthCallback
  */
 
 import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type Dispatch,
   type MutableRefObject,
   type SetStateAction,
@@ -20,6 +22,7 @@ import { supabase } from '../../lib/supabase';
 import {
   NATIVE_LOGIN_FLAG_KEY,
   LOGGED_OUT_STATE,
+  readAuthFromStorage,
   persistSessionToStorage,
   clearAuthStorage,
 } from './storage';
@@ -37,18 +40,23 @@ import {
   isInNativeWebView,
   requestNativeAuth,
   notifyNativeLoginSuccess,
+  notifyNativeLogout,
+  initNativeAuthBridge,
 } from './nativeAuthBridge';
 import { syncUserProfileToStorage } from './userProfile';
 import { fetchHabitOnboardingCompleted } from './habitOnboarding';
 import { bindAnalyticsUser, bindAnalyticsUserSync, resetAnalyticsUser } from './analyticsSync';
 import { validateSessionWithSupabase } from './sessionValidation';
 import { syncAfterLogin } from './postLoginSync';
+import { getOAuthCallbackParams, hasOAuthCallbackParams, clearOAuthCallbackParams } from './oauthCallback';
+import { DEFAULT_APP_PATH } from '../../constants/routes';
 
 // ==========================================
 // 常量
 // ==========================================
 
 const SESSION_CHECK_DEBOUNCE_MS = 3000; // 3 秒内不重复检查
+const DEFAULT_LOGIN_PATH = '/login/mobile';
 
 // ==========================================
 // 类型定义
@@ -60,10 +68,14 @@ const SESSION_CHECK_DEBOUNCE_MS = 3000; // 3 秒内不重复检查
 export interface UseAuthLifecycleParams {
   /** React state setter */
   setAuthState: Dispatch<SetStateAction<AuthState>>;
-  /** 从 localStorage 读取登录态并触发 habit onboarding 查询 */
-  checkLoginState: () => { isLoggedIn: boolean; userId: string | null; sessionToken: string | null };
   /** 登出函数 */
   logout: () => Promise<void>;
+  /** react-router navigate 函数 */
+  navigate: (to: string, options?: { replace?: boolean }) => void;
+  /** 登录页路径 */
+  loginPath: string;
+  /** 默认重定向路径 */
+  defaultRedirectPath: string;
 }
 
 /**
@@ -72,24 +84,22 @@ export interface UseAuthLifecycleParams {
 export interface UseAuthLifecycleReturn {
   /** 立即触发会话检查与修复 */
   triggerSessionCheckNow: (reason?: string) => Promise<void>;
+  /** 会话检查函数的 ref 包装（避免回调闭包引用旧实例） */
+  triggerSessionCheckNowRef: MutableRefObject<((reason?: string) => void) | null>;
   /** 应用原生登录态 */
   applyNativeLogin: (payload?: NativeAuthPayload) => Promise<void>;
   /** 应用原生登出 */
   applyNativeLogout: () => void;
-  // ---- 以下 refs 临时暴露给 AuthContext 中尚未迁移的 useEffect ----
-  // US-013/014 完成后将变为 hook 私有
-  /** 是否已处理过原生登录事件 */
-  hasHandledNativeLoginRef: MutableRefObject<boolean>;
-  /** 是否正在处理原生登录 */
-  isApplyingNativeLoginRef: MutableRefObject<boolean>;
-  /** 最近一次原生登录开始时间 */
-  lastNativeLoginStartedAtRef: MutableRefObject<number | null>;
-  /** 原生登录态注入的启动期等待窗口截止时间 */
-  nativeAuthBootstrapDeadlineRef: MutableRefObject<number | null>;
-  /** onAuthStateChange 是否正在处理 */
-  isOnAuthStateChangeProcessingRef: MutableRefObject<boolean>;
-  /** setSession 是否触发了 onAuthStateChange */
-  setSessionTriggeredAuthChangeRef: MutableRefObject<boolean>;
+  /** 从 localStorage 读取登录态并触发 habit onboarding 查询 */
+  checkLoginState: () => { isLoggedIn: boolean; userId: string | null; sessionToken: string | null };
+  /** 跳转到登录页 */
+  navigateToLogin: (redirectPath?: string) => void;
+  /** 处理 OAuth 回调参数 */
+  handleOAuthCallback: () => Promise<void>;
+  /** OAuth 回调是否正在处理中 */
+  isOAuthProcessing: boolean;
+  /** 绑定访客 onboarding 会话到用户 */
+  bindOnboardingToUser: (visitorId: string, userId: string) => Promise<void>;
 }
 
 // ==========================================
@@ -99,18 +109,18 @@ export interface UseAuthLifecycleReturn {
 /**
  * 认证生命周期 Hook。
  *
- * 封装：
+ * 封装认证的完整生命周期逻辑：
  * - 8 个生命周期 refs（互斥锁、时间戳、状态标记）
- * - applyNativeLogin / applyNativeLogout
- * - triggerSessionCheckNow
+ * - applyNativeLogin / applyNativeLogout / triggerSessionCheckNow
+ * - checkLoginState / navigateToLogin / handleOAuthCallback
  * - restoreSession useEffect（含 onAuthStateChange 订阅）
- * - 定期会话检查 useEffect
+ * - 定期会话检查、Native Bridge 事件、storage 跨标签页同步
  *
  * @param params - Hook 参数
- * @returns 函数和暂时暴露的 refs
+ * @returns 生命周期函数和状态
  */
 export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecycleReturn {
-  const { setAuthState, checkLoginState, logout } = params;
+  const { setAuthState, logout, navigate, loginPath, defaultRedirectPath } = params;
 
   // ==========================================
   // Refs
@@ -147,6 +157,28 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
   const sessionCheckMutexRef = useRef(false);
   /** 上次会话检查时间 */
   const lastSessionCheckTimeRef = useRef(0);
+  /** 登录页路径 ref（供回调闭包使用） */
+  const loginPathRef = useRef(loginPath);
+  /** 默认重定向路径 ref（供回调闭包使用） */
+  const defaultRedirectRef = useRef(defaultRedirectPath);
+  /** 标记是否已处理过 OAuth 回调 */
+  const hasHandledOAuthRef = useRef(false);
+  /** 缓存最新的会话检查函数，避免回调闭包引用旧实例 */
+  const triggerSessionCheckNowRef = useRef<((reason?: string) => void) | null>(null);
+
+  // ==========================================
+  // 状态
+  // ==========================================
+
+  /** OAuth 回调是否正在处理中 */
+  const [isOAuthProcessing, setIsOAuthProcessing] = useState<boolean>(() => hasOAuthCallbackParams());
+
+  // ==========================================
+  // Ref 同步
+  // ==========================================
+
+  useEffect(() => { loginPathRef.current = loginPath; }, [loginPath]);
+  useEffect(() => { defaultRedirectRef.current = defaultRedirectPath; }, [defaultRedirectPath]);
 
   // ==========================================
   // triggerSessionCheckNow
@@ -274,6 +306,72 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
       sessionCheckMutexRef.current = false;
     }
   }, []);
+
+  // 同步 triggerSessionCheckNowRef
+  useEffect(() => {
+    triggerSessionCheckNowRef.current = (reason?: string) => {
+      void triggerSessionCheckNow(reason);
+    };
+    return () => {
+      triggerSessionCheckNowRef.current = null;
+    };
+  }, [triggerSessionCheckNow]);
+
+  // ==========================================
+  // checkLoginState
+  // ==========================================
+
+  /**
+   * 同步 localStorage 的登录态，并在需要时刷新习惯引导完成状态。
+   *
+   * 原理：
+   * - OAuth/OTP 登录会先写入 localStorage，但不会立刻查询 has_completed_habit_onboarding。
+   * - 这里检测到登录态后补一次 Supabase 查询，避免 hasCompletedHabitOnboarding 被错误置为 false。
+   * - 查询完成后再把 isSessionValidated 置为 true，防止未确认前跳转到引导页。
+   *
+   * @returns {{ isLoggedIn: boolean; userId: string | null; sessionToken: string | null }} 本地缓存的基础登录态
+   */
+  const checkLoginState = useCallback(() => {
+    const latest = readAuthFromStorage();
+    setAuthState(prev => {
+      const isSameUser = Boolean(prev.userId && latest.userId && prev.userId === latest.userId);
+      const canRevalidate = Boolean(supabase && latest.isLoggedIn && latest.userId);
+      const shouldRevalidate = canRevalidate && (!isSameUser || !prev.hasCompletedHabitOnboarding);
+
+      return {
+        ...latest,
+        isSessionValidated: shouldRevalidate ? false : prev.isSessionValidated,
+        hasCompletedHabitOnboarding: isSameUser ? prev.hasCompletedHabitOnboarding : false,
+      };
+    });
+
+    if (supabase && latest.isLoggedIn && latest.userId) {
+      const userId = latest.userId;
+      void (async () => {
+        const fetchedHasCompletedHabitOnboarding = await fetchHabitOnboardingCompleted(
+          supabase,
+          userId,
+          'checkLoginState',
+          null
+        );
+
+        setAuthState(prev => {
+          if (prev.userId !== userId) return prev;
+          return {
+            ...prev,
+            hasCompletedHabitOnboarding: fetchedHasCompletedHabitOnboarding ?? prev.hasCompletedHabitOnboarding,
+            isSessionValidated: true,
+          };
+        });
+      })();
+    }
+
+    return {
+      isLoggedIn: latest.isLoggedIn,
+      userId: latest.userId,
+      sessionToken: latest.sessionToken,
+    };
+  }, [setAuthState]);
 
   // ==========================================
   // applyNativeLogin
@@ -518,6 +616,160 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
     localStorage.removeItem(NATIVE_LOGIN_FLAG_KEY);
     void logout();
   }, [logout]);
+
+  // ==========================================
+  // navigateToLogin
+  // ==========================================
+
+  /**
+   * 跳转到登录页。
+   * WebView 环境中通知 Native 端回到原生登录页。
+   */
+  const navigateToLogin = useCallback((redirectPath?: string) => {
+    if (isInNativeWebView()) {
+      const deadline = nativeAuthBootstrapDeadlineRef.current;
+      const isBootstrapPending = Boolean(
+        deadline
+        && Date.now() < deadline
+        && !hasHandledNativeLoginRef.current
+        && !isApplyingNativeLoginRef.current
+      );
+      if (isBootstrapPending) {
+        console.log('📱 WebView 环境：Native 登录态仍在注入窗口内，先请求 Native 注入（避免误触发原生登出）');
+        requestNativeAuth();
+        return;
+      }
+      console.log('📱 WebView 环境，通知 Native 端跳转到原生登录页');
+      notifyNativeLogout();
+      return;
+    }
+
+    const target = redirectPath || defaultRedirectRef.current || DEFAULT_APP_PATH;
+    const loginTarget = loginPathRef.current || DEFAULT_LOGIN_PATH;
+    navigate(`${loginTarget}?redirect=${encodeURIComponent(target)}`, { replace: true });
+  }, [navigate]);
+
+  // ==========================================
+  // handleOAuthCallback
+  // ==========================================
+
+  /**
+   * 处理 OAuth 回调参数（PKCE / Implicit flow）。
+   */
+  const handleOAuthCallback = useCallback(async () => {
+    const { code, accessToken, refreshToken, error, errorDescription } = getOAuthCallbackParams();
+    const hasOAuthParams = Boolean(code || accessToken || error);
+
+    if (!hasOAuthParams) {
+      setIsOAuthProcessing(false);
+      return;
+    }
+
+    if (hasHandledOAuthRef.current) return;
+    hasHandledOAuthRef.current = true;
+    setIsOAuthProcessing(true);
+    console.log('🔐 检测到 OAuth 回调参数，开始处理...');
+
+    if (!supabase) {
+      console.error('❌ Supabase client not initialized, OAuth callback ignored');
+      clearOAuthCallbackParams();
+      setIsOAuthProcessing(false);
+      return;
+    }
+
+    try {
+      if (error) {
+        console.error('❌ OAuth 回调错误:', error, errorDescription);
+        return;
+      }
+
+      if (code) {
+        console.log('🔐 PKCE flow: 使用 code 交换 session...');
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          console.error('❌ exchangeCodeForSession 失败:', exchangeError);
+        } else if (data.session) {
+          console.log('✅ OAuth 登录成功:', data.session.user.email);
+          persistSessionToStorage(data.session);
+          checkLoginState();
+          triggerSessionCheckNowRef.current?.('oauth_pkce');
+        }
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        console.log('🔐 Implicit flow: 使用 access_token 建立 session...');
+        if (!canExecuteSetSession('oauth_implicit')) {
+          console.log('🔐 OAuth implicit: 跳过 setSession，已有其他调用正在执行');
+          return;
+        }
+        acquireSetSessionLock('oauth_implicit');
+        try {
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) {
+            console.error('❌ setSession 失败:', sessionError);
+          } else if (data.session) {
+            console.log('✅ OAuth 登录成功:', data.session.user.email);
+            persistSessionToStorage(data.session);
+            checkLoginState();
+            triggerSessionCheckNowRef.current?.('oauth_implicit');
+          }
+        } finally {
+          releaseSetSessionLock('oauth_implicit');
+        }
+        return;
+      }
+
+      if (accessToken && !refreshToken) {
+        console.warn('⚠️ OAuth 回调缺少 refresh_token，无法建立 Supabase session');
+      }
+    } catch (err) {
+      console.error('❌ OAuth 回调处理失败:', err);
+    } finally {
+      clearOAuthCallbackParams();
+      setIsOAuthProcessing(false);
+    }
+  }, [checkLoginState]);
+
+  // ==========================================
+  // bindOnboardingToUser
+  // ==========================================
+
+  /**
+   * 绑定访客 onboarding 会话到用户。
+   */
+  const bindOnboardingToUser = async (visitorId: string, userId: string) => {
+    if (!supabase) return;
+    try {
+      const { data: sessions, error } = await supabase
+        .from('onboarding_session')
+        .select('*')
+        .eq('visitor_id', visitorId)
+        .eq('status', 'task_completed')
+        .order('task_ended_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Failed to fetch onboarding sessions:', error);
+        return;
+      }
+
+      if (sessions && sessions.length > 0) {
+        const { error: updateError } = await supabase
+          .from('onboarding_session')
+          .update({ user_id: userId })
+          .eq('id', sessions[0].id);
+
+        if (updateError) console.error('Failed to bind onboarding session:', updateError);
+        else console.log('✅ Onboarding session bound to user:', userId);
+      }
+    } catch (err) {
+      console.error('Error binding onboarding to user:', err);
+    }
+  };
 
   // ==========================================
   // Session 恢复（以 Supabase 为权威来源）+ onAuthStateChange
@@ -876,18 +1128,149 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
   }, [triggerSessionCheckNow]);
 
   // ==========================================
+  // Native Auth Bridge 初始化
+  // ==========================================
+
+  useEffect(() => {
+    const handleNativeLogin = (event: Event) => {
+      const nativeEvent = event as CustomEvent<NativeAuthPayload>;
+      void applyNativeLogin(nativeEvent.detail);
+    };
+
+    const handleNativeLogout = () => void applyNativeLogout();
+
+    // 提前标记网页已就绪，避免 Native 端等待超时后才注入（减少时序竞争窗口）
+    window.__MindBoatAuthReady = true;
+
+    const NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS = 8_000;
+    const NATIVE_AUTH_FALLBACK_POLL_INTERVAL_MS = 100;
+    const NATIVE_AUTH_FALLBACK_MAX_WAIT_MS = 8_000;
+
+    /**
+     * 开启/延长 Native 注入等待窗口（避免"尚未注入→误判未登录→触发原生硬登出"）。
+     */
+    const armNativeAuthBootstrapWindow = (reason: string): void => {
+      if (!isInNativeWebView()) return;
+      const now = Date.now();
+      const nextDeadline = now + NATIVE_AUTH_BOOTSTRAP_MAX_WAIT_MS;
+      nativeAuthBootstrapDeadlineRef.current = Math.max(nativeAuthBootstrapDeadlineRef.current ?? 0, nextDeadline);
+      if (import.meta.env.DEV) {
+        console.log('🔐 NativeAuth bootstrap window armed:', reason, 'deadline=', nativeAuthBootstrapDeadlineRef.current);
+      }
+    };
+
+    // ===== 兜底轮询：解决 CustomEvent 丢失 / 注入晚到 =====
+    let fallbackIntervalId: number | undefined;
+    let fallbackStopTimeoutId: number | undefined;
+
+    const stopFallbackPolling = (): void => {
+      if (fallbackIntervalId !== undefined) {
+        window.clearInterval(fallbackIntervalId);
+        fallbackIntervalId = undefined;
+      }
+      if (fallbackStopTimeoutId !== undefined) {
+        window.clearTimeout(fallbackStopTimeoutId);
+        fallbackStopTimeoutId = undefined;
+      }
+    };
+
+    const pollNativeAuthOnce = (): void => {
+      if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) {
+        stopFallbackPolling();
+        return;
+      }
+      if (window.MindBoatNativeAuth) {
+        console.log('🔐 Web: 兜底轮询发现已注入的登录态，开始处理');
+        void applyNativeLogin(window.MindBoatNativeAuth);
+        stopFallbackPolling();
+      }
+    };
+
+    const startFallbackPolling = (): void => {
+      stopFallbackPolling();
+      fallbackIntervalId = window.setInterval(pollNativeAuthOnce, NATIVE_AUTH_FALLBACK_POLL_INTERVAL_MS);
+      fallbackStopTimeoutId = window.setTimeout(stopFallbackPolling, NATIVE_AUTH_FALLBACK_MAX_WAIT_MS);
+      pollNativeAuthOnce();
+    };
+
+    /**
+     * 初始化 Native Auth Bridge，并启动兜底轮询。
+     */
+    const startNativeAuthBridge = (): void => {
+      armNativeAuthBootstrapWindow('startNativeAuthBridge');
+      initNativeAuthBridge((payload) => {
+        armNativeAuthBootstrapWindow('native_payload_found');
+        void applyNativeLogin(payload);
+      });
+      startFallbackPolling();
+    };
+
+    window.addEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
+    window.addEventListener('mindboat:nativeLogout', handleNativeLogout);
+
+    const handleDomContentLoaded = () => {
+      startNativeAuthBridge();
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      handleDomContentLoaded();
+    } else {
+      document.addEventListener('DOMContentLoaded', handleDomContentLoaded);
+    }
+
+    /**
+     * WebView 被挂起后恢复时，可能错过注入事件；在可见时触发一次兜底检查。
+     */
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (hasHandledNativeLoginRef.current || isApplyingNativeLoginRef.current) return;
+      startNativeAuthBridge();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('mindboat:nativeLogin', handleNativeLogin as EventListener);
+      window.removeEventListener('mindboat:nativeLogout', handleNativeLogout);
+      document.removeEventListener('DOMContentLoaded', handleDomContentLoaded);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopFallbackPolling();
+    };
+  }, [applyNativeLogin, applyNativeLogout]);
+
+  // ==========================================
+  // 监听其他标签页的登录状态变化
+  // ==========================================
+
+  useEffect(() => {
+    const handleStorage = async (event: StorageEvent) => {
+      if (!event.key || event.key === 'session_token' || event.key === 'user_id' || event.key === NATIVE_LOGIN_FLAG_KEY) {
+        const validatedState = await validateSessionWithSupabase();
+        setAuthState(validatedState);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [setAuthState]);
+
+  // ==========================================
+  // OAuth 回调处理
+  // ==========================================
+
+  useEffect(() => { void handleOAuthCallback(); }, [handleOAuthCallback]);
+
+  // ==========================================
   // 返回
   // ==========================================
 
   return {
     triggerSessionCheckNow,
+    triggerSessionCheckNowRef,
     applyNativeLogin,
     applyNativeLogout,
-    hasHandledNativeLoginRef,
-    isApplyingNativeLoginRef,
-    lastNativeLoginStartedAtRef,
-    nativeAuthBootstrapDeadlineRef,
-    isOnAuthStateChangeProcessingRef,
-    setSessionTriggeredAuthChangeRef,
+    checkLoginState,
+    navigateToLogin,
+    handleOAuthCallback,
+    isOAuthProcessing,
+    bindOnboardingToUser,
   };
 }

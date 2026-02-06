@@ -86,6 +86,7 @@ export function isNetworkError(error: { message?: string; code?: string } | null
   const code = (error.code || '').toLowerCase();
 
   // 网络相关错误关键词
+  // 注意：iOS WebKit 网络失败的错误信息是 "TypeError: Load failed"，必须包含 'load failed'
   const networkErrorPatterns = [
     'network',
     'fetch',
@@ -100,6 +101,7 @@ export function isNetworkError(error: { message?: string; code?: string } | null
     'abort',
     'etimedout',
     'econnreset',
+    'load failed',
   ];
 
   return networkErrorPatterns.some(pattern => msg.includes(pattern) || code.includes(pattern));

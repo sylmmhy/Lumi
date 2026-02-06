@@ -6,7 +6,6 @@ import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
 import { useWaveformAnimation } from '../useWaveformAnimation';
 import { useVirtualMessageOrchestrator } from '../virtual-messages';
 import { getSupabaseClient } from '../../lib/supabase';
-import { updateReminder } from '../../remindMe/services/reminderService';
 import { getVoiceName } from '../../lib/voiceSettings';
 import type { VirtualMessageUserContext } from '../virtual-messages/types';
 import { devError, devLog, devWarn } from '../gemini-live/utils';
@@ -15,6 +14,7 @@ import { CONNECTION_TIMEOUT_MS, MAX_CAMERA_RETRIES, CAMERA_RETRY_DELAY_MS } from
 import { withTimeout, isValidUserSpeech } from './utils';
 import { useCampfireMode } from './useCampfireMode';
 import { useSessionTimer } from './useSessionTimer';
+import { useSessionMemory } from './useSessionMemory';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -52,17 +52,18 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const processedTranscriptRef = useRef<Set<string>>(new Set());
 
   /**
-   * 保存最新的 saveSessionMemory 引用，确保倒计时结束时可以稳定触发记忆保存
-   */
-  const saveSessionMemoryRef = useRef<(options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => Promise<boolean>>(
-    async () => false
-  );
-
-  /**
    * 保存最新的 cleanup 引用，供 handleTimerComplete 使用
    * 初始为空函数，在 cleanup 定义后由 effect 同步
    */
   const cleanupRef = useRef<() => void>(() => {});
+
+  /**
+   * 保存最新的 saveSessionMemory 引用，供 handleTimerComplete 使用
+   * 初始为空函数，在 useSessionMemory 定义后由 effect 同步
+   */
+  const saveSessionMemoryRef = useRef<(options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => Promise<boolean>>(
+    async () => false
+  );
 
   // 使用 ref 来存储 addMessage 函数，避免循环依赖问题
   const addMessageRef = useRef<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>(() => {});
@@ -247,6 +248,25 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     initialTime,
     onComplete: handleTimerComplete,
   });
+
+  // ==========================================
+  // 记忆保存（独立 Hook）
+  // ==========================================
+  const memory = useSessionMemory({
+    currentUserIdRef,
+    currentTaskDescriptionRef,
+    currentTaskIdRef,
+    userSpeechBufferRef,
+    addMessageRef,
+    messages,
+    timeRemaining: timer.timeRemaining,
+    initialTime,
+  });
+
+  // 同步 saveSessionMemory 到 ref，供 handleTimerComplete 使用
+  useEffect(() => {
+    saveSessionMemoryRef.current = memory.saveSessionMemory;
+  }, [memory.saveSessionMemory]);
 
   // ==========================================
   // VAD (Voice Activity Detection)
@@ -745,165 +765,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [cleanup, campfire]);
 
   /**
-   * 保存会话记忆到 Mem0
-   */
-  const saveSessionMemory = useCallback(async (options?: { additionalContext?: string; forceTaskCompleted?: boolean }) => {
-    const { additionalContext, forceTaskCompleted } = options || {};
-    const userId = currentUserIdRef.current;
-    const taskDescription = currentTaskDescriptionRef.current;
-
-    if (!userId) {
-      devLog('⚠️ 无法保存记忆：缺少 userId');
-      return false;
-    }
-
-    // 复制当前消息列表
-    const messagesCopy = [...messages];
-
-    // 先把 buffer 中剩余的用户消息保存
-    if (userSpeechBufferRef.current.trim()) {
-      const fullUserMessage = userSpeechBufferRef.current.trim();
-      devLog('🎤 保存剩余用户消息:', fullUserMessage);
-      const newUserMessage: AICoachMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: fullUserMessage,
-        timestamp: new Date(),
-        isVirtual: false,
-      };
-      messagesCopy.push(newUserMessage);
-      addMessageRef.current('user', fullUserMessage, false);
-      userSpeechBufferRef.current = '';
-    }
-    if (messagesCopy.length === 0) {
-      devLog('⚠️ 无法保存记忆：没有对话消息');
-      return false;
-    }
-
-    try {
-      devLog('🧠 正在保存会话记忆...');
-
-      const supabaseClient = getSupabaseClient();
-      if (!supabaseClient) {
-        throw new Error('Supabase 未配置');
-      }
-
-      const realMessages = messagesCopy.filter(msg => !msg.isVirtual);
-
-      if (realMessages.length === 0) {
-        devLog('⚠️ 无法保存记忆：没有真实对话消息（全是虚拟消息）');
-        return false;
-      }
-
-      const mem0Messages = realMessages.map(msg => ({
-        role: msg.role === 'ai' ? 'assistant' : 'user',
-        content: msg.content,
-      }));
-
-      if (taskDescription) {
-        mem0Messages.unshift({
-          role: 'system',
-          content: `User was working on task: "${taskDescription}"${additionalContext ? `. ${additionalContext}` : ''}`,
-        });
-      }
-
-      if (import.meta.env.DEV) {
-        devLog('📤 [Mem0] 发送到 Mem0 的内容:', {
-          userId,
-          taskDescription,
-          totalMessages: messagesCopy.length,
-          virtualMessagesFiltered: messagesCopy.length - realMessages.length,
-          realMessagesCount: realMessages.length,
-          mem0MessagesCount: mem0Messages.length,
-          messages: mem0Messages,
-        });
-      }
-
-      const wasTaskCompleted = forceTaskCompleted === true || timer.timeRemaining === 0;
-      const actualDurationMinutes = Math.round((initialTime - timer.timeRemaining) / 60);
-
-      if (import.meta.env.DEV) {
-        devLog('📊 任务完成状态:', {
-          wasTaskCompleted,
-          forceTaskCompleted,
-          actualDurationMinutes,
-          timeRemaining: timer.timeRemaining,
-          initialTime,
-        });
-      }
-
-      const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
-        body: {
-          action: 'extract',
-          userId,
-          messages: mem0Messages,
-          taskDescription,
-          localDate: new Date().toISOString().split('T')[0],
-          metadata: {
-            source: 'ai_coach_session',
-            sessionDuration: initialTime - timer.timeRemaining,
-            timestamp: new Date().toISOString(),
-            task_completed: wasTaskCompleted,
-            actual_duration_minutes: actualDurationMinutes,
-          },
-        },
-      });
-
-      if (error) {
-        throw new Error(`保存记忆失败: ${error.message}`);
-      }
-
-      if (import.meta.env.DEV) {
-        devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        devLog('💾 [记忆保存] 本次会话存的记忆:');
-        devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        const savedMemories = data?.memories as Array<{ content: string; tag: string }> | undefined;
-        if (savedMemories && savedMemories.length > 0) {
-          savedMemories.forEach((memory, index) => {
-            devLog(`  ${index + 1}. [${memory.tag}] ${memory.content}`);
-          });
-        } else {
-          devLog('  (无新记忆被提取)');
-        }
-        devLog('📊 保存统计:', {
-          extracted: data?.extracted,
-          saved: data?.saved,
-          merged: data?.merged,
-        });
-        devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      }
-
-      const taskId = currentTaskIdRef.current;
-      if (wasTaskCompleted && taskId && actualDurationMinutes > 0) {
-        try {
-          await updateReminder(taskId, {
-            actualDurationMinutes,
-          });
-          if (import.meta.env.DEV) {
-            devLog('✅ 任务完成时长已保存到数据库:', { taskId, actualDurationMinutes });
-          }
-        } catch (updateError) {
-          devWarn('⚠️ 保存任务完成时长失败:', updateError);
-        }
-      }
-
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('❌ 保存会话记忆失败:', errorMessage);
-      devWarn('❌ 保存会话记忆失败详情:', error);
-      return false;
-    }
-  }, [messages, timer.timeRemaining, initialTime]);
-
-  /**
-   * 同步 saveSessionMemory 的最新实现
-   */
-  useEffect(() => {
-    saveSessionMemoryRef.current = saveSessionMemory;
-  }, [saveSessionMemory]);
-
-  /**
    * 重置会话
    */
   const resetSession = useCallback(() => {
@@ -967,7 +828,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     endSession,
     stopAudioImmediately,
     resetSession,
-    saveSessionMemory,
+    saveSessionMemory: memory.saveSessionMemory,
     /** 更新当前任务 ID（用于后台保存临时任务后替换为真实 UUID） */
     updateTaskId: (newTaskId: string) => { currentTaskIdRef.current = newTaskId; },
     sendTextMessage: geminiLive.sendTextMessage,

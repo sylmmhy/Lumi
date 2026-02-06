@@ -103,9 +103,13 @@ export function HabitOnboardingPage() {
       // 不传 customSystemInstruction，让 startSession 调用 Edge Function 获取完整 prompt
       // taskDescription 会被发送到 get-system-instruction Edge Function
       const preferredLanguages = getPreferredLanguages();
-      await aiCoach.startSession(onboarding.habitDisplayName, {
+      const started = await aiCoach.startSession(onboarding.habitDisplayName, {
         preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
       });
+      if (!started) {
+        setIsInCall(false);
+        return;
+      }
     } catch (error) {
       console.error('Failed to start call:', error);
       setIsInCall(false);

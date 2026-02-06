@@ -172,7 +172,8 @@ export function TaskFlowController({
 
     // WebView 模式：使用 Gemini Live
     try {
-      await aiCoach.startSession(taskName);
+      const started = await aiCoach.startSession(taskName);
+      if (!started) return;
       setStep('working');
     } catch (error) {
       alert('AI 连接失败，请重试：' + (error as Error).message);

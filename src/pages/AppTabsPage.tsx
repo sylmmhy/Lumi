@@ -49,10 +49,10 @@ import { TourOverlay } from '../components/tour/TourOverlay';
 
 type ViewState = AppTab;
 
-const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
-
 import { devLog } from '../utils/devLog';
 import { getLocalDateString } from '../utils/timeUtils';
+
+const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
 const SCREEN_TIME_START_TASK_INTENT_KEY = 'lumi_pending_start_task_intent';
 const SCREEN_TIME_INTENT_TTL_MS = 10 * 60 * 1000;

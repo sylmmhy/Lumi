@@ -14,6 +14,7 @@ import { useSessionTimer } from './useSessionTimer';
 import { useSessionMemory } from './useSessionMemory';
 import { useTranscriptProcessor } from './useTranscriptProcessor';
 import { useSessionLifecycle } from './useSessionLifecycle';
+import { useSessionContext } from '../useSessionContext';
 import { createAudioAnomalyDetector } from '../../lib/callkit-diagnostic';
 
 /**
@@ -101,6 +102,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // ==========================================
+  // 短期对话上下文（用于篝火模式重连时让 AI "记得"之前聊了什么）
+  // ==========================================
+  const sessionContext = useSessionContext({ maxMessages: 10 });
+
+  // ==========================================
   // 转录处理（独立 Hook：消息状态 + 去重 + 缓冲）
   // ==========================================
   const transcript = useTranscriptProcessor({
@@ -108,11 +114,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       orchestratorRef.current.onUserSpeech(text).catch((err) => {
         devWarn('话题检测失败:', err);
       });
-    }, []),
+      // 同步到短期对话上下文
+      sessionContext.addMessage('user', text);
+    }, [sessionContext]),
     onAIMessage: useCallback((text: string) => {
       orchestratorRef.current.onAISpeech(text);
       intentDetectionRef.current.processAIResponse(text);
-    }, []),
+      // 同步到短期对话上下文
+      sessionContext.addMessage('ai', text);
+    }, [sessionContext]),
     onUserSpeechFragment: useCallback((text: string) => {
       intentDetectionRef.current.addUserMessage(text);
     }, []),
@@ -135,6 +145,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTaskDescription: currentTaskDescriptionRef.current,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
     isSessionActive,
+    getSessionContext: sessionContext.getContext,
   });
 
   // 更新 intentDetectionRef，避免 onTranscriptUpdate 闭包问题
@@ -213,6 +224,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentTaskIdRef,
     preferredLanguagesRef,
     successRecordRef,
+    getSessionContext: sessionContext.getContext,
   });
 
   // 同步 cleanup 到 ref，供 handleTimerComplete 使用
@@ -400,12 +412,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     waveformHeights: waveformAnimation.heights,
 
     // 操作
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- lifecycle.startSession 是稳定引用
     startSession: useCallback(async (taskDescription: string, sessionOptions?: Parameters<typeof lifecycle.startSession>[1]) => {
+      // 新会话启动时清空对话上下文（确保会话隔离）
+      sessionContext.reset();
       // 诊断：在启动前记录 callRecordId，用于音频异常检测
       callRecordIdForDiagRef.current = sessionOptions?.callRecordId ?? null;
       return lifecycle.startSession(taskDescription, sessionOptions);
-    }, [lifecycle.startSession]),
+    }, [lifecycle.startSession, sessionContext]),
     endSession: lifecycle.endSession,
     stopAudioImmediately: lifecycle.stopAudioImmediately,
     resetSession: lifecycle.resetSession,

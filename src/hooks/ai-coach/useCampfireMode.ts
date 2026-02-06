@@ -44,6 +44,8 @@ export interface UseCampfireModeOptions {
   preferredLanguage: string;
   /** 会话是否激活（用于控制意图检测） */
   isSessionActive: boolean;
+  /** 获取当前对话上下文（用于重连时让 AI "记得"之前聊了什么） */
+  getSessionContext?: () => { messages: Array<{ role: 'user' | 'ai'; text: string; timestamp: number }>; summary: string; topics: string[] };
 }
 
 export interface UseCampfireModeReturn {
@@ -87,6 +89,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     currentTaskDescription,
     preferredLanguage,
     isSessionActive,
+    getSessionContext,
   } = options;
 
   // ==========================================
@@ -178,6 +181,16 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     if (!supabase) return null;
 
     const lang = preferredLanguage || 'en-US';
+
+    // 重连时附带对话上下文，让 AI "记得"之前聊了什么
+    const sessionContext = isReconnect && getSessionContext ? getSessionContext() : undefined;
+    if (isReconnect && sessionContext) {
+      devLog('📝 [Campfire] 重连携带对话上下文:', {
+        messageCount: sessionContext.messages.length,
+        topics: sessionContext.topics,
+      });
+    }
+
     const { data, error } = await supabase.functions.invoke('start-campfire-focus', {
       body: {
         userId: currentUserId || '',
@@ -186,6 +199,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
         isReconnect,
         aiTone: 'gentle',
         language: lang.startsWith('zh') ? 'zh' : 'en',
+        ...(sessionContext ? { context: sessionContext } : {}),
       },
     });
 
@@ -199,7 +213,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     }
 
     return data;
-  }, [campfireSessionId, currentUserId, currentTaskDescription, preferredLanguage]);
+  }, [campfireSessionId, currentUserId, currentTaskDescription, preferredLanguage, getSessionContext]);
 
   // ==========================================
   // VAD 触发重连

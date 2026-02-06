@@ -30,6 +30,8 @@ export interface StartSessionOptions {
   preferredLanguages?: string[];
   taskId?: string;
   callRecordId?: string;
+  /** 是否为重连（重连时会将对话上下文传给后端） */
+  isReconnect?: boolean;
 }
 
 /** useSessionLifecycle 的配置 */
@@ -78,6 +80,9 @@ export interface UseSessionLifecycleOptions {
   currentTaskIdRef: React.MutableRefObject<string | null>;
   preferredLanguagesRef: React.MutableRefObject<string[] | null>;
   successRecordRef: React.MutableRefObject<SuccessRecordForVM | null>;
+
+  /** 获取当前对话上下文（用于重连时让 AI "记得"之前聊了什么） */
+  getSessionContext?: () => { messages: Array<{ role: 'user' | 'ai'; text: string; timestamp: number }>; summary: string; topics: string[] };
 }
 
 export interface UseSessionLifecycleReturn {
@@ -193,7 +198,7 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
     startSessionInFlightRef.current = true;
 
     const o = optRef.current;
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId } = sessionOptions || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId, isReconnect } = sessionOptions || {};
     let epochAtStart = o.sessionEpochRef.current;
 
     try {
@@ -333,7 +338,12 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
                     month: 'short',
                     day: 'numeric'
                   }),
-                  localDateISO: new Date().toISOString().split('T')[0]
+                  localDateISO: new Date().toISOString().split('T')[0],
+                  // 重连场景：传入对话上下文让 AI "记得"之前聊了什么
+                  ...(isReconnect && o.getSessionContext ? {
+                    isReconnect: true,
+                    context: o.getSessionContext(),
+                  } : {}),
                 }
               })
             : Promise.resolve(null),

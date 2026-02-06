@@ -175,25 +175,13 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
             </div>
 
             {/* Header - non-sticky, scrolls with content */}
-            <div className="relative bg-brand-darkOrange pt-16 pb-4 flex flex-col items-center text-center transition-colors duration-500">
-                {/* Fire Icon */}
-                <div className="relative mb-6 w-32 h-32 flex items-center justify-center">
-                    <img
-                        src="/fire.png"
-                        alt="Fire"
-                        className="w-full h-full object-contain drop-shadow-lg"
-                    />
-                </div>
-
-                <h1 className="w-full text-center text-[35px] text-[#ebebeb] capitalize leading-[38.99px] mb-1" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.getYouStart')}</h1>
-                <h2 className="w-full text-center text-[58px] text-[#f3fa93] capitalize leading-[60.946px] mb-4" style={{ fontFamily: "'Sansita One', sans-serif" }}>{t('urgency.inFiveMinutes')}</h2>
-
-                {/* SVG Curve Bottom */}
-                <div className="absolute bottom-0 left-0 right-0 translate-y-[98%] z-10 overflow-visible">
-                    <svg viewBox="0 0 1440 100" className="w-full h-auto block text-brand-darkOrange fill-current overflow-visible" preserveAspectRatio="none">
-                        <path d="M0,0 L1440,0 L1440,20 Q720,200 0,20 Z" />
-                    </svg>
-                </div>
+            <div className="relative flex flex-col items-center text-center">
+                {/* 新的头图：包含红色背景、火焰图标和文字 */}
+                <img
+                    src="/urgency-header.png"
+                    alt="Get You Start in 5 Minutes"
+                    className="w-full object-cover"
+                />
             </div>
 
             {/* Spacer */}

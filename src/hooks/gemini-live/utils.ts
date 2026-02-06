@@ -53,22 +53,6 @@ export function createDeferred<T>(): {
 }
 
 /**
- * Logging utility that only logs in development mode
+ * Logging utilities - re-exported from shared devLog module
  */
-export function devLog(message: string, ...args: unknown[]): void {
-  if (import.meta.env.DEV) {
-    console.log(message, ...args);
-  }
-}
-
-export function devWarn(message: string, ...args: unknown[]): void {
-  if (import.meta.env.DEV) {
-    console.warn(message, ...args);
-  }
-}
-
-export function devError(message: string, ...args: unknown[]): void {
-  if (import.meta.env.DEV) {
-    console.error(message, ...args);
-  }
-}
+export { devLog, devWarn, devError } from '../../utils/devLog';

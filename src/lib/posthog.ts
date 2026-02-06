@@ -1,3 +1,5 @@
+import { getOrCreatePermanentUserId, getPermanentUserId } from './permanentUserId'
+
 type PostHogClient = typeof import('posthog-js')['default']
 
 let posthog: PostHogClient | null = null
@@ -17,31 +19,8 @@ async function loadPostHogClient(): Promise<PostHogClient> {
 let isPostHogInitialized = false
 let initPromise: Promise<void> | null = null
 
-/**
- * 生成永久设备用户 ID
- * 这个 ID 存储在 localStorage 中，永不改变
- * 用于识别"这个设备上的人"，即使切换账号或退出登录
- * 
- * @returns {string} 设备用户 ID
- */
-const getOrCreatePermanentUserId = (): string => {
-  const STORAGE_KEY = 'firego_permanent_user_id'
-  
-  // 尝试从 localStorage 读取
-  let permanentUserId = localStorage.getItem(STORAGE_KEY)
-  
-  // 如果不存在，生成新的
-  if (!permanentUserId) {
-    permanentUserId = `puid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem(STORAGE_KEY, permanentUserId)
-    
-    if (import.meta.env.DEV) {
-      console.log('🆕 生成永久设备用户 ID:', permanentUserId)
-    }
-  }
-  
-  return permanentUserId
-}
+const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY
+const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com'
 
 /**
  * 初始化 PostHog SDK
@@ -56,6 +35,14 @@ const getOrCreatePermanentUserId = (): string => {
  */
 export const initPostHog = async () => {
   if (isPostHogInitialized) return
+  if (!POSTHOG_KEY) {
+    // PostHog 仅用于统计；缺失 key 时直接跳过，不影响主流程。
+    if (import.meta.env.DEV) {
+      console.warn('PostHog key missing; analytics disabled.')
+    }
+    isPostHogInitialized = true
+    return
+  }
   if (initPromise) return initPromise
 
   initPromise = (async () => {
@@ -65,8 +52,8 @@ export const initPostHog = async () => {
       // 获取或创建永久设备用户 ID
       const permanentUserId = getOrCreatePermanentUserId()
       
-      client.init('phc_jvbFGqyv4KpwINXVBuARBL18Lx5OlyNlbCwYuinnX3j', {
-        api_host: 'https://us.i.posthog.com',
+      client.init(POSTHOG_KEY, {
+        api_host: POSTHOG_HOST,
         person_profiles: 'identified_only',
         autocapture: true,
         capture_pageview: true,
@@ -101,7 +88,9 @@ export const initPostHog = async () => {
       })
       
       isPostHogInitialized = true
-      console.log('✅ PostHog initialized with permanent user ID:', permanentUserId)
+      if (import.meta.env.DEV) {
+        console.log('✅ PostHog initialized with permanent user ID:', permanentUserId)
+      }
     } catch (error) {
       console.error('Failed to initialize PostHog:', error)
     } finally {
@@ -142,7 +131,7 @@ export const setPostHogUserId = (userId: string) => {
   if (!isPostHogInitialized || !posthog) return
   
   // 获取当前的永久设备用户 ID
-  const permanentUserId = localStorage.getItem('firego_permanent_user_id')
+  const permanentUserId = getPermanentUserId()
   
   if (permanentUserId && permanentUserId !== userId) {
     // 使用 alias 建立关联：账号ID 和 设备ID 是同一个人

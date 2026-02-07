@@ -130,6 +130,41 @@ export function useCoachController(options: UseCoachControllerOptions) {
     const [sessionVerificationResult, setSessionVerificationResult] = useState<VerificationResult | null>(null);
 
     // ==========================================
+    // 金币奖励（fire-and-forget）
+    // ==========================================
+
+    /**
+     * 调用 award-coins Edge Function，将金币持久化到后端排行榜
+     *
+     * @param userId - 用户 ID
+     * @param taskId - 任务 ID（可选）
+     * @param sources - 金币来源列表
+     * @param customAmounts - 自定义金币数量覆盖（可选）
+     */
+    const awardCoins = useCallback(async (
+        userId: string,
+        taskId: string | null,
+        sources: string[],
+        customAmounts?: Record<string, number>,
+    ) => {
+        if (!supabase) return;
+        try {
+            const body: Record<string, unknown> = { user_id: userId, sources };
+            if (taskId) body.task_id = taskId;
+            if (customAmounts) body.custom_amounts = customAmounts;
+
+            const { error } = await supabase.functions.invoke('award-coins', { body });
+            if (error) {
+                console.error('[CoachController] award-coins 失败:', error);
+            } else {
+                devLog('✅ award-coins 成功:', { sources, customAmounts });
+            }
+        } catch (err) {
+            console.error('[CoachController] award-coins 异常:', err);
+        }
+    }, []);
+
+    // ==========================================
     // 语音提示状态
     // ==========================================
     const [hasSeenVoicePrompt, setHasSeenVoicePrompt] = useState(() => {
@@ -518,6 +553,17 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
 
+        // fire-and-forget: 金币奖励（使用与庆祝动画相同的公式：100 基础 + 剩余时间奖励）
+        if (userId) {
+            const remainingTime = aiCoach.state.timeRemaining;
+            const baseCoins = 100;
+            const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
+            const calculatedCoins = baseCoins + timeBonus;
+            void awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete'], {
+                task_complete: calculatedCoins,
+            });
+        }
+
         // fire-and-forget: 视觉验证（不阻塞庆祝流程）
         if (userId && taskIdToComplete && capturedFrames.length > 0) {
             void (async () => {
@@ -540,7 +586,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
         onTaskCompleteForStats();
-    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, onTaskCompleteForStats]);
+    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, awardCoins, onTaskCompleteForStats]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -554,6 +600,17 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         unlockScreenTimeIfLocked('Celebration.confirmYes');
 
+        // fire-and-forget: 金币奖励（确认完成时，使用倒计时结束的完成时间计算）
+        if (auth.userId) {
+            const remainingTime = 300 - completionTime;
+            const baseCoins = 100;
+            const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
+            const calculatedCoins = baseCoins + timeBonus;
+            void awardCoins(auth.userId, currentTaskId, ['task_complete'], {
+                task_complete: calculatedCoins,
+            });
+        }
+
         // 关闭确认页面
         setShowCelebration(false);
         setCelebrationFlow('confirm');
@@ -564,7 +621,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
         onTaskCompleteForStats();
-    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked, onTaskCompleteForStats]);
+    }, [currentTaskId, currentTaskType, completionTime, appTasks, auth.userId, unlockScreenTimeIfLocked, awardCoins, onTaskCompleteForStats]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -600,12 +657,23 @@ export function useCoachController(options: UseCoachControllerOptions) {
             liveKitTimerRef.current = null;
         }
         unlockScreenTimeIfLocked('LiveKit.primaryButton');
+
+        // fire-and-forget: 金币奖励（LiveKit 模式使用 liveKitTimeRemaining 计算）
+        if (auth.userId) {
+            const baseCoins = 100;
+            const timeBonus = Math.min(Math.floor(liveKitTimeRemaining / 60) * 20, 400);
+            const calculatedCoins = baseCoins + timeBonus;
+            void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete'], {
+                task_complete: calculatedCoins,
+            });
+        }
+
         setUsingLiveKit(false);
         setLiveKitConnected(false);
 
         // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
         onTaskCompleteForStats();
-    }, [unlockScreenTimeIfLocked, onTaskCompleteForStats]);
+    }, [unlockScreenTimeIfLocked, auth.userId, liveKitTimeRemaining, currentTaskId, awardCoins, onTaskCompleteForStats]);
 
     /**
      * LiveKit 模式副按钮「END CALL」：结束通话并返回

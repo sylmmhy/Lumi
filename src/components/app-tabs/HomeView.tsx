@@ -27,6 +27,10 @@ interface HomeViewProps {
     isLoggedIn?: boolean;
     /** 下拉刷新回调 */
     onRefresh?: () => Promise<void>;
+    /** 显示金币奖励 Toast（photo verify 成功后触发） */
+    onShowCoinToast?: (amount: number) => void;
+    /** 验证成功后跳转 stats 页 + 播放 EnergyBall 动画 */
+    onVerifySuccess?: () => void;
 }
 
 /**
@@ -41,6 +45,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onRequestLogin,
     isLoggedIn = false,
     onRefresh,
+    onShowCoinToast,
+    onVerifySuccess,
 }) => {
     const { t } = useTranslation();
     const [taskInput, setTaskInput] = useState('');
@@ -687,7 +693,22 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     taskId={photoVerifyTask.id}
                     taskDescription={photoVerifyTask.text}
                     userId={auth.userId}
-                    onVerified={() => setPhotoVerifyTask(null)}
+                    onVerified={(result) => {
+                        if (result.verified) {
+                            // 验证成功：更新任务状态 + 显示金币 Toast + 跳转 stats 动画
+                            if (photoVerifyTask && onUpdateTask) {
+                                onUpdateTask({
+                                    ...photoVerifyTask,
+                                    verification_status: 'verified',
+                                });
+                            }
+                            if (result.coins_awarded > 0) {
+                                onShowCoinToast?.(result.coins_awarded);
+                            }
+                            onVerifySuccess?.();
+                        }
+                        setPhotoVerifyTask(null);
+                    }}
                 />
             )}
 

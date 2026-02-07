@@ -74,6 +74,8 @@ export interface UseCoachControllerOptions {
     handleChangeView: (view: AppTab, replace?: boolean) => void;
     /** 挂起操作的回调（Auth gate 逻辑由 AppTabsPage 管理） */
     pendingCallbacks: PendingCallbacks;
+    /** 任务完成后跳转 stats 页触发金币动画的回调 */
+    onTaskCompleteForStats: () => void;
 }
 
 // ==========================================
@@ -101,6 +103,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         currentView,
         handleChangeView,
         pendingCallbacks,
+        onTaskCompleteForStats,
     } = options;
 
     // ==========================================
@@ -470,7 +473,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
      * 用户在任务执行视图中点击「I'M DOING IT!」
      * - 保存会话记忆到 Mem0
      * - 结束当前 AI 会话
-     * - 直接显示庆祝页面（跳过确认页面）
+     * - 跳转到 stats 页触发金币动画（替代旧庆祝页面）
      * - 标记任务为已完成
      */
     const handleEndAICoachSession = useCallback(() => {
@@ -485,11 +488,6 @@ export function useCoachController(options: UseCoachControllerOptions) {
         const taskTypeToComplete = currentTaskType;
 
         aiCoach.endSession();
-
-        setCompletionTime(usedTime);
-        setCurrentTaskDescription(taskDescriptionSnapshot);
-        setCelebrationFlow('success');
-        setShowCelebration(true);
 
         unlockScreenTimeIfLocked('GeminiLive.primaryButton');
 
@@ -506,12 +504,15 @@ export function useCoachController(options: UseCoachControllerOptions) {
         });
 
         void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked]);
+
+        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
+        onTaskCompleteForStats();
+    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, onTaskCompleteForStats]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
-     * - 显示庆祝页面
      * - 标记任务为已完成
+     * - 关闭确认页面，跳转到 stats 页触发金币动画
      */
     const handleConfirmTaskComplete = useCallback(async () => {
         const actualDurationMinutes = Math.round(completionTime / 60);
@@ -520,8 +521,17 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         unlockScreenTimeIfLocked('Celebration.confirmYes');
 
-        setCelebrationFlow('success');
-    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked]);
+        // 关闭确认页面
+        setShowCelebration(false);
+        setCelebrationFlow('confirm');
+        setCompletionTime(0);
+        setCurrentTaskDescription('');
+        setCurrentTaskId(null);
+        setCurrentTaskType(null);
+
+        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
+        onTaskCompleteForStats();
+    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked, onTaskCompleteForStats]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -547,22 +557,21 @@ export function useCoachController(options: UseCoachControllerOptions) {
     // ==========================================
 
     /**
-     * LiveKit 模式主按钮「I'M DOING IT!」：结束通话并显示庆祝页面
+     * LiveKit 模式主按钮「I'M DOING IT!」：结束通话并跳转到 stats 触发金币动画
      */
     const handleLiveKitPrimaryClick = useCallback(() => {
-        const usedSeconds = 300 - liveKitTimeRemaining;
         endLiveKitRoom();
         if (liveKitTimerRef.current) {
             clearInterval(liveKitTimerRef.current);
             liveKitTimerRef.current = null;
         }
-        setCompletionTime(usedSeconds);
-        setCelebrationFlow('success');
-        setShowCelebration(true);
         unlockScreenTimeIfLocked('LiveKit.primaryButton');
         setUsingLiveKit(false);
         setLiveKitConnected(false);
-    }, [liveKitTimeRemaining, unlockScreenTimeIfLocked]);
+
+        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
+        onTaskCompleteForStats();
+    }, [unlockScreenTimeIfLocked, onTaskCompleteForStats]);
 
     /**
      * LiveKit 模式副按钮「END CALL」：结束通话并返回

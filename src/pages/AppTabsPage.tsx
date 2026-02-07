@@ -11,7 +11,6 @@ import { TestVersionModal } from '../components/modals/TestVersionModal';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { TaskReminderBanner } from '../components/banners/TaskReminderBanner';
 import { TaskCompletionModal } from '../components/modals/TaskCompletionModal';
-import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -31,7 +30,6 @@ import { devLog } from '../utils/devLog';
 import { useAppTasks } from '../hooks/useAppTasks';
 import { useCoachController } from '../hooks/useCoachController';
 import { useScreenTimeController } from '../hooks/useScreenTimeController';
-import { getWeeklyCompletedCount } from '../remindMe/services/statsService';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
@@ -95,10 +93,8 @@ export function AppTabsPage() {
     const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
     const [showTaskCompletionModal, setShowTaskCompletionModal] = useState(false);
-    /** 任务完成庆祝动画 */
-    const [showBannerCelebration, setShowBannerCelebration] = useState(false);
-    /** 本周已完成次数（存钱罐金币数），用于庆祝动画展示 */
-    const [weeklyCount, setWeeklyCount] = useState(0);
+    /** stats 页金币动画触发计数器（每次递增触发 EnergyBall 动画） */
+    const [statsCheckInTrigger, setStatsCheckInTrigger] = useState(0);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         navigate(`/app/${view}`, { replace });
@@ -117,18 +113,6 @@ export function AppTabsPage() {
         }
     }, [navigate, tab]);
 
-    /** 从数据库重新获取本周完成数（存钱罐金币数） */
-    const refreshWeeklyCount = useCallback(async () => {
-        if (!auth.userId) return;
-        try {
-            const p = await getWeeklyCompletedCount(auth.userId);
-            setWeeklyCount(p.current);
-        } catch { /* ignore */ }
-    }, [auth.userId]);
-
-    // 页面加载时获取一次
-    useEffect(() => { void refreshWeeklyCount(); }, [refreshWeeklyCount]);
-
     const pendingCallbacks = {
         setPendingTask,
         setPendingAction,
@@ -145,6 +129,20 @@ export function AppTabsPage() {
         pendingCallbacks,
     });
 
+    /**
+     * AI 会话任务完成后的回调：跳转到 stats 页 + 触发金币动画。
+     * 统一使用 stats 页的金币记录系统、动画和音效。
+     *
+     * 延迟 150ms 递增 trigger，确保 StatsView 先挂载（用旧值初始化 ref），
+     * 之后 trigger 变化触发动画。
+     */
+    const handleTaskCompleteForStats = useCallback(() => {
+        handleChangeView('stats');
+        setTimeout(() => {
+            setStatsCheckInTrigger(prev => prev + 1);
+        }, 150);
+    }, [handleChangeView]);
+
     // AI 教练控制器（封装了会话生命周期、LiveKit、庆祝流程、URL autostart 等）
     const coach = useCoachController({
         auth: {
@@ -158,6 +156,7 @@ export function AppTabsPage() {
         currentView,
         handleChangeView,
         pendingCallbacks,
+        onTaskCompleteForStats: handleTaskCompleteForStats,
     });
 
     // 绑定 coach 回调到 screenTime（解决循环依赖）
@@ -207,7 +206,7 @@ export function AppTabsPage() {
         await appTasks.addTask(newTask);
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
-    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时触发庆祝动画 */
+    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时跳转 stats 触发金币动画 */
     const toggleComplete = useCallback(async (id: string) => {
         // 判断是否是「完成」操作（当前未完成 → 标记完成）
         const task = appTasks.tasks.find(t => t.id === id);
@@ -215,14 +214,11 @@ export function AppTabsPage() {
 
         await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
 
-        // 从数据库刷新真实金币数（确保和 Stats 页面一致）
-        await refreshWeeklyCount();
-
-        // 完成任务时触发庆祝动画
+        // 完成任务时跳转 stats 页触发金币动画
         if (isCompleting) {
-            setShowBannerCelebration(true);
+            handleTaskCompleteForStats();
         }
-    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked, refreshWeeklyCount]);
+    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked, handleTaskCompleteForStats]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const handleStatsToggle = useCallback((id: string, completed: boolean) => {
@@ -280,22 +276,8 @@ export function AppTabsPage() {
             {/* AI 会话全屏遮罩（LiveKit + Gemini Live 两种模式） */}
             <SessionOverlay coach={coach} />
 
-            {/* 任务完成确认 & 庆祝页面 */}
+            {/* 任务完成确认页面（倒计时结束时弹出确认 → 成功跳转 stats / 失败显示鼓励） */}
             {coach.showCelebration && <CelebrationOverlay coach={coach} />}
-
-            {/* 任务完成庆祝动画（Home 页勾选完成 / Banner Already Completed 均触发） */}
-            <WeeklyCelebration
-                visible={showBannerCelebration}
-                title="Task Done!"
-                subtitle="Great job!"
-                message="You showed up! That's a win."
-                count={weeklyCount}
-                target={20}
-                onClose={() => {
-                    setShowBannerCelebration(false);
-                    screenTime.unlockScreenTimeIfLocked('Banner.alreadyCompleted');
-                }}
-            />
 
             {/* Main App Shell */}
             <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(coach.showCelebration || coach.isSessionOverlayVisible) ? 'hidden' : ''}`}>
@@ -318,6 +300,7 @@ export function AppTabsPage() {
                         onToggleComplete={handleStatsToggle}
                         refreshTrigger={appTasks.statsRefreshTrigger}
                         onStartTask={coach.handleStatsStartTask}
+                        externalCheckInTrigger={statsCheckInTrigger}
                     />
                 )}
 
@@ -429,11 +412,10 @@ export function AppTabsPage() {
                     if (taskId && !taskId.startsWith('temp-')) {
                         await appTasks.markTaskAsCompleted(taskId, 0);
                         devLog('✅ [Banner] Already Completed - 标记任务完成:', taskId);
-                        // 刷新真实金币数并触发庆祝
-                        await refreshWeeklyCount();
-                        setShowBannerCelebration(true);
+                        // 跳转 stats 页触发金币动画
+                        handleTaskCompleteForStats();
                     } else if (taskName) {
-                        // fallback：通过 toggleComplete（内部已包含 refreshWeeklyCount + 庆祝）
+                        // fallback：通过 toggleComplete（内部已包含跳转 stats + 金币动画）
                         const matchedTask = appTasks.tasks.find(
                             t => !t.completed && t.text === taskName
                         );

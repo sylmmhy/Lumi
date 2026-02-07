@@ -1,8 +1,8 @@
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { supabase } from '../../lib/supabase';
 import { AuthContext } from '../../context/AuthContextDefinition';
-import { isHealthKitSupported, openHealthApp } from '../../lib/healthKitBridge';
+import { isHealthKitSupported, healthKitAsync, openHealthApp } from '../../lib/healthKitBridge';
 import type { HealthDataRecord } from '../../utils/bedtimeCalculator';
 import {
   parseSleepNights,
@@ -37,57 +37,56 @@ export function WeeklySleepReport() {
   }, [uiLanguage]);
 
   /**
-   * 展开时获取数据（带竞态条件防护）
-   * 使用 cancelled 标志确保组件卸载或依赖变化后不会更新 state
+   * 从 Supabase 拉取睡眠 + HRV 数据
+   * 先触发 HealthKit 同步（确保最新数据已上传），再查询数据库
+   */
+  const fetchData = useCallback(async () => {
+    if (!userId || !supabase) return;
+
+    setIsLoading(true);
+    try {
+      // 先触发 HealthKit 同步，确保最新睡眠数据已上传到 Supabase
+      if (isHealthKitSupported()) {
+        await healthKitAsync.syncData(14);
+      }
+
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+      const { data, error } = await supabase
+        .from('health_data')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('start_date', fourteenDaysAgo.toISOString())
+        .in('data_type', [
+          'HKCategoryTypeIdentifierSleepAnalysis',
+          'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+        ])
+        .order('start_date', { ascending: false })
+        .limit(5000);
+
+      if (error) {
+        console.error('[WeeklySleepReport] Error:', error);
+        return;
+      }
+
+      setHealthData(data || []);
+    } catch (err) {
+      console.error('[WeeklySleepReport] Error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId]);
+
+  /**
+   * 展开时自动拉取最新数据
+   * 每次展开都重新拉取，避免缓存导致看不到最新夜晚数据
    */
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchData = async () => {
-      if (!userId || !supabase) return;
-
-      setIsLoading(true);
-      try {
-        const fourteenDaysAgo = new Date();
-        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
-        const { data, error } = await supabase
-          .from('health_data')
-          .select('*')
-          .eq('user_id', userId)
-          .gte('start_date', fourteenDaysAgo.toISOString())
-          .in('data_type', [
-            'HKCategoryTypeIdentifierSleepAnalysis',
-            'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-          ])
-          .order('start_date', { ascending: false })
-          .limit(5000);
-
-        if (error) {
-          console.error('[WeeklySleepReport] Error:', error);
-          return;
-        }
-
-        if (!cancelled) {
-          setHealthData(data || []);
-        }
-      } catch (err) {
-        console.error('[WeeklySleepReport] Error:', err);
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    if (isExpanded && healthData.length === 0) {
+    if (isExpanded) {
       fetchData();
     }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isExpanded, healthData.length, userId]);
+  }, [isExpanded, fetchData]);
 
   // 计算报告数据
   const reportData = useMemo(() => {
@@ -378,6 +377,20 @@ export function WeeklySleepReport() {
                 </div>
               )}
             </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={fetchData}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 py-2 text-sm text-violet-600 hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <i className={`fa-solid fa-arrows-rotate text-xs ${isLoading ? 'fa-spin' : ''}`}></i>
+              <span>
+                {isLoading
+                  ? (language === 'zh' ? '同步中...' : 'Syncing...')
+                  : (language === 'zh' ? '刷新数据' : 'Refresh Data')}
+              </span>
+            </button>
 
             {/* Apple Health Link */}
             <button

@@ -18,6 +18,7 @@ import { useBackgroundNudge } from './useBackgroundNudge';
 import { useSessionContext } from '../useSessionContext';
 import { createAudioAnomalyDetector } from '../../lib/callkit-diagnostic';
 import { useIntentDetection } from '../ai-tools';
+import { useAsyncMemoryPipeline, generateContextMessage } from '../virtual-messages/useAsyncMemoryPipeline';
 
 /**
  * AI Coach Session Hook - 组合层
@@ -159,6 +160,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   });
 
   // US-006: intentDetectionRef 由统一裁判实例 (unifiedIntentDetection) 同步
+
+  // ==========================================
+  // US-010: 异步记忆管道（供统一裁判的 topic_changed 触发）
+  // ==========================================
+  const memoryPipeline = useAsyncMemoryPipeline(currentUserIdRef.current);
 
   // ==========================================
   // 切换到习惯设定模式：直接换 Gemini 连接，不走 lifecycle
@@ -321,13 +327,40 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
 
       // ────────────────────────────────────────
-      // 优先级 3：话题变化 + 记忆检索
+      // 优先级 3：话题变化 + 记忆检索（US-010）
       // ────────────────────────────────────────
       if (result.topic_changed && result.fetch_memories) {
-        devLog(`📚 [统一裁判] 话题变化: ${result.topic_changed}, 需要检索记忆`,
-          { queries: result.memory_queries });
-        // US-010 将接入 useAsyncMemoryPipeline，当前仅记录
-        // 不 return —— coach_note 可以和记忆检索共存（但实际上裁判不会同时返回两者）
+        // 防御性检查：篝火模式下不检索记忆
+        if (campfire.isCampfireMode) {
+          devLog(`📚 [统一裁判] 篝火模式中，跳过记忆检索`);
+        } else {
+          const epochAtStart = refereeEpochRef.current;
+          devLog(`📚 [统一裁判] 话题变化: ${result.topic_changed}, 开始记忆检索`,
+            { queries: result.memory_queries, epoch: epochAtStart });
+
+          // 异步检索记忆 — 结果注入前检查 epoch
+          memoryPipeline.fetchMemoriesForTopic(
+            result.topic_changed,
+            result.memory_queries || [],
+          ).then((memories) => {
+            // epoch 检查：模式已切换，丢弃过期结果
+            if (refereeEpochRef.current !== epochAtStart) {
+              devWarn(`📚 [统一裁判] epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃记忆结果`);
+              return;
+            }
+            if (memories.length > 0 && geminiLive.isConnected) {
+              const contextMsg = generateContextMessage(
+                memories, result.topic_changed!, 'neutral', 0.5
+              );
+              // 静默注入：turnComplete=false, role='system'
+              geminiLive.sendClientContent(contextMsg, false, 'system');
+              devLog(`📚 [统一裁判] 已注入 ${memories.length} 条记忆`);
+            }
+          }).catch((err) => {
+            devWarn(`📚 [统一裁判] 记忆检索失败:`, err);
+          });
+        }
+        // 不 return —— coach_note 理论上可以和记忆检索共存
       }
 
       // ────────────────────────────────────────

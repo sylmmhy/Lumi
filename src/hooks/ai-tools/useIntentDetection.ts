@@ -88,6 +88,9 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     debounceMs = 500,
   } = options;
 
+  // 会话 ID：用于生成幂等键（破坏性工具去重）
+  const sessionIdRef = useRef(crypto.randomUUID());
+
   // 对话历史
   const userMessagesRef = useRef<string[]>([]);
   const aiMessageHistoryRef = useRef<string[]>([]);
@@ -198,6 +201,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
       supabaseUrl,
       supabaseAnonKey,
       preferredLanguage,
+      sessionId: sessionIdRef.current,
     };
 
     console.log(`🔧 [IntentDetection] 执行工具: ${tool}`, args);

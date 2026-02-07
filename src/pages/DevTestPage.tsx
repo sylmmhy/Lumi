@@ -30,6 +30,7 @@ import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { useCampfireSession } from '../hooks/campfire';
 import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
+import { SessionResumptionSpike } from '../components/dev/SessionResumptionSpike';
 
 type TestMode =
   | 'menu'
@@ -56,7 +57,8 @@ type TestMode =
   | 'campfire-companion'
   | 'pledge-confirm'
   | 'weekly-report'
-  | 'weekly-celebration';
+  | 'weekly-celebration'
+  | 'session-resumption-spike';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -469,6 +471,24 @@ export function DevTestPage() {
 
           {/* 分隔线 */}
           <div className="border-t border-gray-700 my-2" />
+          <p className="text-gray-500 text-xs text-center">🔬 Spike 测试</p>
+
+          {/* Session Resumption Spike */}
+          <button
+            onClick={() => setMode('session-resumption-spike')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🔄 Session Resumption Spike
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              验证 Gemini Live session resume + prompt 切换
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 src/components/dev/SessionResumptionSpike.tsx
+            </div>
+          </button>
+
+          {/* 分隔线 */}
+          <div className="border-t border-gray-700 my-2" />
           <p className="text-gray-500 text-xs text-center">🔒 Screen Time 解锁</p>
 
           {/* 承诺确认测试 */}
@@ -580,6 +600,7 @@ export function DevTestPage() {
       {mode === 'pledge-confirm' && <PledgeConfirmTest onBack={backToMenu} />}
       {mode === 'weekly-report' && <WeeklyReportTest onBack={backToMenu} />}
       {mode === 'weekly-celebration' && <WeeklyCelebrationTest onBack={backToMenu} />}
+      {mode === 'session-resumption-spike' && <SessionResumptionSpike onBack={backToMenu} />}
     </>
   );
 }

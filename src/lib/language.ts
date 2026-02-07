@@ -362,9 +362,31 @@ export async function setUILanguageWithSync(
   // 1. 保存到 localStorage（立即生效）
   setUILanguage(languageCode);
 
-  // 2. 异步同步到后端
+  // 2. 同步到 iOS（供 Shield Extension 显示本地化推送通知）
+  syncUILanguageToiOS(languageCode);
+
+  // 3. 异步同步到后端
   if (syncToBackend) {
     syncLanguagePreferencesToBackend({ ui_language: languageCode });
+  }
+}
+
+/**
+ * 将 UI 语言同步到 iOS 原生端
+ * Shield Extension 会根据此设置显示本地化的推送通知
+ */
+export function syncUILanguageToiOS(languageCode?: string): void {
+  try {
+    const lang = languageCode || getUILanguage();
+    if (window.webkit?.messageHandlers?.screenTime) {
+      window.webkit.messageHandlers.screenTime.postMessage({
+        action: 'setUILanguage',
+        language: lang,
+      });
+      console.log('[iOS] UI 语言已同步:', lang);
+    }
+  } catch (error) {
+    console.warn('[iOS] 同步语言到 iOS 失败:', error);
   }
 }
 

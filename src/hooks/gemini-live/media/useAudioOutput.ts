@@ -92,6 +92,11 @@ export function useAudioOutput(
    * 3. 失败时重置 stale flag → 实际等待 iOS 事件 → 重试
    */
   const ensureReadyInternal = async (): Promise<AudioContext> => {
+    // 快速路径：AudioContext 已经在运行，直接返回（不输出日志）
+    if (audioContextRef.current?.state === 'running') {
+      return audioContextRef.current;
+    }
+
     const startTime = performance.now();
     const MAX_ATTEMPTS = 3;
     devLog(`🔊 [ensureReady] 开始 | 现有 AudioContext 状态: ${audioContextRef.current?.state ?? 'null'}`);

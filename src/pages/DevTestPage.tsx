@@ -29,6 +29,7 @@ import { WeeklyReportTest } from '../components/dev/WeeklyReportTest';
 import { VoiceChatTest } from '../components/dev/VoiceChatTest';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { useCampfireSession } from '../hooks/campfire';
+import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 
 type TestMode =
   | 'menu'
@@ -54,7 +55,8 @@ type TestMode =
   | 'voice-chat-test'
   | 'campfire-companion'
   | 'pledge-confirm'
-  | 'weekly-report';
+  | 'weekly-report'
+  | 'weekly-celebration';
 
 /**
  * 开发测试页面，集中挂载 /dev 下的所有组件示例，方便统一修改和回归。
@@ -282,6 +284,20 @@ export function DevTestPage() {
             </span>
             <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
               📄 src/components/celebration/StartCelebrationView.tsx
+            </div>
+          </button>
+
+          {/* 周庆祝动画 */}
+          <button
+            onClick={() => setMode('weekly-celebration')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🎊 周庆祝动画 (Weekly Celebration)
+            <span className="block text-xs font-normal opacity-70 mt-1">
+              周目标完成庆祝 + 金色光芒效果
+            </span>
+            <div className="mt-2 px-2 py-1 bg-black/20 rounded text-[10px] font-mono text-left break-all">
+              📄 src/components/celebration/WeeklyCelebration.tsx
             </div>
           </button>
 
@@ -563,6 +579,7 @@ export function DevTestPage() {
       {mode === 'voice-chat-test' && <VoiceChatTest onBack={backToMenu} />}
       {mode === 'pledge-confirm' && <PledgeConfirmTest onBack={backToMenu} />}
       {mode === 'weekly-report' && <WeeklyReportTest onBack={backToMenu} />}
+      {mode === 'weekly-celebration' && <WeeklyCelebrationTest onBack={backToMenu} />}
     </>
   );
 }
@@ -1740,6 +1757,92 @@ function PledgeConfirmTest({ onBack }: { onBack: () => void }) {
         />
       )}
     </div>
+  );
+}
+
+// ============================================
+// 测试 13: 周庆祝动画
+// ============================================
+function WeeklyCelebrationTest({ onBack }: { onBack: () => void }) {
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  return (
+    <>
+      {!showCelebration ? (
+        <div className="min-h-screen bg-[#1e1e1e] flex flex-col items-center justify-center gap-6 p-6">
+          <h2 className="text-2xl font-bold text-yellow-400">🎊 周庆祝动画测试</h2>
+
+          <div className="text-center space-y-4 max-w-md">
+            <p className="text-gray-400">
+              这是周目标完成时显示的庆祝动画。
+            </p>
+            <p className="text-gray-500 text-sm">
+              包含金色放射光芒、数字展示和激励文案。
+            </p>
+          </div>
+
+          {/* 示例数据展示 */}
+          <div className="w-full max-w-md bg-[#2a2a2a] rounded-xl p-4 space-y-3">
+            <h3 className="text-white font-bold text-sm">📋 测试数据</h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">标题：</span>
+                <span className="text-white">Weekly Wins!</span>
+              </div>
+              <div>
+                <span className="text-gray-500">副标题：</span>
+                <span className="text-orange-400">Small Wins, Big Change</span>
+              </div>
+              <div>
+                <span className="text-gray-500">完成次数：</span>
+                <span className="text-blue-400">2 次</span>
+              </div>
+              <div>
+                <span className="text-gray-500">激励文案：</span>
+                <span className="text-green-400">You showed up! That&apos;s a win.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 触发按钮 */}
+          <button
+            onClick={() => setShowCelebration(true)}
+            className="px-8 py-4 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold rounded-xl transition-all shadow-lg"
+          >
+            🎉 触发周庆祝动画
+          </button>
+
+          {/* 提示 */}
+          <div className="text-center space-y-2 max-w-md">
+            <p className="text-gray-500 text-xs">
+              💡 提示：动画会自动在 3 秒后关闭
+            </p>
+            <p className="text-gray-500 text-xs">
+              👆 或点击屏幕任意位置手动关闭
+            </p>
+          </div>
+
+          {/* 返回按钮 */}
+          <button
+            onClick={onBack}
+            className="text-gray-500 hover:text-gray-300 text-sm underline"
+          >
+            ← 返回菜单
+          </button>
+        </div>
+      ) : null}
+
+      {/* 周庆祝动画 */}
+      <WeeklyCelebration
+        visible={showCelebration}
+        count={2}
+        icon="🌙"
+        centerIcon="🎯"
+        onClose={() => {
+          setShowCelebration(false);
+        }}
+      />
+    </>
   );
 }
 

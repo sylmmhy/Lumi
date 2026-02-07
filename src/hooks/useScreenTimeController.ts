@@ -9,11 +9,22 @@ import { getLocalDateString } from '../utils/timeUtils';
 // 常量
 // ==========================================
 const SCREEN_TIME_START_TASK_INTENT_KEY = 'lumi_pending_start_task_intent';
+const SCREEN_TIME_LOCKED_TASK_KEY = 'lumi_locked_task_info';
 const SCREEN_TIME_INTENT_TTL_MS = 10 * 60 * 1000;
 
 // ==========================================
 // 类型定义
 // ==========================================
+
+/**
+ * 锁定时的任务信息（用于 Banner 显示）
+ */
+export interface LockedTaskInfo {
+    taskName: string;
+    taskId: string;
+    consequence?: string;
+    pledge?: string;
+}
 
 /**
  * 认证信息
@@ -98,6 +109,34 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
     });
 
     // ==========================================
+    // 锁定任务信息（用于 Banner 显示）
+    // ==========================================
+
+    /** 锁定时关联的任务信息（持久化到 localStorage 防 WebView reload 丢失） */
+    const [lockedTaskInfo, setLockedTaskInfo] = useState<LockedTaskInfo | null>(() => {
+        try {
+            const raw = localStorage.getItem(SCREEN_TIME_LOCKED_TASK_KEY);
+            return raw ? JSON.parse(raw) as LockedTaskInfo : null;
+        } catch {
+            return null;
+        }
+    });
+
+    /** 存储锁定任务信息到 localStorage */
+    const saveLockedTaskInfo = useCallback((info: LockedTaskInfo | null) => {
+        setLockedTaskInfo(info);
+        try {
+            if (info) {
+                localStorage.setItem(SCREEN_TIME_LOCKED_TASK_KEY, JSON.stringify(info));
+            } else {
+                localStorage.removeItem(SCREEN_TIME_LOCKED_TASK_KEY);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    // ==========================================
     // 解锁状态（refs，不触发重渲染）
     // ==========================================
 
@@ -127,13 +166,16 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
         isScreenTimeLockedRef.current = false;
         shouldUnlockScreenTimeAfterTaskCompleteRef.current = false;
 
+        // 清除锁定任务信息
+        saveLockedTaskInfo(null);
+
         devLog(`🔓 [ScreenTime] 任务完成触发解锁 (${source})`);
         try {
             window.webkit.messageHandlers.screenTime.postMessage({ action: 'unlockApps' });
         } catch (error) {
             console.error('[ScreenTime] unlockApps 发送失败:', error);
         }
-    }, []);
+    }, [saveLockedTaskInfo]);
 
     // ==========================================
     // 后果确认状态
@@ -159,6 +201,14 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
         if (event.action === 'start_task') {
             isScreenTimeLockedRef.current = true;
             shouldUnlockScreenTimeAfterTaskCompleteRef.current = true;
+
+            // 持久化锁定任务信息，用于 Banner 显示
+            saveLockedTaskInfo({
+                taskName: event.taskName || '开始任务',
+                taskId: event.taskId || `temp-${Date.now()}`,
+                consequence: event.consequence,
+                pledge: event.consequencePledge,
+            });
 
             const task: Task = {
                 id: event.taskId || `temp-${Date.now()}`,
@@ -222,7 +272,7 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
             });
             setShowPledgeConfirm(true);
         }
-    }, [auth.isLoggedIn, auth.isSessionValidated, handleChangeView, pendingCallbacks]);
+    }, [auth.isLoggedIn, auth.isSessionValidated, handleChangeView, pendingCallbacks, saveLockedTaskInfo]);
 
     // ==========================================
     // 使用 Screen Time Hook 监听 iOS 事件
@@ -235,6 +285,13 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
     useEffect(() => {
         isScreenTimeLockedRef.current = screenTime.status.isLocked;
     }, [screenTime.status.isLocked]);
+
+    /**
+     * 合并锁定状态：本地 state 或 iOS 桥接状态
+     * - isAppLocked 由 start_task 事件设置
+     * - screenTime.status.isLocked 由 iOS 桥接同步
+     * 注意：unlockScreenTimeIfLocked 会清除 isAppLocked 和 lockedTaskInfo
+     */
 
     // ==========================================
     // 副作用：localStorage intent 恢复
@@ -316,6 +373,19 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
     }, []);
 
     /**
+     * 从 Banner 接受后果：使用 lockedTaskInfo 中的数据打开后果确认页面
+     */
+    const handleAcceptConsequences = useCallback(() => {
+        if (!lockedTaskInfo) return;
+        setPledgeConfirmData({
+            taskName: lockedTaskInfo.taskName,
+            consequence: lockedTaskInfo.consequence || 'Accept the consequence',
+            pledge: lockedTaskInfo.pledge || `I accept the consequence for not completing "${lockedTaskInfo.taskName}".`,
+        });
+        setShowPledgeConfirm(true);
+    }, [lockedTaskInfo]);
+
+    /**
      * 测试承诺确认页面 (用于 UI 调整)
      */
     const handleTestPledge = useCallback(() => {
@@ -342,11 +412,17 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
          */
         coachBindingsRef,
 
+        /** 当前 app 是否被 Screen Time 锁定（直接从 iOS 桥接状态派生） */
+        isAppLocked: screenTime.status.isLocked,
+        /** 锁定时关联的任务信息（用于 Banner 显示） */
+        lockedTaskInfo,
+
         // 后果确认状态
         showPledgeConfirm,
         pledgeConfirmData,
         handlePledgeUnlocked,
         handlePledgeCancel,
+        handleAcceptConsequences,
         handleTestPledge,
     };
 }

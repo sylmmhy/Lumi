@@ -164,6 +164,14 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
       currentCallRecordIdRef.current = null;
     }
 
+    // 0. 取消后台 nudge（会话结束时确保不会继续推送）
+    const supabaseForNudge = getSupabaseClient();
+    if (supabaseForNudge) {
+      supabaseForNudge.functions.invoke('background-nudge', {
+        body: { action: 'cancel' },
+      }).catch(() => {});
+    }
+
     // 1. 停止计时器
     o.timer.stopTimer();
 

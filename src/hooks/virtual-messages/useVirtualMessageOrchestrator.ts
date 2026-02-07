@@ -148,6 +148,8 @@ export function useVirtualMessageOrchestrator(
   const lastTopicRef = useRef<TopicInfo | null>(null)
   // 追踪 AI 说话状态
   const isSpeakingRef = useRef<boolean>(isSpeaking)
+  // 追踪最新的 enabled 状态（异步操作完成后实时检查，防止篝火模式进入时仍然注入记忆）
+  const enabledRef = useRef<boolean>(enabled)
   // 🔧 追踪本次会话已注入的记忆内容（用于去重）
   const injectedMemoriesRef = useRef<Set<string>>(new Set())
   // 🔧 追踪最后一次记忆注入时间（用于节流）
@@ -158,6 +160,10 @@ export function useVirtualMessageOrchestrator(
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
   }, [isSpeaking])
+
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
   // =====================================================
   // 核心方法：立即注入
@@ -250,8 +256,9 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
       contextTracker.updateEmotionalState(result.emotionalState)
     }
 
-    // 检查是否需要情绪响应
+    // 检查是否需要情绪响应（异步话题检测后再次检查 enabled，防止篝火模式进入时注入）
     if (
+      enabledRef.current &&
       result.emotionalState.intensity >= EMOTION_RESPONSE_THRESHOLD &&
       result.emotionalState.primary !== 'neutral'
     ) {
@@ -265,7 +272,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
 
       // 🆕 方案 2：静默注入
       sendClientContent(empathyMessage, false, 'user')
-      devLog(`✅ [Orchestrator] EMPATHY 已静默注入`) 
+      devLog(`✅ [Orchestrator] EMPATHY 已静默注入`)
     }
 
     // 处理话题变化（用于上下文追踪）
@@ -300,7 +307,11 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
           contextTracker.getContext().summary
         )
 
-        if (memories.length > 0) {
+        // 异步操作完成后，再次检查 enabled 状态
+        // 防止篝火模式进入期间（enabled 已变为 false）仍然注入记忆导致 AI 被触发说话
+        if (!enabledRef.current) {
+          devLog(`🔎 [Orchestrator] 记忆检索完成但 enabled 已变为 false（可能正在进入篝火模式），跳过注入`)
+        } else if (memories.length > 0) {
           // 🔧 去重检查：过滤掉本次会话已注入过的记忆
           const newMemories = memories.filter(m => !injectedMemoriesRef.current.has(m.content))
 

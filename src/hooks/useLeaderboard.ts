@@ -2,7 +2,7 @@
  * useLeaderboard - 排行榜数据 Hook
  *
  * 调用 get-leaderboard Edge Function，支持：
- * - Public 排行榜（全服按 weekly_xp 排名）
+ * - Public 排行榜（全服按 weekly_coins 排名）
  * - Friends 排行榜（好友间排名）
  * - 自动包含用户自己的排名（即使不在 Top N）
  * - 赛季信息（当前周数、剩余天数）
@@ -20,8 +20,8 @@ export interface RankingEntry {
   user_id: string;
   display_name: string;
   avatar_emoji: string;
-  weekly_xp: number;
-  total_xp: number;
+  weekly_coins: number;
+  total_coins: number;
   is_me: boolean;
 }
 
@@ -74,7 +74,7 @@ interface UseLeaderboardReturn {
  * await switchType(userId, 'friends');
  *
  * // 显示数据
- * data?.rankings.map(r => `${r.rank}. ${r.display_name}: ${r.weekly_xp} XP`);
+ * data?.rankings.map(r => `${r.rank}. ${r.display_name}: ${r.weekly_coins} XP`);
  * ```
  */
 export function useLeaderboard(): UseLeaderboardReturn {

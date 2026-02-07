@@ -51,7 +51,7 @@ export function CelebrationOverlay({ coach }: CelebrationOverlayProps) {
                         ? {
                             verified: coach.sessionVerificationResult.verified,
                             confidence: coach.sessionVerificationResult.confidence,
-                            xp_awarded: coach.sessionVerificationResult.xp_awarded,
+                            coins_awarded: coach.sessionVerificationResult.coins_awarded,
                             not_visually_verifiable: coach.sessionVerificationResult.not_visually_verifiable,
                         }
                         : null,

@@ -17,7 +17,7 @@ export interface VerificationResult {
   confidence: number;
   evidence: string;
   not_visually_verifiable: boolean;
-  xp_awarded: number;
+  coins_awarded: number;
   source: 'in_session' | 'photo_upload';
 }
 

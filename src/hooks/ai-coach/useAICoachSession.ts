@@ -133,8 +133,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }, [sessionContext]),
     onAIMessage: useCallback((text: string) => {
       orchestratorRef.current.onAISpeech(text);
-      intentDetectionRef.current.processAIResponse(text);
-      habitIntentDetectionRef.current.processAIResponse(text);
+      // 注意：不再在此处调用 processAIResponse —— 改由 turnComplete 统一触发，
+      // 确保裁判拿到完整的 AI 回复而非碎片。缓冲由 useTranscriptProcessor.aiResponseBufferRef 完成。
       // 同步到短期对话上下文
       sessionContext.addMessage('ai', text);
     }, [sessionContext]),
@@ -512,14 +512,23 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const { setOnTurnComplete } = geminiLive;
   const { recordTurnComplete } = virtualMessages;
 
-  // 当 AI 说完话时（turnComplete），同时通知两套虚拟消息系统
+  // 当 AI 说完话时（turnComplete），统一触发：
+  // 1. 虚拟消息系统通知
+  // 2. 裁判（意图检测）— 用 flushAIResponseBuffer 取出完整回复
   useEffect(() => {
     setOnTurnComplete(() => {
       recordTurnComplete(false);
       orchestratorRef.current.onTurnComplete();
+
+      // 取出本轮 AI 的完整回复，传给裁判（意图检测）
+      const completeAIResponse = transcript.flushAIResponseBuffer();
+      if (completeAIResponse.trim()) {
+        intentDetectionRef.current.processAIResponse(completeAIResponse);
+        habitIntentDetectionRef.current.processAIResponse(completeAIResponse);
+      }
     });
     return () => setOnTurnComplete(null);
-  }, [recordTurnComplete, setOnTurnComplete]);
+  }, [recordTurnComplete, setOnTurnComplete, transcript.flushAIResponseBuffer]);
 
   // 当 AI 开始说话时，关闭观察状态
   useEffect(() => {

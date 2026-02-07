@@ -1,31 +1,85 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useLeaderboard } from '../../hooks/useLeaderboard';
+import type { LeaderboardType, RankingEntry } from '../../hooks/useLeaderboard';
+import { useAuth } from '../../hooks/useAuth';
 
 /**
- * 排行榜视图，展示公开/好友榜数据，同时在功能未就绪时展示"Coming Soon"蒙层。
+ * LeaderboardView - 排行榜视图
  *
- * @returns {JSX.Element} 排行榜页面内容与占位蒙层。
+ * 展示 Public / Friends 两个排行榜 Tab，接入 get-leaderboard Edge Function。
+ * 按 weekly_xp 降序排列，每周一 UTC 重置。
  */
 export const LeaderboardView = () => {
     const { t } = useTranslation();
+    const auth = useAuth();
+    const { data, isLoading, fetchLeaderboard } = useLeaderboard();
     const [scrollTop, setScrollTop] = useState(0);
+    const [activeTab, setActiveTab] = useState<LeaderboardType>('public');
     const showStickyHeader = scrollTop > 80;
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         setScrollTop(e.currentTarget.scrollTop);
     };
 
-    // Mock Data
-    const rankingData = [
-        { rank: 1, name: 'Parrot', score: 37327, avatar: '🦜' },
-        { rank: 2, name: '3H', score: 30530, avatar: '😐', isMe: true },
-        { rank: 3, name: 'Past', score: 10831, avatar: '🦉' },
-        { rank: 4, name: 'Old Gao', score: 10632, avatar: '😎' },
-        { rank: 5, name: 'Old Wu', score: 10138, avatar: '🧢' },
-        { rank: 6, name: 'M', score: 10001, avatar: 'Ⓜ️' },
-        { rank: 7, name: 'User 7', score: 9001, avatar: '👤' },
-        { rank: 8, name: 'User 8', score: 8000, avatar: '👤' },
-    ];
+    // 初始加载 + Tab 切换
+    const loadData = useCallback((type: LeaderboardType) => {
+        if (!auth.userId) return;
+        setActiveTab(type);
+        void fetchLeaderboard(auth.userId, type);
+    }, [auth.userId, fetchLeaderboard]);
+
+    useEffect(() => {
+        loadData('public');
+    }, [loadData]);
+
+    const handleTabSwitch = (type: LeaderboardType) => {
+        if (type === activeTab) return;
+        loadData(type);
+    };
+
+    // 排名图标
+    const RankIcon = ({ rank }: { rank: number }) => {
+        if (rank === 1) return <i className="fa-solid fa-trophy text-yellow-400 text-xl"></i>;
+        if (rank === 2) return <i className="fa-solid fa-medal text-gray-400 text-xl"></i>;
+        if (rank === 3) return <i className="fa-solid fa-medal text-orange-700 text-xl"></i>;
+        return <span className="text-brand-greenText font-bold font-serif text-lg">{rank}</span>;
+    };
+
+    // 排名行
+    const RankingRow = ({ entry }: { entry: RankingEntry }) => (
+        <div
+            className={`flex items-center p-3 rounded-2xl ${entry.is_me ? 'bg-brand-lightGreen border border-green-100' : 'bg-white hover:bg-gray-50'}`}
+        >
+            {/* Rank */}
+            <div className="w-10 flex justify-center">
+                <RankIcon rank={entry.rank} />
+            </div>
+
+            {/* Avatar */}
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl shadow-sm mx-3 relative">
+                {entry.avatar_emoji}
+                {entry.rank <= 3 && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                        <i className={`fa-solid fa-crown text-[8px] ${entry.rank === 1 ? 'text-yellow-500' : entry.rank === 2 ? 'text-gray-400' : 'text-orange-600'}`}></i>
+                    </div>
+                )}
+            </div>
+
+            {/* Name */}
+            <div className="flex-1">
+                <span className={`font-bold ${entry.is_me ? 'text-brand-greenText' : 'text-gray-700'}`}>
+                    {entry.display_name}
+                    {entry.is_me && <span className="text-xs text-gray-400 ml-1">({t('leaderboard.you')})</span>}
+                </span>
+            </div>
+
+            {/* Score */}
+            <div className="text-right">
+                <span className="text-gray-500 text-sm font-medium">{entry.weekly_xp} {t('leaderboard.xp')}</span>
+            </div>
+        </div>
+    );
 
     return (
         <div className="flex-1 relative h-full overflow-hidden flex flex-col">
@@ -52,19 +106,21 @@ export const LeaderboardView = () => {
                     </div>
                 </div>
 
-                {/* Floating Stats Box - Positioned with negative margin to overlap */}
+                {/* Floating Stats Box */}
                 <div className="px-8 -mt-8 relative z-10 mb-8">
                     <div className="bg-white rounded-3xl shadow-lg p-4 flex divide-x divide-gray-100">
                         <div className="flex-1 flex flex-col items-center justify-center">
-                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.today')}</span>
-                            <span className="text-gray-700 font-bold text-lg flex items-center gap-1">
-                                <i className="fa-solid fa-caret-up text-gray-400"></i> 0 {t('leaderboard.pos')}
+                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.weeklyXP')}</span>
+                            <span className="text-brand-orange font-bold text-lg flex items-center gap-1">
+                                <i className="fa-solid fa-bolt"></i>
+                                {data?.rankings.find(r => r.is_me)?.weekly_xp ?? data?.user_rank?.weekly_xp ?? 0}
                             </span>
                         </div>
                         <div className="flex-1 flex flex-col items-center justify-center">
                             <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.timeLeft')}</span>
                             <span className="text-brand-orange font-bold text-lg flex items-center gap-1">
-                                <i className="fa-regular fa-clock"></i> 1 {t('leaderboard.day')}
+                                <i className="fa-regular fa-clock"></i>
+                                {data?.days_remaining ?? '-'} {(data?.days_remaining ?? 0) === 1 ? t('leaderboard.day') : t('leaderboard.days')}
                             </span>
                         </div>
                     </div>
@@ -73,67 +129,69 @@ export const LeaderboardView = () => {
                 {/* Sticky Tabs */}
                 <div className="sticky top-12 z-40 bg-white pb-2 pt-1">
                     <div className="flex justify-center gap-4">
-                        <button className="bg-brand-yellow text-brand-orange font-serif italic font-bold text-lg px-8 py-2 rounded-full shadow-sm">
+                        <button
+                            onClick={() => handleTabSwitch('public')}
+                            className={`font-serif italic font-bold text-lg px-8 py-2 rounded-full shadow-sm transition-colors ${
+                                activeTab === 'public'
+                                    ? 'bg-brand-yellow text-brand-orange'
+                                    : 'bg-[#F0F0F0] text-gray-400'
+                            }`}
+                        >
                             {t('leaderboard.public')}
                         </button>
-                        <button className="bg-[#F0F0F0] text-gray-400 font-serif italic font-bold text-lg px-8 py-2 rounded-full">
+                        <button
+                            onClick={() => handleTabSwitch('friends')}
+                            className={`font-serif italic font-bold text-lg px-8 py-2 rounded-full shadow-sm transition-colors ${
+                                activeTab === 'friends'
+                                    ? 'bg-brand-yellow text-brand-orange'
+                                    : 'bg-[#F0F0F0] text-gray-400'
+                            }`}
+                        >
                             {t('leaderboard.friends')}
                         </button>
                     </div>
                 </div>
 
-                {/* Ranking List */}
-                <div className="px-4 pb-28 space-y-2">
-                    {rankingData.map((user, idx) => (
-                        <div
-                            key={idx}
-                            className={`flex items-center p-3 rounded-2xl ${user.isMe ? 'bg-brand-lightGreen border border-green-100' : 'bg-white hover:bg-gray-50'}`}
-                        >
-                            {/* Rank */}
-                            <div className="w-10 flex justify-center">
-                                {user.rank === 1 && <i className="fa-solid fa-trophy text-yellow-400 text-xl"></i>}
-                                {user.rank === 2 && <i className="fa-solid fa-medal text-gray-400 text-xl"></i>}
-                                {user.rank === 3 && <i className="fa-solid fa-medal text-orange-700 text-xl"></i>}
-                                {user.rank > 3 && <span className="text-brand-greenText font-bold font-serif text-lg">{user.rank}</span>}
-                            </div>
-
-                            {/* Avatar */}
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl shadow-sm mx-3 relative">
-                                {user.avatar}
-                                {user.rank <= 3 && (
-                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
-                                        <i className={`fa-solid fa-crown text-[8px] ${user.rank === 1 ? 'text-yellow-500' : user.rank === 2 ? 'text-gray-400' : 'text-orange-600'}`}></i>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Name */}
-                            <div className="flex-1">
-                                <span className={`font-bold ${user.isMe ? 'text-brand-greenText' : 'text-gray-700'}`}>
-                                    {user.name}
-                                </span>
-                            </div>
-
-                            {/* Score */}
-                            <div className="text-right">
-                                <span className="text-gray-500 text-sm font-medium">{user.score} {t('leaderboard.xp')}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Coming Soon Overlay */}
-            <div className="absolute inset-x-0 top-0 bottom-0 z-[60] bg-white/90 backdrop-blur-sm flex items-center justify-center px-6 text-center">
-                <div className="bg-white border border-brand-orange/30 rounded-3xl shadow-lg px-6 py-5 flex flex-col items-center gap-3 max-w-sm w-full">
-                    <div className="w-12 h-12 rounded-full bg-brand-orange/10 flex items-center justify-center text-brand-orange text-2xl shadow-inner">
-                        <i className="fa-solid fa-hourglass-half"></i>
+                {/* Loading State */}
+                {isLoading && (
+                    <div className="flex justify-center py-12">
+                        <div className="w-8 h-8 border-3 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                    <p className="text-2xl font-serif font-bold italic text-brand-orange">{t('leaderboard.comingSoon')}</p>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                        {t('leaderboard.comingSoonHint')}
-                    </p>
-                </div>
+                )}
+
+                {/* Ranking List */}
+                {!isLoading && (
+                    <div className="px-4 pb-28 space-y-2">
+                        {(data?.rankings ?? []).length === 0 ? (
+                            <div className="flex flex-col items-center py-12 text-center">
+                                <span className="text-4xl mb-4">🏆</span>
+                                <p className="text-gray-500 text-sm">
+                                    {activeTab === 'friends'
+                                        ? t('leaderboard.noFriendsYet')
+                                        : t('leaderboard.noRankingsYet')}
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                {data?.rankings.map((entry) => (
+                                    <RankingRow key={entry.user_id} entry={entry} />
+                                ))}
+
+                                {/* 如果用户不在 Top N，显示分隔 + 自己的排名 */}
+                                {data?.user_rank && (
+                                    <>
+                                        <div className="flex items-center gap-2 px-4 py-2">
+                                            <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                                            <span className="text-xs text-gray-400">···</span>
+                                            <div className="flex-1 border-t border-dashed border-gray-200"></div>
+                                        </div>
+                                        <RankingRow entry={data.user_rank} />
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

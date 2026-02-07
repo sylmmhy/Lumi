@@ -11,6 +11,8 @@ import { QuickTagsRow } from '../common/QuickTags';
 import { StickyHeader } from './StickyHeader';
 
 import { supabase } from '../../lib/supabase';
+import { PhotoVerificationModal } from '../modals/PhotoVerificationModal';
+import { useAuth } from '../../hooks/useAuth';
 
 interface HomeViewProps {
     tasks: Task[];
@@ -70,6 +72,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         startRect: DOMRect;
         endRect: DOMRect;
     } | null>(null);
+
+    // Photo Verification State
+    const [photoVerifyTask, setPhotoVerifyTask] = useState<Task | null>(null);
+    const auth = useAuth({ requireLoginAfterOnboarding: false });
 
     // Scroll State
     const [scrollTop, setScrollTop] = useState(0);
@@ -494,6 +500,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onEdit={handleEditTask}
                                         onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
+                                        onPhotoVerify={setPhotoVerifyTask}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -507,6 +514,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
+                                        onPhotoVerify={setPhotoVerifyTask}
                                         />
                                     </div>
                                 )}
@@ -521,6 +529,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
+                                        onPhotoVerify={setPhotoVerifyTask}
                                         />
                                     </div>
                                 )}
@@ -535,6 +544,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
+                                        onPhotoVerify={setPhotoVerifyTask}
                                         />
                                     </div>
                                 )}
@@ -549,6 +559,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
+                                        onPhotoVerify={setPhotoVerifyTask}
                                         />
                                     </div>
                                 )}
@@ -565,6 +576,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     onToggle={onToggleComplete}
                                     onDelete={onDeleteTask}
                                     onEdit={handleEditTask}
+                                    onPhotoVerify={setPhotoVerifyTask}
                                 />
                             </div>
                         )}
@@ -664,6 +676,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     routineLabel={t('home.routineTask')}
                     confirmRoutineLabel={t('home.setRecurringReminder')}
                     confirmOnceLabel={t('home.setOnceReminder')}
+                />
+            )}
+
+            {/* Photo Verification Modal */}
+            {photoVerifyTask && auth.userId && (
+                <PhotoVerificationModal
+                    isOpen={true}
+                    onClose={() => setPhotoVerifyTask(null)}
+                    taskId={photoVerifyTask.id}
+                    taskDescription={photoVerifyTask.text}
+                    userId={auth.userId}
+                    onVerified={() => setPhotoVerifyTask(null)}
                 />
             )}
 

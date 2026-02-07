@@ -18,6 +18,10 @@ export interface GeminiSessionConfig {
   voiceName?: string;
   enableThinking?: boolean;
   enableProactiveAudio?: boolean;
+  /** 启用 session resumption（默认 false，实验性功能） */
+  enableSessionResumption?: boolean;
+  /** 恢复 session 时使用的 handle（来自之前的 sessionResumptionUpdate） */
+  resumptionHandle?: string;
 }
 
 export interface GeminiSession {

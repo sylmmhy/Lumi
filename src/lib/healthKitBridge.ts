@@ -18,6 +18,7 @@ interface HealthKitWebKitHandlers {
   syncHealthData?: HealthKitMessageHandler;
   getAvailableTypes?: HealthKitMessageHandler;
   getHealthDataByType?: HealthKitMessageHandler;
+  openHealthApp?: HealthKitMessageHandler;
 }
 
 /** Get HealthKit handlers from window.webkit (type-safe) */
@@ -154,6 +155,24 @@ const healthKitBridge = {
  */
 export function isHealthKitSupported(): boolean {
   return isIOSWebView();
+}
+
+/**
+ * 打开 Apple Health app
+ * 通过 native bridge 调用 iOS 的 UIApplication.shared.open(x-apple-health://)
+ */
+export function openHealthApp(): void {
+  if (isIOSWebView()) {
+    const handler = getHealthKitHandlers()?.openHealthApp;
+    if (handler) {
+      console.log('[HealthKit] Sending openHealthApp message to native');
+      handler.postMessage({});
+    } else {
+      console.warn('[HealthKit] openHealthApp handler not available');
+    }
+  } else {
+    console.log('[HealthKit] Not in iOS WebView, cannot open Health app');
+  }
 }
 
 /**

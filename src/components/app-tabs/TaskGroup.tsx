@@ -11,6 +11,8 @@ interface TaskGroupProps {
   onEdit?: (task: Task) => void;
   onSkipForDay?: (task: Task) => void;
   onUnskipForDay?: (task: Task) => void;
+  /** 拍照验证回调 */
+  onPhotoVerify?: (task: Task) => void;
 }
 
 /**
@@ -30,6 +32,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   onEdit,
   onSkipForDay,
   onUnskipForDay,
+  onPhotoVerify,
 }) => (
     <div className="animate-fade-in-up">
         {/* Section Label - Quicksand Bold */}
@@ -49,6 +52,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
                     onEdit={onEdit}
                     onSkipForDay={onSkipForDay}
                     onUnskipForDay={onUnskipForDay}
+                    onPhotoVerify={onPhotoVerify}
                 />
             ))}
         </div>

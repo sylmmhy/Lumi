@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { getSupabaseClient } from '../lib/supabase';
 
 /**
  * 庆祝动画 Hook - 管理庆祝页面的各种动画
@@ -124,22 +123,14 @@ export function useCelebrationAnimation(options: UseCelebrationAnimationOptions)
       try {
         let targetCoins: number;
 
-        // 如果有自定义金币数量，直接使用
+        // 如果有自定义金币数量，直接使用；否则根据剩余时间本地计算
         if (customCoins !== undefined) {
           targetCoins = customCoins;
         } else {
-          // 从后端获取金币数量
-          const supabase = getSupabaseClient();
-          if (!supabase) {
-            throw new Error('Supabase 未配置');
-          }
-
-          const { data, error } = await supabase.functions.invoke('calculate-task-rewards', {
-            body: { remainingTime }
-          });
-
-          if (error) throw error;
-          targetCoins = data.coins;
+          // 基础金币 100 + 剩余时间奖励（每分钟 +20，上限 500）
+          const baseCoins = 100;
+          const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
+          targetCoins = baseCoins + timeBonus;
         }
 
         const duration = 1500; // 1.5秒

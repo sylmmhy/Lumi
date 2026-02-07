@@ -13,6 +13,7 @@ import { persistSessionToStorage } from './storage';
 import { syncUserProfileToStorage } from './userProfile';
 import { bindAnalyticsUserSync } from './analyticsSync';
 import { fetchHabitOnboardingCompleted } from './habitOnboarding';
+import { loadLanguagePreferencesFromBackend, getUILanguage, syncLanguagePreferencesToBackend, syncUILanguageToiOS } from '../../lib/language';
 
 /**
  * syncAfterLogin 的参数
@@ -87,6 +88,21 @@ export async function syncAfterLogin(params: SyncAfterLoginParams): Promise<Sync
     userId,
     source,
   )) ?? false;
+
+  // 6. 同步语言偏好：后端 → localStorage，或 localStorage → 后端
+  try {
+    const backendPrefs = await loadLanguagePreferencesFromBackend();
+    if (!backendPrefs?.ui_language) {
+      // 后端没有语言设置，将当前自动检测的 UI 语言同步到后端
+      const currentLang = getUILanguage();
+      console.log(`[PostLoginSync] 后端无语言设置，同步当前语言到后端: ${currentLang}`);
+      syncLanguagePreferencesToBackend({ ui_language: currentLang });
+    }
+    // 同步到 iOS（供 Shield Extension 本地化推送通知）
+    syncUILanguageToiOS();
+  } catch (error) {
+    console.warn('[PostLoginSync] 语言偏好同步失败:', error);
+  }
 
   return { userName, userPicture, hasCompletedHabitOnboarding };
 }

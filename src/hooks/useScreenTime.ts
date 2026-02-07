@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { syncUILanguageToiOS } from '../lib/language';
 
 export interface ScreenTimeStatus {
   status: 'notDetermined' | 'denied' | 'approved' | 'error';
@@ -176,6 +177,8 @@ export function useScreenTime(options: UseScreenTimeOptions = {}) {
     // 注意：直接调用 sendMessage 而非 getStatus，避免在声明前访问
     if (window.webkit?.messageHandlers?.screenTime) {
       window.webkit.messageHandlers.screenTime.postMessage({ action: 'getStatus' });
+      // 同步当前 UI 语言到 iOS（供 Shield Extension 本地化推送通知）
+      syncUILanguageToiOS();
     }
 
     return () => {

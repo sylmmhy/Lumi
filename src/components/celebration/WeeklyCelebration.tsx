@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { EnergyBall } from '../stats';
+import { ConfettiEffect } from '../effects/ConfettiEffect';
 
 export interface WeeklyCelebrationProps {
   /** 是否显示庆祝动画 */
@@ -76,7 +77,7 @@ export const WeeklyCelebration: React.FC<WeeklyCelebrationProps> = ({
   message = "You showed up! That's a win.",
   onClose,
   autoCloseDuration = 4000,
-  backgroundColor = '#429950',
+  backgroundColor = 'rgba(0, 0, 0, 0.85)',
   muted = false,
 }) => {
   const [show, setShow] = useState(false);
@@ -177,6 +178,9 @@ export const WeeklyCelebration: React.FC<WeeklyCelebrationProps> = ({
           {message}
         </div>
       </div>
+
+      {/* 彩带效果 */}
+      <ConfettiEffect active={show} recycle={false} gravity={0.15} numberOfPieces={300} />
 
       {/* 点击遮罩关闭 */}
       <button

@@ -31,6 +31,7 @@ import { devLog } from '../utils/devLog';
 import { useAppTasks } from '../hooks/useAppTasks';
 import { useCoachController } from '../hooks/useCoachController';
 import { useScreenTimeController } from '../hooks/useScreenTimeController';
+import { getWeeklyCompletedCount } from '../remindMe/services/statsService';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
@@ -94,8 +95,10 @@ export function AppTabsPage() {
     const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
     const [showTaskCompletionModal, setShowTaskCompletionModal] = useState(false);
-    /** Banner「Already Completed」触发的庆祝动画 */
+    /** 任务完成庆祝动画 */
     const [showBannerCelebration, setShowBannerCelebration] = useState(false);
+    /** 本周已完成次数（存钱罐金币数），用于庆祝动画展示 */
+    const [weeklyCount, setWeeklyCount] = useState(0);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         navigate(`/app/${view}`, { replace });
@@ -113,6 +116,18 @@ export function AppTabsPage() {
             navigate(DEFAULT_APP_PATH, { replace: true });
         }
     }, [navigate, tab]);
+
+    /** 从数据库重新获取本周完成数（存钱罐金币数） */
+    const refreshWeeklyCount = useCallback(async () => {
+        if (!auth.userId) return;
+        try {
+            const p = await getWeeklyCompletedCount(auth.userId);
+            setWeeklyCount(p.current);
+        } catch { /* ignore */ }
+    }, [auth.userId]);
+
+    // 页面加载时获取一次
+    useEffect(() => { void refreshWeeklyCount(); }, [refreshWeeklyCount]);
 
     const pendingCallbacks = {
         setPendingTask,
@@ -192,10 +207,22 @@ export function AppTabsPage() {
         await appTasks.addTask(newTask);
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
-    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调 */
+    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时触发庆祝动画 */
     const toggleComplete = useCallback(async (id: string) => {
+        // 判断是否是「完成」操作（当前未完成 → 标记完成）
+        const task = appTasks.tasks.find(t => t.id === id);
+        const isCompleting = task && !task.completed;
+
         await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
-    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
+
+        // 从数据库刷新真实金币数（确保和 Stats 页面一致）
+        await refreshWeeklyCount();
+
+        // 完成任务时触发庆祝动画
+        if (isCompleting) {
+            setShowBannerCelebration(true);
+        }
+    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked, refreshWeeklyCount]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const handleStatsToggle = useCallback((id: string, completed: boolean) => {
@@ -256,14 +283,14 @@ export function AppTabsPage() {
             {/* 任务完成确认 & 庆祝页面 */}
             {coach.showCelebration && <CelebrationOverlay coach={coach} />}
 
-            {/* Banner「Already Completed」庆祝动画 */}
+            {/* 任务完成庆祝动画（Home 页勾选完成 / Banner Already Completed 均触发） */}
             <WeeklyCelebration
                 visible={showBannerCelebration}
                 title="Task Done!"
                 subtitle="Great job!"
                 message="You showed up! That's a win."
-                count={1}
-                target={1}
+                count={weeklyCount}
+                target={20}
                 onClose={() => {
                     setShowBannerCelebration(false);
                     screenTime.unlockScreenTimeIfLocked('Banner.alreadyCompleted');
@@ -394,9 +421,27 @@ export function AppTabsPage() {
             <TaskCompletionModal
                 isOpen={showTaskCompletionModal}
                 onClose={() => setShowTaskCompletionModal(false)}
-                onAlreadyCompleted={() => {
+                onAlreadyCompleted={async () => {
                     setShowTaskCompletionModal(false);
-                    setShowBannerCelebration(true);
+                    // 同步任务完成状态到数据库
+                    const taskId = screenTime.lockedTaskInfo?.taskId;
+                    const taskName = screenTime.lockedTaskInfo?.taskName;
+                    if (taskId && !taskId.startsWith('temp-')) {
+                        await appTasks.markTaskAsCompleted(taskId, 0);
+                        devLog('✅ [Banner] Already Completed - 标记任务完成:', taskId);
+                        // 刷新真实金币数并触发庆祝
+                        await refreshWeeklyCount();
+                        setShowBannerCelebration(true);
+                    } else if (taskName) {
+                        // fallback：通过 toggleComplete（内部已包含 refreshWeeklyCount + 庆祝）
+                        const matchedTask = appTasks.tasks.find(
+                            t => !t.completed && t.text === taskName
+                        );
+                        if (matchedTask) {
+                            await toggleComplete(matchedTask.id);
+                            devLog('✅ [Banner] Already Completed - 通过名称匹配标记任务完成:', matchedTask.id);
+                        }
+                    }
                 }}
                 onLetLumiHelp={() => {
                     setShowTaskCompletionModal(false);

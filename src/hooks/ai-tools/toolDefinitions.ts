@@ -156,4 +156,6 @@ export interface ToolCallContext {
   supabaseAnonKey: string;
   /** 用户首选语言 */
   preferredLanguage?: string;
+  /** 会话 ID，用于生成幂等键（防止破坏性工具重复执行） */
+  sessionId?: string;
 }

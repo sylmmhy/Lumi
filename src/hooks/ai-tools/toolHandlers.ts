@@ -210,7 +210,7 @@ export async function handleCreateHabitStack(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage, sessionId } = context;
   const anchorTaskId = args.anchor_task_id as string;
   const newHabitTitle = args.new_habit_title as string;
   const position = args.position as string;
@@ -219,12 +219,16 @@ export async function handleCreateHabitStack(
   console.log('🔧 [Tool] create_habit_stack 调用:', { anchorTaskId, newHabitTitle, position });
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    };
+    if (sessionId) {
+      headers['X-Idempotency-Key'] = `${sessionId}_create_habit_stack_${Date.now()}`;
+    }
     const response = await fetch(`${supabaseUrl}/functions/v1/create-habit-stack`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
+      headers,
       body: JSON.stringify({
         userId,
         anchor_task_id: anchorTaskId,
@@ -309,17 +313,21 @@ export async function handleSaveGoalPlan(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
-  
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage, sessionId } = context;
+
   console.log('🔧 [Tool] save_goal_plan 调用:', args);
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    };
+    if (sessionId) {
+      headers['X-Idempotency-Key'] = `${sessionId}_save_goal_plan_${Date.now()}`;
+    }
     const response = await fetch(`${supabaseUrl}/functions/v1/save-goal-plan`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
+      headers,
       body: JSON.stringify({
         userId,
         ...args,
@@ -360,7 +368,7 @@ export async function handleCreateSimpleRoutine(
   args: Record<string, unknown>,
   context: ToolCallContext
 ): Promise<ToolCallResult> {
-  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage } = context;
+  const { userId, supabaseUrl, supabaseAnonKey, preferredLanguage, sessionId } = context;
   const habitName = args.habit_name as string;
   const reminderTime = args.reminder_time as string;
   const durationMinutes = (args.duration_minutes as number) || 5;
@@ -368,12 +376,16 @@ export async function handleCreateSimpleRoutine(
   console.log('🛠️ [Tool] create_simple_routine 调用:', { habitName, reminderTime });
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    };
+    if (sessionId) {
+      headers['X-Idempotency-Key'] = `${sessionId}_create_simple_routine_${Date.now()}`;
+    }
     const response = await fetch(`${supabaseUrl}/functions/v1/create-simple-routine`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
+      headers,
       body: JSON.stringify({
         userId,
         habit_name: habitName,

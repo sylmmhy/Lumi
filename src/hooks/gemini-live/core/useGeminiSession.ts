@@ -146,8 +146,12 @@ export function useGeminiSession(
   const resumptionHandleRef = useRef<string | null>(null);
   const resumptionHandleTimestampRef = useRef<number>(0);
   const lastConfigRef = useRef<GeminiSessionConfig | undefined>(undefined);
-  const getConversationContextRef = useRef(getConversationContext)
+  const getConversationContextRef = useRef(getConversationContext);
   getConversationContextRef.current = getConversationContext;
+  /** true 表示用户主动断开（不触发自动恢复） */
+  const intentionalDisconnectRef = useRef(false);
+  /** 防止并发恢复 */
+  const isRecoveringRef = useRef(false);
 
   /**
    * 建立 Gemini Live WebSocket 连接
@@ -161,6 +165,8 @@ export function useGeminiSession(
       devLog('⚠️ Session exists, ignoring connect request');
       return;
     }
+
+    intentionalDisconnectRef.current = false;
 
     try {
       // 使用预获取的 token 或现场获取
@@ -253,10 +259,75 @@ export function useGeminiSession(
             setIsConnected(false);
             onError?.(errorMessage);
           },
-          onclose: () => {
+          onclose: (closeEvent: CloseEvent) => {
+            sessionRef.current = null;
             setIsConnected(false);
-            devLog('Gemini Live disconnected');
+
+            const code = closeEvent?.code ?? 0;
+            devLog(`Gemini Live disconnected (code=${code})`);
             onDisconnected?.();
+
+            // 自动恢复：非预期断开（1008/1011）且不是用户主动断开
+            const unexpectedCodes = [1008, 1011];
+            if (
+              unexpectedCodes.includes(code) &&
+              !intentionalDisconnectRef.current &&
+              !isRecoveringRef.current &&
+              lastConfigRef.current?.enableSessionResumption
+            ) {
+              isRecoveringRef.current = true;
+              const recoveryStart = Date.now();
+              devLog(`🔄 [Session] 非预期断开 (code=${code})，尝试自动恢复...`);
+
+              // 异步恢复：尝试 resumption，失败则全新连接
+              (async () => {
+                try {
+                  const savedConfig = lastConfigRef.current!;
+                  const handle = resumptionHandleRef.current;
+                  const handleAge = Date.now() - resumptionHandleTimestampRef.current;
+                  const handleValid = handle && handleAge < HANDLE_MAX_AGE_MS;
+
+                  if (handleValid) {
+                    // 主路径：使用 session resumption 重连
+                    devLog('🔄 [Session] 尝试 resumption 重连...');
+                    const token = await fetchGeminiToken();
+                    await connect(
+                      { ...savedConfig, resumptionHandle: handle },
+                      token,
+                    );
+                  } else {
+                    // 回退：全新连接
+                    devLog('🔄 [Session] handle 无效，回退到全新连接...');
+                    resumptionHandleRef.current = null;
+                    const token = await fetchGeminiToken();
+                    await connect(savedConfig, token);
+                  }
+
+                  const elapsed = Date.now() - recoveryStart;
+                  devLog(`🔄 [Session] 恢复成功 (${elapsed}ms)`);
+
+                  // 注入对话上下文
+                  const contextFn = getConversationContextRef.current;
+                  if (contextFn) {
+                    const ctx = contextFn();
+                    if (ctx && sessionRef.current) {
+                      setTimeout(() => {
+                        if (sessionRef.current) {
+                          sendClientContent(ctx, false, 'system');
+                          devLog('🔄 [Session] 恢复后注入对话上下文');
+                        }
+                      }, 500);
+                    }
+                  }
+                } catch (recoverError) {
+                  const elapsed = Date.now() - recoveryStart;
+                  console.error(`❌ [Session] 恢复失败 (${elapsed}ms):`, recoverError);
+                  onError?.(recoverError instanceof Error ? recoverError.message : 'Recovery failed');
+                } finally {
+                  isRecoveringRef.current = false;
+                }
+              })();
+            }
           },
         },
       });
@@ -274,6 +345,7 @@ export function useGeminiSession(
    */
   const disconnect = useCallback(() => {
     devLog('🔌 Disconnecting Gemini Live session...');
+    intentionalDisconnectRef.current = true;
 
     if (sessionRef.current) {
       sessionRef.current.close();

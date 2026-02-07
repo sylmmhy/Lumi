@@ -15,7 +15,8 @@ import { StatsHeader } from './StatsHeader';
 import type { Task } from '../../remindMe/types';
 import { fetchRecurringReminders, toggleReminderCompletion, updateReminder, deleteReminder } from '../../remindMe/services/reminderService';
 import { getAllRoutineCompletions, markRoutineComplete, unmarkRoutineComplete } from '../../remindMe/services/routineCompletionService';
-import { getWeeklyCompletedCount, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
+import { getUserWeeklyCoins, getWeeklyCoinHistory, getHabitsTotalCompletions } from '../../remindMe/services/statsService';
+import type { WeeklyCoinEntry } from '../../remindMe/services/statsService';
 
 // 从 stats 模块导入组件和类型
 import {
@@ -27,6 +28,7 @@ import {
     buildDenseHistoryWithGaps,
     EnergyBall,
     taskToHabit,
+    calculateCurrentStreak,
 } from '../stats';
 import type { Habit, HabitTheme } from '../stats';
 
@@ -62,10 +64,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
     const [isLoading, setIsLoading] = useState(true);
 
-    // 存钱罐数据（本周习惯完成总次数）
+    // 存钱罐数据（本周金币余额 from users.weekly_coins）
     const [weeklyCount, setWeeklyCount] = useState(0);
-    const [weeklyTarget] = useState(20); // 目标固定为 20
+    const [weeklyTarget] = useState(20);
     const [triggerRise, setTriggerRise] = useState(false);
+
+    // 周切换状态
+    const [weeklyHistory, setWeeklyHistory] = useState<WeeklyCoinEntry[]>([]);
+    const [currentWeekIndex, setCurrentWeekIndex] = useState(0); // 0=本周
+
+    // Streak 弹窗状态
+    const [streakPill, setStreakPill] = useState<{ visible: boolean; count: number }>({ visible: false, count: 0 });
 
     // Toast 状态
     const { toastMessage, showToast, hideToast } = useCheckInToast();
@@ -92,7 +101,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         };
     }, [updateHeaderPosition]);
 
-    // 外部触发打卡动画（AI 会话完成 / Home 勾选完成后跳转到 stats 页时触发）
+    // 外部触发打卡动画（verify 成功跳转过来时）— Duolingo 风格三阶段叠加
     const prevExternalTriggerRef = useRef(externalCheckInTrigger ?? 0);
     useEffect(() => {
         const prev = prevExternalTriggerRef.current;
@@ -101,25 +110,41 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
         // 只在计数器递增时触发动画（首次挂载 prev === curr 不触发）
         if (curr > prev) {
-            // 与 handleCheckIn 相同的动画流程
+            // 阶段 1 (0ms)：金色光晕 + checkin 音效 + 黑色遮罩
             setTriggerRise(true);
             playCheckInSound();
-            setTimeout(() => setTriggerRise(false), 3500);
 
-            // 延迟 1 秒后，从数据库刷新真实金币数 + 播放硬币音效
+            // 阶段 2 (800ms)：金币掉入 + coinDrop 音效 + weeklyCount += 5
             setTimeout(async () => {
                 if (auth.userId) {
                     try {
-                        const p = await getWeeklyCompletedCount(auth.userId);
-                        setWeeklyCount(p.current);
+                        const coins = await getUserWeeklyCoins(auth.userId);
+                        setWeeklyCount(coins);
                     } catch { /* ignore */ }
                 }
                 playCoinDropSound();
-            }, 1000);
+            }, 800);
+
+            // 阶段 3 (1800ms)：Streak 弹窗
+            setTimeout(() => {
+                // 从所有习惯中取最大 streak
+                const maxStreak = habits.reduce((max, h) => {
+                    const s = calculateCurrentStreak(h.history);
+                    return s > max ? s : max;
+                }, 0);
+                if (maxStreak > 0) {
+                    setStreakPill({ visible: true, count: maxStreak });
+                    // 2s 后 fade out
+                    setTimeout(() => setStreakPill({ visible: false, count: 0 }), 2000);
+                }
+            }, 1800);
+
+            // 光晕持续 3.5s
+            setTimeout(() => setTriggerRise(false), 3500);
 
             showToast();
         }
-    }, [externalCheckInTrigger, auth.userId, showToast]);
+    }, [externalCheckInTrigger, auth.userId, showToast, habits]);
 
     /**
      * 播放打卡光晕音效
@@ -210,9 +235,20 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 // 2. 获取所有完成历史
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
 
-                // 3. 获取本周完成数（存钱罐数据）
-                const weeklyProgress = await getWeeklyCompletedCount(auth.userId);
-                setWeeklyCount(weeklyProgress.current);
+                // 3. 获取本周金币余额（存钱罐数据）
+                const coins = await getUserWeeklyCoins(auth.userId);
+                setWeeklyCount(coins);
+
+                // 3b. 获取历史周金币数据（周切换用）
+                // 过滤掉本周（本周已由 weeklyCount 实时显示）
+                const allHistory = await getWeeklyCoinHistory(auth.userId);
+                const now = new Date();
+                const yearStart = new Date(now.getFullYear(), 0, 1);
+                const weekNum = Math.ceil(((now.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
+                const currentSeasonWeek = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+                const pastHistory = allHistory.filter(e => e.week !== currentSeasonWeek);
+                setWeeklyHistory(pastHistory);
+                setCurrentWeekIndex(0);
 
                 // 4. 批量获取累计完成次数（里程碑进度条数据）
                 const habitIds = routineTasks.map(t => t.id);
@@ -294,9 +330,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 return habit;
             }));
 
-            // 5. 更新存钱罐计数（取消打卡时减少）
-            if (!newStatus) {
-                setWeeklyCount(prev => Math.max(prev - 1, 0));
+            // 5. 更新存钱罐计数（取消打卡时刷新真实金币数）
+            if (!newStatus && auth.userId) {
+                getUserWeeklyCoins(auth.userId)
+                    .then(coins => setWeeklyCount(coins))
+                    .catch(() => setWeeklyCount(prev => Math.max(prev - 1, 0)));
             }
         } catch (error) {
             console.error('Failed to toggle habit:', error);
@@ -323,11 +361,19 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         playCheckInSound();
         setTimeout(() => setTriggerRise(false), 3500);
 
-        // 3. 延迟 1 秒后，存钱罐 +1（触发金币掉落动画）+ 播放硬币音效
-        setTimeout(() => {
-            setWeeklyCount(prev => prev + 1);
+        // 3. 延迟 800ms 后，刷新真实金币数 + 播放硬币音效
+        setTimeout(async () => {
+            if (auth.userId) {
+                try {
+                    const coins = await getUserWeeklyCoins(auth.userId);
+                    setWeeklyCount(coins);
+                } catch {
+                    // 回退到 +1
+                    setWeeklyCount(prev => prev + 1);
+                }
+            }
             playCoinDropSound();
-        }, 1000);
+        }, 800);
 
         // 4. 显示 Toast
         showToast();
@@ -385,15 +431,26 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     setTriggerRise(true);
                     playCheckInSound();
                     setTimeout(() => setTriggerRise(false), 3500);
-                    // 延迟 1 秒后更新能量球计数（触发金币掉落）+ 播放硬币音效
-                    setTimeout(() => {
-                        setWeeklyCount(prev => prev + 1);
+                    // 延迟 800ms 后刷新真实金币数 + 播放硬币音效
+                    setTimeout(async () => {
+                        if (auth.userId) {
+                            try {
+                                const coins = await getUserWeeklyCoins(auth.userId);
+                                setWeeklyCount(coins);
+                            } catch {
+                                setWeeklyCount(prev => prev + 1);
+                            }
+                        }
                         playCoinDropSound();
-                    }, 1000);
+                    }, 800);
                     showToast();
                 } else {
-                    // 取消打卡时立即更新
-                    setWeeklyCount(prev => Math.max(prev - 1, 0));
+                    // 取消打卡时刷新真实金币数
+                    if (auth.userId) {
+                        getUserWeeklyCoins(auth.userId)
+                            .then(coins => setWeeklyCount(coins))
+                            .catch(() => setWeeklyCount(prev => Math.max(prev - 1, 0)));
+                    }
                 }
             }
 
@@ -417,6 +474,54 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             console.error('Failed to toggle habit on date:', error);
         }
     };
+
+    // ========== 周切换逻辑 ==========
+
+    /** 当前显示的金币数（本周用实时 weeklyCount，历史周用 history） */
+    const displayedWeeklyCount = useMemo(() => {
+        if (currentWeekIndex === 0) return weeklyCount;
+        // 历史周：index 0 = 最新周（history 降序排列）
+        const entry = weeklyHistory[currentWeekIndex - 1];
+        return entry?.coins ?? 0;
+    }, [currentWeekIndex, weeklyCount, weeklyHistory]);
+
+    /** 格式化赛季周标签 '2026-W06' → 'Feb 3 - Feb 9' */
+    const formatWeekLabel = useCallback((seasonWeek: string): string => {
+        const match = seasonWeek.match(/^(\d{4})-W(\d{2})$/);
+        if (!match) return seasonWeek;
+        const year = parseInt(match[1], 10);
+        const week = parseInt(match[2], 10);
+        // ISO week → Monday date
+        const jan4 = new Date(year, 0, 4);
+        const dayOfWeek = jan4.getDay() || 7;
+        const monday = new Date(jan4);
+        monday.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${fmt(monday)} - ${fmt(sunday)}`;
+    }, []);
+
+    /** 当前显示的周标签 */
+    const weekLabel = useMemo(() => {
+        if (currentWeekIndex === 0) return 'This Week';
+        const entry = weeklyHistory[currentWeekIndex - 1];
+        return entry ? formatWeekLabel(entry.week) : 'This Week';
+    }, [currentWeekIndex, weeklyHistory, formatWeekLabel]);
+
+    /** 切换到上一周（更早） */
+    const handlePrevWeek = useCallback(() => {
+        // 最多可回退到 weeklyHistory.length 周前
+        setCurrentWeekIndex(prev => Math.min(prev + 1, weeklyHistory.length));
+    }, [weeklyHistory.length]);
+
+    /** 切换到下一周（更近） */
+    const handleNextWeek = useCallback(() => {
+        setCurrentWeekIndex(prev => Math.max(prev - 1, 0));
+    }, []);
+
+    /** 是否可以往"下一周"（更近）方向切换 */
+    const canGoNext = currentWeekIndex > 0;
 
     // ========== 渲染 ==========
     return (
@@ -443,11 +548,38 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 }}
             >
                 <EnergyBall
-                    current={weeklyCount}
+                    current={displayedWeeklyCount}
                     target={weeklyTarget}
-                    triggerRise={triggerRise}
+                    triggerRise={currentWeekIndex === 0 && triggerRise}
                 />
             </div>
+
+            {/* Streak 弹窗 - 存钱罐下方 */}
+            {streakPill.visible && (
+                <div
+                    className="fixed left-1/2 -translate-x-1/2"
+                    style={{
+                        top: headerBottom + 70,
+                        zIndex: 41,
+                        animation: 'streak-fade-in-out 2s ease-in-out forwards',
+                    }}
+                >
+                    <div
+                        className="px-4 py-2 rounded-full bg-orange-500/90 text-white text-sm font-bold shadow-lg"
+                        style={{ fontFamily: "'Quicksand', sans-serif" }}
+                    >
+                        🔥 {streakPill.count}d streak!
+                    </div>
+                    <style>{`
+                        @keyframes streak-fade-in-out {
+                            0% { opacity: 0; transform: translateY(10px); }
+                            15% { opacity: 1; transform: translateY(0); }
+                            75% { opacity: 1; transform: translateY(0); }
+                            100% { opacity: 0; transform: translateY(-5px); }
+                        }
+                    `}</style>
+                </div>
+            )}
 
             {/* 打卡成功 Toast */}
             <CheckInToast message={toastMessage} onClose={hideToast} />
@@ -463,6 +595,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     ref={headerRef}
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
+                    weekLabel={weekLabel}
+                    onPrevWeek={handlePrevWeek}
+                    onNextWeek={handleNextWeek}
+                    canGoNext={canGoNext}
                 />
 
                 {/* 内容区域 - pt-20 为悬挂的能量球留出空间 */}

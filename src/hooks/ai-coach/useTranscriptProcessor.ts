@@ -13,7 +13,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { devLog } from '../gemini-live/utils';
 import type { AICoachMessage } from './types';
-import { isValidUserSpeech } from './utils';
+import { isValidUserSpeech, sanitizeBracketTags } from './utils';
 
 /** 转录条目（与 useGeminiLive 的 transcript 格式匹配） */
 interface TranscriptEntry {
@@ -164,7 +164,8 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
       addMessageRef.current('ai', displayText);
 
       // 累积到 AI 回复缓冲区（turnComplete 后由裁判统一消费）
-      aiResponseBufferRef.current += displayText;
+      // 清理危险标签防止 prompt 注入（AI 转录中不应包含系统标签）
+      aiResponseBufferRef.current += sanitizeBracketTags(displayText);
 
       if (import.meta.env.DEV) {
         // 累积流式碎片，500ms 无新消息后输出完整句子
@@ -186,7 +187,8 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
     if (lastMessage.role === 'user') {
       // 累积用户语音碎片，不立即存储
       if (isValidUserSpeech(lastMessage.text)) {
-        userSpeechBufferRef.current += lastMessage.text;
+        // 清理危险标签防止 prompt 注入（用户语音转文字中不应包含系统标签）
+        userSpeechBufferRef.current += sanitizeBracketTags(lastMessage.text);
 
         // 通知下游（意图检测）
         onUserSpeechFragmentRef.current(lastMessage.text);

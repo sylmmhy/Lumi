@@ -592,5 +592,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     enterCampfireMode: campfire.enterCampfireMode,
     exitCampfireMode: campfire.exitCampfireMode,
     campfireStats: campfire.campfireStats,
+
+    // 帧缓冲区（任务完成时抓取最近帧用于视觉验证）
+    getRecentFrames: geminiLive.getRecentFrames,
   };
 }

@@ -11,6 +11,7 @@ import { TestVersionModal } from '../components/modals/TestVersionModal';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
 import { TaskReminderBanner } from '../components/banners/TaskReminderBanner';
 import { TaskCompletionModal } from '../components/modals/TaskCompletionModal';
+import { CoinRewardToast, useCoinRewardToast } from '../components/stats';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -73,6 +74,9 @@ export function AppTabsPage() {
 
     const [isPremium] = useState(() => checkoutSuccess);
     const [showConfetti, setShowConfetti] = useState(() => checkoutSuccess);
+
+    // 金币奖励 Toast（out-of-session 完成任务后显示）
+    const { coins: coinToastAmount, showCoinToast, hideCoinToast } = useCoinRewardToast();
 
     // 任务 CRUD 和状态管理（提取到独立 hook）
     const appTasks = useAppTasks(auth.userId);
@@ -206,19 +210,10 @@ export function AppTabsPage() {
         await appTasks.addTask(newTask);
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
-    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时跳转 stats 触发金币动画 */
+    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const toggleComplete = useCallback(async (id: string) => {
-        // 判断是否是「完成」操作（当前未完成 → 标记完成）
-        const task = appTasks.tasks.find(t => t.id === id);
-        const isCompleting = task && !task.completed;
-
         await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
-
-        // 完成任务时跳转 stats 页触发金币动画
-        if (isCompleting) {
-            handleTaskCompleteForStats();
-        }
-    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked, handleTaskCompleteForStats]);
+    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const handleStatsToggle = useCallback((id: string, completed: boolean) => {
@@ -273,6 +268,9 @@ export function AppTabsPage() {
                 </div>
             )}
 
+            {/* Out-of-session 完成任务后的金币奖励 Toast */}
+            <CoinRewardToast coins={coinToastAmount} onClose={hideCoinToast} />
+
             {/* AI 会话全屏遮罩（LiveKit + Gemini Live 两种模式） */}
             <SessionOverlay coach={coach} />
 
@@ -292,6 +290,8 @@ export function AppTabsPage() {
                         onRequestLogin={() => setShowAuthModal(true)}
                         isLoggedIn={auth.isLoggedIn}
                         onRefresh={appTasks.handleRefresh}
+                        onShowCoinToast={showCoinToast}
+                        onVerifySuccess={handleTaskCompleteForStats}
                     />
                 )}
 

@@ -10,6 +10,7 @@ export { HeatmapDetailOverlay } from './HeatmapDetailOverlay';
 export { EnergyBall } from './EnergyBall';
 export { MilestoneProgressBar } from './MilestoneProgressBar';
 export { CheckInToast, getRandomToastMessage, useCheckInToast } from './CheckInToast';
+export { CoinRewardToast, useCoinRewardToast } from './CoinRewardToast';
 
 // 类型
 export type { Habit, HabitTheme, HeatmapDay, MonthLabel, CalendarDay, WeeklyProgress } from './types';

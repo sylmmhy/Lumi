@@ -9,6 +9,10 @@ import type { LiveServerMessage } from '@google/genai';
 import type { ToolCall, MessageHandlerContext } from '../types';
 import { isThinkingContent, devLog } from '../utils';
 
+/** Spike 1 验证：记录 turnComplete 和 outputTranscription 的到达顺序 */
+const SPIKE1_LOGGING = false;
+let spike1TurnCounter = 0;
+
 /**
  * 处理 serverContent 消息
  */
@@ -28,6 +32,10 @@ export function handleServerContent(
 
   // Handle turn complete - AI 说完一轮
   if ('turnComplete' in serverContent) {
+    if (SPIKE1_LOGGING) {
+      console.log('[SPIKE1] turnComplete', Date.now(), `turn=${spike1TurnCounter}`);
+      spike1TurnCounter++;
+    }
     context.onTurnComplete();
   }
 
@@ -44,6 +52,9 @@ export function handleServerContent(
     const transcription = serverContent.outputTranscription as { text?: string };
     if (transcription.text) {
       const text = transcription.text.trim();
+      if (SPIKE1_LOGGING) {
+        console.log('[SPIKE1] outputTranscription', Date.now(), `turn=${spike1TurnCounter}`, text.slice(0, 80));
+      }
 
       // 在生产环境过滤 thinking 内容
       if (import.meta.env.DEV || !isThinkingContent(text)) {

@@ -550,41 +550,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // ==========================================
   // 虚拟消息（原有的定时触发系统）
   // ==========================================
-  /**
-   * 从 Orchestrator 获取当前对话上下文（给"智能小纸条"用）
-   */
-  const getConversationContext = useCallback((): VirtualMessageUserContext | null => {
-    return orchestratorRef.current.getVirtualMessageContext?.() ?? null;
-  }, []);
-
-  /**
-   * 调用后端 Edge Function，生成一条"小纸条"（一整句话）
-   */
-  const fetchCoachGuidance = useCallback(async (context: VirtualMessageUserContext) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return null;
-
-    const userPreferredLanguage = preferredLanguagesRef.current?.[0] || 'en-US';
-
-    const { data, error } = await supabase.functions.invoke('generate-coach-guidance', {
-      body: {
-        userId: currentUserIdRef.current,
-        ...context,
-        userPreferredLanguage,
-      },
-    });
-
-    if (error) {
-      devWarn('⚠️ generate-coach-guidance 调用失败:', error);
-      return null;
-    }
-
-    if (data && typeof (data as { note?: unknown }).note === 'string') {
-      return { note: (data as { note: string }).note };
-    }
-
-    return null;
-  }, []);
+  // US-011: generate-coach-guidance API 已被统一裁判的 coach_note 替代
+  // getConversationContext 和 fetchCoachGuidance 不再需要
 
   const virtualMessages = useVirtualMessages({
     enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
@@ -597,8 +564,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     successRecord: successRecordRef.current,
     initialDuration: initialTime,
     preferredLanguage: preferredLanguagesRef.current?.[0],
-    getConversationContext,
-    fetchCoachGuidance,
   });
 
   const { setOnTurnComplete } = geminiLive;

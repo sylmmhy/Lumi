@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect } from 'react';
-import type { VirtualMessageUserContext } from './virtual-messages/types';
 
 /**
  * Virtual Messages Hook - AI 消息调度
@@ -69,16 +68,8 @@ export interface UseVirtualMessagesOptions {
   initialDuration?: number;
   /** 用户首选语言，用于触发词中携带语言信息，确保 AI 回复使用正确语言 */
   preferredLanguage?: string;
-  /**
-   * 获取当前对话上下文（给“智能小纸条”使用）
-   * 如果未提供，虚拟消息会回退到旧的 [CHECK_IN] 逻辑
-   */
-  getConversationContext?: () => VirtualMessageUserContext | null;
-  /**
-   * 调用后端生成“小纸条”
-   * 注意：实现方必须保证尽快返回；本 Hook 也会做 2 秒超时保护
-   */
-  fetchCoachGuidance?: (context: VirtualMessageUserContext) => Promise<CoachGuidanceResult | null>;
+  // US-011: getConversationContext 和 fetchCoachGuidance 已移除
+  // coach_note 由统一裁判 (detect-intent) 生成并通过 onDetectionComplete 注入
 }
 
 // 冷却时间：15秒
@@ -100,8 +91,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     successRecord,
     initialDuration = 300, // 默认5分钟
     preferredLanguage = 'en-US', // 默认英文，确保触发词携带语言信息
-    getConversationContext,
-    fetchCoachGuidance,
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -111,9 +100,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
   const lastVirtualMessageTimeRef = useRef<number>(0);
   const lastTurnCompleteTimeRef = useRef<number>(0);
 
-  // 智能小纸条：外部依赖用 ref 防止 useEffect 循环
-  const getConversationContextRef = useRef(getConversationContext);
-  const fetchCoachGuidanceRef = useRef(fetchCoachGuidance);
+  // US-011: getConversationContext/fetchCoachGuidance refs 已移除
 
   // 更新 refs
   useEffect(() => {
@@ -128,13 +115,6 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     lastUserSpeechRef.current = lastUserSpeechTime;
   }, [lastUserSpeechTime]);
 
-  useEffect(() => {
-    getConversationContextRef.current = getConversationContext;
-  }, [getConversationContext]);
-
-  useEffect(() => {
-    fetchCoachGuidanceRef.current = fetchCoachGuidance;
-  }, [fetchCoachGuidance]);
 
   /**
    * 记录 AI 完成回复的时间

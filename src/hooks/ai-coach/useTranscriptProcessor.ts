@@ -42,6 +42,13 @@ export interface UseTranscriptProcessorReturn {
   addMessageRef: React.MutableRefObject<(role: 'user' | 'ai', content: string, isVirtual?: boolean) => void>;
   /** 用户语音缓冲区 ref（给 useSessionMemory 读取剩余内容） */
   userSpeechBufferRef: React.MutableRefObject<string>;
+  /** AI 回复缓冲区 ref（turnComplete 后取出完整回复给裁判用） */
+  aiResponseBufferRef: React.MutableRefObject<string>;
+  /**
+   * 取出并清空 AI 回复缓冲区，返回本轮 AI 的完整回复文本。
+   * 在 turnComplete 时调用，将完整回复传给裁判（processAIResponse）。
+   */
+  flushAIResponseBuffer: () => string;
   /** 重置所有内部状态（清空消息、去重集合、缓冲区） */
   reset: () => void;
   /** 仅清空消息列表 */
@@ -96,6 +103,8 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
   const processedTranscriptRef = useRef<Set<string>>(new Set());
   /** 用户语音碎片缓冲区，角色切换时 flush */
   const userSpeechBufferRef = useRef<string>('');
+  /** AI 回复缓冲区：累积 outputTranscription 碎片，turnComplete 后一次性取出给裁判 */
+  const aiResponseBufferRef = useRef<string>('');
   /** 上一条消息的角色，用于检测角色切换 */
   const lastProcessedRoleRef = useRef<'user' | 'assistant' | null>(null);
 
@@ -154,6 +163,9 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
       const displayText = lastMessage.text;
       addMessageRef.current('ai', displayText);
 
+      // 累积到 AI 回复缓冲区（turnComplete 后由裁判统一消费）
+      aiResponseBufferRef.current += displayText;
+
       if (import.meta.env.DEV) {
         // 累积流式碎片，500ms 无新消息后输出完整句子
         aiSpeechLogBufferRef.current += displayText;
@@ -164,7 +176,7 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
         }, 500);
       }
 
-      // 通知下游（上下文追踪 + 意图检测）
+      // 通知下游（上下文追踪，但不再直接触发意图检测——改由 turnComplete 统一触发）
       onAIMessageRef.current(displayText);
 
       // 更新角色跟踪
@@ -189,11 +201,22 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
   // 公开方法
   // ==========================================
 
+  /**
+   * 取出并清空 AI 回复缓冲区。
+   * 在 turnComplete 时调用，返回本轮 AI 的完整回复文本给裁判使用。
+   */
+  const flushAIResponseBuffer = useCallback((): string => {
+    const buffered = aiResponseBufferRef.current;
+    aiResponseBufferRef.current = '';
+    return buffered;
+  }, []);
+
   /** 重置所有内部状态（新会话时调用） */
   const reset = useCallback(() => {
     setMessages([]);
     processedTranscriptRef.current.clear();
     userSpeechBufferRef.current = '';
+    aiResponseBufferRef.current = '';
     lastProcessedRoleRef.current = null;
   }, []);
 
@@ -208,6 +231,8 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
     addMessage,
     addMessageRef,
     userSpeechBufferRef,
+    aiResponseBufferRef,
+    flushAIResponseBuffer,
     reset,
     clearMessages,
   };

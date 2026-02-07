@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
  * LeaderboardView - 排行榜视图
  *
  * 展示 Public / Friends 两个排行榜 Tab，接入 get-leaderboard Edge Function。
- * 按 weekly_xp 降序排列，每周一 UTC 重置。
+ * 按 weekly_coins 降序排列，每周一 UTC 重置。
  */
 export const LeaderboardView = () => {
     const { t } = useTranslation();
@@ -76,7 +76,10 @@ export const LeaderboardView = () => {
 
             {/* Score */}
             <div className="text-right">
-                <span className="text-gray-500 text-sm font-medium">{entry.weekly_xp} {t('leaderboard.xp')}</span>
+                <span className="text-gray-500 text-sm font-medium flex items-center gap-1">
+                    {entry.weekly_coins}
+                    <img src="/coin.png" alt="coin" className="w-4 h-4" />
+                </span>
             </div>
         </div>
     );
@@ -110,10 +113,10 @@ export const LeaderboardView = () => {
                 <div className="px-8 -mt-8 relative z-10 mb-8">
                     <div className="bg-white rounded-3xl shadow-lg p-4 flex divide-x divide-gray-100">
                         <div className="flex-1 flex flex-col items-center justify-center">
-                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.weeklyXP')}</span>
+                            <span className="text-xs text-gray-400 font-bold mb-1">{t('leaderboard.weeklyCoins')}</span>
                             <span className="text-brand-orange font-bold text-lg flex items-center gap-1">
-                                <i className="fa-solid fa-bolt"></i>
-                                {data?.rankings.find(r => r.is_me)?.weekly_xp ?? data?.user_rank?.weekly_xp ?? 0}
+                                <img src="/coin.png" alt="coin" className="w-5 h-5" />
+                                {data?.rankings.find(r => r.is_me)?.weekly_coins ?? data?.user_rank?.weekly_coins ?? 0}
                             </span>
                         </div>
                         <div className="flex-1 flex flex-col items-center justify-center">

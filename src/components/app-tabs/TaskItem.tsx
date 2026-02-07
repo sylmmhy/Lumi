@@ -15,7 +15,7 @@ interface TaskItemProps {
     onSkipForDay?: (task: Task) => void;
     /** 取消跳过今天的回调 */
     onUnskipForDay?: (task: Task) => void;
-    /** 拍照验证回调：点击 "+50 XP" 按钮触发 */
+    /** 拍照验证回调：点击 "+50" 金币按钮触发 */
     onPhotoVerify?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
@@ -231,30 +231,13 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         </span>
                     )}
                 </div>
-                {/* 右侧操作区：时间 / 拍照验证 / Start 按钮 */}
+                {/* 右侧操作区：时间 / Start 按钮 */}
                 {mode === 'home' ? (
-                    task.completed && onPhotoVerify && (!task.verification_status || task.verification_status === 'unverified') ? (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onPhotoVerify(task);
-                            }}
-                            className="px-3 py-1.5 rounded-lg text-[13px] font-bold"
-                            style={{
-                                fontFamily: "'Quicksand', sans-serif",
-                                backgroundColor: '#FEF3C7',
-                                color: '#92400E',
-                            }}
-                        >
-                            +50 XP
-                        </button>
-                    ) : (
-                        <div className="px-2.5 py-1 min-w-[70px] text-right">
-                            <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
-                                {task.displayTime}
-                            </span>
-                        </div>
-                    )
+                    <div className="px-2.5 py-1 min-w-[70px] text-right">
+                        <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
+                            {task.displayTime}
+                        </span>
+                    </div>
                 ) : (
                     <button
                         onClick={(e) => {
@@ -267,6 +250,39 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                     </button>
                 )}
             </div>
+
+            {/* Verification badge - 完成任务后的拍照验证引导，显示在任务卡片下方 */}
+            {/* relative z-10 确保在 skip/delete 滑动按钮（absolute inset-0）之上 */}
+            {task.completed && onPhotoVerify && (!task.verification_status || task.verification_status === 'unverified') && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onPhotoVerify(task);
+                    }}
+                    className="relative z-10 w-full flex items-center justify-center gap-2 py-2.5 bg-[#FFF9E6] border-t border-[#E6C865]/30 rounded-b-2xl"
+                >
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E6C865] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E6C865]" />
+                    </span>
+                    <span
+                        className="text-[13px] text-[#92400E] flex items-center gap-1"
+                        style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
+                    >
+                        Verify to earn +50 <img src="/coin.png" alt="coin" className="w-4 h-4" />
+                    </span>
+                </button>
+            )}
+
+            {/* Verified badge - 已验证的静态绿色徽章 */}
+            {task.completed && task.verification_status === 'verified' && (
+                <div className="relative z-10 w-full flex items-center justify-center gap-1.5 py-2 bg-green-50 border-t border-green-200/50 rounded-b-2xl">
+                    <span className="text-green-600 text-[12px]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
+                        ✓ Verified
+                    </span>
+                </div>
+            )}
+
             </div>
             </div>
 

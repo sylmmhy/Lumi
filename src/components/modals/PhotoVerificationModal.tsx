@@ -1,8 +1,10 @@
 /**
  * PhotoVerificationModal - Out-of-Session 拍照验证弹窗
  *
- * 用户在 HomeView 手动完成任务后，可以通过拍照获得额外 XP。
+ * 用户在 HomeView 手动完成任务后，可以通过拍照获得额外金币。
  * 拍照后调用 verify-task-completion Edge Function 进行视觉验证。
+ *
+ * 设计风格：白色卡片 + 金色点缀，匹配 LeaderboardView/StatsView 设计系统。
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -64,56 +66,56 @@ export function PhotoVerificationModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
       onClick={onClose}
     >
+      {/* 半透明背景 */}
+      <div className="absolute inset-0 bg-gray-500/40" />
+
+      {/* 卡片 */}
       <div
-        className="flex flex-col items-center gap-6 p-6 mx-4 rounded-2xl"
-        style={{ backgroundColor: '#2E2B28', maxWidth: '360px', width: '100%' }}
+        className="relative bg-white rounded-[24px] shadow-2xl border border-gray-100/50 flex flex-col items-center gap-5 p-6 mx-4"
+        style={{ maxWidth: '360px', width: '100%' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 标题 */}
         <h2
-          style={{
-            fontFamily: 'Sansita, sans-serif',
-            fontSize: '24px',
-            color: '#FFC92A',
-            textAlign: 'center',
-          }}
+          className="text-gray-900 font-semibold text-[20px] text-center"
+          style={{ fontFamily: "'Quicksand', sans-serif" }}
         >
           Verify Your Task
         </h2>
 
         <p
-          style={{
-            fontFamily: 'Inter, sans-serif',
-            fontSize: '14px',
-            color: '#999',
-            textAlign: 'center',
-          }}
+          className="text-gray-500 text-[14px] text-center -mt-2"
+          style={{ fontFamily: "'Quicksand', sans-serif" }}
         >
-          Take a photo to verify &ldquo;{taskDescription}&rdquo; and earn bonus XP!
+          Take a photo to verify &ldquo;{taskDescription}&rdquo; and earn bonus coins!
         </p>
 
         {/* 预览 / 拍照按钮 */}
         {preview ? (
-          <div className="relative w-full" style={{ aspectRatio: '4/3', borderRadius: '12px', overflow: 'hidden' }}>
+          <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: '4/3' }}>
             <img src={preview} alt="Task verification" className="w-full h-full object-cover" />
           </div>
         ) : (
           <button
             onClick={handleTakePhoto}
             disabled={isVerifying}
-            className="flex flex-col items-center justify-center gap-2 w-full"
+            className="flex flex-col items-center justify-center gap-3 w-full rounded-xl"
             style={{
               aspectRatio: '4/3',
-              borderRadius: '12px',
-              border: '2px dashed #555',
-              backgroundColor: '#1e1e1e',
+              border: '2px dashed #E6C865',
+              backgroundColor: '#FFF9E6',
             }}
           >
-            <span style={{ fontSize: '48px' }}>📸</span>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#999' }}>
+            {/* 金色圆形相机图标 */}
+            <div className="w-14 h-14 rounded-full bg-[#FEF3C7] flex items-center justify-center">
+              <i className="fa-solid fa-camera text-[#E6C865] text-2xl" />
+            </div>
+            <span
+              className="text-gray-500 text-[14px]"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               Tap to take a photo
             </span>
           </button>
@@ -133,16 +135,17 @@ export function PhotoVerificationModal({
         {isVerifying && (
           <div className="flex items-center gap-2">
             <div
+              className="w-[18px] h-[18px] rounded-full"
               style={{
-                width: '18px',
-                height: '18px',
-                border: '2px solid #666',
-                borderTopColor: '#FFC92A',
-                borderRadius: '50%',
+                border: '2px solid #E5E7EB',
+                borderTopColor: '#E6C865',
                 animation: 'spin 0.8s linear infinite',
               }}
             />
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#999' }}>
+            <span
+              className="text-gray-500 text-[14px]"
+              style={{ fontFamily: "'Quicksand', sans-serif" }}
+            >
               Analyzing photo...
             </span>
           </div>
@@ -151,23 +154,30 @@ export function PhotoVerificationModal({
         {/* 验证结果 */}
         {result && !isVerifying && (
           <div
-            className="flex items-center gap-2 px-4 py-3 rounded-xl w-full justify-center"
-            style={{
-              backgroundColor: result.verified ? '#1a3a1a' : '#3a1a1a',
-              border: result.verified ? '1px solid #2d5a2d' : '1px solid #5a2d2d',
-            }}
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl w-full justify-center ${
+              result.verified
+                ? 'bg-green-50 border border-green-200'
+                : 'bg-amber-50 border border-amber-200'
+            }`}
           >
             {result.verified ? (
               <>
-                <span style={{ fontSize: '20px' }}>✅</span>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 600, color: '#4ade80' }}>
-                  Verified! +{result.xp_awarded} XP
+                <span className="text-[20px]">✅</span>
+                <span
+                  className="text-green-700 text-[15px] font-semibold flex items-center gap-1"
+                  style={{ fontFamily: "'Quicksand', sans-serif" }}
+                >
+                  Verified! +{result.coins_awarded}
+                  <img src="/coin.png" alt="coin" className="w-4 h-4" />
                 </span>
               </>
             ) : (
               <>
-                <span style={{ fontSize: '20px' }}>🤔</span>
-                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '15px', color: '#f87171' }}>
+                <span className="text-[20px]">🤔</span>
+                <span
+                  className="text-amber-700 text-[15px]"
+                  style={{ fontFamily: "'Quicksand', sans-serif" }}
+                >
                   Could not verify. Try again?
                 </span>
               </>
@@ -180,22 +190,20 @@ export function PhotoVerificationModal({
           {!result && !isVerifying && preview && (
             <button
               onClick={handleTakePhoto}
-              className="flex-1 py-3 rounded-xl"
-              style={{ backgroundColor: '#444', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: '14px' }}
+              className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+              style={{ fontFamily: "'Quicksand', sans-serif", fontSize: '14px' }}
             >
               Retake
             </button>
           )}
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl"
-            style={{
-              backgroundColor: result?.verified ? '#FFC92A' : '#444',
-              color: result?.verified ? '#000' : '#fff',
-              fontFamily: 'Inter, sans-serif',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
+            className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${
+              result?.verified
+                ? 'bg-brand-goldBorder text-white hover:bg-[#D4A825]'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            style={{ fontFamily: "'Quicksand', sans-serif", fontSize: '14px' }}
           >
             {result?.verified ? 'Done' : 'Close'}
           </button>

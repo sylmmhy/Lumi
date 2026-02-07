@@ -10,6 +10,7 @@ import { PermissionsSection } from '../profile/PermissionsSection';
 import { MemoriesSection } from '../profile/MemoriesSection';
 import { HealthKitSection } from '../profile/HealthKitSection';
 import { BedtimeRecommendation } from '../profile/BedtimeRecommendation';
+import { WeeklySleepReport } from '../profile/WeeklySleepReport';
 import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
@@ -811,6 +812,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* Optimal Bedtime Recommendation (iOS only) */}
                 <BedtimeRecommendation />
+
+                {/* Weekly Sleep Report (iOS only) */}
+                <WeeklySleepReport />
 
                 {/* Discord Community Section */}
                 <a

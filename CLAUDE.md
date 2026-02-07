@@ -344,3 +344,30 @@ npm run lint     # 代码检查
 ### 通用规范
 - **Git**：遵循 Conventional Commits，中文描述
 - **注释**：所有导出的函数必须包含 JSDoc 注释
+
+---
+
+## 睡眠系统开发规则
+
+### i18n 必须使用 t() 函数
+- ❌ `language === 'zh' ? '中文' : 'English'`
+- ✅ `t('profile.sleepScore.title')`
+- 新组件必须先在 zh.json/en.json 添加翻译键，再用 `t()` 引用
+
+### 避免重复解析 HealthKit 数据
+- `parseSleepNights` 是 O(n log n)，同一份 healthData 只调用一次
+- 用 `calculateSleepDebtFromNights(nights)` 而非 `calculateSleepDebt(healthData)`
+- 多个派生值合并为一个 `useMemo`，不要拆成多个 `useEffect`
+
+### 异步 useEffect 必须防竞态
+```ts
+useEffect(() => {
+  let cancelled = false;
+  fetchData().then(d => { if (!cancelled) setState(d); });
+  return () => { cancelled = true; };
+}, [deps]);
+```
+
+### 生产环境禁止裸 console.log
+- 调试日志用 `if (import.meta.env.DEV)` 包裹
+- `console.error` 可保留

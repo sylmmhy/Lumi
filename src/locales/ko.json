@@ -207,15 +207,15 @@
 
   "leaderboard.ranking": "랭킹",
   "leaderboard.youAreTheBest": "최고야!",
-  "leaderboard.weeklyXP": "이번 주 XP",
+  "leaderboard.weeklyCoins": "이번 주 코인",
   "leaderboard.timeLeft": "남은 시간",
   "leaderboard.day": "일",
   "leaderboard.days": "일",
   "leaderboard.public": "전체",
   "leaderboard.friends": "친구",
-  "leaderboard.xp": "XP",
+  "leaderboard.coins": "코인",
   "leaderboard.you": "나",
-  "leaderboard.noRankingsYet": "작업을 완료해서 XP를 얻고 랭킹을 올리자!",
+  "leaderboard.noRankingsYet": "작업을 완료해서 코인을 얻고 랭킹을 올리자!",
   "leaderboard.noFriendsYet": "친구를 추가해서 랭킹에서 경쟁하자!",
 
   "habitOnboarding.welcome.title": "안녕, 나는 Lumi야",

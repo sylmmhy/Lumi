@@ -234,15 +234,15 @@
 
   "leaderboard.ranking": "排行榜",
   "leaderboard.youAreTheBest": "你是最棒的！",
-  "leaderboard.weeklyXP": "本周经验",
+  "leaderboard.weeklyCoins": "本周金币",
   "leaderboard.timeLeft": "剩余时间",
   "leaderboard.day": "天",
   "leaderboard.days": "天",
   "leaderboard.public": "公开",
   "leaderboard.friends": "好友",
-  "leaderboard.xp": "经验值",
+  "leaderboard.coins": "金币",
   "leaderboard.you": "我",
-  "leaderboard.noRankingsYet": "完成任务赚取经验值，攀登排行榜！",
+  "leaderboard.noRankingsYet": "完成任务赚取金币，攀登排行榜！",
   "leaderboard.noFriendsYet": "添加好友一起竞争排行榜！",
 
   "habitOnboarding.welcome.title": "嗨，我是 Lumi",

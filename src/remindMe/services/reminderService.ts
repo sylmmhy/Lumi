@@ -45,6 +45,8 @@ interface TaskRecord {
   consequence_short: string | null;
   consequence_pledge: string | null;
   preloaded_consequence: string | null;
+  // Verification field - 拍照验证状态
+  verification_status: 'unverified' | 'verified' | 'failed' | 'skipped' | null;
 }
 
 /**
@@ -105,6 +107,7 @@ function dbToTask(record: TaskRecord): Task {
     consequenceShort: record.consequence_short ?? undefined,
     consequencePledge: record.consequence_pledge ?? undefined,
     preloadedConsequence: record.preloaded_consequence ?? undefined,
+    verification_status: record.verification_status ?? undefined,
   };
 }
 

@@ -64,11 +64,16 @@ export async function fetchGeminiToken(ttl: number = 1800): Promise<string> {
 // Hook Types
 // ============================================================================
 
+/** Session resumption handle 的最大有效时长（2 小时） */
+const HANDLE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
 interface UseGeminiSessionOptions {
   onMessage?: (message: LiveServerMessage) => void;
   onConnected?: () => void;
   onDisconnected?: () => void;
   onError?: (error: string) => void;
+  /** 获取对话上下文摘要（用于 session resumption 重连后注入） */
+  getConversationContext?: () => string | null;
 }
 
 interface UseGeminiSessionReturn {
@@ -83,6 +88,14 @@ interface UseGeminiSessionReturn {
     prefetchedToken?: string
   ) => Promise<void>;
   disconnect: () => void;
+  /**
+   * 使用 session resumption 重连（关闭当前连接，用新 systemInstruction + 保存的 handle 重连）
+   * 如果 handle 过期（>2h）或不存在，则回退到全新连接。
+   */
+  reconnectWithResumption: (
+    newConfig: GeminiSessionConfig,
+    prefetchedToken?: string,
+  ) => Promise<void>;
 
   // Methods
   sendRealtimeInput: (input: {
@@ -109,6 +122,8 @@ interface UseGeminiSessionReturn {
    * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
    */
   sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void;
+  /** 获取当前保存的 session resumption handle（如果有） */
+  resumptionHandle: string | null;
 }
 
 // ============================================================================
@@ -118,7 +133,7 @@ interface UseGeminiSessionReturn {
 export function useGeminiSession(
   options: UseGeminiSessionOptions = {}
 ): UseGeminiSessionReturn {
-  const { onMessage, onConnected, onDisconnected, onError } = options;
+  const { onMessage, onConnected, onDisconnected, onError, getConversationContext } = options;
 
   // State
   const [isConnected, setIsConnected] = useState(false);
@@ -126,6 +141,13 @@ export function useGeminiSession(
 
   // Refs
   const sessionRef = useRef<GeminiSession | null>(null);
+
+  // Session resumption refs
+  const resumptionHandleRef = useRef<string | null>(null);
+  const resumptionHandleTimestampRef = useRef<number>(0);
+  const lastConfigRef = useRef<GeminiSessionConfig | undefined>(undefined);
+  const getConversationContextRef = useRef(getConversationContext)
+  getConversationContextRef.current = getConversationContext;
 
   /**
    * 建立 Gemini Live WebSocket 连接
@@ -158,6 +180,9 @@ export function useGeminiSession(
 
       const selectedVoice = config?.voiceName || 'Puck';
       devLog('🎤 Gemini Live 使用声音:', selectedVoice);
+
+      // 保存配置供 reconnectWithResumption 使用
+      lastConfigRef.current = config;
 
       const session = await ai.live.connect({
         model,
@@ -193,6 +218,10 @@ export function useGeminiSession(
               targetTokens: '8192',
             },
           },
+          // Session resumption（默认关闭，由 feature flag 控制）
+          sessionResumption: config?.enableSessionResumption
+            ? { handle: config.resumptionHandle || undefined }
+            : undefined,
           // System instruction
           systemInstruction: config?.systemInstruction
             ? { parts: [{ text: config.systemInstruction }] }
@@ -207,6 +236,15 @@ export function useGeminiSession(
             onConnected?.();
           },
           onmessage: (message: LiveServerMessage) => {
+            // Session resumption: 保存 handle
+            if (message.sessionResumptionUpdate) {
+              const update = message.sessionResumptionUpdate;
+              if (update.resumable && update.newHandle) {
+                resumptionHandleRef.current = update.newHandle;
+                resumptionHandleTimestampRef.current = Date.now();
+                devLog('🔄 [Session] resumption handle 已保存');
+              }
+            }
             onMessage?.(message);
           },
           onerror: (errorEvent: ErrorEvent) => {
@@ -344,6 +382,60 @@ export function useGeminiSession(
     }
   }, []);
 
+  /**
+   * 使用 session resumption 重连。
+   * 关闭当前连接，用新 config + 保存的 handle 重连。
+   * 如果 handle 过期（>2h）或不存在，回退到全新连接。
+   * 重连后注入对话上下文摘要（如果 getConversationContext 提供了）。
+   */
+  const reconnectWithResumption = useCallback(async (
+    newConfig: GeminiSessionConfig,
+    prefetchedToken?: string,
+  ) => {
+    devLog('🔄 [Session] reconnectWithResumption 开始');
+
+    // 1. 关闭当前连接
+    if (sessionRef.current) {
+      sessionRef.current.close();
+      sessionRef.current = null;
+    }
+    setIsConnected(false);
+
+    // 2. 检查 handle 是否有效（存在且未过期）
+    const handle = resumptionHandleRef.current;
+    const handleAge = Date.now() - resumptionHandleTimestampRef.current;
+    const handleValid = handle && handleAge < HANDLE_MAX_AGE_MS;
+
+    if (!handleValid) {
+      devLog(`🔄 [Session] handle ${handle ? '已过期' : '不存在'}，回退到全新连接`);
+      resumptionHandleRef.current = null;
+    }
+
+    // 3. 重连（带或不带 handle）
+    const configWithResumption: GeminiSessionConfig = {
+      ...newConfig,
+      enableSessionResumption: newConfig.enableSessionResumption,
+      resumptionHandle: handleValid ? handle : undefined,
+    };
+
+    await connect(configWithResumption, prefetchedToken);
+
+    // 4. 重连成功后注入对话上下文
+    const contextFn = getConversationContextRef.current;
+    if (contextFn) {
+      const context = contextFn();
+      if (context) {
+        // 短暂延迟确保连接建立
+        setTimeout(() => {
+          if (sessionRef.current) {
+            sendClientContent(context, false, 'system');
+            devLog('🔄 [Session] 对话上下文已注入');
+          }
+        }, 500);
+      }
+    }
+  }, [connect, sendClientContent]);
+
   return {
     // State
     isConnected,
@@ -353,11 +445,13 @@ export function useGeminiSession(
     // Actions
     connect,
     disconnect,
+    reconnectWithResumption,
 
     // Methods
     sendRealtimeInput,
     sendToolResponse,
     sendClientContent,
+    resumptionHandle: resumptionHandleRef.current,
   };
 }
 

@@ -52,7 +52,6 @@ export interface UseSessionLifecycleOptions {
   campfire: {
     isCampfireMode: boolean;
     stopCampfireResources: () => void;
-    intentDetection: { clearHistory: () => void };
     savedSystemInstructionRef: React.MutableRefObject<string>;
     cleanupResources: () => void;
   };
@@ -234,7 +233,6 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
       epochAtStart = o.sessionEpochRef.current;
 
       o.transcript.reset();
-      o.campfire.intentDetection.clearHistory();
       o.currentUserIdRef.current = userId || null;
       o.currentTaskDescriptionRef.current = taskDescription;
       o.currentTaskIdRef.current = taskId || null;

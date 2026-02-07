@@ -160,17 +160,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     currentUserId: currentUserIdRef.current,
     currentTaskDescription: currentTaskDescriptionRef.current,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
-    isSessionActive,
     getSessionContext: sessionContext.getContext,
   });
 
-  // 更新 intentDetectionRef，避免 onTranscriptUpdate 闭包问题
-  useEffect(() => {
-    intentDetectionRef.current = {
-      processAIResponse: campfire.intentDetection.processAIResponse,
-      addUserMessage: campfire.intentDetection.addUserMessage,
-    };
-  }, [campfire.intentDetection.processAIResponse, campfire.intentDetection.addUserMessage]);
+  // intentDetectionRef 不再由 campfire 提供 —— 篝火模式的意图检测已移除，
+  // 将由 US-006 中的统一裁判实例接管。当前保持为初始 no-op。
 
   // ==========================================
   // 切换到习惯设定模式：直接换 Gemini 连接，不走 lifecycle

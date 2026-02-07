@@ -18,7 +18,6 @@ import { getVoiceName } from '../../lib/voiceSettings';
 import { devLog, devWarn } from '../gemini-live/utils';
 import { useAmbientAudio } from '../campfire/useAmbientAudio';
 import { useFocusTimer } from '../campfire/useFocusTimer';
-import { useIntentDetection } from '../ai-tools';
 
 // ==========================================
 // 类型定义
@@ -42,8 +41,6 @@ export interface UseCampfireModeOptions {
   currentTaskDescription: string;
   /** 用户首选语言 */
   preferredLanguage: string;
-  /** 会话是否激活（用于控制意图检测） */
-  isSessionActive: boolean;
   /** 获取当前对话上下文（用于重连时让 AI "记得"之前聊了什么） */
   getSessionContext?: () => { messages: Array<{ role: 'user' | 'ai'; text: string; timestamp: number }>; summary: string; topics: string[] };
 }
@@ -67,12 +64,6 @@ export interface UseCampfireModeReturn {
   stopCampfireResources: () => void;
   /** 保存的原始 system instruction ref（startSession 写入，exitCampfireMode 读取） */
   savedSystemInstructionRef: React.MutableRefObject<string>;
-  /** 意图检测的方法（供 onTranscriptUpdate 喂数据） */
-  intentDetection: {
-    processAIResponse: (aiResponse: string) => void;
-    addUserMessage: (message: string) => void;
-    clearHistory: () => void;
-  };
   /** 篝火模式资源清理（供组件卸载时调用） */
   cleanupResources: () => void;
 }
@@ -88,7 +79,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     currentUserId,
     currentTaskDescription,
     preferredLanguage,
-    isSessionActive,
     getSessionContext,
   } = options;
 
@@ -107,9 +97,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   const savedSystemInstructionRef = useRef<string>('');
   const campfireMicStreamRef = useRef<MediaStream | null>(null);
 
-  // 用 ref 存储进入/退出函数（避免 useIntentDetection 闭包问题）
-  const enterCampfireModeRef = useRef<(options?: { skipFarewell?: boolean }) => void>(() => {});
-  const exitCampfireModeRef = useRef<() => void>(() => {});
   /** 🔧 修复闭包过期：标记"篝火重连刚完成，需要发送触发消息" */
   const campfireNeedsTriggerRef = useRef(false);
 
@@ -122,20 +109,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
   /** 专注计时 */
   const focusTimer = useFocusTimer();
-
-  /** 意图检测（检测 enter_campfire / exit_campfire） */
-  const intentDetection = useIntentDetection({
-    userId: currentUserId || '',
-    chatType: 'daily_chat',
-    enabled: isSessionActive && !isCampfireMode,
-    onDetectionComplete: (result) => {
-      if (result.tool === 'enter_campfire' && result.confidence >= 0.6) {
-        enterCampfireModeRef.current({ skipFarewell: true });
-      } else if (result.tool === 'exit_campfire' && result.confidence >= 0.6) {
-        exitCampfireModeRef.current();
-      }
-    },
-  });
 
   /** 篝火模式独立的 VAD 实例：在 Gemini 断开时监听麦克风
    * minSpeechDuration=100ms：比默认 250ms 更灵敏，适配篝火模式的快速唤醒场景。
@@ -443,12 +416,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   // Effects
   // ==========================================
 
-  // 更新进入/退出函数的 ref（避免 useIntentDetection 闭包问题）
-  useEffect(() => {
-    enterCampfireModeRef.current = enterCampfireMode;
-    exitCampfireModeRef.current = exitCampfireMode;
-  }, [enterCampfireMode, exitCampfireMode]);
-
   // 🔧 修复闭包过期：当 Gemini 连接建立后，发送篝火重连触发消息
   // 为什么不在 campfireReconnectGemini 里直接调用 sendTextMessage？
   // 因为 sendTextMessage 是 useCallback([sessionIsConnected])，
@@ -525,11 +492,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     exitCampfireMode,
     stopCampfireResources,
     savedSystemInstructionRef,
-    intentDetection: {
-      processAIResponse: intentDetection.processAIResponse,
-      addUserMessage: intentDetection.addUserMessage,
-      clearHistory: intentDetection.clearHistory,
-    },
     cleanupResources,
   };
 }

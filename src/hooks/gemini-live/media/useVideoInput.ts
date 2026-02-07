@@ -238,7 +238,6 @@ export function useVideoInput(
       captureTimeoutRef.current = -1;
     }
 
-    devLog('📹 Frame capture stopped');
   }, []);
 
   // P0 修复：完整清理资源 on unmount

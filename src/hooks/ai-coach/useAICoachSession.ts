@@ -283,7 +283,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     taskStartTime: timer.taskStartTime,
     sendClientContent: geminiLive.sendClientContent,
     isSpeaking: geminiLive.isSpeaking,
-    enabled: isSessionActive && geminiLive.isConnected,
+    enabled: isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
     enableMemoryRetrieval: true,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
   });
@@ -345,7 +345,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, []);
 
   const virtualMessages = useVirtualMessages({
-    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected,
+    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
     taskStartTime: timer.taskStartTime,
     isAISpeaking: geminiLive.isSpeaking,
     isUserSpeaking: vad.isSpeaking,

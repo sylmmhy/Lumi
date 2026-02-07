@@ -283,7 +283,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           const toolName = detection.tool as string; // 已通过 hasTool 确保非 null
 
           // 这些工具由 onDetectionComplete 处理，不需要通过 executeToolCall 执行
-          const specialTools = ['switch_to_habit_setup', 'enter_campfire', 'exit_campfire'];
+          const specialTools = ['switch_to_habit_setup', 'enter_campfire', 'exit_campfire', 'switch_to_chat_mode'];
 
           if (detection.success && hasTool && detection.confidence >= 0.6) {
             // 跳过特殊工具（它们在 onDetectionComplete 中处理）

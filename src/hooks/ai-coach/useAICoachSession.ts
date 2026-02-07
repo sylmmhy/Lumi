@@ -79,7 +79,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 跟踪当前 callRecordId（用于诊断上报）
   const callRecordIdForDiagRef = useRef<string | null>(null);
 
-  // 用于调用 intentDetection 方法的 ref（避免闭包问题）
+  // 统一裁判：单一 intentDetection ref（避免闭包问题）
+  // US-006: 合并原有的 intentDetectionRef + habitIntentDetectionRef 为一个
   const intentDetectionRef = useRef<{
     processAIResponse: (aiResponse: string) => void;
     addUserMessage: (message: string) => void;
@@ -88,14 +89,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     addUserMessage: () => {},
   });
 
-  // 习惯工具意图检测 ref（独立于篝火模式的 intentDetection）
-  const habitIntentDetectionRef = useRef<{
-    processAIResponse: (aiResponse: string) => void;
-    addUserMessage: (message: string) => void;
-  }>({
-    processAIResponse: () => {},
-    addUserMessage: () => {},
-  });
+  // 裁判 epoch：每次模式切换（campfire/habit_setup/normal/voip_push）递增，
+  // 用于丢弃过期的异步结果（US-010 将消费此值）
+  const refereeEpochRef = useRef(0);
 
   // 已切换到习惯设定模式的锁（防止 switch_to_habit_setup 无限循环触发）
   const habitSetupActiveRef = useRef(false);
@@ -140,7 +136,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     }, [sessionContext]),
     onUserSpeechFragment: useCallback((text: string) => {
       intentDetectionRef.current.addUserMessage(text);
-      habitIntentDetectionRef.current.addUserMessage(text);
     }, []),
   });
 
@@ -163,8 +158,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     getSessionContext: sessionContext.getContext,
   });
 
-  // intentDetectionRef 不再由 campfire 提供 —— 篝火模式的意图检测已移除，
-  // 将由 US-006 中的统一裁判实例接管。当前保持为初始 no-op。
+  // US-006: intentDetectionRef 由统一裁判实例 (unifiedIntentDetection) 同步
 
   // ==========================================
   // 切换到习惯设定模式：直接换 Gemini 连接，不走 lifecycle
@@ -179,7 +173,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       // 设置锁，防止切换后再次触发
       habitSetupActiveRef.current = true;
-      devLog('🔄 [习惯切换] 开始切换...', { topic });
+      // US-006: 模式切换时递增 epoch，丢弃过期异步结果
+      refereeEpochRef.current += 1;
+      devLog('🔄 [习惯切换] 开始切换...', { topic, epoch: refereeEpochRef.current });
 
       // 1. 获取习惯设定 prompt
       const { data, error } = await supabase.functions.invoke('start-voice-chat', {
@@ -247,10 +243,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [geminiLive, campfire.savedSystemInstructionRef]);
 
   // ==========================================
-  // 习惯工具意图检测（独立于篝火模式，处理 save_goal_plan 等）
-  // 用户在“陪我聊天”里提到想设立习惯时，自动检测并调用后端工具
+  // 统一裁判 — 唯一的 useIntentDetection 实例（US-006）
+  // 处理所有意图：campfire enter/exit、habit setup、chat mode、工具调用
   // ==========================================
-  const habitIntentDetection = useIntentDetection({
+  const unifiedIntentDetection = useIntentDetection({
     userId: currentUserIdRef.current || '',
     chatType: 'daily_chat',
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
@@ -258,33 +254,67 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onToolResult: (result) => {
       // 工具执行完后，把结果注入回 Gemini 对话
       if (result.success && result.responseHint && geminiLive.isConnected) {
-        devLog(`✅ [习惯工具] ${result.tool} 执行成功，注入结果到对话`);
+        devLog(`✅ [统一裁判] ${result.tool} 执行成功，注入结果到对话`);
         geminiLive.sendClientContent(
           `[TOOL_RESULT] type=${result.tool}\nresult: ${result.responseHint}\naction: 用你自己的话简短地告诉用户这个结果。不要直接照读，像朋友一样自然地说。`,
           true
         );
       } else if (!result.success) {
-        devWarn(`❌ [习惯工具] ${result.tool} 执行失败:`, result.error);
+        devWarn(`❌ [统一裁判] ${result.tool} 执行失败:`, result.error);
       }
     },
     onDetectionComplete: (result) => {
-      devLog(`🎯 [习惯意图] onDetectionComplete 被调用:`, { tool: result.tool, confidence: result.confidence });
-      if (result.tool === 'switch_to_habit_setup' && result.confidence >= 0.6 && !habitSetupActiveRef.current) {
-        devLog(`🎯 [习惯意图] 检测到用户想设立习惯，切换到习惯设定模式...`);
-        switchToHabitSetupMode(result.args?.topic as string | undefined);
-      } else if (result.tool && !['enter_campfire', 'exit_campfire', 'switch_to_habit_setup'].includes(result.tool)) {
-        devLog(`🎯 [习惯意图] 检测到: ${result.tool} (置信度: ${result.confidence})`);
+      devLog(`🎯 [统一裁判] onDetectionComplete:`, { tool: result.tool, confidence: result.confidence });
+
+      if (!result.tool || result.confidence < 0.6) return;
+
+      // 分发到对应处理器
+      switch (result.tool) {
+        case 'enter_campfire':
+          refereeEpochRef.current += 1;
+          devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
+          campfire.enterCampfireMode();
+          break;
+
+        case 'exit_campfire':
+          refereeEpochRef.current += 1;
+          devLog(`🔥 [统一裁判] 退出篝火模式 (epoch=${refereeEpochRef.current})`);
+          campfire.exitCampfireMode();
+          break;
+
+        case 'switch_to_habit_setup':
+          if (!habitSetupActiveRef.current) {
+            devLog(`🎯 [统一裁判] 切换到习惯设定模式`);
+            switchToHabitSetupMode(result.args?.topic as string | undefined);
+          }
+          break;
+
+        case 'switch_to_chat_mode':
+          refereeEpochRef.current += 1;
+          devLog(`💬 [统一裁判] 切换到聊天模式 (epoch=${refereeEpochRef.current})`);
+          // 注入 MODE_OVERRIDE 指令让 AI 切换行为
+          if (geminiLive.isConnected) {
+            geminiLive.sendClientContent(
+              `[MODE_OVERRIDE] The user no longer wants to be pushed. Switch to casual chat mode — be supportive and conversational, stop nudging about tasks.`,
+              true
+            );
+          }
+          break;
+
+        default:
+          devLog(`🎯 [统一裁判] 检测到: ${result.tool} (置信度: ${result.confidence})`);
+          break;
       }
     },
   });
 
-  // 同步习惯意图检测 ref
+  // 同步统一裁判到 ref（供 turnComplete 回调使用）
   useEffect(() => {
-    habitIntentDetectionRef.current = {
-      processAIResponse: habitIntentDetection.processAIResponse,
-      addUserMessage: habitIntentDetection.addUserMessage,
+    intentDetectionRef.current = {
+      processAIResponse: unifiedIntentDetection.processAIResponse,
+      addUserMessage: unifiedIntentDetection.addUserMessage,
     };
-  }, [habitIntentDetection.processAIResponse, habitIntentDetection.addUserMessage]);
+  }, [unifiedIntentDetection.processAIResponse, unifiedIntentDetection.addUserMessage]);
 
   // ==========================================
   // 倒计时（独立 Hook）
@@ -514,11 +544,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       recordTurnComplete(false);
       orchestratorRef.current.onTurnComplete();
 
-      // 取出本轮 AI 的完整回复，传给裁判（意图检测）
+      // 取出本轮 AI 的完整回复，传给统一裁判（US-006: 只调用一次）
       const completeAIResponse = transcript.flushAIResponseBuffer();
       if (completeAIResponse.trim()) {
         intentDetectionRef.current.processAIResponse(completeAIResponse);
-        habitIntentDetectionRef.current.processAIResponse(completeAIResponse);
       }
     });
     return () => setOnTurnComplete(null);
@@ -566,8 +595,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 操作
     startSession: useCallback(async (taskDescription: string, sessionOptions?: Parameters<typeof lifecycle.startSession>[1]) => {
-      // 新会话启动时重置习惯设定锁和对话上下文
+      // 新会话启动时重置习惯设定锁、裁判 epoch 和对话上下文
       habitSetupActiveRef.current = false;
+      refereeEpochRef.current = 0;
       sessionContext.reset();
       // 诊断：在启动前记录 callRecordId，用于音频异常检测
       callRecordIdForDiagRef.current = sessionOptions?.callRecordId ?? null;

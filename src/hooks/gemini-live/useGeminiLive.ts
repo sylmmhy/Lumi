@@ -23,6 +23,7 @@ import { handleServerContent } from './core/messageHandlers';
 import { useAudioInput } from './media/useAudioInput';
 import { useVideoInput } from './media/useVideoInput';
 import { useAudioOutput } from './media/useAudioOutput';
+import { useVideoFrameBuffer } from './media/useVideoFrameBuffer';
 
 // Features
 import { useTranscript } from './features/useTranscript';
@@ -201,6 +202,9 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     audioStream,
   } = audioInput;
 
+  // Video frame buffer (环形缓冲区，保存最近 10 帧用于任务验证)
+  const frameBuffer = useVideoFrameBuffer({ maxFrames: 10 });
+
   // Video input (camera)
   // 解构出稳定的字段，避免依赖整个对象导致 useCallback/useEffect 重复触发
   const videoInput = useVideoInput({
@@ -211,6 +215,8 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
           data: base64Jpeg,
         },
       });
+      // 同时存入帧缓冲区，供任务完成时视觉验证使用
+      frameBuffer.addFrame(base64Jpeg);
     },
     onError: (error: string) => {
       devLog('Video input error:', error);
@@ -494,6 +500,9 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     // Context injection (方案 A: turnComplete 后静默注入)
     injectContextSilently,
     sendClientContent: session.sendClientContent,
+
+    // Frame buffer (任务完成时抓取最近帧用于视觉验证)
+    getRecentFrames: frameBuffer.getRecentFrames,
 
     // Refs for UI
     videoRef,

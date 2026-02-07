@@ -53,6 +53,12 @@ export interface Task {
    */
   personalBestAtCompletion?: number | null
 
+  // Visual verification fields - 视觉验证字段
+  /**
+   * 验证状态：unverified=未验证, verified=已验证, failed=验证失败, skipped=跳过
+   */
+  verification_status?: 'unverified' | 'verified' | 'failed' | 'skipped' | null
+
   // Consequence fields - 后果相关字段
   /**
    * 简短后果描述（≤10个字，用于承诺列）

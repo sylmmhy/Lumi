@@ -12,6 +12,8 @@ import { isLiveKitMode, startLiveKitRoom, endLiveKitRoom, onLiveKitEvent } from 
 import { devLog } from '../utils/devLog';
 import { getLocalDateString } from '../utils/timeUtils';
 import { saveSessionMemory } from '../lib/saveSessionMemory';
+import { useTaskVerification } from './useTaskVerification';
+import type { VerificationResult } from './useTaskVerification';
 
 // ==========================================
 // 类型定义
@@ -120,6 +122,12 @@ export function useCoachController(options: UseCoachControllerOptions) {
     // 通话追踪
     // ==========================================
     const [currentCallRecordId, setCurrentCallRecordId] = useState<string | null>(null);
+
+    // ==========================================
+    // 视觉验证
+    // ==========================================
+    const { verifyWithFrames, isVerifying: isVerifyingTask } = useTaskVerification();
+    const [sessionVerificationResult, setSessionVerificationResult] = useState<VerificationResult | null>(null);
 
     // ==========================================
     // 语音提示状态
@@ -486,6 +494,11 @@ export function useCoachController(options: UseCoachControllerOptions) {
         const taskDescriptionSnapshot = aiCoach.state.taskDescription;
         const taskIdToComplete = currentTaskId;
         const taskTypeToComplete = currentTaskType;
+        const userId = auth.userId;
+
+        // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
+        const capturedFrames = aiCoach.getRecentFrames(5);
+        devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
 
         aiCoach.endSession();
 
@@ -497,7 +510,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         void saveSessionMemory({
             messages: messagesSnapshot,
             taskDescription: taskDescriptionSnapshot,
-            userId: auth.userId,
+            userId,
             taskCompleted: true,
             usedTime,
             actualDurationMinutes,
@@ -505,9 +518,29 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
 
+        // fire-and-forget: 视觉验证（不阻塞庆祝流程）
+        if (userId && taskIdToComplete && capturedFrames.length > 0) {
+            void (async () => {
+                try {
+                    const result = await verifyWithFrames(
+                        taskIdToComplete,
+                        taskDescriptionSnapshot,
+                        capturedFrames,
+                        userId
+                    );
+                    if (result) {
+                        setSessionVerificationResult(result);
+                        devLog('✅ 视觉验证完成:', { verified: result.verified, confidence: result.confidence });
+                    }
+                } catch (err) {
+                    console.error('[CoachController] 视觉验证 fire-and-forget 错误:', err);
+                }
+            })();
+        }
+
         // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
         onTaskCompleteForStats();
-    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, onTaskCompleteForStats]);
+    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, onTaskCompleteForStats]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -550,6 +583,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskDescription('');
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+        setSessionVerificationResult(null);
     }, []);
 
     // ==========================================
@@ -768,5 +802,9 @@ export function useCoachController(options: UseCoachControllerOptions) {
         // LiveKit 按钮回调
         handleLiveKitPrimaryClick,
         handleLiveKitSecondaryClick,
+
+        // 视觉验证状态
+        isVerifyingTask,
+        sessionVerificationResult,
     };
 }

@@ -1,6 +1,7 @@
 // 导入动画样式
 import '../effects/effects.css';
 import { ConfettiEffect } from '../effects';
+import { VerificationBadge } from './VerificationBadge';
 
 /**
  * CelebrationView - 可复用的庆祝/结果视图组件
@@ -74,6 +75,17 @@ export interface CelebrationViewProps {
       label: string;
       onClick: () => void;
     };
+  };
+
+  /** 视觉验证状态（可选） */
+  verification?: {
+    isVerifying: boolean;
+    result: {
+      verified: boolean;
+      confidence: number;
+      xp_awarded: number;
+      not_visually_verifiable: boolean;
+    } | null;
   };
 
   /** 背景颜色 */
@@ -161,6 +173,7 @@ export function CelebrationView({
   success,
   failure,
   confirm,
+  verification,
   backgroundColor = '#1e1e1e',
 }: CelebrationViewProps) {
   return (
@@ -331,6 +344,14 @@ export function CelebrationView({
                   {success.taskDescription}
                 </span>
               </div>
+
+              {/* 视觉验证徽章 */}
+              {verification && (verification.isVerifying || verification.result) && (
+                <VerificationBadge
+                  isVerifying={verification.isVerifying}
+                  result={verification.result}
+                />
+              )}
 
               {/* 等级 + 进度条 + 皇冠 */}
               <div

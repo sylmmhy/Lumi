@@ -3,7 +3,7 @@
  *
  * 本模块提供动态虚拟消息系统的核心 Hooks，用于：
  * - 追踪对话上下文
- * - 检测话题和情绪变化（向量匹配版）
+ * - 检测情绪变化（本地关键词匹配）
  * - 异步检索相关记忆
  * - 生成动态虚拟消息
  *
@@ -12,55 +12,12 @@
  * ```typescript
  * import {
  *   useConversationContextTracker,
- *   useTopicDetector,
  *   useAsyncMemoryPipeline,
  *   generateContextMessage,
  * } from '@/hooks/virtual-messages'
  *
- * function MyComponent() {
- *   const tracker = useConversationContextTracker({
- *     taskDescription: '完成任务',
- *     initialDuration: 300,
- *     taskStartTime: Date.now(),
- *   })
- *
- *   const { detectFromMessage } = useTopicDetector()
- *   const { fetchMemoriesForTopic } = useAsyncMemoryPipeline(userId)
- *
- *   // 当用户说话时
- *   const handleUserSpeech = async (text: string) => {
- *     tracker.addUserMessage(text)
- *
- *     // 异步检测话题（向量匹配）
- *     const result = await detectFromMessage(text)
- *
- *     if (result.topic) {
- *       tracker.updateTopic(result.topic)
- *       tracker.updateEmotionalState(result.emotionalState)
- *
- *       if (result.isTopicChanged) {
- *         // API 直接返回 memoryQuestions
- *         const memories = await fetchMemoriesForTopic(
- *           result.topic.name,
- *           [],
- *           undefined,
- *           result.memoryQuestions
- *         )
- *
- *         if (memories.length > 0) {
- *           const message = generateContextMessage(
- *             memories,
- *             result.topic.name,
- *             result.emotionalState.primary,
- *             result.emotionalState.intensity
- *           )
- *           // 发送虚拟消息
- *           sendTextMessage(message)
- *         }
- *       }
- *     }
- *   }
- * }
+ * // Topic detection is now handled by the unified referee (detect-intent)
+ * // Memory injection is triggered by the referee's topic_changed callback
  * ```
  *
  * @see docs/in-progress/20260127-dynamic-virtual-messages.md
@@ -102,11 +59,7 @@ export {
   type ConversationContextTracker,
 } from './useConversationContextTracker'
 
-export {
-  useTopicDetector,
-  type TopicDetector,
-  type TopicDetectionResultExtended,
-} from './useTopicDetector'
+// US-012: useTopicDetector removed — topic detection handled by unified referee
 
 export {
   useAsyncMemoryPipeline,

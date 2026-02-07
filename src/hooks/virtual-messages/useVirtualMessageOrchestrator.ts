@@ -18,8 +18,8 @@
 
 import { useCallback, useRef, useEffect } from 'react'
 import { useConversationContextTracker } from './useConversationContextTracker'
-import { useTopicDetector } from './useTopicDetector'
 import { useAsyncMemoryPipeline, generateContextMessage } from './useAsyncMemoryPipeline'
+import { EMOTION_KEYWORDS, EMOTION_INTENSIFIERS, EMOTION_DIMINISHERS } from './constants'
 import type {
   VirtualMessageOrchestratorOptions,
   VirtualMessageType,
@@ -119,7 +119,6 @@ export function useVirtualMessageOrchestrator(
     sendClientContent,
     isSpeaking,
     enabled = true,
-    enableMemoryRetrieval = true,
     preferredLanguage = 'en-US',
   } = options
 
@@ -134,8 +133,8 @@ export function useVirtualMessageOrchestrator(
     taskStartTime,
   })
 
-  // 话题检测器（向量版）
-  const topicDetector = useTopicDetector()
+  // US-012: useTopicDetector 已删除 — 话题检测由统一裁判 (detect-intent) 处理
+  // 情绪检测使用本地关键词匹配（不依赖 API）
 
   // 异步记忆管道
   const memoryPipeline = useAsyncMemoryPipeline(userId)
@@ -154,8 +153,6 @@ export function useVirtualMessageOrchestrator(
   const injectedMemoriesRef = useRef<Set<string>>(new Set())
   // 🔧 追踪最后一次记忆注入时间（用于节流）
   const lastMemoryInjectionTimeRef = useRef<number>(0)
-  // 🔧 记忆注入最小间隔（20 个来回约等于 60 秒）
-  const MEMORY_INJECTION_COOLDOWN_MS = 60000
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking
@@ -228,7 +225,54 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
   // =====================================================
 
   /**
+   * 本地情绪检测（关键词匹配，替代 useTopicDetector 中的情绪部分）
+   */
+  const detectEmotionLocally = useCallback((text: string): {
+    primary: EmotionalState['primary'];
+    intensity: number;
+    trigger?: string;
+  } => {
+    const lowerText = text.toLowerCase()
+    let primary: EmotionalState['primary'] = 'neutral'
+    let intensity = 0.3
+    let trigger: string | undefined
+
+    // 关键词匹配
+    for (const [emotion, keywords] of Object.entries(EMOTION_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (lowerText.includes(keyword)) {
+          primary = emotion as EmotionalState['primary']
+          intensity = 0.6
+          trigger = keyword
+          break
+        }
+      }
+      if (primary !== 'neutral') break
+    }
+
+    // 强度修饰词
+    if (primary !== 'neutral') {
+      for (const word of EMOTION_INTENSIFIERS) {
+        if (lowerText.includes(word)) {
+          intensity = Math.min(1.0, intensity + 0.2)
+          break
+        }
+      }
+      for (const word of EMOTION_DIMINISHERS) {
+        if (lowerText.includes(word)) {
+          intensity = Math.max(0.1, intensity - 0.2)
+          break
+        }
+      }
+    }
+
+    return { primary, intensity, trigger }
+  }, [])
+
+  /**
    * 处理用户说话事件
+   * US-012: 移除 useTopicDetector，话题检测由统一裁判处理
+   * 保留本地情绪检测 + 上下文追踪
    */
   const onUserSpeech = useCallback(async (text: string): Promise<TopicResultForResistance | null> => {
     if (!enabled) return null
@@ -240,126 +284,55 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     // 更新上下文
     contextTracker.addUserMessage(text)
 
-    // 异步检测话题和情绪（向量匹配）
-    devLog(`🔍 [Orchestrator] 开始话题检测...`)
-    const result = await topicDetector.detectFromMessage(text)
+    // 本地情绪检测（不调用 API）
+    const emotionResult = detectEmotionLocally(text)
 
-    devLog(`🔍 [Orchestrator] 话题检测完成:`, {
-      topic: result.topic?.name || '无',
-      confidence: result.confidence ? `${(result.confidence * 100).toFixed(1)}%` : 'N/A',
-      emotion: result.emotionalState.primary,
-      isTopicChanged: result.isTopicChanged,
+    devLog(`🔍 [Orchestrator] 本地情绪检测:`, {
+      emotion: emotionResult.primary,
+      intensity: emotionResult.intensity,
     })
 
     // 更新情绪状态
-    if (result.emotionalState.primary !== 'neutral') {
-      contextTracker.updateEmotionalState(result.emotionalState)
+    if (emotionResult.primary !== 'neutral') {
+      contextTracker.updateEmotionalState({
+        primary: emotionResult.primary,
+        intensity: emotionResult.intensity,
+        trigger: emotionResult.trigger,
+        detectedAt: Date.now(),
+      })
     }
 
-    // 检查是否需要情绪响应（异步话题检测后再次检查 enabled，防止篝火模式进入时注入）
+    // 检查是否需要情绪响应
     if (
       enabledRef.current &&
-      result.emotionalState.intensity >= EMOTION_RESPONSE_THRESHOLD &&
-      result.emotionalState.primary !== 'neutral'
+      emotionResult.intensity >= EMOTION_RESPONSE_THRESHOLD &&
+      emotionResult.primary !== 'neutral'
     ) {
       devLog(`\n💗 [${timestamp}] ========== 触发情绪响应 ==========`)
 
       const empathyMessage = generateEmpathyMessage(
-        result.emotionalState.primary,
-        result.emotionalState.intensity,
-        result.emotionalState.trigger
+        emotionResult.primary,
+        emotionResult.intensity,
+        emotionResult.trigger
       )
 
-      // 🆕 方案 2：静默注入
       sendClientContent(empathyMessage, false, 'user')
       devLog(`✅ [Orchestrator] EMPATHY 已静默注入`)
     }
 
-    // 处理话题变化（用于上下文追踪）
-    if (result.topic) {
-      contextTracker.updateTopic(result.topic)
+    // US-012: 话题检测和记忆注入由统一裁判 (detect-intent) 处理
+    // 不再在此处调用 topicDetector.detectFromMessage 或 memoryPipeline.fetchMemoriesForTopic
 
-      if (result.isTopicChanged) {
-        devLog(`\n🏷️ [${timestamp}] ========== 话题变化 ==========`)
-        devLog(`🏷️ [Orchestrator] 新话题: "${result.topic.name}"`)
-        lastTopicRef.current = result.topic
-      }
-    }
-
-    // 🔧 方案 B：同步等待记忆检索，立即静默注入
-    // 🔧 修复：添加节流和去重逻辑
-    const now = Date.now()
-    const timeSinceLastInjection = now - lastMemoryInjectionTimeRef.current
-    const shouldSkipDueToThrottle = timeSinceLastInjection < MEMORY_INJECTION_COOLDOWN_MS
-
-    if (enableMemoryRetrieval && userId && text.length > 5) {
-      // 🔧 节流检查：距离上次注入是否超过冷却时间
-      if (shouldSkipDueToThrottle) {
-        devLog(`🔎 [Orchestrator] 跳过记忆检索 - 距上次注入 ${Math.round(timeSinceLastInjection / 1000)}秒 (冷却: ${MEMORY_INJECTION_COOLDOWN_MS / 1000}秒)`)
-      } else {
-        devLog(`\n🔎 [${timestamp}] ========== 同步检索记忆 ==========`)
-        devLog(`🔎 [Orchestrator] 搜索词: "${text.substring(0, 30)}..."`)
-
-        // 同步等待记忆检索完成
-        const memories = await memoryPipeline.fetchMemoriesForTopic(
-          text,
-          [],
-          contextTracker.getContext().summary
-        )
-
-        // 异步操作完成后，再次检查 enabled 状态
-        // 防止篝火模式进入期间（enabled 已变为 false）仍然注入记忆导致 AI 被触发说话
-        if (!enabledRef.current) {
-          devLog(`🔎 [Orchestrator] 记忆检索完成但 enabled 已变为 false（可能正在进入篝火模式），跳过注入`)
-        } else if (memories.length > 0) {
-          // 🔧 去重检查：过滤掉本次会话已注入过的记忆
-          const newMemories = memories.filter(m => !injectedMemoriesRef.current.has(m.content))
-
-          if (newMemories.length === 0) {
-            devLog(`🔎 [Orchestrator] 所有 ${memories.length} 条记忆都已注入过，跳过`)
-          } else {
-            devLog(`🔎 [Orchestrator] 找到 ${newMemories.length} 条新记忆（过滤掉 ${memories.length - newMemories.length} 条已注入）`)
-            if (import.meta.env.DEV) {
-              newMemories.forEach((m, i) => {
-                devLog(`   ${i + 1}. [${m.tag}] ${m.content}`)
-              })
-            }
-
-            const contextMessage = generateContextMessage(
-              newMemories,
-              result.topic?.name || '对话',
-              result.emotionalState.primary,
-              result.emotionalState.intensity
-            )
-
-            // ✅ 静默注入（turnComplete=false），AI 回复时会自然引用
-            sendClientContent(contextMessage, false, 'user')
-            devLog(`✅ [Orchestrator] 记忆已注入，AI 将带着记忆回复`)
-
-            // 🔧 更新已注入记忆的记录
-            newMemories.forEach(m => injectedMemoriesRef.current.add(m.content))
-            lastMemoryInjectionTimeRef.current = now
-          }
-        } else {
-          devLog(`🔎 [Orchestrator] 未找到相关记忆`)
-        }
-      }
-    }
-
-    // 返回话题检测结果（用于抗拒分析）
+    // 返回简化的情绪检测结果
     return {
-      topic: result.topic ? { id: result.topic.id, name: result.topic.name } : null,
-      emotion: result.emotionalState.primary,
-      emotionIntensity: result.emotionalState.intensity,
-      confidence: result.confidence,
+      topic: null, // 话题检测由裁判处理
+      emotion: emotionResult.primary,
+      emotionIntensity: emotionResult.intensity,
     }
   }, [
     enabled,
-    enableMemoryRetrieval,
-    userId,
     contextTracker,
-    topicDetector,
-    memoryPipeline,
+    detectEmotionLocally,
     generateEmpathyMessage,
     sendClientContent,
   ])
@@ -424,13 +397,12 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
    */
   const reset = useCallback(() => {
     contextTracker.resetContext()
-    topicDetector.reset()
     lastTopicRef.current = null
     // 🔧 清空已注入记忆的记录
     injectedMemoriesRef.current.clear()
     lastMemoryInjectionTimeRef.current = 0
     devLog(`🔄 [Orchestrator] 状态已重置（含记忆去重记录）`)
-  }, [contextTracker, topicDetector])
+  }, [contextTracker])
 
   /**
    * 发送温柔引导消息
@@ -452,7 +424,7 @@ action: 用过渡话开头，然后轻柔地问用户是否想做点什么转移
     getContext,
     getVirtualMessageContext,
     reset,
-    isDetecting: topicDetector.isDetecting,
+    isDetecting: false, // US-012: topic detection moved to referee, no async detection
     sendGentleRedirect,
   }
 }

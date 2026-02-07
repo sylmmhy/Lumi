@@ -72,7 +72,9 @@ function getRandomTexture(): string {
 /**
  * 存钱罐进度组件
  */
-export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = false }) => {
+export const EnergyBall: React.FC<EnergyBallProps> = ({ current, target: _target, triggerRise = false }) => {
+    // 物理粒子数上限为 40，但数字显示层保持真实 current 值
+    const particleCount = Math.min(Math.max(current, 0), 40);
     const size = 125;
     const borderWidth = 8;
     const innerSize = size - borderWidth * 2; // 109px
@@ -273,34 +275,33 @@ export const EnergyBall: React.FC<EnergyBallProps> = ({ current, triggerRise = f
         };
     }, [initEngine]);
 
-    // 响应 current 变化
+    // 响应 particleCount 变化（物理粒子数，上限 40）
     useEffect(() => {
-        const targetCount = Math.min(Math.max(current, 0), 40);
         const currentCount = coinBodiesRef.current.size;
         const prevCount = prevCurrentRef.current;
 
         // 首次加载或重新挂载：批量添加
-        if (prevCount === 0 && targetCount > 0 && currentCount === 0) {
-            addCoinsInBatch(targetCount);
+        if (prevCount === 0 && particleCount > 0 && currentCount === 0) {
+            addCoinsInBatch(particleCount);
         }
         // 增加金币：逐个添加
-        else if (targetCount > currentCount) {
-            const diff = targetCount - currentCount;
+        else if (particleCount > currentCount) {
+            const diff = particleCount - currentCount;
             for (let i = 0; i < diff; i++) {
-                const timeoutId = window.setTimeout(() => addCoin(), i * 100); // 间隔 100ms 掉落
+                const timeoutId = window.setTimeout(() => addCoin(), i * 100);
                 timeoutIdsRef.current.push(timeoutId);
             }
         }
         // 减少金币：逐个移除
-        else if (targetCount < currentCount) {
-            const diff = currentCount - targetCount;
+        else if (particleCount < currentCount) {
+            const diff = currentCount - particleCount;
             for (let i = 0; i < diff; i++) {
                 removeCoin();
             }
         }
 
-        prevCurrentRef.current = targetCount;
-    }, [current, addCoin, removeCoin, addCoinsInBatch]);
+        prevCurrentRef.current = particleCount;
+    }, [particleCount, addCoin, removeCoin, addCoinsInBatch]);
 
     return (
         <div className="relative">

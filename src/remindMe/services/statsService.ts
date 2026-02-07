@@ -134,6 +134,78 @@ export async function getMonthlyCompletedCount(
 }
 
 /**
+ * 历史周金币数据结构
+ */
+export interface WeeklyCoinEntry {
+    /** 赛季周标识，格式如 '2026-W06' */
+    week: string;
+    /** 该周金币总数 */
+    coins: number;
+}
+
+/**
+ * 获取用户当前周金币数（从 users.weekly_coins）
+ *
+ * @param userId - 用户 ID
+ * @returns 当前周金币数
+ */
+export async function getUserWeeklyCoins(userId: string): Promise<number> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('weekly_coins')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        console.error('Failed to get user weekly coins:', error);
+        throw error;
+    }
+
+    return data?.weekly_coins ?? 0;
+}
+
+/**
+ * 获取用户历史每周金币（从 coins_ledger 按 season_week 聚合，最近 12 周）
+ *
+ * @param userId - 用户 ID
+ * @returns 按周排序的金币数组（最近的在前）
+ */
+export async function getWeeklyCoinHistory(userId: string): Promise<WeeklyCoinEntry[]> {
+    if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+    }
+
+    const { data, error } = await supabase
+        .from('coins_ledger')
+        .select('season_week, amount')
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error('Failed to get weekly coin history:', error);
+        throw error;
+    }
+
+    // 按 season_week 分组求和
+    const weekMap = new Map<string, number>();
+    data?.forEach(row => {
+        const current = weekMap.get(row.season_week) ?? 0;
+        weekMap.set(row.season_week, current + (row.amount ?? 0));
+    });
+
+    // 转换为数组，按周降序排序，取最近 12 周
+    const entries: WeeklyCoinEntry[] = Array.from(weekMap.entries())
+        .map(([week, coins]) => ({ week, coins }))
+        .sort((a, b) => b.week.localeCompare(a.week))
+        .slice(0, 12);
+
+    return entries;
+}
+
+/**
  * 获取习惯的累计完成次数（用于里程碑进度条）
  *
  * 说明：

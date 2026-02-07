@@ -15,7 +15,7 @@ interface TaskItemProps {
     onSkipForDay?: (task: Task) => void;
     /** 取消跳过今天的回调 */
     onUnskipForDay?: (task: Task) => void;
-    /** 拍照验证回调：点击 "+50" 金币按钮触发 */
+    /** 拍照验证回调：点击 "+5" 金币按钮触发 */
     onPhotoVerify?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
@@ -269,7 +269,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         className="text-[13px] text-[#92400E] flex items-center gap-1"
                         style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                     >
-                        Verify to earn +50 <img src="/coin.png" alt="coin" className="w-4 h-4" />
+                        Verify to earn +5 <img src="/coin.png" alt="coin" className="w-4 h-4" />
                     </span>
                 </button>
             )}

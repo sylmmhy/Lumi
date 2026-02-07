@@ -83,7 +83,7 @@ export interface CelebrationViewProps {
     result: {
       verified: boolean;
       confidence: number;
-      xp_awarded: number;
+      coins_awarded: number;
       not_visually_verifiable: boolean;
     } | null;
   };

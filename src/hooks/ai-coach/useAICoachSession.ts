@@ -264,46 +264,81 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
     },
     onDetectionComplete: (result) => {
-      devLog(`🎯 [统一裁判] onDetectionComplete:`, { tool: result.tool, confidence: result.confidence });
+      devLog(`🎯 [统一裁判] onDetectionComplete:`, {
+        tool: result.tool, confidence: result.confidence,
+        topic_changed: result.topic_changed, fetch_memories: result.fetch_memories,
+        coach_note: result.coach_note?.slice(0, 40),
+      });
 
-      if (!result.tool || result.confidence < 0.6) return;
+      // ────────────────────────────────────────
+      // 优先级 1：模式切换（最高优先级，立即执行并返回）
+      // ────────────────────────────────────────
+      if (result.tool && result.confidence >= 0.6) {
+        const modeTools = ['enter_campfire', 'exit_campfire', 'switch_to_habit_setup', 'switch_to_chat_mode'];
+        if (modeTools.includes(result.tool)) {
+          switch (result.tool) {
+            case 'enter_campfire':
+              refereeEpochRef.current += 1;
+              devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
+              campfire.enterCampfireMode();
+              return; // 模式切换后不处理其他动作
 
-      // 分发到对应处理器
-      switch (result.tool) {
-        case 'enter_campfire':
-          refereeEpochRef.current += 1;
-          devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
-          campfire.enterCampfireMode();
-          break;
+            case 'exit_campfire':
+              refereeEpochRef.current += 1;
+              devLog(`🔥 [统一裁判] 退出篝火模式 (epoch=${refereeEpochRef.current})`);
+              campfire.exitCampfireMode();
+              return;
 
-        case 'exit_campfire':
-          refereeEpochRef.current += 1;
-          devLog(`🔥 [统一裁判] 退出篝火模式 (epoch=${refereeEpochRef.current})`);
-          campfire.exitCampfireMode();
-          break;
+            case 'switch_to_habit_setup':
+              if (!habitSetupActiveRef.current) {
+                devLog(`🎯 [统一裁判] 切换到习惯设定模式`);
+                switchToHabitSetupMode(result.args?.topic as string | undefined);
+              }
+              return;
 
-        case 'switch_to_habit_setup':
-          if (!habitSetupActiveRef.current) {
-            devLog(`🎯 [统一裁判] 切换到习惯设定模式`);
-            switchToHabitSetupMode(result.args?.topic as string | undefined);
+            case 'switch_to_chat_mode':
+              refereeEpochRef.current += 1;
+              devLog(`💬 [统一裁判] 切换到聊天模式 (epoch=${refereeEpochRef.current})`);
+              if (geminiLive.isConnected) {
+                geminiLive.sendClientContent(
+                  `[MODE_OVERRIDE] The user no longer wants to be pushed. Switch to casual chat mode — be supportive and conversational, stop nudging about tasks.`,
+                  true
+                );
+              }
+              return;
           }
-          break;
+        }
+      }
 
-        case 'switch_to_chat_mode':
-          refereeEpochRef.current += 1;
-          devLog(`💬 [统一裁判] 切换到聊天模式 (epoch=${refereeEpochRef.current})`);
-          // 注入 MODE_OVERRIDE 指令让 AI 切换行为
-          if (geminiLive.isConnected) {
-            geminiLive.sendClientContent(
-              `[MODE_OVERRIDE] The user no longer wants to be pushed. Switch to casual chat mode — be supportive and conversational, stop nudging about tasks.`,
-              true
-            );
-          }
-          break;
+      // ────────────────────────────────────────
+      // 优先级 2：工具调用（由 useIntentDetection 内部的 executeToolCall 处理，
+      //           这里只记录日志；executeToolCall 结果通过 onToolResult 回调）
+      // ────────────────────────────────────────
+      if (result.tool && result.tool !== 'null' && result.confidence >= 0.6) {
+        devLog(`🎯 [统一裁判] 工具调用: ${result.tool} (置信度: ${result.confidence})`);
+        // 有工具调用时，跳过低优先级动作
+        return;
+      }
 
-        default:
-          devLog(`🎯 [统一裁判] 检测到: ${result.tool} (置信度: ${result.confidence})`);
-          break;
+      // ────────────────────────────────────────
+      // 优先级 3：话题变化 + 记忆检索
+      // ────────────────────────────────────────
+      if (result.topic_changed && result.fetch_memories) {
+        devLog(`📚 [统一裁判] 话题变化: ${result.topic_changed}, 需要检索记忆`,
+          { queries: result.memory_queries });
+        // US-010 将接入 useAsyncMemoryPipeline，当前仅记录
+        // 不 return —— coach_note 可以和记忆检索共存（但实际上裁判不会同时返回两者）
+      }
+
+      // ────────────────────────────────────────
+      // 优先级 4：教练提示（coach_note）
+      // ────────────────────────────────────────
+      if (result.coach_note && geminiLive.isConnected) {
+        devLog(`📝 [统一裁判] 注入 coach_note: ${result.coach_note.slice(0, 50)}...`);
+        geminiLive.sendClientContent(
+          `[COACH_NOTE] ${result.coach_note}`,
+          true
+        );
       }
     },
   });

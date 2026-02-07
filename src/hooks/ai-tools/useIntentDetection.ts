@@ -58,6 +58,11 @@ interface DetectIntentResult {
   confidence: number;
   reasoning?: string;
   error?: string;
+  // US-009: 统一裁判新增字段
+  topic_changed?: string | null;
+  fetch_memories?: boolean;
+  memory_queries?: string[] | null;
+  coach_note?: string | null;
 }
 
 interface LastSuggestion {
@@ -172,6 +177,11 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
         args: {},
         confidence: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
+        // US-009: 错误时也返回默认值
+        topic_changed: null,
+        fetch_memories: false,
+        memory_queries: null,
+        coach_note: null,
       };
     }
   }, [supabaseUrl, supabaseAnonKey, chatType]);

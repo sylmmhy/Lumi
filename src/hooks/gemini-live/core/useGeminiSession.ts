@@ -186,6 +186,13 @@ export function useGeminiSession(
           // 启用语音转录
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          // 启用上下文窗口压缩：自动裁剪最早的对话轮次，system instructions 始终保留。
+          // 无此配置时音频 session 约 15 分钟被服务端强制终止。
+          contextWindowCompression: {
+            slidingWindow: {
+              targetTokens: '8192',
+            },
+          },
           // System instruction
           systemInstruction: config?.systemInstruction
             ? { parts: [{ text: config.systemInstruction }] }

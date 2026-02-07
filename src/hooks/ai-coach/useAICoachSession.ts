@@ -307,8 +307,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
               devLog(`💬 [统一裁判] 切换到聊天模式 (epoch=${refereeEpochRef.current})`);
               if (geminiLive.isConnected) {
                 geminiLive.sendClientContent(
-                  `[MODE_OVERRIDE] The user no longer wants to be pushed. Switch to casual chat mode — be supportive and conversational, stop nudging about tasks.`,
-                  true
+                  `[MODE_OVERRIDE] mode=chat\nUser doesn't want tasks right now. Switch to friend mode: stop pushing, listen and support. If user later wants to work, guide back naturally.`,
+                  false,
+                  'system'
                 );
               }
               return;

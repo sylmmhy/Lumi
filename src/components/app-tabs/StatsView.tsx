@@ -40,6 +40,8 @@ interface StatsViewProps {
     refreshTrigger?: number;
     /** 启动 AI Coach 任务的回调（传递习惯 ID 和名称） */
     onStartTask?: (habitId: string, habitTitle: string) => void;
+    /** 外部触发打卡动画的计数器（每次递增时触发 EnergyBall 动画 + 音效 + Toast） */
+    externalCheckInTrigger?: number;
 }
 
 /**
@@ -50,7 +52,7 @@ interface StatsViewProps {
  * 2. 习惯卡片：热力图 + 里程碑进度条
  * 3. 打卡联动：打卡时水位上涨 + Toast 激励
  */
-export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger, onStartTask }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger, onStartTask, externalCheckInTrigger }) => {
     const auth = useAuth();
     const { t } = useTranslation();
 
@@ -89,6 +91,35 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             window.removeEventListener('resize', updateHeaderPosition);
         };
     }, [updateHeaderPosition]);
+
+    // 外部触发打卡动画（AI 会话完成 / Home 勾选完成后跳转到 stats 页时触发）
+    const prevExternalTriggerRef = useRef(externalCheckInTrigger ?? 0);
+    useEffect(() => {
+        const prev = prevExternalTriggerRef.current;
+        const curr = externalCheckInTrigger ?? 0;
+        prevExternalTriggerRef.current = curr;
+
+        // 只在计数器递增时触发动画（首次挂载 prev === curr 不触发）
+        if (curr > prev) {
+            // 与 handleCheckIn 相同的动画流程
+            setTriggerRise(true);
+            playCheckInSound();
+            setTimeout(() => setTriggerRise(false), 3500);
+
+            // 延迟 1 秒后，从数据库刷新真实金币数 + 播放硬币音效
+            setTimeout(async () => {
+                if (auth.userId) {
+                    try {
+                        const p = await getWeeklyCompletedCount(auth.userId);
+                        setWeeklyCount(p.current);
+                    } catch { /* ignore */ }
+                }
+                playCoinDropSound();
+            }, 1000);
+
+            showToast();
+        }
+    }, [externalCheckInTrigger, auth.userId, showToast]);
 
     /**
      * 播放打卡光晕音效

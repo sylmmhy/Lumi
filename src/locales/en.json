@@ -232,15 +232,15 @@
 
   "leaderboard.ranking": "Ranking",
   "leaderboard.youAreTheBest": "You are the best!",
-  "leaderboard.weeklyXP": "Weekly XP",
+  "leaderboard.weeklyCoins": "Weekly Coins",
   "leaderboard.timeLeft": "Time Left",
   "leaderboard.day": "Day",
   "leaderboard.days": "Days",
   "leaderboard.public": "Public",
   "leaderboard.friends": "Friends",
-  "leaderboard.xp": "XP",
+  "leaderboard.coins": "Coins",
   "leaderboard.you": "You",
-  "leaderboard.noRankingsYet": "Complete tasks to earn XP and climb the ranks!",
+  "leaderboard.noRankingsYet": "Complete tasks to earn coins and climb the ranks!",
   "leaderboard.noFriendsYet": "Add friends to compete on the leaderboard!",
 
   "habitOnboarding.welcome.title": "Hi, I'm Lumi",

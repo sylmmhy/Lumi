@@ -207,15 +207,15 @@
 
   "leaderboard.ranking": "Ranking",
   "leaderboard.youAreTheBest": "¡Eres el mejor!",
-  "leaderboard.weeklyXP": "XP Semanal",
+  "leaderboard.weeklyCoins": "Monedas Semanales",
   "leaderboard.timeLeft": "Tiempo restante",
   "leaderboard.day": "Día",
   "leaderboard.days": "Días",
   "leaderboard.public": "Público",
   "leaderboard.friends": "Amigos",
-  "leaderboard.xp": "XP",
+  "leaderboard.coins": "Monedas",
   "leaderboard.you": "Tú",
-  "leaderboard.noRankingsYet": "¡Completa tareas para ganar XP y subir en el ranking!",
+  "leaderboard.noRankingsYet": "¡Completa tareas para ganar monedas y subir en el ranking!",
   "leaderboard.noFriendsYet": "¡Agrega amigos para competir en la tabla!",
 
   "habitOnboarding.welcome.title": "Hola, soy Lumi",

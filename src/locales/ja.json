@@ -207,15 +207,15 @@
 
   "leaderboard.ranking": "ランキング",
   "leaderboard.youAreTheBest": "最高だね！",
-  "leaderboard.weeklyXP": "今週のXP",
+  "leaderboard.weeklyCoins": "今週のコイン",
   "leaderboard.timeLeft": "残り時間",
   "leaderboard.day": "日",
   "leaderboard.days": "日",
   "leaderboard.public": "全体",
   "leaderboard.friends": "友達",
-  "leaderboard.xp": "XP",
+  "leaderboard.coins": "コイン",
   "leaderboard.you": "自分",
-  "leaderboard.noRankingsYet": "タスクを完了してXPを獲得し、ランキングを上げよう！",
+  "leaderboard.noRankingsYet": "タスクを完了してコインを獲得し、ランキングを上げよう！",
   "leaderboard.noFriendsYet": "友達を追加してランキングで競おう！",
 
   "habitOnboarding.welcome.title": "こんにちは、Lumiだよ",

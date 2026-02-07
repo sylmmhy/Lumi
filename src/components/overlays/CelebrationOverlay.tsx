@@ -17,6 +17,8 @@ interface CelebrationOverlayProps {
         | 'handleCloseCelebration'
         | 'handleConfirmTaskComplete'
         | 'handleConfirmTaskIncomplete'
+        | 'isVerifyingTask'
+        | 'sessionVerificationResult'
     >;
 }
 
@@ -42,6 +44,17 @@ export function CelebrationOverlay({ coach }: CelebrationOverlayProps) {
                         label: 'TAKE MORE CHALLENGE',
                         onClick: coach.handleCloseCelebration,
                     },
+                }}
+                verification={{
+                    isVerifying: coach.isVerifyingTask,
+                    result: coach.sessionVerificationResult
+                        ? {
+                            verified: coach.sessionVerificationResult.verified,
+                            confidence: coach.sessionVerificationResult.confidence,
+                            xp_awarded: coach.sessionVerificationResult.xp_awarded,
+                            not_visually_verifiable: coach.sessionVerificationResult.not_visually_verifiable,
+                        }
+                        : null,
                 }}
                 failure={{
                     button: {

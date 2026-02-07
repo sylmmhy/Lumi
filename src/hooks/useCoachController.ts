@@ -12,6 +12,9 @@ import { isLiveKitMode, startLiveKitRoom, endLiveKitRoom, onLiveKitEvent } from 
 import { devLog } from '../utils/devLog';
 import { getLocalDateString } from '../utils/timeUtils';
 import { saveSessionMemory } from '../lib/saveSessionMemory';
+import { useTaskVerification } from './useTaskVerification';
+import { useXP } from './useXP';
+import type { VerificationResult } from './useTaskVerification';
 
 // ==========================================
 // 类型定义
@@ -117,6 +120,13 @@ export function useCoachController(options: UseCoachControllerOptions) {
     // 通话追踪
     // ==========================================
     const [currentCallRecordId, setCurrentCallRecordId] = useState<string | null>(null);
+
+    // ==========================================
+    // 视觉验证 + XP
+    // ==========================================
+    const { verifyWithFrames, isVerifying: isVerifyingTask } = useTaskVerification();
+    const { awardXP, lastAward: lastXPAward } = useXP();
+    const [sessionVerificationResult, setSessionVerificationResult] = useState<VerificationResult | null>(null);
 
     // ==========================================
     // 语音提示状态
@@ -483,6 +493,11 @@ export function useCoachController(options: UseCoachControllerOptions) {
         const taskDescriptionSnapshot = aiCoach.state.taskDescription;
         const taskIdToComplete = currentTaskId;
         const taskTypeToComplete = currentTaskType;
+        const userId = auth.userId;
+
+        // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
+        const capturedFrames = aiCoach.getRecentFrames(5);
+        devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
 
         aiCoach.endSession();
 
@@ -499,14 +514,41 @@ export function useCoachController(options: UseCoachControllerOptions) {
         void saveSessionMemory({
             messages: messagesSnapshot,
             taskDescription: taskDescriptionSnapshot,
-            userId: auth.userId,
+            userId,
             taskCompleted: true,
             usedTime,
             actualDurationMinutes,
         });
 
         void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked]);
+
+        // fire-and-forget: XP 发放 + 视觉验证（不阻塞庆祝流程）
+        if (userId && taskIdToComplete) {
+            void (async () => {
+                try {
+                    // 1. 发放基础 XP（任务完成 + Session 完成）
+                    await awardXP(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+                    devLog('✅ 基础 XP 已发放');
+
+                    // 2. 视觉验证（如果有帧的话）
+                    if (capturedFrames.length > 0) {
+                        const result = await verifyWithFrames(
+                            taskIdToComplete,
+                            taskDescriptionSnapshot,
+                            capturedFrames,
+                            userId
+                        );
+                        if (result) {
+                            setSessionVerificationResult(result);
+                            devLog('✅ 视觉验证完成:', { verified: result.verified, confidence: result.confidence });
+                        }
+                    }
+                } catch (err) {
+                    console.error('[CoachController] XP/验证 fire-and-forget 错误:', err);
+                }
+            })();
+        }
+    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, awardXP, verifyWithFrames]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -521,7 +563,12 @@ export function useCoachController(options: UseCoachControllerOptions) {
         unlockScreenTimeIfLocked('Celebration.confirmYes');
 
         setCelebrationFlow('success');
-    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked]);
+
+        // fire-and-forget: 发放 XP（任务完成，倒计时到期场景）
+        if (auth.userId && currentTaskId) {
+            void awardXP(auth.userId, currentTaskId, ['task_complete']);
+        }
+    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked, auth.userId, awardXP]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -540,6 +587,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskDescription('');
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+        setSessionVerificationResult(null);
     }, []);
 
     // ==========================================
@@ -759,5 +807,10 @@ export function useCoachController(options: UseCoachControllerOptions) {
         // LiveKit 按钮回调
         handleLiveKitPrimaryClick,
         handleLiveKitSecondaryClick,
+
+        // 视觉验证 + XP 状态
+        isVerifyingTask,
+        sessionVerificationResult,
+        lastXPAward,
     };
 }

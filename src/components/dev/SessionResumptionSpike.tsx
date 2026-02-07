@@ -11,7 +11,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { GoogleGenAI, type LiveServerMessage } from '@google/genai';
+import { GoogleGenAI, Modality, type LiveServerMessage } from '@google/genai';
 
 // ============================================================================
 // 常量
@@ -159,7 +159,7 @@ export function SessionResumptionSpike({ onBack }: { onBack: () => void }) {
       const session = await ai.live.connect({
         model: MODEL,
         config: {
-          responseModalities: ['TEXT'],
+          responseModalities: [Modality.TEXT],
           systemInstruction: {
             parts: [{ text: PROMPT_A }],
           },
@@ -271,7 +271,7 @@ export function SessionResumptionSpike({ onBack }: { onBack: () => void }) {
       const session = await ai.live.connect({
         model: MODEL,
         config: {
-          responseModalities: ['TEXT'],
+          responseModalities: [Modality.TEXT],
           systemInstruction: {
             parts: [{ text: PROMPT_B }],
           },

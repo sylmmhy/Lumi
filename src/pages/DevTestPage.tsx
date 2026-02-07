@@ -1857,8 +1857,6 @@ function WeeklyCelebrationTest({ onBack }: { onBack: () => void }) {
       <WeeklyCelebration
         visible={showCelebration}
         count={2}
-        icon="🌙"
-        centerIcon="🎯"
         onClose={() => {
           setShowCelebration(false);
         }}

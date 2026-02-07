@@ -281,9 +281,16 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           // 注意：AI 可能返回字符串 "null" 而不是真正的 null
           const hasTool = detection.tool && detection.tool !== 'null';
           const toolName = detection.tool as string; // 已通过 hasTool 确保非 null
+
+          // 这些工具由 onDetectionComplete 处理，不需要通过 executeToolCall 执行
+          const specialTools = ['switch_to_habit_setup', 'enter_campfire', 'exit_campfire'];
+
           if (detection.success && hasTool && detection.confidence >= 0.6) {
-            // 检查工具是否已触发过（防重复）
-            if (triggeredToolsRef.current.has(toolName)) {
+            // 跳过特殊工具（它们在 onDetectionComplete 中处理）
+            if (specialTools.includes(toolName)) {
+              console.log(`🔄 [IntentDetection] ${toolName} 由 onDetectionComplete 处理，跳过 executeToolCall`);
+            } else if (triggeredToolsRef.current.has(toolName)) {
+              // 检查工具是否已触发过（防重复）
               console.log(`⚠️ [IntentDetection] ${toolName} 已触发过，跳过`);
             } else {
               console.log(`🔧 [IntentDetection] 检测到工具调用: ${toolName} (置信度: ${detection.confidence})`);

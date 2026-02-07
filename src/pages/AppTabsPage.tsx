@@ -9,6 +9,9 @@ import { CelebrationOverlay } from '../components/overlays/CelebrationOverlay';
 import { AuthModal } from '../components/modals/AuthModal';
 import { TestVersionModal } from '../components/modals/TestVersionModal';
 import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm';
+import { TaskReminderBanner } from '../components/banners/TaskReminderBanner';
+import { TaskCompletionModal } from '../components/modals/TaskCompletionModal';
+import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -90,6 +93,9 @@ export function AppTabsPage() {
      */
     const [pendingActionSource, setPendingActionSource] = useState<'session-validation' | 'auth-required' | null>(null);
     const urgencyStartRef = useRef<(() => void) | null>(null);
+    const [showTaskCompletionModal, setShowTaskCompletionModal] = useState(false);
+    /** Banner「Already Completed」触发的庆祝动画 */
+    const [showBannerCelebration, setShowBannerCelebration] = useState(false);
 
     const handleChangeView = useCallback((view: ViewState, replace = false) => {
         navigate(`/app/${view}`, { replace });
@@ -154,6 +160,7 @@ export function AppTabsPage() {
         const timer = window.setTimeout(() => setShowConfetti(false), 5000);
         return () => window.clearTimeout(timer);
     }, [checkoutSuccess, handleChangeView]);
+
 
     /**
      * 创建任务并在必要时触发登录/挂起流程。
@@ -249,6 +256,20 @@ export function AppTabsPage() {
             {/* 任务完成确认 & 庆祝页面 */}
             {coach.showCelebration && <CelebrationOverlay coach={coach} />}
 
+            {/* Banner「Already Completed」庆祝动画 */}
+            <WeeklyCelebration
+                visible={showBannerCelebration}
+                title="Task Done!"
+                subtitle="Great job!"
+                message="You showed up! That's a win."
+                count={1}
+                target={1}
+                onClose={() => {
+                    setShowBannerCelebration(false);
+                    screenTime.unlockScreenTimeIfLocked('Banner.alreadyCompleted');
+                }}
+            />
+
             {/* Main App Shell */}
             <div className={`w-full h-full max-w-md bg-white md:h-[90vh] md:max-h-[850px] md:shadow-2xl md:rounded-[40px] overflow-hidden relative flex flex-col ${(coach.showCelebration || coach.isSessionOverlayVisible) ? 'hidden' : ''}`}>
 
@@ -295,12 +316,22 @@ export function AppTabsPage() {
                     />
                 )}
 
-                {/* AI 会话全屏展示、LiveKit 模式或庆祝页面时隐藏底部导航 */}
+                {/* AI 会话全屏展示、LiveKit 模式或庆祝页面时隐藏底部导航和横幅 */}
                 {!(coach.isSessionOverlayVisible || coach.showCelebration) && (
-                    <BottomNavBar
-                        currentView={currentView}
-                        onChange={(view) => handleChangeView(view)}
-                    />
+                    <>
+                        {/* Screen Time 锁定时的任务提醒横幅 */}
+                        {screenTime.isAppLocked && !screenTime.showPledgeConfirm && (
+                            <TaskReminderBanner
+                                taskName={screenTime.lockedTaskInfo?.taskName ?? 'your task'}
+                                onCompleteTask={() => setShowTaskCompletionModal(true)}
+                                onAcceptConsequences={screenTime.handleAcceptConsequences}
+                            />
+                        )}
+                        <BottomNavBar
+                            currentView={currentView}
+                            onChange={(view) => handleChangeView(view)}
+                        />
+                    </>
                 )}
 
             </div>
@@ -337,6 +368,33 @@ export function AppTabsPage() {
 <TestVersionModal
                 isOpen={appTasks.showTestVersionModal}
                 onClose={() => appTasks.setShowTestVersionModal(false)}
+            />
+
+            {/* 任务完成确认弹窗（从 Banner 点击 Complete Task 触发） */}
+            <TaskCompletionModal
+                isOpen={showTaskCompletionModal}
+                onClose={() => setShowTaskCompletionModal(false)}
+                onAlreadyCompleted={() => {
+                    setShowTaskCompletionModal(false);
+                    setShowBannerCelebration(true);
+                }}
+                onLetLumiHelp={() => {
+                    setShowTaskCompletionModal(false);
+                    const taskName = screenTime.lockedTaskInfo?.taskName ?? 'Start task';
+                    const taskId = screenTime.lockedTaskInfo?.taskId ?? `temp-${Date.now()}`;
+                    const task: Task = {
+                        id: taskId,
+                        text: taskName,
+                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        displayTime: 'Now',
+                        date: new Date().toISOString().split('T')[0],
+                        completed: false,
+                        type: 'todo',
+                        category: 'morning',
+                        called: false,
+                    };
+                    coach.ensureVoicePromptThenStart(task);
+                }}
             />
 
             {/* Screen Time 后果确认界面 */}

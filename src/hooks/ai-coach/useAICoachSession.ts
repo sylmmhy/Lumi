@@ -14,6 +14,7 @@ import { useSessionTimer } from './useSessionTimer';
 import { useSessionMemory } from './useSessionMemory';
 import { useTranscriptProcessor } from './useTranscriptProcessor';
 import { useSessionLifecycle } from './useSessionLifecycle';
+import { useBackgroundNudge } from './useBackgroundNudge';
 import { useSessionContext } from '../useSessionContext';
 import { createAudioAnomalyDetector } from '../../lib/callkit-diagnostic';
 
@@ -231,6 +232,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   useEffect(() => {
     cleanupRef.current = lifecycle.cleanup;
   }, [lifecycle.cleanup]);
+
+  // ==========================================
+  // 后台推送召回（切后台时渐进式推送）
+  // ==========================================
+  useBackgroundNudge({
+    isSessionActive,
+    taskId: currentTaskIdRef.current,
+    taskDescription: currentTaskDescriptionRef.current,
+    sessionType: campfire.isCampfireMode ? 'campfire' : 'coach',
+    getTranscriptSummary: () => {
+      const recent = transcript.messages.slice(-5);
+      return recent.map(m => `${m.role}: ${m.content}`).join('\n');
+    },
+  });
 
   // ==========================================
   // VAD (Voice Activity Detection)

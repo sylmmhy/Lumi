@@ -134,9 +134,9 @@ export function useGeminiSession(
     config?: GeminiSessionConfig,
     prefetchedToken?: string
   ) => {
-    // 防重复连接：如果已连接或正在连接，直接返回
-    if (isConnected || sessionRef.current) {
-      devLog('⚠️ Already connected or session exists, ignoring connect request');
+    // 防重复连接：只检查 sessionRef（它是立即更新的，不受 React state 批处理影响）
+    if (sessionRef.current) {
+      devLog('⚠️ Session exists, ignoring connect request');
       return;
     }
 
@@ -222,7 +222,7 @@ export function useGeminiSession(
       setError(errorMessage);
       onError?.(errorMessage);
     }
-  }, [isConnected, onMessage, onConnected, onDisconnected, onError]);
+  }, [onMessage, onConnected, onDisconnected, onError]);
 
   /**
    * 断开连接

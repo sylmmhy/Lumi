@@ -232,7 +232,7 @@ function analyzeSleepRegularity(
 
   sortedSleep.forEach(record => {
     // 只考虑入睡相关的阶段
-    if (record.sleep_stage && ['inBed', 'asleep', 'asleepCore', 'asleepDeep'].includes(record.sleep_stage)) {
+    if (record.sleep_stage && ['inBed', 'asleep', 'core', 'deep'].includes(record.sleep_stage)) {
       const startDate = new Date(record.start_date);
       const dateKey = startDate.toDateString();
 

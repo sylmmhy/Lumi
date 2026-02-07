@@ -15,13 +15,15 @@ interface TaskItemProps {
     onSkipForDay?: (task: Task) => void;
     /** 取消跳过今天的回调 */
     onUnskipForDay?: (task: Task) => void;
+    /** 拍照验证回调：点击 "+50 XP" 按钮触发 */
+    onPhotoVerify?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
     /** urgency 模式下点击 Start 的回调 */
     onStart?: () => void;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, mode = 'home', onStart }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, onPhotoVerify, mode = 'home', onStart }) => {
     const { t } = useTranslation();
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
@@ -229,13 +231,30 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         </span>
                     )}
                 </div>
-                {/* Time - Quicksand Bold 14px Brand Blue */}
+                {/* 右侧操作区：时间 / 拍照验证 / Start 按钮 */}
                 {mode === 'home' ? (
-                    <div className="px-2.5 py-1 min-w-[70px] text-right">
-                        <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
-                            {task.displayTime}
-                        </span>
-                    </div>
+                    task.completed && onPhotoVerify && (!task.verification_status || task.verification_status === 'unverified') ? (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onPhotoVerify(task);
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-[13px] font-bold"
+                            style={{
+                                fontFamily: "'Quicksand', sans-serif",
+                                backgroundColor: '#FEF3C7',
+                                color: '#92400E',
+                            }}
+                        >
+                            +50 XP
+                        </button>
+                    ) : (
+                        <div className="px-2.5 py-1 min-w-[70px] text-right">
+                            <span className="text-[14px] text-[#4361EE]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 700 }}>
+                                {task.displayTime}
+                            </span>
+                        </div>
+                    )
                 ) : (
                     <button
                         onClick={(e) => {

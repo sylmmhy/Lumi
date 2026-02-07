@@ -41,6 +41,10 @@ interface TaskRecord {
   overcame_resistance: boolean | null;
   actual_duration_minutes: number | null;
   personal_best_at_completion: number | null;
+  // Consequence fields - 后果相关字段
+  consequence_short: string | null;
+  consequence_pledge: string | null;
+  preloaded_consequence: string | null;
 }
 
 /**
@@ -97,6 +101,10 @@ function dbToTask(record: TaskRecord): Task {
     overcameResistance: record.overcame_resistance ?? undefined,
     actualDurationMinutes: record.actual_duration_minutes ?? undefined,
     personalBestAtCompletion: record.personal_best_at_completion ?? undefined,
+    // Consequence fields
+    consequenceShort: record.consequence_short ?? undefined,
+    consequencePledge: record.consequence_pledge ?? undefined,
+    preloadedConsequence: record.preloaded_consequence ?? undefined,
   };
 }
 

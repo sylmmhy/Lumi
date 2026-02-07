@@ -324,7 +324,27 @@ export function AppTabsPage() {
                             <TaskReminderBanner
                                 taskName={screenTime.lockedTaskInfo?.taskName ?? 'your task'}
                                 onCompleteTask={() => setShowTaskCompletionModal(true)}
-                                onAcceptConsequences={screenTime.handleAcceptConsequences}
+                                onAcceptConsequences={() => {
+                                    // 优先从 lockedTaskInfo 获取后果数据
+                                    if (screenTime.lockedTaskInfo?.consequence) {
+                                        screenTime.handleAcceptConsequences();
+                                        return;
+                                    }
+                                    // fallback：从已加载的任务列表中查找有 consequence_pledge 的最近未完成任务
+                                    const taskWithConsequence = appTasks.tasks.find(
+                                        t => !t.completed && t.consequencePledge
+                                    );
+                                    if (taskWithConsequence) {
+                                        screenTime.openPledgeConfirmWithData({
+                                            taskName: taskWithConsequence.text,
+                                            consequence: taskWithConsequence.preloadedConsequence || taskWithConsequence.consequenceShort || 'Accept the consequence',
+                                            pledge: taskWithConsequence.consequencePledge!,
+                                        });
+                                    } else {
+                                        // 没有任何后果数据时使用通用 fallback
+                                        screenTime.handleAcceptConsequences();
+                                    }
+                                }}
                             />
                         )}
                         <BottomNavBar

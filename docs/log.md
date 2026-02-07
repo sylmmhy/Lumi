@@ -1,65 +1,65 @@
-[18:10:21.474] [INFO] [DevConsole] 调试控制台已启动
-[18:10:21.482] [INFO] [DevConsole] WebView 环境: native-app
-[18:10:21.482] [INFO] [DevConsole] User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mind...
-[18:10:21.482] [LOG] 🔐 NativeAuth bootstrap window armed: startNativeAuthBridge deadline= 1770430229474
-[18:10:21.482] [LOG] 🔐 Web: Native Auth Bridge 已初始化
-[18:10:21.482] [LOG] 🔐 Web: 发现已设置的登录态，立即处理
-[18:10:21.482] [LOG] 🔐 NativeAuth bootstrap window armed: native_payload_found deadline= 1770430229474
-[18:10:21.482] [LOG] 🔐 applyNativeLogin: 开始处理, userId: 31d5da79-2cfc-445d-9543-eefc5b8d31d7
-[18:10:21.482] [LOG] 🔐 setSession (applyNativeLogin): 获取锁
-[18:10:21.482] [LOG] 🔐 applyNativeLogin: 调用 setSession (尝试 1/3)...
-[18:10:21.482] [LOG] 📱 已取消注册 window.refreshTasks()
-[18:10:21.482] [LOG] 📹 useVideoInput unmounted, all resources cleaned up
-[18:10:21.482] [LOG] 🔌 Disconnecting Gemini Live...
-[18:10:21.482] [LOG] 🔌 Disconnecting Gemini Live session...
-[18:10:21.482] [LOG] ✅ Gemini Live session disconnected
-[18:10:21.482] [LOG] 🎤 Microphone stopped
-[18:10:21.482] [LOG] 📹 Camera stopped
-[18:10:21.482] [LOG] ✅ Gemini Live disconnected and cleaned up
-[18:10:21.482] [INFO] [DevConsole] 调试控制台已启动
-[18:10:21.482] [INFO] [DevConsole] WebView 环境: native-app
-[18:10:21.482] [INFO] [DevConsole] User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mind...
-[18:10:21.482] [DEBUG] [PermissionContext] 跳过权限检查（防抖）
-[18:10:21.482] [LOG] 🔐 NativeAuth bootstrap window armed: startNativeAuthBridge deadline= 1770430229476
-[18:10:21.482] [LOG] 🔐 Web: Native Auth Bridge 已初始化
-[18:10:21.482] [LOG] 🔐 Web: 发现已设置的登录态，立即处理
-[18:10:21.482] [LOG] 🔐 NativeAuth bootstrap window armed: native_payload_found deadline= 1770430229476
-[18:10:21.482] [LOG] 🔐 applyNativeLogin: 已在处理中，跳过重复调用
-[18:10:21.482] [LOG] [ScreenTime] Callback received: {
+[18:53:48.396] [INFO] [DevConsole] 调试控制台已启动
+[18:53:48.403] [INFO] [DevConsole] WebView 环境: native-app
+[18:53:48.403] [INFO] [DevConsole] User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mind...
+[18:53:48.403] [LOG] 🔐 NativeAuth bootstrap window armed: startNativeAuthBridge deadline= 1770432836396
+[18:53:48.403] [LOG] 🔐 Web: Native Auth Bridge 已初始化
+[18:53:48.403] [LOG] 🔐 Web: 没有登录态，向 Native 请求...
+[18:53:48.403] [LOG] 🔐 Web: 已向 Native 请求登录态
+[18:53:48.403] [LOG] 📱 已取消注册 window.refreshTasks()
+[18:53:48.403] [LOG] 📹 useVideoInput unmounted, all resources cleaned up
+[18:53:48.403] [LOG] 🔌 Disconnecting Gemini Live...
+[18:53:48.403] [LOG] 🔌 Disconnecting Gemini Live session...
+[18:53:48.403] [LOG] ✅ Gemini Live session disconnected
+[18:53:48.403] [LOG] 🎤 Microphone stopped
+[18:53:48.403] [LOG] 📹 Camera stopped
+[18:53:48.403] [LOG] ✅ Gemini Live disconnected and cleaned up
+[18:53:48.403] [INFO] [DevConsole] 调试控制台已启动
+[18:53:48.403] [INFO] [DevConsole] WebView 环境: native-app
+[18:53:48.403] [INFO] [DevConsole] User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mind...
+[18:53:48.403] [DEBUG] [PermissionContext] 跳过权限检查（防抖）
+[18:53:48.403] [LOG] 🔐 NativeAuth bootstrap window armed: startNativeAuthBridge deadline= 1770432836397
+[18:53:48.403] [LOG] 🔐 Web: Native Auth Bridge 已初始化
+[18:53:48.403] [LOG] 🔐 Web: 没有登录态，向 Native 请求...
+[18:53:48.403] [LOG] 🔐 Web: 已向 Native 请求登录态
+[18:53:48.403] [LOG] [ScreenTime] Callback received: {
+  "status": "approved",
+  "action": "statusUpdate",
+  "categoriesCount": 1,
   "appsCount": 19,
   "isLocked": true,
-  "categoriesCount": 1,
-  "isAuthorized": true,
-  "action": "statusUpdate",
   "isConfigured": true,
-  "status": "approved"
+  "isAuthorized": true
 }
-[18:10:21.482] [LOG] [ScreenTime] Callback received: {
+[18:53:48.416] [LOG] 🔐 iOS: native 提供了 token，强制触发登录事件以建立新会话
+[18:53:48.416] [LOG] 🔐 applyNativeLogin: 开始处理, userId: 31d5da79-2cfc-445d-9543-eefc5b8d31d7
+[18:53:48.416] [LOG] 🔐 setSession (applyNativeLogin): 获取锁
+[18:53:48.416] [LOG] 🔐 applyNativeLogin: 调用 setSession (尝试 1/3)...
+[18:53:48.416] [LOG] 🔐 iOS: native 提供了 token，强制触发登录事件以建立新会话
+[18:53:48.416] [LOG] 🔐 applyNativeLogin: 已在处理中，跳过重复调用
+[18:53:48.416] [LOG] [ScreenTime] Callback received: {
+  "status": "approved",
+  "action": "statusUpdate",
+  "categoriesCount": 1,
   "appsCount": 19,
   "isLocked": true,
-  "categoriesCount": 1,
-  "isAuthorized": true,
-  "action": "statusUpdate",
   "isConfigured": true,
-  "status": "approved"
+  "isAuthorized": true
 }
-[18:10:21.482] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过
-[18:10:21.482] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过
-[18:10:21.536] [LOG] 🔐 iOS: native 提供了 token，强制触发登录事件以建立新会话
-[18:10:21.536] [LOG] 🔐 applyNativeLogin: 已在处理中，跳过重复调用
-[18:10:21.576] [WARN] Amplitude API key missing; analytics disabled.
-[18:10:21.655] [LOG] 🔄 Auth state changed: SIGNED_IN
-[18:10:21.655] [LOG] 📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding = true
-[18:10:21.655] [LOG] ✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding = true
-[18:10:21.655] [LOG] ✅ applyNativeLogin: setSession 成功，Supabase 会话已建立，autoRefreshToken 已激活
-[18:10:21.655] [LOG] 🔐 setSession (applyNativeLogin): 释放锁
-[18:10:21.655] [LOG] 🔄 Auth state changed: INITIAL_SESSION
-[18:10:21.655] [LOG] 📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding = true
-[18:10:21.655] [LOG] ✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding = true
-[18:10:21.676] [WARN] PostHog key missing; analytics disabled.
-[18:10:21.754] [LOG] 🔐 applyNativeLogin: onAuthStateChange 已接管状态处理，跳过重复查询
-[18:10:21.754] [LOG] 🔐 Web: 已通知 Native 停止重试, reason: session_set
-[18:10:21.769] [LOG] 🔍 [DEBUG] fetchReminders 返回的任务: [
+[18:53:48.419] [LOG] 🔄 Auth state changed: INITIAL_SESSION
+[18:53:48.419] [WARN] Amplitude API key missing; analytics disabled.
+[18:53:48.419] [LOG] 📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding = true
+[18:53:48.419] [LOG] ✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding = true
+[18:53:48.422] [LOG] 🔓 Dev backdoor: skipping session validation for test account
+[18:53:48.422] [LOG] 🔓 Dev backdoor: skipping session validation for test account
+[18:53:48.424] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过覆盖
+[18:53:48.424] [ERROR] Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://react.dev/link/setstate-in-render DevConsole AuthProvider AuthProvider
+[18:53:48.424] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过覆盖
+[18:53:48.424] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过覆盖
+[18:53:48.424] [LOG] 🔄 restoreSession: 正在处理原生登录，跳过覆盖
+[18:53:48.488] [LOG] 🔐 iOS: native 提供了 token，强制触发登录事件以建立新会话
+[18:53:48.488] [LOG] 🔐 applyNativeLogin: 已在处理中，跳过重复调用
+[18:53:48.488] [LOG] 🎤 nativeAudioSessionReady 事件已接收，标记已更新
+[18:53:48.542] [LOG] 🔍 [DEBUG] fetchReminders 返回的任务: [
   {
     "id": "e5c47cfd-b2fb-49a4-b188-3a25177bb389",
     "title": "打那个电话",
@@ -157,9 +157,16 @@
     "is_snoozed": false,
     "time": "18:10",
     "reminder_date": "2026-02-06"
+  },
+  {
+    "id": "70bd0c73-9ad9-4050-b312-6c064fd3a273",
+    "title": "开始学习",
+    "is_snoozed": false,
+    "time": "18:53",
+    "reminder_date": "2026-02-06"
   }
 ]
-[18:10:21.784] [LOG] 🔍 [DEBUG] fetchReminders 返回的任务: [
+[18:53:48.542] [LOG] 🔍 [DEBUG] fetchReminders 返回的任务: [
   {
     "id": "e5c47cfd-b2fb-49a4-b188-3a25177bb389",
     "title": "打那个电话",
@@ -257,117 +264,31 @@
     "is_snoozed": false,
     "time": "18:10",
     "reminder_date": "2026-02-06"
+  },
+  {
+    "id": "70bd0c73-9ad9-4050-b312-6c064fd3a273",
+    "title": "开始学习",
+    "is_snoozed": false,
+    "time": "18:53",
+    "reminder_date": "2026-02-06"
   }
 ]
-[18:10:21.901] [LOG] 📱 [iOS] 已发送 taskChanged 批量同步消息 {
-  "count": 14
+[18:53:48.548] [LOG] 🔄 Auth state changed: SIGNED_IN
+[18:53:48.548] [LOG] 📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding = true
+[18:53:48.548] [LOG] ✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding = true
+[18:53:48.548] [LOG] ✅ applyNativeLogin: setSession 成功，Supabase 会话已建立，autoRefreshToken 已激活
+[18:53:48.548] [LOG] 🔐 setSession (applyNativeLogin): 释放锁
+[18:53:48.599] [WARN] PostHog key missing; analytics disabled.
+[18:53:48.644] [LOG] 📱 [iOS] 已发送 taskChanged 批量同步消息 {
+  "count": 15
 }
-[18:10:21.901] [LOG] 📱 已同步 14 个任务到原生端
-[18:10:21.942] [LOG] 📱 [iOS] 已发送 taskChanged 批量同步消息 {
-  "count": 14
+[18:53:48.644] [LOG] 📱 已同步 15 个任务到原生端
+[18:53:48.647] [LOG] 🔐 applyNativeLogin: onAuthStateChange 已接管状态处理，跳过重复查询
+[18:53:48.647] [LOG] 🔐 Web: 已通知 Native 停止重试, reason: session_set
+[18:53:48.667] [LOG] 📱 [iOS] 已发送 taskChanged 批量同步消息 {
+  "count": 15
 }
-[18:10:21.942] [LOG] 📱 已同步 14 个任务到原生端
-[18:10:21.946] [LOG] ✓ VoIP Token injected
-[18:10:23.871] [LOG] [PermissionsSection] Mount - isAndroidWebView: false isIOSWebView: true
-[18:10:23.883] [LOG] [PermissionsSection] window.webkit: true
-[18:10:23.883] [LOG] [PermissionsSection] window.webkit.messageHandlers: true
-[18:10:23.883] [LOG] [PermissionsSection] iOS: checking notification permission
-[18:10:23.883] [LOG] [PermissionsSection] iOS: checking microphone permission
-[18:10:23.883] [LOG] [PermissionsSection] iOS: checking camera permission
-[18:10:23.883] [LOG] [HealthKit] Checking permission status...
-[18:10:23.883] [LOG] [PermissionsSection] Mount - isAndroidWebView: false isIOSWebView: true
-[18:10:23.883] [LOG] [PermissionsSection] window.webkit: true
-[18:10:23.883] [LOG] [PermissionsSection] window.webkit.messageHandlers: true
-[18:10:23.883] [DEBUG] [PermissionsSection] 跳过权限检查（防抖）
-[18:10:23.883] [LOG] [HealthKit] Checking permission status...
-[18:10:23.883] [LOG] [PermissionsSection] Native permission result: microphone = true, status = granted
-[18:10:23.883] [LOG] [PermissionsSection] Native permission result: camera = true, status = granted
-[18:10:23.883] [LOG] [HealthKit] Result received: {
-  "type": "permissionStatus",
-  "data": {
-    "status": "prompt",
-    "granted": false
-  }
-}
-[18:10:23.883] [LOG] [HealthKit] Result received: {
-  "type": "permissionStatus",
-  "data": {
-    "status": "prompt",
-    "granted": false
-  }
-}
-[18:10:23.883] [LOG] [HealthKitSection] Authorization status: prompt
-[18:10:23.883] [LOG] [HealthKitSection] Authorization status: prompt
-[18:10:23.883] [LOG] [PermissionsSection] Native permission result: notification = true, status = granted
-[18:10:23.883] [LOG] [ScreenTime] Callback received: {
-  "appsCount": 19,
-  "isLocked": true,
-  "isAuthorized": true,
-  "categoriesCount": 1,
-  "action": "statusUpdate",
-  "isConfigured": true,
-  "status": "approved"
-}
-[18:10:23.883] [LOG] [ScreenTime] Callback received: {
-  "appsCount": 19,
-  "isLocked": true,
-  "isAuthorized": true,
-  "categoriesCount": 1,
-  "action": "statusUpdate",
-  "isConfigured": true,
-  "status": "approved"
-}
-[18:10:24.480] [LOG] 🔄 会话检查触发来源: initial_delay
-[18:10:40.692] [LOG] [PermissionsSection] Mount - isAndroidWebView: false isIOSWebView: true
-[18:10:40.695] [LOG] [PermissionsSection] window.webkit: true
-[18:10:40.695] [LOG] [PermissionsSection] window.webkit.messageHandlers: true
-[18:10:40.695] [LOG] [PermissionsSection] iOS: checking notification permission
-[18:10:40.695] [LOG] [PermissionsSection] iOS: checking microphone permission
-[18:10:40.695] [LOG] [PermissionsSection] iOS: checking camera permission
-[18:10:40.695] [LOG] [HealthKit] Checking permission status...
-[18:10:40.695] [LOG] [PermissionsSection] Mount - isAndroidWebView: false isIOSWebView: true
-[18:10:40.695] [LOG] [PermissionsSection] window.webkit: true
-[18:10:40.695] [LOG] [PermissionsSection] window.webkit.messageHandlers: true
-[18:10:40.695] [DEBUG] [PermissionsSection] 跳过权限检查（防抖）
-[18:10:40.695] [LOG] [HealthKit] Checking permission status...
-[18:10:40.695] [LOG] [PermissionsSection] Native permission result: microphone = true, status = granted
-[18:10:40.695] [LOG] [PermissionsSection] Native permission result: camera = true, status = granted
-[18:10:40.699] [LOG] [HealthKit] Result received: {
-  "type": "permissionStatus",
-  "data": {
-    "granted": false,
-    "status": "prompt"
-  }
-}
-[18:10:40.699] [LOG] [HealthKit] Result received: {
-  "type": "permissionStatus",
-  "data": {
-    "granted": false,
-    "status": "prompt"
-  }
-}
-[18:10:40.699] [LOG] [HealthKitSection] Authorization status: prompt
-[18:10:40.699] [LOG] [HealthKitSection] Authorization status: prompt
-[18:10:40.699] [LOG] [PermissionsSection] Native permission result: notification = true, status = granted
-[18:10:40.699] [LOG] [ScreenTime] Callback received: {
-  "appsCount": 19,
-  "isLocked": true,
-  "categoriesCount": 1,
-  "isAuthorized": true,
-  "action": "statusUpdate",
-  "status": "approved",
-  "isConfigured": true
-}
-[18:10:40.699] [LOG] [ScreenTime] Callback received: {
-  "appsCount": 19,
-  "isLocked": true,
-  "categoriesCount": 1,
-  "isAuthorized": true,
-  "action": "statusUpdate",
-  "status": "approved",
-  "isConfigured": true
-}
-[18:10:43.169] [LOG] 🔄 Auth state changed: SIGNED_IN
-[18:10:43.193] [LOG] 📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding = true
-[18:10:43.193] [LOG] ✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding = true
-[18:10:54.761] [LOG] [DevConsole] 使用 Clipboard API 复制成功
+[18:53:48.667] [LOG] 📱 已同步 15 个任务到原生端
+[18:53:49.013] [LOG] ✓ VoIP Token injected
+[18:53:51.398] [LOG] 🔄 会话检查触发来源: initial_delay
+[18:53:56.410] [LOG] [DevConsole] 使用 Clipboard API 复制成功

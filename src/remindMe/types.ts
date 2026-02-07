@@ -52,6 +52,20 @@ export interface Task {
    * 完成时的个人最佳记录
    */
   personalBestAtCompletion?: number | null
+
+  // Consequence fields - 后果相关字段
+  /**
+   * 简短后果描述（≤10个字，用于承诺列）
+   */
+  consequenceShort?: string | null
+  /**
+   * 完整承诺内容（格式：我愿意接受由于不按时{task}导致{consequence}的后果）
+   */
+  consequencePledge?: string | null
+  /**
+   * 预生成的个性化后果文本（任务到期前生成）
+   */
+  preloadedConsequence?: string | null
 }
 
 export const TaskType = {

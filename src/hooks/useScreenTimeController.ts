@@ -386,6 +386,14 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
     }, [lockedTaskInfo]);
 
     /**
+     * 使用指定数据打开后果确认页面（供 AppTabsPage 从任务列表读取真实数据后调用）
+     */
+    const openPledgeConfirmWithData = useCallback((data: { taskName: string; consequence: string; pledge: string }) => {
+        setPledgeConfirmData(data);
+        setShowPledgeConfirm(true);
+    }, []);
+
+    /**
      * 测试承诺确认页面 (用于 UI 调整)
      */
     const handleTestPledge = useCallback(() => {
@@ -423,6 +431,7 @@ export function useScreenTimeController(options: UseScreenTimeControllerOptions)
         handlePledgeUnlocked,
         handlePledgeCancel,
         handleAcceptConsequences,
+        openPledgeConfirmWithData,
         handleTestPledge,
     };
 }

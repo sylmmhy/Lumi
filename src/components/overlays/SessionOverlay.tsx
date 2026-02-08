@@ -1,5 +1,6 @@
 import { TaskWorkingView } from '../task/TaskWorkingView';
 import type { useCoachController } from '../../hooks/useCoachController';
+import { designSystem, getButtonStyle, getPanelStyle } from '../../styles/designSystem';
 
 /**
  * SessionOverlay 的 props
@@ -11,6 +12,9 @@ interface SessionOverlayProps {
         ReturnType<typeof useCoachController>,
         | 'usingLiveKit'
         | 'showCelebration'
+        | 'showVerificationChoice'
+        | 'isSessionFinalizing'
+        | 'sessionFinalizingMessage'
         | 'currentTaskDescription'
         | 'liveKitTimeRemaining'
         | 'liveKitConnected'
@@ -18,6 +22,10 @@ interface SessionOverlayProps {
         | 'handleLiveKitPrimaryClick'
         | 'handleLiveKitSecondaryClick'
         | 'aiCoach'
+        | 'handleRequestSessionCompletion'
+        | 'handleCancelSessionCompletion'
+        | 'handleCompleteWithVerification'
+        | 'handleCompleteWithoutVerification'
         | 'handleEndAICoachSession'
         | 'handleEndCall'
     >;
@@ -31,6 +39,60 @@ interface SessionOverlayProps {
 export function SessionOverlay({ coach }: SessionOverlayProps) {
     return (
         <>
+            {coach.isSessionFinalizing && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm px-6">
+                    <div className={`relative w-full max-w-sm ${getPanelStyle('2xl', true)} p-6 text-center`}>
+                        <div className={designSystem.patterns.innerGlowTinted}></div>
+                        <div className="relative z-10 flex flex-col items-center gap-3">
+                            <div className="h-12 w-12 rounded-full border-4 border-white/25 border-t-[#E6FB47] animate-spin" />
+                            <p className="text-white text-lg font-semibold">Wrapping up your session</p>
+                            <p className="text-white/80 text-sm">{coach.sessionFinalizingMessage}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {coach.showVerificationChoice && !coach.isSessionFinalizing && (
+                <div
+                    className="fixed inset-0 z-[85] flex items-center justify-center bg-black/50 backdrop-blur-sm px-6"
+                    onClick={coach.handleCancelSessionCompletion}
+                >
+                    <div
+                        className={`relative w-full max-w-sm ${getPanelStyle('2xl', true)} p-6`}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className={designSystem.patterns.innerGlowTinted}></div>
+                        <div className="relative z-10">
+                            <h3 className="text-white text-xl font-semibold text-center mb-2">Finish this session?</h3>
+                            <p className="text-white/80 text-sm text-center mb-5">
+                                You can verify now for reward eligibility, or skip verification and finish directly.
+                            </p>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={coach.handleCompleteWithVerification}
+                                    className={`w-full ${getButtonStyle('accent', 'md')}`}
+                                >
+                                    Verify and Finish
+                                </button>
+                                <button
+                                    onClick={coach.handleCompleteWithoutVerification}
+                                    className={`w-full ${getButtonStyle('glassTinted', 'md')} text-white`}
+                                >
+                                    Finish Without Verification
+                                </button>
+                                <button
+                                    onClick={coach.handleCancelSessionCompletion}
+                                    className="w-full py-2 text-white/70 text-sm"
+                                >
+                                    Continue Session
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* LiveKit 模式：使用原生音频，不显示摄像头 */}
             {coach.usingLiveKit && !coach.showCelebration && (
                 <TaskWorkingView
@@ -81,7 +143,7 @@ export function SessionOverlay({ coach }: SessionOverlayProps) {
                         primaryButton={{
                             label: "I'M DOING IT!",
                             emoji: '✅',
-                            onClick: coach.handleEndAICoachSession,
+                            onClick: coach.handleRequestSessionCompletion,
                         }}
                         secondaryButton={{
                             label: 'END CALL',

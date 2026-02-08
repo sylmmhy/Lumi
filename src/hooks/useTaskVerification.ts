@@ -19,6 +19,7 @@ export interface VerificationResult {
   not_visually_verifiable: boolean;
   coins_awarded: number;
   source: 'in_session' | 'photo_upload';
+  decision_reason?: string;
 }
 
 interface UseTaskVerificationReturn {
@@ -27,7 +28,8 @@ interface UseTaskVerificationReturn {
     taskId: string,
     taskDescription: string,
     frames: string[],
-    userId: string
+    userId: string,
+    sessionDurationSeconds?: number
   ) => Promise<VerificationResult | null>;
 
   /** 使用照片验证（Out-of-Session） */
@@ -73,7 +75,8 @@ export function useTaskVerification(): UseTaskVerificationReturn {
     taskDescription: string,
     frames: string[],
     userId: string,
-    source: 'in_session' | 'photo_upload'
+    source: 'in_session' | 'photo_upload',
+    sessionDurationSeconds?: number
   ): Promise<VerificationResult | null> => {
     if (!supabase) {
       console.error('[useTaskVerification] Supabase not initialized');
@@ -87,14 +90,23 @@ export function useTaskVerification(): UseTaskVerificationReturn {
     setIsVerifying(true);
 
     try {
+      const requestBody: Record<string, unknown> = {
+        user_id: userId,
+        task_id: taskId,
+        task_description: taskDescription,
+        frames,
+        source,
+      };
+      if (
+        source === 'in_session' &&
+        typeof sessionDurationSeconds === 'number' &&
+        Number.isFinite(sessionDurationSeconds)
+      ) {
+        requestBody.session_duration_seconds = Math.max(0, Math.trunc(sessionDurationSeconds));
+      }
+
       const { data, error } = await supabase.functions.invoke('verify-task-completion', {
-        body: {
-          user_id: userId,
-          task_id: taskId,
-          task_description: taskDescription,
-          frames,
-          source,
-        },
+        body: requestBody,
       });
 
       if (error) {
@@ -103,6 +115,15 @@ export function useTaskVerification(): UseTaskVerificationReturn {
       }
 
       const verificationResult = data as VerificationResult;
+      console.log('[useTaskVerification] Verification result:', {
+        verified: verificationResult.verified,
+        confidence: verificationResult.confidence,
+        evidence: verificationResult.evidence,
+        decisionReason: verificationResult.decision_reason ?? null,
+        notVisuallyVerifiable: verificationResult.not_visually_verifiable,
+        coinsAwarded: verificationResult.coins_awarded,
+        source: verificationResult.source,
+      });
       setResult(verificationResult);
       return verificationResult;
 
@@ -123,10 +144,18 @@ export function useTaskVerification(): UseTaskVerificationReturn {
     taskId: string,
     taskDescription: string,
     frames: string[],
-    userId: string
+    userId: string,
+    sessionDurationSeconds?: number
   ): Promise<VerificationResult | null> => {
     if (frames.length === 0) return null;
-    return callVerifyEndpoint(taskId, taskDescription, frames.slice(0, 5), userId, 'in_session');
+    return callVerifyEndpoint(
+      taskId,
+      taskDescription,
+      frames.slice(0, 5),
+      userId,
+      'in_session',
+      sessionDurationSeconds
+    );
   }, [callVerifyEndpoint]);
 
   const verifyWithPhoto = useCallback(async (

@@ -29,8 +29,8 @@ interface HomeViewProps {
     onRefresh?: () => Promise<void>;
     /** 显示金币奖励 Toast（photo verify 成功后触发） */
     onShowCoinToast?: (amount: number) => void;
-    /** 验证成功后跳转 stats 页 + 播放 EnergyBall 动画 */
-    onVerifySuccess?: () => void;
+    /** 验证成功后跳转 stats 页；awardedCoins > 0 时才播放 EnergyBall 动画 */
+    onVerifySuccess?: (awardedCoins: number) => void;
 }
 
 /**
@@ -705,7 +705,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             if (result.coins_awarded > 0) {
                                 onShowCoinToast?.(result.coins_awarded);
                             }
-                            onVerifySuccess?.();
+                            onVerifySuccess?.(result.coins_awarded);
                         }
                         setPhotoVerifyTask(null);
                     }}

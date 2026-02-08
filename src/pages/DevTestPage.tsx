@@ -4,7 +4,7 @@
  * 仅在开发环境下可用，访问 /dev 即可
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TaskWorkingView } from '../components/task/TaskWorkingView';
 import { CelebrationView } from '../components/celebration/CelebrationView';
@@ -31,6 +31,7 @@ import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm
 import { useCampfireSession } from '../hooks/campfire';
 import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 import { SessionResumptionSpike } from '../components/dev/SessionResumptionSpike';
+import { supabase } from '../lib/supabase';
 
 type TestMode =
   | 'menu'
@@ -68,6 +69,100 @@ type TestMode =
 export function DevTestPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<TestMode>('menu');
+  const [isResettingCoins, setIsResettingCoins] = useState(false);
+  const [isLoadingCoins, setIsLoadingCoins] = useState(false);
+  const [coinActionMessage, setCoinActionMessage] = useState<string | null>(null);
+  const [coinSnapshot, setCoinSnapshot] = useState<{ weekly: number; total: number } | null>(null);
+
+  /**
+   * 加载当前登录用户的金币快照（weekly + total）。
+   * 仅用于 /dev 页面的手动调试展示。
+   */
+  const loadMyCoinsSnapshot = useCallback(async () => {
+    if (!supabase) {
+      setCoinActionMessage('❌ Supabase 未初始化，无法读取金币');
+      return;
+    }
+
+    setIsLoadingCoins(true);
+    try {
+      const { data: authData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const userId = authData.user?.id;
+      if (!userId) {
+        setCoinSnapshot(null);
+        setCoinActionMessage('⚠️ 未登录，无法读取金币');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('weekly_coins, total_coins')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      setCoinSnapshot({
+        weekly: Number(data?.weekly_coins ?? 0),
+        total: Number(data?.total_coins ?? 0),
+      });
+    } catch (error) {
+      console.error('[DevTestPage] 读取金币快照失败:', error);
+      setCoinActionMessage('❌ 读取金币失败，请查看控制台日志');
+    } finally {
+      setIsLoadingCoins(false);
+    }
+  }, []);
+
+  /**
+   * 将当前用户金币直接重置为 0（weekly + total）。
+   * 仅用于 /dev 手工测试，避免影响正式流程。
+   */
+  const resetMyCoinsToZero = useCallback(async () => {
+    if (!supabase) {
+      setCoinActionMessage('❌ Supabase 未初始化，无法重置金币');
+      return;
+    }
+
+    const confirmed = window.confirm('确认将当前账号的 weekly_coins 和 total_coins 都重置为 0 吗？');
+    if (!confirmed) return;
+
+    setIsResettingCoins(true);
+    setCoinActionMessage(null);
+    try {
+      const { data: authData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const userId = authData.user?.id;
+      if (!userId) {
+        setCoinActionMessage('⚠️ 未登录，无法重置金币');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          weekly_coins: 0,
+          total_coins: 0,
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setCoinActionMessage('✅ 金币已重置为 0');
+      await loadMyCoinsSnapshot();
+    } catch (error) {
+      console.error('[DevTestPage] 重置金币失败:', error);
+      setCoinActionMessage('❌ 重置金币失败，请查看控制台日志');
+    } finally {
+      setIsResettingCoins(false);
+    }
+  }, [loadMyCoinsSnapshot]);
+
+  useEffect(() => {
+    if (mode !== 'menu') return;
+    void loadMyCoinsSnapshot();
+  }, [mode, loadMyCoinsSnapshot]);
 
   // 返回菜单
   const backToMenu = () => setMode('menu');
@@ -86,6 +181,36 @@ export function DevTestPage() {
         <p className="text-gray-400 text-center mb-6">
           点击下方按钮测试各个组件
         </p>
+
+        <div className="w-full max-w-sm rounded-xl border border-yellow-500/30 bg-[#2a2a2a] p-4">
+          <h2 className="text-sm font-bold text-yellow-300 mb-2">🪙 Dev Coin Control</h2>
+          <p className="text-xs text-gray-300 mb-3">
+            当前用户金币：
+            {' '}
+            {isLoadingCoins ? '加载中...' : `weekly=${coinSnapshot?.weekly ?? '-'}, total=${coinSnapshot?.total ?? '-'}`}
+          </p>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => void loadMyCoinsSnapshot()}
+              disabled={isLoadingCoins || isResettingCoins}
+              className="flex-1 py-2 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold"
+            >
+              刷新金币
+            </button>
+            <button
+              onClick={() => void resetMyCoinsToZero()}
+              disabled={isLoadingCoins || isResettingCoins}
+              className="flex-1 py-2 px-3 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold"
+            >
+              {isResettingCoins ? '重置中...' : '设为 0'}
+            </button>
+          </div>
+
+          {coinActionMessage && (
+            <p className="text-xs text-gray-200 mt-3">{coinActionMessage}</p>
+          )}
+        </div>
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           {/* AI 教练任务流程 */}

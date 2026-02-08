@@ -15,6 +15,15 @@ import { saveSessionMemory } from '../lib/saveSessionMemory';
 import { useTaskVerification } from './useTaskVerification';
 import type { VerificationResult } from './useTaskVerification';
 import type { CoinRewardSource } from '../constants/coinRewards';
+import { isValidSupabaseUuid } from '../context/auth/nativeAuthBridge';
+
+const TEMPORARY_TASK_ID_PATTERN = /^\d+$/;
+
+/**
+ * 判断任务 ID 是否为前端临时 ID（尚未落库）。
+ */
+const isTemporaryTaskId = (taskId: string): boolean =>
+    TEMPORARY_TASK_ID_PATTERN.test(taskId) || taskId.startsWith('temp-');
 
 // ==========================================
 // 类型定义
@@ -92,8 +101,10 @@ export interface UseCoachControllerOptions {
     /** 挂起操作的回调（Auth gate 逻辑由 AppTabsPage 管理） */
     pendingCallbacks: PendingCallbacks;
     /** 任务完成后跳转 stats 页触发金币动画的回调 */
-    onTaskCompleteForStats: () => void;
+    onTaskCompleteForStats: (awardedCoins: number) => void;
 }
+
+const DEFAULT_SESSION_FINALIZING_MESSAGE = 'Finalizing your session...';
 
 // ==========================================
 // Hook 实现
@@ -132,6 +143,11 @@ export function useCoachController(options: UseCoachControllerOptions) {
     const [currentTaskDescription, setCurrentTaskDescription] = useState('');
     const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
     const [currentTaskType, setCurrentTaskType] = useState<'todo' | 'routine' | 'routine_instance' | null>(null);
+    const [showVerificationChoice, setShowVerificationChoice] = useState(false);
+    const [isSessionFinalizing, setIsSessionFinalizing] = useState(false);
+    const [sessionFinalizingMessage, setSessionFinalizingMessage] = useState(DEFAULT_SESSION_FINALIZING_MESSAGE);
+    const pendingTaskPersistRef = useRef<Map<string, Promise<Task | null>>>(new Map());
+    const persistedTempTaskRef = useRef<Map<string, Task>>(new Map());
 
     // ==========================================
     // 通话追踪
@@ -159,27 +175,42 @@ export function useCoachController(options: UseCoachControllerOptions) {
         userId: string,
         taskId: string | null,
         sources: CoinRewardSource[],
-    ) => {
-        if (!supabase) return;
+    ): Promise<number> => {
+        if (!supabase) return 0;
         try {
             const body: Record<string, unknown> = { user_id: userId, sources };
-            if (taskId) body.task_id = taskId;
+            if (taskId && isValidSupabaseUuid(taskId)) {
+                body.task_id = taskId;
+            }
 
             const { data, error } = await supabase.functions.invoke('award-coins', { body });
             if (error) {
                 console.error('[CoachController] award-coins 失败:', error);
+                return 0;
             } else {
                 const response = data as AwardCoinsResponse | null;
-                devLog('✅ award-coins 成功:', {
-                    taskId,
-                    sources,
-                    totalAwarded: response?.total_coins_awarded ?? null,
-                    weeklyCoins: response?.user_weekly_coins ?? null,
-                    breakdown: response?.breakdown ?? [],
-                });
+                const totalAwarded = response?.total_coins_awarded ?? 0;
+                if (totalAwarded > 0) {
+                    devLog('✅ award-coins 成功:', {
+                        taskId,
+                        sources,
+                        totalAwarded,
+                        weeklyCoins: response?.user_weekly_coins ?? null,
+                        breakdown: response?.breakdown ?? [],
+                    });
+                } else {
+                    devLog('ℹ️ award-coins 跳过（未发币）:', {
+                        taskId,
+                        sources,
+                        totalAwarded,
+                        breakdown: response?.breakdown ?? [],
+                    });
+                }
+                return totalAwarded;
             }
         } catch (err) {
             console.error('[CoachController] award-coins 异常:', err);
+            return 0;
         }
     }, []);
 
@@ -207,6 +238,74 @@ export function useCoachController(options: UseCoachControllerOptions) {
             console.error('Failed to persist voice prompt flag', error);
         }
     }, []);
+
+    /**
+     * 将临时任务异步保存到数据库，并返回落库后的真实任务（含 UUID）。
+     * - 若同一个 temp task 已在保存中，复用同一个 Promise，避免重复创建。
+     * - 若任务已在当前内存列表中存在真实副本，直接复用，避免重复插入。
+     */
+    const persistTemporaryTask = useCallback((task: Task): Promise<Task | null> => {
+        if (!auth.userId || !isTemporaryTaskId(task.id)) {
+            return Promise.resolve(null);
+        }
+
+        const existingPromise = pendingTaskPersistRef.current.get(task.id);
+        if (existingPromise) {
+            return existingPromise;
+        }
+
+        const persistPromise = (async () => {
+            try {
+                const existingPersistedTask = appTasks.tasks.find(candidate =>
+                    !isTemporaryTaskId(candidate.id) &&
+                    candidate.text === task.text &&
+                    candidate.time === task.time &&
+                    (candidate.date || '') === (task.date || '') &&
+                    candidate.type === task.type
+                );
+
+                if (existingPersistedTask) {
+                    devLog('ℹ️ 复用已存在的真实任务，跳过重复创建', {
+                        tempTaskId: task.id,
+                        persistedTaskId: existingPersistedTask.id,
+                    });
+                    return existingPersistedTask;
+                }
+
+                const taskSignature = `${task.text}|${task.time}|${task.date || ''}`;
+                if (!appTasks.isTaskSignatureCreated(taskSignature)) {
+                    appTasks.markTaskSignatureCreated(taskSignature);
+                }
+
+                const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
+                const sessionUserId = sessionData?.session?.user?.id ?? auth.userId;
+                if (!sessionUserId) {
+                    console.warn('⚠️ 临时任务落库失败：缺少有效用户 ID', { tempTaskId: task.id });
+                    return null;
+                }
+
+                const savedTask = await createReminder(task, sessionUserId);
+                if (!savedTask) {
+                    return null;
+                }
+
+                persistedTempTaskRef.current.set(task.id, savedTask);
+                devLog('✅ 临时任务已落库，获得真实 UUID', {
+                    tempTaskId: task.id,
+                    taskId: savedTask.id,
+                });
+                return savedTask;
+            } catch (error) {
+                console.error('⚠️ 临时任务后台保存失败:', error);
+                return null;
+            } finally {
+                pendingTaskPersistRef.current.delete(task.id);
+            }
+        })();
+
+        pendingTaskPersistRef.current.set(task.id, persistPromise);
+        return persistPromise;
+    }, [appTasks, auth.userId]);
 
     // ==========================================
     // LiveKit 模式状态
@@ -253,10 +352,11 @@ export function useCoachController(options: UseCoachControllerOptions) {
         if (!auth.isLoggedIn && (aiCoach.isSessionActive || aiCoach.isConnecting)) {
             devLog('🔐 用户已登出，强制结束 AI 教练会话并释放媒体资源');
             aiCoach.endSession();
+            pendingTaskPersistRef.current.clear();
+            persistedTempTaskRef.current.clear();
             if (aiCoach.cameraEnabled) {
                 aiCoach.toggleCamera();
             }
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- 登出时必须同步重置状态
             setCurrentTaskId(null);
             setCurrentTaskType(null);
             setShowCelebration(false);
@@ -341,44 +441,27 @@ export function useCoachController(options: UseCoachControllerOptions) {
      */
     const startAICoachForTask = useCallback(async (task: Task) => {
         devLog('🤖 Starting AI Coach session for task:', task.text);
+        setSessionVerificationResult(null);
+        setShowVerificationChoice(false);
+        setIsSessionFinalizing(false);
+        setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
 
         const taskToUse = task;
         const taskId = task.id;
 
         // 检查任务 ID 是否是临时的（时间戳格式，全数字）
-        const isTemporaryId = /^\d+$/.test(task.id) || task.id.startsWith('temp-');
+        const isTemporaryId = isTemporaryTaskId(task.id);
 
         if (isTemporaryId && auth.userId) {
-            const taskSignature = `${task.text}|${task.time}|${task.date || ''}`;
-
-            if (appTasks.isTaskSignatureCreated(taskSignature)) {
-                console.warn('⚠️ startAICoachForTask: 检测到重复任务创建请求，跳过数据库保存', {
-                    taskSignature,
-                    displayTime: task.displayTime,
-                    tempId: task.id
-                });
-            } else {
-                devLog('📝 检测到临时任务 ID，后台保存到数据库...', { taskSignature, displayTime: task.displayTime });
-                appTasks.markTaskSignatureCreated(taskSignature);
-
-                // fire-and-forget：后台保存，完成后更新 taskId
-                (async () => {
-                    try {
-                        const { data: sessionData } = await supabase?.auth.getSession() ?? { data: null };
-                        if (sessionData?.session?.user?.id) {
-                            const savedTask = await createReminder(task, sessionData.session.user.id);
-                            if (savedTask) {
-                                devLog('✅ 任务已后台保存到数据库，真实 ID:', savedTask.id);
-                                aiCoach.updateTaskId(savedTask.id);
-                                setCurrentTaskId(savedTask.id);
-                                appTasks.replaceTaskId(task.id, savedTask);
-                            }
-                        }
-                    } catch (saveError) {
-                        console.error('⚠️ 后台保存临时任务失败:', saveError);
-                    }
-                })();
-            }
+            devLog('📝 检测到临时任务 ID，后台落库中...', { tempTaskId: task.id, displayTime: task.displayTime });
+            void persistTemporaryTask(task).then(savedTask => {
+                if (!savedTask) {
+                    return;
+                }
+                aiCoach.updateTaskId(savedTask.id);
+                setCurrentTaskId(prev => (prev === null || prev === task.id ? savedTask.id : prev));
+                appTasks.replaceTaskId(task.id, savedTask);
+            });
         }
 
         devLog('🎙️ LiveKit 检测:', {
@@ -393,20 +476,22 @@ export function useCoachController(options: UseCoachControllerOptions) {
             setLiveKitTimeRemaining(300);
             setLiveKitError(null);
             setCurrentTaskDescription(taskToUse.text);
-            setCurrentTaskId(taskId);
+            const persistedTask = isTemporaryId ? persistedTempTaskRef.current.get(taskId) : null;
+            const resolvedTaskId = persistedTask?.id ?? taskId;
+            setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
 
             startLiveKitRoom();
 
-            if (auth.userId && !isTemporaryId) {
+            if (auth.userId && !isTemporaryTaskId(resolvedTaskId)) {
                 try {
-                    await updateReminder(taskId, { called: true });
+                    await updateReminder(resolvedTaskId, { called: true });
                     devLog('✅ Task called status persisted to database');
                 } catch (updateError) {
                     console.error('⚠️ Failed to persist called status:', updateError);
                 }
             }
-            appTasks.patchTask(taskId, { called: true });
+            appTasks.patchTask(resolvedTaskId, { called: true });
             return;
         }
 
@@ -423,22 +508,24 @@ export function useCoachController(options: UseCoachControllerOptions) {
             if (!started) return;
             devLog('✅ AI Coach session started successfully');
 
-            setCurrentTaskId(taskId);
+            const persistedTask = isTemporaryId ? persistedTempTaskRef.current.get(taskId) : null;
+            const resolvedTaskId = persistedTask?.id ?? taskId;
+            setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
 
-            if (auth.userId && !isTemporaryId) {
+            if (auth.userId && !isTemporaryTaskId(resolvedTaskId)) {
                 try {
-                    await updateReminder(taskId, { called: true });
+                    await updateReminder(resolvedTaskId, { called: true });
                     devLog('✅ Task called status persisted to database');
                 } catch (updateError) {
                     console.error('⚠️ Failed to persist called status:', updateError);
                 }
             }
-            appTasks.patchTask(taskId, { called: true });
+            appTasks.patchTask(resolvedTaskId, { called: true });
         } catch (error) {
             console.error('❌ Failed to start AI coach session:', error);
         }
-    }, [aiCoach, appTasks, auth.userId, auth.userName, currentCallRecordId]);
+    }, [aiCoach, appTasks, auth.userId, auth.userName, currentCallRecordId, persistTemporaryTask]);
 
     /**
      * 确保首次显示语音/摄像头提示；用户确认后才真正启动 AI 教练。
@@ -522,6 +609,9 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+        setShowVerificationChoice(false);
+        setIsSessionFinalizing(false);
+        setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
 
         void saveSessionMemory({
             messages: messagesSnapshot,
@@ -532,74 +622,196 @@ export function useCoachController(options: UseCoachControllerOptions) {
     }, [aiCoach, auth.userId]);
 
     /**
+     * 打开“完成方式”选择弹层，让用户决定是否进行视觉验证。
+     */
+    const handleRequestSessionCompletion = useCallback(() => {
+        if (isSessionFinalizing) return;
+        setShowVerificationChoice(true);
+    }, [isSessionFinalizing]);
+
+    /**
+     * 关闭“完成方式”选择弹层，返回会话页面。
+     */
+    const handleCancelSessionCompletion = useCallback(() => {
+        if (isSessionFinalizing) return;
+        setShowVerificationChoice(false);
+    }, [isSessionFinalizing]);
+
+    /**
      * 用户在任务执行视图中点击「I'M DOING IT!」
      * - 保存会话记忆到 Mem0
      * - 结束当前 AI 会话
      * - 跳转到 stats 页触发金币动画（替代旧庆祝页面）
      * - 标记任务为已完成
      */
-    const handleEndAICoachSession = useCallback(() => {
-        aiCoach.stopAudioImmediately();
-
-        const usedTime = 300 - aiCoach.state.timeRemaining;
-        const actualDurationMinutes = Math.round(usedTime / 60);
-
-        const messagesSnapshot = [...aiCoach.state.messages];
-        const taskDescriptionSnapshot = aiCoach.state.taskDescription;
-        const taskIdToComplete = currentTaskId;
-        const taskTypeToComplete = currentTaskType;
-        const userId = auth.userId;
-
-        // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
-        const capturedFrames = aiCoach.getRecentFrames(5);
-        devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
-
-        aiCoach.endSession();
-
-        unlockScreenTimeIfLocked('GeminiLive.primaryButton');
-
-        setCurrentTaskId(null);
-        setCurrentTaskType(null);
-
-        void saveSessionMemory({
-            messages: messagesSnapshot,
-            taskDescription: taskDescriptionSnapshot,
-            userId,
-            taskCompleted: true,
-            usedTime,
-            actualDurationMinutes,
-        });
-
-        void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-
-        // fire-and-forget: 金币奖励（统一使用后端默认规则）
-        if (userId) {
-            void awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+    const handleEndAICoachSession = useCallback(async (shouldVerifyCompletion = true) => {
+        if (isSessionFinalizing) {
+            devLog('⏳ 会话结算中，忽略重复点击 I\'M DOING IT!');
+            return;
         }
+        setShowVerificationChoice(false);
+        setIsSessionFinalizing(true);
+        setSessionFinalizingMessage('Saving your session...');
+        let awardedCoinsForStats = 0;
+        try {
+            aiCoach.stopAudioImmediately();
+            setSessionVerificationResult(null);
 
-        // fire-and-forget: 视觉验证（不阻塞庆祝流程）
-        if (userId && taskIdToComplete && capturedFrames.length > 0) {
-            void (async () => {
+            const usedTime = 300 - aiCoach.state.timeRemaining;
+            const actualDurationMinutes = Math.round(usedTime / 60);
+
+            const messagesSnapshot = [...aiCoach.state.messages];
+            const taskDescriptionSnapshot = aiCoach.state.taskDescription;
+            let taskIdToComplete = currentTaskId;
+            const taskTypeToComplete = currentTaskType;
+            const userId = auth.userId;
+
+            // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
+            const capturedFrames = aiCoach.getRecentFrames(5);
+            devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
+
+            aiCoach.endSession();
+
+            unlockScreenTimeIfLocked('GeminiLive.primaryButton');
+
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+
+            void saveSessionMemory({
+                messages: messagesSnapshot,
+                taskDescription: taskDescriptionSnapshot,
+                userId,
+                taskCompleted: true,
+                usedTime,
+                actualDurationMinutes,
+            });
+
+            // 关键修复：会话结束前确保临时任务已落库，拿到真实 UUID 再执行后续流程。
+            if (userId && taskIdToComplete && isTemporaryTaskId(taskIdToComplete)) {
+                const tempTaskId = taskIdToComplete;
+                const persistedTaskFromRef = persistedTempTaskRef.current.get(tempTaskId);
+                if (persistedTaskFromRef && isValidSupabaseUuid(persistedTaskFromRef.id)) {
+                    taskIdToComplete = persistedTaskFromRef.id;
+                    aiCoach.updateTaskId(persistedTaskFromRef.id);
+                    appTasks.replaceTaskId(tempTaskId, persistedTaskFromRef);
+                    devLog('✅ 使用缓存的真实 UUID 完成会话收尾', {
+                        tempTaskId,
+                        taskId: persistedTaskFromRef.id,
+                    });
+                }
+
+                if (!isValidSupabaseUuid(taskIdToComplete)) {
+                    const taskFromState = appTasks.tasks.find(t => t.id === tempTaskId);
+                    const now = new Date();
+                    const fallbackTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    const fallbackTask: Task = taskFromState ?? {
+                        id: tempTaskId,
+                        text: taskDescriptionSnapshot || 'Focus task',
+                        time: fallbackTime,
+                        displayTime: 'Now',
+                        date: getLocalDateString(),
+                        completed: false,
+                        type: 'todo',
+                        category: 'morning',
+                        called: true,
+                    };
+
+                    const inFlightPersist = pendingTaskPersistRef.current.get(tempTaskId);
+                    const persistedTask = inFlightPersist
+                        ? await inFlightPersist
+                        : await persistTemporaryTask(fallbackTask);
+
+                    if (persistedTask && isValidSupabaseUuid(persistedTask.id)) {
+                        taskIdToComplete = persistedTask.id;
+                        persistedTempTaskRef.current.set(tempTaskId, persistedTask);
+                        aiCoach.updateTaskId(persistedTask.id);
+                        appTasks.replaceTaskId(tempTaskId, persistedTask);
+                        devLog('✅ 会话结束前已解析临时任务为真实 UUID', {
+                            tempTaskId,
+                            taskId: persistedTask.id,
+                        });
+                    } else {
+                        devLog('⚠️ 会话结束时仍未拿到真实 UUID，将跳过验证与发币', { tempTaskId });
+                    }
+                }
+            }
+
+            void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
+
+            // 视觉验证后再决定是否发任务完成金币
+            let verificationPassed = false;
+            setSessionFinalizingMessage(shouldVerifyCompletion ? 'Verifying your progress...' : 'Skipping verification...');
+            if (shouldVerifyCompletion && userId && taskIdToComplete && isValidSupabaseUuid(taskIdToComplete) && capturedFrames.length > 0) {
                 try {
                     const result = await verifyWithFrames(
                         taskIdToComplete,
                         taskDescriptionSnapshot,
                         capturedFrames,
-                        userId
+                        userId,
+                        usedTime
                     );
                     if (result) {
                         setSessionVerificationResult(result);
-                        devLog('✅ 视觉验证完成:', { verified: result.verified, confidence: result.confidence });
+                        verificationPassed = result.verified === true;
+                        devLog('✅ 视觉验证完成:', {
+                            taskId: taskIdToComplete,
+                            verified: result.verified,
+                            confidence: result.confidence,
+                            notVisuallyVerifiable: result.not_visually_verifiable,
+                            evidence: result.evidence,
+                            decisionReason: result.decision_reason ?? null,
+                            coinsAwarded: result.coins_awarded,
+                        });
                     }
                 } catch (err) {
-                    console.error('[CoachController] 视觉验证 fire-and-forget 错误:', err);
+                    console.error('[CoachController] 视觉验证错误:', err);
                 }
-            })();
-        }
+            } else if (!shouldVerifyCompletion) {
+                devLog('ℹ️ 用户选择跳过视觉验证，不发放 task_complete/session_complete 金币', {
+                    taskId: taskIdToComplete,
+                });
+            } else if (taskIdToComplete && !isValidSupabaseUuid(taskIdToComplete)) {
+                devLog('⚠️ 跳过视觉验证：taskId 不是有效 UUID', { taskId: taskIdToComplete });
+            } else if (!capturedFrames.length) {
+                devLog('⚠️ 跳过视觉验证：无可用帧');
+            }
 
-        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
-        onTaskCompleteForStats();
-    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, awardCoins, onTaskCompleteForStats]);
+            // 仅验证通过才发 task/session 完成金币
+            if (verificationPassed && userId) {
+                setSessionFinalizingMessage('Calculating your rewards...');
+                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+            } else {
+                devLog('ℹ️ 未通过验证，不发放 task_complete/session_complete 金币', {
+                    taskId: taskIdToComplete,
+                    verificationPassed,
+                });
+            }
+        } catch (error) {
+            console.error('[CoachController] 会话结算失败，降级为无奖励跳转:', error);
+        } finally {
+            setSessionFinalizingMessage('Opening your stats...');
+            onTaskCompleteForStats(awardedCoinsForStats);
+            setIsSessionFinalizing(false);
+            setShowVerificationChoice(false);
+            setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
+        }
+    }, [aiCoach, currentTaskId, currentTaskType, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, awardCoins, onTaskCompleteForStats, persistTemporaryTask, isSessionFinalizing]);
+
+    /**
+     * 用户选择“验证后完成”。
+     */
+    const handleCompleteWithVerification = useCallback(() => {
+        setShowVerificationChoice(false);
+        void handleEndAICoachSession(true);
+    }, [handleEndAICoachSession]);
+
+    /**
+     * 用户选择“跳过验证直接完成”。
+     */
+    const handleCompleteWithoutVerification = useCallback(() => {
+        setShowVerificationChoice(false);
+        void handleEndAICoachSession(false);
+    }, [handleEndAICoachSession]);
 
     /**
      * 用户在确认页面点击「YES, I DID IT!」
@@ -613,11 +825,6 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         unlockScreenTimeIfLocked('Celebration.confirmYes');
 
-        // fire-and-forget: 金币奖励（统一使用后端默认规则）
-        if (auth.userId) {
-            void awardCoins(auth.userId, currentTaskId, ['task_complete']);
-        }
-
         // 关闭确认页面
         setShowCelebration(false);
         setCelebrationFlow('confirm');
@@ -626,9 +833,10 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskId(null);
         setCurrentTaskType(null);
 
-        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
-        onTaskCompleteForStats();
-    }, [currentTaskId, currentTaskType, completionTime, appTasks, auth.userId, unlockScreenTimeIfLocked, awardCoins, onTaskCompleteForStats]);
+        // 此路径没有视觉验证结果，不发 task_complete 金币
+        onTaskCompleteForStats(0);
+        devLog('ℹ️ Confirm 完成路径未触发视觉验证，不发放 task_complete 金币');
+    }, [currentTaskId, currentTaskType, completionTime, appTasks, unlockScreenTimeIfLocked, onTaskCompleteForStats]);
 
     /**
      * 用户确认未完成任务 - 显示鼓励页面（不标记任务完成）
@@ -648,6 +856,9 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskId(null);
         setCurrentTaskType(null);
         setSessionVerificationResult(null);
+        setShowVerificationChoice(false);
+        setIsSessionFinalizing(false);
+        setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
     }, []);
 
     // ==========================================
@@ -665,17 +876,13 @@ export function useCoachController(options: UseCoachControllerOptions) {
         }
         unlockScreenTimeIfLocked('LiveKit.primaryButton');
 
-        // fire-and-forget: 金币奖励（统一使用后端默认规则）
-        if (auth.userId) {
-            void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete']);
-        }
+        // LiveKit 当前没有视觉验证链路，不发 task/session 完成金币
+        onTaskCompleteForStats(0);
+        devLog('ℹ️ LiveKit 完成路径未触发视觉验证，不发放 task_complete/session_complete 金币');
 
         setUsingLiveKit(false);
         setLiveKitConnected(false);
-
-        // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
-        onTaskCompleteForStats();
-    }, [unlockScreenTimeIfLocked, auth.userId, currentTaskId, awardCoins, onTaskCompleteForStats]);
+    }, [unlockScreenTimeIfLocked, onTaskCompleteForStats]);
 
     /**
      * LiveKit 模式副按钮「END CALL」：结束通话并返回
@@ -713,7 +920,6 @@ export function useCoachController(options: UseCoachControllerOptions) {
         // 如果有 callRecordId，记录 WebView 打开时间（表示用户点击了接听）
         if (callRecordIdParam && !currentCallRecordId) {
             devLog('📞 检测到 callRecordId，记录 WebView 打开时间:', callRecordIdParam);
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- URL 参数解析后必须同步记录 callRecordId
             setCurrentCallRecordId(callRecordIdParam);
 
             supabase?.functions.invoke('manage-call-records', {
@@ -826,7 +1032,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
     // ==========================================
 
     /** 会话遮罩是否可见（AI 会话活跃、正在连接、或 LiveKit 模式中） */
-    const isSessionOverlayVisible = aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit;
+    const isSessionOverlayVisible = aiCoach.isSessionActive || aiCoach.isConnecting || usingLiveKit || isSessionFinalizing;
 
     // ==========================================
     // 返回值
@@ -837,6 +1043,9 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
         // 会话遮罩可见性
         isSessionOverlayVisible,
+        showVerificationChoice,
+        isSessionFinalizing,
+        sessionFinalizingMessage,
 
         // LiveKit 状态
         usingLiveKit,
@@ -864,6 +1073,10 @@ export function useCoachController(options: UseCoachControllerOptions) {
         handleQuickStart,
         handleStatsStartTask,
         handleEndCall,
+        handleRequestSessionCompletion,
+        handleCancelSessionCompletion,
+        handleCompleteWithVerification,
+        handleCompleteWithoutVerification,
         handleEndAICoachSession,
         handleConfirmTaskComplete,
         handleConfirmTaskIncomplete,

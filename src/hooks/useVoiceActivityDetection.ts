@@ -137,17 +137,9 @@ export function useVoiceActivityDetection(
       }
       const average = sum / passbandBinCount;
 
-      // 诊断日志 + 音量上报：每 60 帧（约 1 秒）
+      // 音量上报：每 60 帧（约 1 秒）用于外部音频异常检测
       frameCount++;
       if (frameCount % 60 === 1) {
-        console.log('🔊 [VAD Loop]', {
-          frame: frameCount,
-          volume: Math.round(average),
-          audioCtxState: audioContext.state,
-          threshold: risingThreshold,
-          isSpeaking: speakingRef.current,
-        });
-        // 音量上报回调（用于外部音频异常检测）
         onVolumeReport?.(Math.round(average));
       }
 

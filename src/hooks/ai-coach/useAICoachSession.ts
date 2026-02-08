@@ -256,7 +256,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     userId: currentUserIdRef.current || '',
     chatType: 'daily_chat',
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
-    enabled: isSessionActive && !campfire.isCampfireMode,
+    enabled: isSessionActive && (!campfire.isCampfireMode || geminiLive.isConnected),
     onToolResult: (result) => {
       // 工具执行完后，把结果注入回 Gemini 对话
       if (result.success && result.responseHint && geminiLive.isConnected) {
@@ -286,7 +286,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
             case 'enter_campfire':
               refereeEpochRef.current += 1;
               devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
-              campfire.enterCampfireMode();
+              campfire.enterCampfireMode({ skipFarewell: true });
               return; // 模式切换后不处理其他动作
 
             case 'exit_campfire':

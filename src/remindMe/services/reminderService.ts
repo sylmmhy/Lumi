@@ -36,11 +36,12 @@ interface TaskRecord {
   created_at: string;
   updated_at: string;
   // Success metadata fields - 成功元数据字段
-  completion_mood: 'proud' | 'relieved' | 'satisfied' | 'neutral' | null;
-  difficulty_perception: 'easier_than_usual' | 'normal' | 'harder_than_usual' | null;
-  overcame_resistance: boolean | null;
-  actual_duration_minutes: number | null;
-  personal_best_at_completion: number | null;
+  // 已在 20260201 系列迁移中删除，保留为可选字段仅用于兼容旧快照/旧本地数据库。
+  completion_mood?: 'proud' | 'relieved' | 'satisfied' | 'neutral' | null;
+  difficulty_perception?: 'easier_than_usual' | 'normal' | 'harder_than_usual' | null;
+  overcame_resistance?: boolean | null;
+  actual_duration_minutes?: number | null;
+  personal_best_at_completion?: number | null;
   // Consequence fields - 后果相关字段
   consequence_short: string | null;
   consequence_pledge: string | null;
@@ -53,6 +54,7 @@ interface TaskRecord {
  * 当浏览器无法识别时区或运行在非浏览器环境时使用的默认时区。
  */
 const DEFAULT_TIMEZONE = 'UTC';
+let hasLoggedRemovedTaskMetadataWrite = false;
 
 /**
  * 安全获取浏览器时区，失败时返回 null 让原生端或后端自行回退。
@@ -271,6 +273,7 @@ export async function fetchRecurringReminders(userId: string): Promise<Task[]> {
     .select('*')
     .eq('user_id', userId)
     .eq('is_recurring', true)
+    .neq('status', 'archived')
     .order('time', { ascending: true });
 
   if (error) {
@@ -416,12 +419,35 @@ export async function updateReminder(id: string, updates: Partial<Task>): Promis
   if (updates.recurrenceDays !== undefined) dbUpdates.recurrence_days = updates.recurrenceDays || null;
   if (updates.recurrenceEndDate !== undefined) dbUpdates.recurrence_end_date = updates.recurrenceEndDate || null;
 
-  // Success metadata fields - 成功元数据字段
-  if (updates.completionMood !== undefined) dbUpdates.completion_mood = updates.completionMood || null;
-  if (updates.difficultyPerception !== undefined) dbUpdates.difficulty_perception = updates.difficultyPerception || null;
-  if (updates.overcameResistance !== undefined) dbUpdates.overcame_resistance = updates.overcameResistance ?? null;
-  if (updates.actualDurationMinutes !== undefined) dbUpdates.actual_duration_minutes = updates.actualDurationMinutes ?? null;
-  if (updates.personalBestAtCompletion !== undefined) dbUpdates.personal_best_at_completion = updates.personalBestAtCompletion ?? null;
+  const hasDeprecatedSuccessMetadataUpdates =
+    updates.completionMood !== undefined ||
+    updates.difficultyPerception !== undefined ||
+    updates.overcameResistance !== undefined ||
+    updates.actualDurationMinutes !== undefined ||
+    updates.personalBestAtCompletion !== undefined;
+
+  // 这些字段已从 tasks 表删除（迁移: 20260201031709 / 20260201032214 / 20260201032841）。
+  // 这里不再写入，避免 PGRST204 schema cache 报错。
+  if (hasDeprecatedSuccessMetadataUpdates) {
+    if (!hasLoggedRemovedTaskMetadataWrite) {
+      devLog('⚠️ Ignored deprecated success metadata updates on tasks table', {
+        removedColumns: [
+          'completion_mood',
+          'difficulty_perception',
+          'overcame_resistance',
+          'actual_duration_minutes',
+          'personal_best_at_completion',
+        ],
+      });
+      hasLoggedRemovedTaskMetadataWrite = true;
+    }
+  }
+
+  // 仅传入了已废弃字段时，直接回查当前任务，避免发送空 update。
+  if (Object.keys(dbUpdates).length === 0) {
+    devLog('ℹ️ Skipped empty task update payload', { taskId: id });
+    return fetchReminderById(id, sessionUser.id);
+  }
 
   // 安全性：添加 user_id 条件，确保只能更新属于当前用户的任务
   const { data, error } = await supabase
@@ -767,15 +793,17 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
   const today = getLocalDateString();
 
   try {
-    // 1. 获取所有 routine 模板（仅获取 pending 状态的，排除已完成/归档的）
-    // 🔧 修复：用户标记 routine 为 completed 后，不应再为其生成每日实例
+    // 1. 获取所有 active routine 模板（仅排除 archived）
+    // 说明：
+    // - routine 模板本身不应该用 status=completed 表达“今天已完成”，那是 instance/打卡记录的职责。
+    // - 历史数据里若模板误写成 completed，这里仍会生成今天实例，保证用户可勾选。
     const { data: routineTemplates, error: fetchError } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .eq('task_type', 'routine')
       .eq('is_recurring', true)
-      .eq('status', 'pending');
+      .neq('status', 'archived');
 
     if (fetchError) {
       console.error('Failed to fetch routine templates:', fetchError);
@@ -799,32 +827,31 @@ export async function generateTodayRoutineInstances(userId: string): Promise<Tas
     );
 
     // 3. 为还没有今日实例的 routine 生成实例
-    // 🔧 修复：跳过今天时间已过的任务，避免 pg_cron 立即触发推送
+    // 关键：即使时间已过也要生成“静默实例”，否则用户当天无法在 Home 勾选 routine。
+    // 对已过时的实例设置 called=true，避免创建后被通知任务再次触发。
     const instancesToCreate = routineTemplates
-      .filter(template => {
-        // 跳过已有今日实例的
-	        if (existingParentIds.has(template.id)) return false;
-	        // 🆕 跳过今天时间已过的任务（避免立即触发电话）
-	        if (!isTimeInFuture(template.time, today)) {
-	          devLog(`⏭️ Skipping routine "${template.title}" - time ${template.time} has passed for today`);
-	          return false;
-	        }
-	        return true;
-	      })
-      .map(template => ({
-        user_id: userId,
-        title: template.title,
-        time: template.time,
-        display_time: template.display_time,
-        reminder_date: today,
-        timezone: template.timezone,
-        status: 'pending' as const,
-        task_type: 'routine_instance' as const,
-        time_category: template.time_category,
-        called: false,
-        is_recurring: false,
-        parent_routine_id: template.id,
-      }));
+      .filter(template => !existingParentIds.has(template.id))
+      .map(template => {
+        const shouldNotifyLater = isTimeInFuture(template.time, today);
+        if (!shouldNotifyLater) {
+          devLog(`📝 Created silent routine_instance for "${template.title}" (time passed: ${template.time ?? 'null'})`);
+        }
+
+        return {
+          user_id: userId,
+          title: template.title,
+          time: template.time,
+          display_time: template.display_time,
+          reminder_date: today,
+          timezone: template.timezone,
+          status: 'pending' as const,
+          task_type: 'routine_instance' as const,
+          time_category: template.time_category,
+          called: !shouldNotifyLater,
+          is_recurring: false,
+          parent_routine_id: template.id,
+        };
+      });
 
     if (instancesToCreate.length === 0) {
       return [];

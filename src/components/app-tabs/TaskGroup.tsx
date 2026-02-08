@@ -6,7 +6,7 @@ interface TaskGroupProps {
   title: string;
   icon: string;
   tasks: Task[];
-  onToggle: (id: string) => void;
+  onToggle: (id: string) => Promise<boolean> | boolean;
   onDelete: (id: string) => void;
   onEdit?: (task: Task) => void;
   onSkipForDay?: (task: Task) => void;

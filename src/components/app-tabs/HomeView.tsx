@@ -17,7 +17,7 @@ import { useAuth } from '../../hooks/useAuth';
 interface HomeViewProps {
     tasks: Task[];
     onAddTask: (task: Task) => void;
-    onToggleComplete: (id: string) => void;
+    onToggleComplete: (id: string) => Promise<boolean> | boolean;
     onDeleteTask: (id: string) => void;
     /** 更新任务 */
     onUpdateTask?: (task: Task) => void;

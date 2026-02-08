@@ -211,8 +211,8 @@ export function AppTabsPage() {
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
     /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调 */
-    const toggleComplete = useCallback(async (id: string) => {
-        await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
+    const toggleComplete = useCallback((id: string) => {
+        return appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
     }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */

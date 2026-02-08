@@ -100,6 +100,9 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   /** 🔧 修复闭包过期：标记"篝火重连刚完成，需要发送触发消息" */
   const campfireNeedsTriggerRef = useRef(false);
 
+  /** 篝火模式进入时间戳：用于 VAD 冷却期，避免 AI 音频残留触发误重连 */
+  const campfireEntryTimeRef = useRef<number>(0);
+
   // ==========================================
   // 子 Hooks
   // ==========================================
@@ -188,6 +191,52 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     return data;
   }, [campfireSessionId, currentUserId, currentTaskDescription, preferredLanguage, getSessionContext]);
 
+  /**
+   * 调用 get-system-instruction 获取正常的 AI 教练 system prompt（用于 VAD 重连和退出篝火）
+   * 和首次启动时用的是同一个后端接口，保证 AI 行为完全一致
+   */
+  const fetchReconnectInstruction = useCallback(async (): Promise<string | null> => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    const sessionContext = getSessionContext ? getSessionContext() : undefined;
+    if (sessionContext) {
+      devLog('📝 [Campfire] 重连携带对话上下文:', {
+        messageCount: sessionContext.messages.length,
+        topics: sessionContext.topics,
+      });
+    }
+
+    const { data, error } = await supabase.functions.invoke('get-system-instruction', {
+      body: {
+        taskInput: currentTaskDescription || '',
+        userId: currentUserId || '',
+        preferredLanguages: [preferredLanguage || 'en-US'],
+        localTime: (() => {
+          const now = new Date();
+          const hours = now.getHours();
+          const minutes = now.getMinutes().toString().padStart(2, '0');
+          return `${hours}:${minutes} (24-hour format)`;
+        })(),
+        localDate: new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'short',
+          day: 'numeric'
+        }),
+        localDateISO: new Date().toISOString().split('T')[0],
+        isReconnect: true,
+        ...(sessionContext ? { context: sessionContext } : {}),
+      },
+    });
+
+    if (error) {
+      devWarn('❌ [Campfire] get-system-instruction error:', error);
+      return null;
+    }
+
+    return data?.systemInstruction || null;
+  }, [currentUserId, currentTaskDescription, preferredLanguage, getSessionContext]);
+
   // ==========================================
   // VAD 触发重连
   // ==========================================
@@ -205,28 +254,29 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       // 防止 sessionRef 残留导致 connect 被忽略
       geminiLive.disconnect();
 
-      // 并行获取 token 和 system prompt，减少重连耗时
-      const [token, config] = await Promise.all([
+      // 并行获取 token 和 system prompt（用正常的 get-system-instruction，和首次启动一致）
+      const [token, systemInstruction] = await Promise.all([
         fetchGeminiToken(),
-        callStartCampfireFocus(true),
+        fetchReconnectInstruction(),
       ]);
       if (epochAtStart !== sessionEpochRef.current) {
         devLog('🔌 [Campfire] reconnect cancelled (stale epoch)');
         return;
       }
-      if (!config?.geminiConfig?.systemPrompt) {
+      if (!systemInstruction) {
         devWarn('❌ [Campfire] No system prompt from backend');
         return;
       }
 
-      // 🔧 修复：始终使用用户偏好的声音（getVoiceName），不用后端返回的 voiceConfig
-      // 后端 start-campfire-focus 固定返回 Aoede（女声），但用户之前选的是 Puck（男声）
       await geminiLive.connect(
-        config.geminiConfig.systemPrompt,
+        systemInstruction,
         [],
         token,
         getVoiceName()
       );
+
+      // 更新保存的 system instruction（包含最新对话上下文）
+      savedSystemInstructionRef.current = systemInstruction;
 
       // reconnect 后确保麦克风重新启用（disconnect 会 stop mic）
       if (!geminiLive.isRecording) {
@@ -249,7 +299,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     } finally {
       campfireReconnectLockRef.current = false;
     }
-  }, [geminiLive, callStartCampfireFocus, startCampfireIdleTimer, sessionEpochRef]);
+  }, [geminiLive, fetchReconnectInstruction, startCampfireIdleTimer, sessionEpochRef]);
 
   // ==========================================
   // 进入/退出篝火模式
@@ -310,6 +360,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
     // 切换状态
     devLog('🏕️ [Step 4] 设置 isCampfireMode = true');
+    campfireEntryTimeRef.current = Date.now();
     setIsCampfireMode(true);
     setCampfireChatCount(0);
 
@@ -355,13 +406,24 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     // 4. 切换状态
     setIsCampfireMode(false);
 
-    // 5. 重新连接 AI 教练（用保存的原始 system prompt）
-    if (savedSystemInstructionRef.current) {
-      try {
-        const token = await fetchGeminiToken();
+    // 5. 重新连接 AI 教练（重新获取 system prompt，包含对话上下文，和首次启动一致）
+    try {
+      const [token, systemInstruction] = await Promise.all([
+        fetchGeminiToken(),
+        fetchReconnectInstruction(),
+      ]);
+
+      const prompt = systemInstruction || savedSystemInstructionRef.current;
+      if (prompt) {
         const voiceName = getVoiceName();
         geminiLive.disconnect();
-        await geminiLive.connect(savedSystemInstructionRef.current, undefined, token, voiceName);
+        await geminiLive.connect(prompt, undefined, token, voiceName);
+
+        // 更新保存的 system instruction
+        if (systemInstruction) {
+          savedSystemInstructionRef.current = systemInstruction;
+        }
+
         // reconnect 后确保麦克风重新启用
         if (!geminiLive.isRecording) {
           try {
@@ -370,9 +432,9 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
             devWarn('⚠️ [Campfire] Failed to re-enable microphone after exit:', e);
           }
         }
-      } catch (err) {
-        devWarn('❌ [Campfire] Failed to reconnect AI coach:', err);
       }
+    } catch (err) {
+      devWarn('❌ [Campfire] Failed to reconnect AI coach:', err);
     }
 
     // 6. 更新数据库（异步）
@@ -395,7 +457,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     }
 
     return stats;
-  }, [isCampfireMode, ambientAudio, focusTimer, campfireSessionId, campfireChatCount, geminiLive, clearCampfireIdleTimer, currentTaskDescription]);
+  }, [isCampfireMode, ambientAudio, focusTimer, campfireSessionId, campfireChatCount, geminiLive, clearCampfireIdleTimer, currentTaskDescription, fetchReconnectInstruction]);
 
   /**
    * 停止篝火模式相关资源（白噪音/计时器/麦克风流）
@@ -426,9 +488,8 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       campfireNeedsTriggerRef.current = false;
       // 延迟 500ms 确保连接完全稳定（与 dev 版本一致）
       const timer = setTimeout(() => {
-        const lang = preferredLanguage?.startsWith('zh') ? 'zh' : 'en';
         devLog('📤 [Campfire] Sending reconnect trigger message...');
-        geminiLive.sendTextMessage(`[CAMPFIRE_RECONNECT] language=${lang}`);
+        geminiLive.sendTextMessage(`[RECONNECT] The user was taking a focus break and just came back. Continue the conversation naturally.`);
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -438,6 +499,14 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   useEffect(() => {
     if (isCampfireMode && campfireVad.isSpeaking) {
       devLog('🔥 [Campfire VAD] Speaking detected, isConnected:', geminiLive.isConnected);
+
+      // 进入篝火模式后 2 秒内忽略 VAD，避免 AI 音频残留被麦克风拾取触发误重连
+      const CAMPFIRE_VAD_COOLDOWN_MS = 2000;
+      if (Date.now() - campfireEntryTimeRef.current < CAMPFIRE_VAD_COOLDOWN_MS) {
+        devLog('🔥 [Campfire VAD] 冷却期内，忽略');
+        return;
+      }
+
       if (!campfireReconnectLockRef.current && !geminiLive.isConnected) {
         campfireReconnectGemini();
       }

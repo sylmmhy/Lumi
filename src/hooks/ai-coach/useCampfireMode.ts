@@ -64,6 +64,8 @@ export interface UseCampfireModeReturn {
   stopCampfireResources: () => void;
   /** 保存的原始 system instruction ref（startSession 写入，exitCampfireMode 读取） */
   savedSystemInstructionRef: React.MutableRefObject<string>;
+  /** 篝火模式重连状态标记（供统一裁判检查，避免重复触发 enter_campfire） */
+  isReconnectingFromCampfireRef: React.MutableRefObject<boolean>;
   /** 篝火模式资源清理（供组件卸载时调用） */
   cleanupResources: () => void;
 }
@@ -102,6 +104,9 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
   /** 篝火模式进入时间戳：用于 VAD 冷却期，避免 AI 音频残留触发误重连 */
   const campfireEntryTimeRef = useRef<number>(0);
+
+  /** 🔧 篝火重连状态标记：防止重连后意图检测再次触发 enter_campfire */
+  const isReconnectingFromCampfireRef = useRef(false);
 
   // ==========================================
   // 子 Hooks
@@ -293,6 +298,9 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       // 改为设置 ref 标记，由 useEffect 在 isConnected 变 true 后发送
       campfireNeedsTriggerRef.current = true;
 
+      // 🔧 设置重连状态标记，防止意图检测再次触发 enter_campfire
+      isReconnectingFromCampfireRef.current = true;
+
       setCampfireChatCount(prev => prev + 1);
       startCampfireIdleTimer();
     } catch (err) {
@@ -321,7 +329,13 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       devLog('🏕️ [Step 1] 等待 AI 说完...');
       await new Promise<void>((resolve) => {
         const check = setInterval(() => {
-          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
+          if (!geminiLive.isSpeaking) {
+            clearInterval(check);
+            // 🔧 额外等待 1.5 秒，确保 AudioStreamer 播放队列清空
+            // 原因：interrupted 信号会让 isSpeaking = false，但音频可能还在播放
+            devLog('🏕️ [Step 1] isSpeaking = false，额外等待 1.5 秒确保音频播放完成...');
+            setTimeout(resolve, 1500);
+          }
         }, 300);
         setTimeout(() => { clearInterval(check); resolve(); }, 5000);
       });
@@ -334,7 +348,12 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       devLog('🏕️ [Step 1] 等待告别语说完...');
       await new Promise<void>((resolve) => {
         const check = setInterval(() => {
-          if (!geminiLive.isSpeaking) { clearInterval(check); resolve(); }
+          if (!geminiLive.isSpeaking) {
+            clearInterval(check);
+            // 🔧 额外等待 1.5 秒，确保 AudioStreamer 播放队列清空
+            devLog('🏕️ [Step 1] isSpeaking = false，额外等待 1.5 秒确保音频播放完成...');
+            setTimeout(resolve, 1500);
+          }
         }, 300);
         setTimeout(() => { clearInterval(check); resolve(); }, 5000);
       });
@@ -499,16 +518,17 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   // VAD 触发 → 重连 Gemini（只在 isSpeaking 变化时执行，不依赖 currentVolume 避免刷屏）
   useEffect(() => {
     if (isCampfireMode && campfireVad.isSpeaking) {
-      devLog('🔥 [Campfire VAD] Speaking detected, isConnected:', geminiLive.isConnected);
-
-      // 进入篝火模式后 2 秒内忽略 VAD，避免 AI 音频残留被麦克风拾取触发误重连
-      const CAMPFIRE_VAD_COOLDOWN_MS = 2000;
+      // 🔧 进入篝火模式后 5 秒内忽略 VAD，避免 AI 音频残留被麦克风拾取触发误重连
+      // 从 2 秒增加到 5 秒：给 AudioStreamer 更长的时间清空播放队列
+      const CAMPFIRE_VAD_COOLDOWN_MS = 5000;
       if (Date.now() - campfireEntryTimeRef.current < CAMPFIRE_VAD_COOLDOWN_MS) {
         devLog('🔥 [Campfire VAD] 冷却期内，忽略');
         return;
       }
 
       if (!campfireReconnectLockRef.current && !geminiLive.isConnected) {
+        // 只在需要重连时才显示 log，避免 isConnected=true 时刷屏
+        devLog('🔥 [Campfire VAD] Speaking detected, isConnected: false, reconnecting...');
         campfireReconnectGemini();
       }
     }
@@ -562,6 +582,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     exitCampfireMode,
     stopCampfireResources,
     savedSystemInstructionRef,
+    isReconnectingFromCampfireRef,
     cleanupResources,
   };
 }

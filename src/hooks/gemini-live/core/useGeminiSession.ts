@@ -217,6 +217,18 @@ export function useGeminiSession(
           // 启用语音转录
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          // 🔧 配置 VAD（语音活动检测）以减少误触发 interrupted 信号
+          // 降低灵敏度，避免环境噪音被误判为"用户说话"导致 AI 回复被中断
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              // 降低开始说话的灵敏度（减少误触发）
+              startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+              // 降低结束说话的灵敏度（允许用户有更长的停顿）
+              endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+              // 需要 1 秒沉默才认为用户停止说话（默认约 500ms）
+              silenceDurationMs: 1000,
+            },
+          },
           // 启用上下文窗口压缩：自动裁剪最早的对话轮次，system instructions 始终保留。
           // 无此配置时音频 session 约 15 分钟被服务端强制终止。
           contextWindowCompression: {

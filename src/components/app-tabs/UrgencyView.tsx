@@ -143,6 +143,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
             type: 'todo',
             category: 'morning',
             called: false,
+            chatMode: 'coach', // 陪我开始任务使用 Coach Prompt（目标导向）
         });
         setCustomTask('');
     }, [customTask, onStartTask]);
@@ -161,6 +162,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
             type: 'todo',
             category: 'morning',
             called: false,
+            chatMode: 'daily', // 和 Lumi 聊天使用日常陪伴 prompt
         });
     }, [onStartTask, t]);
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { estimateCompletionCoins } from '../constants/coinRewards';
 
 /**
  * 庆祝动画 Hook - 管理庆祝页面的各种动画
@@ -15,7 +16,7 @@ export type SuccessScene = 1 | 2 | 3 | 4 | 5;
 export interface UseCelebrationAnimationOptions {
   /** 是否启用动画 */
   enabled: boolean;
-  /** 剩余时间（秒），用于计算奖励 */
+  /** 剩余时间（秒），当前仅保留参数兼容旧调用 */
   remainingTime: number;
   /** 目标进度百分比，默认 80 */
   targetProgress?: number;
@@ -39,7 +40,6 @@ export interface CelebrationAnimationState {
 export function useCelebrationAnimation(options: UseCelebrationAnimationOptions): CelebrationAnimationState {
   const {
     enabled,
-    remainingTime,
     targetProgress = 80,
     playSound = true,
     customCoins,
@@ -123,14 +123,11 @@ export function useCelebrationAnimation(options: UseCelebrationAnimationOptions)
       try {
         let targetCoins: number;
 
-        // 如果有自定义金币数量，直接使用；否则根据剩余时间本地计算
+        // 如果有自定义金币数量，直接使用；否则使用统一奖励配置
         if (customCoins !== undefined) {
           targetCoins = customCoins;
         } else {
-          // 基础金币 100 + 剩余时间奖励（每分钟 +20，上限 500）
-          const baseCoins = 100;
-          const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
-          targetCoins = baseCoins + timeBonus;
+          targetCoins = estimateCompletionCoins(true);
         }
 
         const duration = 1500; // 1.5秒
@@ -150,8 +147,8 @@ export function useCelebrationAnimation(options: UseCelebrationAnimationOptions)
         }, 1000 / frameRate);
       } catch (error) {
         console.error('获取金币失败:', error);
-        // 备用：使用基础金币
-        setState(prev => ({ ...prev, coins: 200 }));
+        // 备用：仍然使用统一奖励值，避免显示异常大额
+        setState(prev => ({ ...prev, coins: estimateCompletionCoins(true) }));
       }
     };
 
@@ -160,7 +157,7 @@ export function useCelebrationAnimation(options: UseCelebrationAnimationOptions)
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [enabled, state.scene, remainingTime, customCoins]);
+  }, [enabled, state.scene, customCoins]);
 
   // 场景3：进度条填充动画
   useEffect(() => {
@@ -190,4 +187,3 @@ export function useCelebrationAnimation(options: UseCelebrationAnimationOptions)
 
   return state;
 }
-

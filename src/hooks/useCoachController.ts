@@ -105,6 +105,7 @@ export interface UseCoachControllerOptions {
 }
 
 const DEFAULT_SESSION_FINALIZING_MESSAGE = 'Finalizing your session...';
+const MIN_SESSION_SECONDS_FOR_VERIFICATION = 5;
 
 // ==========================================
 // Hook 实现
@@ -339,6 +340,13 @@ export function useCoachController(options: UseCoachControllerOptions) {
         enabled: showCelebration && celebrationFlow === 'success',
         remainingTime: 300 - completionTime, // 剩余时间用于计算奖励
     });
+
+    const sessionElapsedSeconds = Math.max(0, 300 - aiCoach.state.timeRemaining);
+    const canVerifyCurrentSession = sessionElapsedSeconds >= MIN_SESSION_SECONDS_FOR_VERIFICATION;
+    const verificationWaitSecondsRemaining = Math.max(
+        0,
+        MIN_SESSION_SECONDS_FOR_VERIFICATION - sessionElapsedSeconds,
+    );
 
     // ==========================================
     // 副作用：用户登出时清理会话
@@ -801,9 +809,18 @@ export function useCoachController(options: UseCoachControllerOptions) {
      * 用户选择“验证后完成”。
      */
     const handleCompleteWithVerification = useCallback(() => {
+        if (!canVerifyCurrentSession) {
+            devLog('ℹ️ 会话时长不足，自动走不验证完成路径', {
+                sessionElapsedSeconds,
+                requiredSeconds: MIN_SESSION_SECONDS_FOR_VERIFICATION,
+            });
+            setShowVerificationChoice(false);
+            void handleEndAICoachSession(false);
+            return;
+        }
         setShowVerificationChoice(false);
         void handleEndAICoachSession(true);
-    }, [handleEndAICoachSession]);
+    }, [canVerifyCurrentSession, handleEndAICoachSession, sessionElapsedSeconds]);
 
     /**
      * 用户选择“跳过验证直接完成”。
@@ -1046,6 +1063,8 @@ export function useCoachController(options: UseCoachControllerOptions) {
         showVerificationChoice,
         isSessionFinalizing,
         sessionFinalizingMessage,
+        canVerifyCurrentSession,
+        verificationWaitSecondsRemaining,
 
         // LiveKit 状态
         usingLiveKit,

@@ -35,6 +35,14 @@ import { useScreenTimeController } from '../hooks/useScreenTimeController';
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
 /**
+ * 判断任务 ID 是否为前端临时 ID（尚未落库）。
+ * 目前兼容两种格式：
+ * - 纯数字时间戳（例如 `1770539224734`）
+ * - `temp-` 前缀（例如 `temp-1770539224734`）
+ */
+const isTemporaryTaskId = (taskId: string): boolean => /^\d+$/.test(taskId) || taskId.startsWith('temp-');
+
+/**
  * 应用主入口页面，负责根据 URL tab 渲染对应视图，并复用 AI 教练、任务数据等共享逻辑。
  *
  * @returns {JSX.Element} - 主应用的 Tab 容器视图，包含任务列表、统计、紧急启动等子页面
@@ -80,6 +88,15 @@ export function AppTabsPage() {
 
     // 任务 CRUD 和状态管理（提取到独立 hook）
     const appTasks = useAppTasks(auth.userId);
+
+    /**
+     * Home 页面只展示持久化任务（真实 UUID），临时任务不进入 Home 列表。
+     * 这样可以避免用户在 Home 中看到尚未落库的会话临时任务。
+     */
+    const homeTasks = useMemo(
+        () => appTasks.tasks.filter(task => !isTemporaryTaskId(task.id)),
+        [appTasks.tasks]
+    );
 
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingTask, setPendingTask] = useState<Task | null>(null);
@@ -134,14 +151,17 @@ export function AppTabsPage() {
     });
 
     /**
-     * AI 会话任务完成后的回调：跳转到 stats 页 + 触发金币动画。
-     * 统一使用 stats 页的金币记录系统、动画和音效。
+     * AI 会话任务完成后的回调：跳转到 stats 页。
+     * 只有当本次确实发放金币（awardedCoins > 0）时，才触发金币动画。
      *
      * 延迟 150ms 递增 trigger，确保 StatsView 先挂载（用旧值初始化 ref），
      * 之后 trigger 变化触发动画。
      */
-    const handleTaskCompleteForStats = useCallback(() => {
+    const handleTaskCompleteForStats = useCallback((awardedCoins: number) => {
         handleChangeView('stats');
+        if (awardedCoins <= 0) {
+            return;
+        }
         setTimeout(() => {
             setStatsCheckInTrigger(prev => prev + 1);
         }, 150);
@@ -282,7 +302,7 @@ export function AppTabsPage() {
 
                 {currentView === 'home' && (
                     <HomeView
-                        tasks={appTasks.tasks}
+                        tasks={homeTasks}
                         onAddTask={addTask}
                         onToggleComplete={toggleComplete}
                         onDeleteTask={appTasks.handleDeleteTask}
@@ -409,11 +429,11 @@ export function AppTabsPage() {
                     // 同步任务完成状态到数据库
                     const taskId = screenTime.lockedTaskInfo?.taskId;
                     const taskName = screenTime.lockedTaskInfo?.taskName;
-                    if (taskId && !taskId.startsWith('temp-')) {
+                    if (taskId && !isTemporaryTaskId(taskId)) {
                         await appTasks.markTaskAsCompleted(taskId, 0);
                         devLog('✅ [Banner] Already Completed - 标记任务完成:', taskId);
-                        // 跳转 stats 页触发金币动画
-                        handleTaskCompleteForStats();
+                        // 没有发币时，仅跳转 stats，不触发金币动画
+                        handleTaskCompleteForStats(0);
                     } else if (taskName) {
                         // fallback：通过 toggleComplete（内部已包含跳转 stats + 金币动画）
                         const matchedTask = appTasks.tasks.find(

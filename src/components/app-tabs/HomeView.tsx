@@ -706,8 +706,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 onShowCoinToast?.(result.coins_awarded);
                             }
                             onVerifySuccess?.(result.coins_awarded);
+                            setPhotoVerifyTask(null);
                         }
-                        setPhotoVerifyTask(null);
+                        // 验证失败时不关闭 modal，让用户看到失败提示并可以重试
                     }}
                 />
             )}

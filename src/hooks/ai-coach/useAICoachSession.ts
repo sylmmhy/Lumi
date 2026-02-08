@@ -97,6 +97,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 已切换到习惯设定模式的锁（防止 switch_to_habit_setup 无限循环触发）
   const habitSetupActiveRef = useRef(false);
 
+  // 智能重试：记录最后一条用户消息和空响应计数
+  const lastUserMessageRef = useRef<string | null>(null);
+  const emptyResponseCountRef = useRef(0);
+  const MAX_EMPTY_RETRIES = 2; // 最多重试 2 次
+
   // 用于调用 messageOrchestrator 方法的 ref（避免循环依赖）
   const orchestratorRef = useRef<{
     onUserSpeech: (text: string) => Promise<unknown>;
@@ -284,6 +289,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         if (modeTools.includes(result.tool)) {
           switch (result.tool) {
             case 'enter_campfire':
+              // 🔧 防止篝火模式重连后重复触发 enter_campfire
+              if (campfire.isReconnectingFromCampfireRef.current) {
+                devLog(`🔥 [统一裁判] 刚从篝火模式重连，忽略 enter_campfire 检测`);
+                campfire.isReconnectingFromCampfireRef.current = false; // 重置标记
+                return;
+              }
+
               refereeEpochRef.current += 1;
               devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
               campfire.enterCampfireMode({ skipFarewell: true });
@@ -336,8 +348,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           devLog(`📚 [统一裁判] 篝火模式中，跳过记忆检索`);
         } else {
           const epochAtStart = refereeEpochRef.current;
-          devLog(`📚 [统一裁判] 话题变化: ${result.topic_changed}, 开始记忆检索`,
-            { queries: result.memory_queries, epoch: epochAtStart });
+          devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+          devLog(`📚 [记忆检索] 检测到话题变化，开始检索记忆...`);
+          devLog(`📌 话题: ${result.topic_changed}`);
+          devLog(`🔍 查询条件: ${JSON.stringify(result.memory_queries || [], null, 2)}`);
+          devLog(`🔢 Epoch: ${epochAtStart}`);
 
           // 异步检索记忆 — 结果注入前检查 epoch
           memoryPipeline.fetchMemoriesForTopic(
@@ -346,19 +361,40 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           ).then((memories) => {
             // epoch 检查：模式已切换，丢弃过期结果
             if (refereeEpochRef.current !== epochAtStart) {
-              devWarn(`📚 [统一裁判] epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃记忆结果`);
+              devWarn(`📚 [记忆检索] epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃过期结果`);
               return;
             }
-            if (memories.length > 0 && geminiLive.isConnected) {
-              const contextMsg = generateContextMessage(
-                memories, result.topic_changed!, 'neutral', 0.5
-              );
-              // 静默注入：turnComplete=false, role='system'
-              geminiLive.sendClientContent(contextMsg, false, 'system');
-              devLog(`📚 [统一裁判] 已注入 ${memories.length} 条记忆`);
+
+            devLog(`📊 [记忆检索] 检索完成，共获取 ${memories.length} 条记忆`);
+
+            if (memories.length > 0) {
+              devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+              devLog(`📝 [记忆检索] 检索到的记忆内容:`);
+              memories.forEach((mem, idx) => {
+                devLog(`  ${idx + 1}. [${mem.tags?.join(', ') || 'UNKNOWN'}] ${mem.content.slice(0, 100)}${mem.content.length > 100 ? '...' : ''}`);
+              });
+              devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+              if (geminiLive.isConnected) {
+                const contextMsg = generateContextMessage(
+                  memories, result.topic_changed!, 'neutral', 0.5
+                );
+
+                devLog(`📤 [记忆检索] 注入上下文消息到 Gemini:`);
+                devLog(contextMsg);
+                devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+                // 静默注入：turnComplete=false, role='system'
+                geminiLive.sendClientContent(contextMsg, false, 'system');
+                devLog(`✅ [记忆检索] 已成功注入 ${memories.length} 条记忆`);
+              } else {
+                devWarn(`⚠️ [记忆检索] Gemini 未连接，跳过记忆注入`);
+              }
+            } else {
+              devLog(`ℹ️ [记忆检索] 未找到相关记忆`);
             }
           }).catch((err) => {
-            devWarn(`📚 [统一裁判] 记忆检索失败:`, err);
+            devWarn(`❌ [记忆检索] 检索失败:`, err);
           });
         }
         // 不 return —— coach_note 理论上可以和记忆检索共存
@@ -573,6 +609,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 当 AI 说完话时（turnComplete），统一触发：
   // 1. 虚拟消息系统通知
   // 2. 裁判（意图检测）— 用 flushAIResponseBuffer 取出完整回复
+  // 3. 智能重试：检测空响应并自动重试
   useEffect(() => {
     setOnTurnComplete(() => {
       recordTurnComplete(false);
@@ -580,12 +617,55 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
       // 取出本轮 AI 的完整回复，传给统一裁判（US-006: 只调用一次）
       const completeAIResponse = transcript.flushAIResponseBuffer();
+
       if (completeAIResponse.trim()) {
+        // ✅ 有内容 - 成功回复，重置计数器
+        emptyResponseCountRef.current = 0;
         intentDetectionRef.current.processAIResponse(completeAIResponse);
+      } else {
+        // 🚨 空响应 - 触发智能重试
+        emptyResponseCountRef.current += 1;
+        devWarn(`⚠️ [EmptyResponse] 第 ${emptyResponseCountRef.current} 次空响应（interrupted 导致）`);
+
+        if (emptyResponseCountRef.current <= MAX_EMPTY_RETRIES && lastUserMessageRef.current) {
+          // 🔄 重试：重新发送用户的最后一条消息
+          devLog(`🔄 [Retry] 重新发送用户消息: "${lastUserMessageRef.current.slice(0, 50)}..."`);
+
+          // 构造重试消息（告诉 AI 用户刚才说了什么）
+          const preferredLang = preferredLanguagesRef.current?.[0] || 'en-US';
+          const isChinese = preferredLang.includes('zh');
+          const retryPrompt = isChinese
+            ? `[系统提示] 用户刚才说："${lastUserMessageRef.current}"，但你的回复被中断了，请重新回复。`
+            : `[SYSTEM] User just said: "${lastUserMessageRef.current}". Your response was interrupted, please respond again.`;
+
+          geminiLive.sendTextMessage(retryPrompt);
+        } else if (emptyResponseCountRef.current > MAX_EMPTY_RETRIES) {
+          // ⚠️ 超过重试次数 - 发送 fallback 消息
+          devWarn('⚠️ [EmptyResponse] 超过最大重试次数，发送 fallback 消息');
+
+          const preferredLang = preferredLanguagesRef.current?.[0] || 'en-US';
+          const isChinese = preferredLang.includes('zh');
+          const fallbackMsg = isChinese
+            ? "抱歉，我现在有点不在状态，我们稍后再聊好吗？"
+            : "Sorry, I'm having some trouble right now. Can we talk later?";
+
+          geminiLive.sendTextMessage(fallbackMsg);
+          emptyResponseCountRef.current = 0; // 重置计数器
+        }
       }
     });
     return () => setOnTurnComplete(null);
-  }, [recordTurnComplete, setOnTurnComplete, transcript.flushAIResponseBuffer]);
+  }, [recordTurnComplete, setOnTurnComplete, transcript.flushAIResponseBuffer, geminiLive.sendTextMessage]);
+
+  // 记录用户的最后一条消息（用于智能重试）
+  useEffect(() => {
+    const messages = transcript.messages;
+    const userMessages = messages.filter(m => m.role === 'user' && !m.isVirtual);
+    if (userMessages.length > 0) {
+      const lastMsg = userMessages[userMessages.length - 1];
+      lastUserMessageRef.current = lastMsg.content;
+    }
+  }, [transcript.messages]);
 
   // 当 AI 开始说话时，关闭观察状态
   useEffect(() => {

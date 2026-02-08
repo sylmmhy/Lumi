@@ -72,6 +72,13 @@ export interface Task {
    * 预生成的个性化后果文本（任务到期前生成）
    */
   preloadedConsequence?: string | null
+
+  // AI 对话模式（瞬态字段，不持久化到数据库）
+  /**
+   * 对话模式：coach（目标导向）或 daily（陪伴聊天）
+   * 仅在启动 AI 会话时使用，不保存到数据库
+   */
+  chatMode?: 'coach' | 'daily'
 }
 
 export const TaskType = {

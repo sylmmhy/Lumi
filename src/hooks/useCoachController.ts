@@ -506,13 +506,16 @@ export function useCoachController(options: UseCoachControllerOptions) {
         // WebView 模式：使用 Gemini Live
         try {
             const preferredLanguages = getPreferredLanguages();
+            // 解析 chatMode：优先使用 task.chatMode，未指定时默认为 'coach'
+            const chatMode = task.chatMode || 'coach';
+            devLog(`🎭 [chatMode] ${task.chatMode ? `任务指定: ${task.chatMode}` : '未指定，使用默认: coach'} → 最终使用: ${chatMode === 'coach' ? 'Coach Prompt（目标导向）' : 'Daily Chat Prompt（日常陪伴）'}`);
             const started = await aiCoach.startSession(taskToUse.text, {
                 userId: auth.userId ?? undefined,
                 userName: auth.userName ?? undefined,
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
                 taskId: taskId,
                 callRecordId: currentCallRecordId ?? undefined,
-                chatMode: 'coach',
+                chatMode,
             });
             if (!started) return;
             devLog('✅ AI Coach session started successfully');

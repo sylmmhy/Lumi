@@ -3,14 +3,13 @@
  *
  * 封装 saveSessionMemory 的全部逻辑：
  * - 将对话消息转换为 Mem0 格式并发送到 memory-extractor Edge Function
- * - 记录任务完成时长（updateReminder）
+ * - 记录任务完成时长（写入 memory metadata）
  * - 处理用户语音缓冲区（flush buffer → 追加到消息列表）
  *
  * 通过 reactiveRef 模式实现稳定的函数引用，避免 interval 回调拿到过时闭包。
  */
 import { useRef, useCallback, useEffect } from 'react';
 import { getSupabaseClient } from '../../lib/supabase';
-import { updateReminder } from '../../remindMe/services/reminderService';
 import { devLog, devWarn } from '../gemini-live/utils';
 import type { AICoachMessage } from './types';
 
@@ -26,7 +25,7 @@ export interface UseSessionMemoryOptions {
   currentUserIdRef: React.MutableRefObject<string | null>;
   /** 当前任务描述（ref，稳定引用） */
   currentTaskDescriptionRef: React.MutableRefObject<string>;
-  /** 当前任务 ID，用于保存 actual_duration_minutes（ref，稳定引用） */
+  /** 当前任务 ID（ref，稳定引用），用于在 metadata 中关联任务上下文 */
   currentTaskIdRef: React.MutableRefObject<string | null>;
   /** 用户语音缓冲区（ref，稳定引用） */
   userSpeechBufferRef: React.MutableRefObject<string>;
@@ -175,6 +174,8 @@ export function useSessionMemory(options: UseSessionMemoryOptions): UseSessionMe
         });
       }
 
+      const taskId = currentTaskIdRef.current;
+
       const { data, error } = await supabaseClient.functions.invoke('memory-extractor', {
         body: {
           action: 'extract',
@@ -187,6 +188,7 @@ export function useSessionMemory(options: UseSessionMemoryOptions): UseSessionMe
             sessionDuration: currentInitialTime - currentTimeRemaining,
             timestamp: new Date().toISOString(),
             task_completed: wasTaskCompleted,
+            task_id: taskId,
             actual_duration_minutes: actualDurationMinutes,
           },
         },
@@ -216,18 +218,11 @@ export function useSessionMemory(options: UseSessionMemoryOptions): UseSessionMe
         devLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       }
 
-      // 如果任务已完成，保存实际时长到数据库
-      const taskId = currentTaskIdRef.current;
+      // tasks.actual_duration_minutes 已在迁移中移除；
+      // 任务时长通过 memory metadata 持久化并供后端分析使用。
       if (wasTaskCompleted && taskId && actualDurationMinutes > 0) {
-        try {
-          await updateReminder(taskId, {
-            actualDurationMinutes,
-          });
-          if (import.meta.env.DEV) {
-            devLog('✅ 任务完成时长已保存到数据库:', { taskId, actualDurationMinutes });
-          }
-        } catch (updateError) {
-          devWarn('⚠️ 保存任务完成时长失败:', updateError);
+        if (import.meta.env.DEV) {
+          devLog('✅ 任务完成时长已写入 memory metadata:', { taskId, actualDurationMinutes });
         }
       }
 

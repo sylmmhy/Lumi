@@ -67,7 +67,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 使用 ref 存储当前会话信息
   const currentUserIdRef = useRef<string | null>(null);
   const currentTaskDescriptionRef = useRef<string>('');
-  const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于保存 actual_duration_minutes
+  const currentTaskIdRef = useRef<string | null>(null); // 任务 ID，用于关联会话任务上下文
 
   // 存储从服务器获取的成功记录（用于虚拟消息系统的 memory boost）
   const successRecordRef = useRef<SuccessRecordForVM | null>(null);

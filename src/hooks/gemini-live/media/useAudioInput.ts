@@ -75,34 +75,47 @@ export function useAudioInput(
 
     isStartingRef.current = true;
 
+    let recorder: AudioRecorder | null = null;
+
     try {
-      // 如果已有 recorder 实例，先清理旧的监听器
-      if (recorderRef.current) {
-        recorderRef.current.removeAllListeners('data');
-        recorderRef.current.removeAllListeners('volume');
+      // 如果已有 recorder 实例，先清理旧的监听器；否则创建新实例。
+      recorder = recorderRef.current;
+      if (recorder) {
+        recorder.removeAllListeners('data');
+        recorder.removeAllListeners('volume');
       } else {
-        recorderRef.current = new AudioRecorder(sampleRate);
+        recorder = new AudioRecorder(sampleRate);
+        recorderRef.current = recorder;
       }
 
       // 设置音频数据回调
-      recorderRef.current.on('data', (base64Audio: string) => {
+      recorder.on('data', (base64Audio: string) => {
         onAudioData?.(base64Audio);
       });
 
       // 设置音量回调（可选）
       if (onVolumeChange) {
-        recorderRef.current.on('volume', onVolumeChange);
+        recorder.on('volume', onVolumeChange);
       }
 
-      await recorderRef.current.start();
-      setAudioStream(recorderRef.current.stream || null);
+      await recorder.start();
+
+      // 并发保护：start 期间若被 stop/replace，这里不要再访问旧引用，避免空指针。
+      if (recorderRef.current !== recorder) {
+        recorder.stop();
+        return;
+      }
+
+      setAudioStream(recorder.stream || null);
       setIsRecording(true);
       setError(null);
 
       devLog('🎤 Microphone started');
     } catch (err) {
       console.error('Microphone error:', err);
-      recorderRef.current = null;
+      if (recorderRef.current === recorder) {
+        recorderRef.current = null;
+      }
 
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       let userFriendlyError: string;

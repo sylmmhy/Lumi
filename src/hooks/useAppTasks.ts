@@ -48,8 +48,10 @@ export function useAppTasks(userId: string | null) {
         }
 
         try {
-            const [, todayTasks, routineTemplates] = await Promise.all([
-                generateTodayRoutineInstances(userId),
+            // 先生成再查询，避免并发时 fetchReminders 先返回导致拿不到刚生成的今日实例。
+            await generateTodayRoutineInstances(userId);
+
+            const [todayTasks, routineTemplates] = await Promise.all([
                 fetchReminders(userId),
                 fetchRecurringReminders(userId),
             ]);
@@ -203,9 +205,9 @@ export function useAppTasks(userId: string | null) {
         id: string,
         authUserId: string | null,
         unlockScreenTimeIfLocked: (source: string) => void,
-    ) => {
+    ): Promise<boolean> => {
         const task = tasks.find(t => t.id === id);
-        if (!task || !authUserId) return;
+        if (!task || !authUserId) return false;
 
         const newCompletedStatus = !task.completed;
         const today = getLocalDateString();
@@ -213,6 +215,7 @@ export function useAppTasks(userId: string | null) {
         let dbIdToUpdate: string | null = null;
         const uiIdsToUpdate: string[] = [id];
         let routineIdForCompletion: string | null = null;
+        let recoveredTodayInstance: Task | null = null;
 
         if (task.type === 'routine_instance' && task.parentRoutineId) {
             dbIdToUpdate = id;
@@ -223,25 +226,101 @@ export function useAppTasks(userId: string | null) {
             }
         } else if (task.type === 'routine') {
             routineIdForCompletion = id;
-            const todayInstance = tasks.find(t =>
+            let todayInstance = tasks.find(t =>
                 t.type === 'routine_instance' &&
                 t.parentRoutineId === id &&
                 t.date === today
             );
+            if (!todayInstance) {
+                devLog('⚠️ routine 模板缺少今天实例，尝试自动补救', { routineId: id, today });
+                try {
+                    await generateTodayRoutineInstances(authUserId);
+                    const refreshedTodayTasks = await fetchReminders(authUserId, today);
+                    todayInstance = refreshedTodayTasks.find(t =>
+                        t.type === 'routine_instance' &&
+                        t.parentRoutineId === id &&
+                        t.date === today
+                    );
+                    if (todayInstance) {
+                        recoveredTodayInstance = todayInstance;
+                        devLog('✅ 自动补救成功：已找到今天 routine_instance', {
+                            routineId: id,
+                            instanceId: todayInstance.id,
+                            today,
+                        });
+                    }
+                } catch (recoveryError) {
+                    console.error('Failed to recover missing routine_instance before toggle:', recoveryError);
+                }
+            }
+            if (!todayInstance) {
+                try {
+                    const [year, month, day] = today.split('-').map(Number);
+                    const [hours, minutes] = (task.time || '00:00').split(':').map(Number);
+                    const reminderTime = new Date(year, month - 1, day, hours || 0, minutes || 0);
+                    const shouldAllowFutureReminder = reminderTime.getTime() > Date.now();
+
+                    const createdInstance = await createReminder({
+                        text: task.text,
+                        time: task.time,
+                        displayTime: task.displayTime,
+                        date: today,
+                        completed: false,
+                        type: 'routine_instance',
+                        category: task.category,
+                        called: !shouldAllowFutureReminder,
+                        isRecurring: false,
+                        parentRoutineId: id,
+                        isSkip: false,
+                    }, authUserId);
+
+                    if (createdInstance && createdInstance.type === 'routine_instance') {
+                        todayInstance = createdInstance;
+                        recoveredTodayInstance = createdInstance;
+                        devLog('✅ 兜底补建 routine_instance 成功', {
+                            routineId: id,
+                            instanceId: createdInstance.id,
+                            today,
+                        });
+                    } else {
+                        // 可能是唯一约束冲突导致创建返回空，回查一次数据库拿到已有实例
+                        const refreshedTodayTasks = await fetchReminders(authUserId, today);
+                        todayInstance = refreshedTodayTasks.find(t =>
+                            t.type === 'routine_instance' &&
+                            t.parentRoutineId === id &&
+                            t.date === today
+                        );
+                        if (todayInstance) {
+                            recoveredTodayInstance = todayInstance;
+                        }
+                    }
+                } catch (createInstanceError) {
+                    console.error('Failed to create fallback routine_instance during toggle:', createInstanceError);
+                }
+            }
             if (todayInstance) {
                 dbIdToUpdate = todayInstance.id;
                 uiIdsToUpdate.push(todayInstance.id);
             } else {
-                console.warn('No routine_instance found for today, cannot toggle completion');
-                return;
+                console.warn('No routine_instance found for today, cannot toggle completion', {
+                    routineId: id,
+                    today,
+                });
+                return false;
             }
         } else {
             dbIdToUpdate = id;
         }
 
-        setTasks(prev => prev.map(t =>
-            uiIdsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
-        ));
+        setTasks(prev => {
+            const recoveredInstanceId = recoveredTodayInstance?.id;
+            const next = recoveredTodayInstance && recoveredInstanceId && !prev.some(t => t.id === recoveredInstanceId)
+                ? [...prev, recoveredTodayInstance]
+                : prev;
+            return next.map(t =>
+                uiIdsToUpdate.includes(t.id) ? { ...t, completed: newCompletedStatus } : t
+            );
+        });
 
         if (newCompletedStatus) {
             unlockScreenTimeIfLocked('toggleComplete');
@@ -261,11 +340,13 @@ export function useAppTasks(userId: string | null) {
             }
 
             setStatsRefreshTrigger(prev => prev + 1);
+            return true;
         } catch (error) {
             console.error('Failed to toggle reminder completion:', error);
             setTasks(prev => prev.map(t =>
                 uiIdsToUpdate.includes(t.id) ? { ...t, completed: !newCompletedStatus } : t
             ));
+            return false;
         }
     }, [tasks]);
 
@@ -347,28 +428,137 @@ export function useAppTasks(userId: string | null) {
         }
 
         try {
-            devLog('✅ 标记任务完成:', { taskId, actualDurationMinutes, taskType });
+            const todayKey = getLocalDateString();
+            const taskFromState = tasks.find(t => t.id === taskId);
+            const effectiveTaskType = taskType ?? taskFromState?.type ?? null;
 
-            await updateReminder(taskId, {
+            devLog('✅ 标记任务完成:', { taskId, actualDurationMinutes, taskType: effectiveTaskType });
+
+            // routine 模板必须通过“今天的 routine_instance”来记录完成，不能把模板本身写成 completed。
+            if (effectiveTaskType === 'routine') {
+                if (!userId) {
+                    console.warn('⚠️ 无法标记 routine 完成：缺少 userId', { routineId: taskId });
+                    return;
+                }
+
+                let routineTemplate = taskFromState?.type === 'routine' ? taskFromState : undefined;
+                if (!routineTemplate) {
+                    const routines = await fetchRecurringReminders(userId);
+                    routineTemplate = routines.find(t => t.id === taskId && t.type === 'routine');
+                }
+
+                let todayInstance = tasks.find(t =>
+                    t.type === 'routine_instance' &&
+                    t.parentRoutineId === taskId &&
+                    t.date === todayKey
+                );
+
+                if (!todayInstance) {
+                    await generateTodayRoutineInstances(userId);
+                    const refreshedTodayTasks = await fetchReminders(userId, todayKey);
+                    todayInstance = refreshedTodayTasks.find(t =>
+                        t.type === 'routine_instance' &&
+                        t.parentRoutineId === taskId &&
+                        t.date === todayKey
+                    );
+                }
+
+                if (!todayInstance && routineTemplate) {
+                    const [year, month, day] = todayKey.split('-').map(Number);
+                    const [hours, minutes] = (routineTemplate.time || '00:00').split(':').map(Number);
+                    const reminderTime = new Date(year, month - 1, day, hours || 0, minutes || 0);
+                    const shouldAllowFutureReminder = reminderTime.getTime() > Date.now();
+
+                    const createdInstance = await createReminder({
+                        text: routineTemplate.text,
+                        time: routineTemplate.time,
+                        displayTime: routineTemplate.displayTime,
+                        date: todayKey,
+                        completed: false,
+                        type: 'routine_instance',
+                        category: routineTemplate.category,
+                        called: !shouldAllowFutureReminder,
+                        isRecurring: false,
+                        timezone: routineTemplate.timezone,
+                        parentRoutineId: taskId,
+                        isSkip: false,
+                    }, userId);
+
+                    if (createdInstance?.type === 'routine_instance') {
+                        todayInstance = createdInstance;
+                        devLog('✅ markTaskAsCompleted 兜底补建 routine_instance 成功', {
+                            routineId: taskId,
+                            instanceId: createdInstance.id,
+                            today: todayKey,
+                        });
+                    }
+                }
+
+                if (!todayInstance) {
+                    console.warn('⚠️ 标记 routine 完成失败：缺少今天 routine_instance', {
+                        routineId: taskId,
+                        today: todayKey,
+                    });
+                    return;
+                }
+
+                const updatedInstance = await updateReminder(todayInstance.id, {
+                    completed: true,
+                    actualDurationMinutes,
+                });
+                if (!updatedInstance) {
+                    throw new Error(`Failed to update routine_instance completion: ${todayInstance.id}`);
+                }
+
+                await markRoutineComplete(userId, taskId, todayKey);
+
+                setTasks(prev => {
+                    const withRecovered = prev.some(t => t.id === todayInstance.id)
+                        ? prev
+                        : [...prev, todayInstance];
+                    return withRecovered.map(t => {
+                        if (t.id === taskId || t.id === todayInstance.id) {
+                            return { ...t, completed: true };
+                        }
+                        return t;
+                    });
+                });
+
+                devLog('✅ routine 已标记为完成（通过 today instance）', {
+                    routineId: taskId,
+                    instanceId: todayInstance.id,
+                    date: todayKey,
+                });
+                return;
+            }
+
+            const updatedTask = await updateReminder(taskId, {
                 completed: true,
                 actualDurationMinutes,
             });
-
-            if (taskType === 'routine' && userId) {
-                const todayKey = getLocalDateString();
-                await markRoutineComplete(userId, taskId, todayKey);
-                devLog('✅ 习惯打卡记录已保存:', { taskId, date: todayKey });
+            if (!updatedTask) {
+                throw new Error(`Failed to update task completion: ${taskId}`);
             }
 
-            setTasks(prev => prev.map(t =>
-                t.id === taskId ? { ...t, completed: true } : t
-            ));
+            if (effectiveTaskType === 'routine_instance' && userId && taskFromState?.parentRoutineId) {
+                await markRoutineComplete(userId, taskFromState.parentRoutineId, todayKey);
+            }
+
+            setTasks(prev => prev.map(t => {
+                if (t.id === taskId) {
+                    return { ...t, completed: true };
+                }
+                if (effectiveTaskType === 'routine_instance' && taskFromState?.parentRoutineId && t.id === taskFromState.parentRoutineId) {
+                    return { ...t, completed: true };
+                }
+                return t;
+            }));
 
             devLog('✅ 任务已标记为完成');
         } catch (error) {
             console.error('❌ 标记任务完成失败:', error);
         }
-    }, [userId]);
+    }, [userId, tasks]);
 
     // ── 底层操作（供 coach controller 使用） ────────────────────────────
 

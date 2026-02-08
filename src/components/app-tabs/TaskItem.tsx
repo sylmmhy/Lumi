@@ -7,7 +7,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 interface TaskItemProps {
     task: Task;
     icon?: string;
-    onToggle: (id: string) => void;
+    onToggle: (id: string) => Promise<boolean> | boolean;
     onDelete: (id: string) => void;
     /** 点击任务编辑的回调 */
     onEdit?: (task: Task) => void;
@@ -52,18 +52,22 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
     const currentTranslateX = useRef(0);
     const itemRef = useRef<HTMLDivElement>(null);
 
-    // 处理勾选切换：完成时播放彩带，取消完成时直接切换
+    // 处理勾选切换：仅在切换成功后播放彩带，避免“未完成也庆祝”的误导反馈
     const handleToggle = () => {
         if (task.completed) {
-            // 取消完成：直接切换状态，无彩带
-            onToggle(task.id);
-        } else {
-            // 完成任务：触发彩带效果
-            setConfettiTrigger(Date.now());
-            setTimeout(() => {
-                onToggle(task.id);
-            }, 300);
+            void Promise.resolve(onToggle(task.id));
+            return;
         }
+
+        void (async () => {
+            try {
+                const toggled = await Promise.resolve(onToggle(task.id));
+                if (toggled === false) return;
+                setConfettiTrigger(Date.now());
+            } catch (error) {
+                console.error('Failed to toggle task from TaskItem:', error);
+            }
+        })();
     };
 
     const handleTouchStart = (e: React.TouchEvent) => {

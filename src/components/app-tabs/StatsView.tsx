@@ -114,7 +114,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
             setTriggerRise(true);
             playCheckInSound();
 
-            // 阶段 2 (800ms)：金币掉入 + coinDrop 音效 + weeklyCount += 5
+            // 阶段 2 (800ms)：金币掉入 + coinDrop 音效 + 刷新真实 weeklyCount
             setTimeout(async () => {
                 if (auth.userId) {
                     try {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Task } from '../../remindMe/types';
 import { ConfettiEffect } from '../effects';
 import { useTranslation } from '../../hooks/useTranslation';
+import { getCoinReward } from '../../constants/coinRewards';
 
 interface TaskItemProps {
     task: Task;
@@ -15,7 +16,7 @@ interface TaskItemProps {
     onSkipForDay?: (task: Task) => void;
     /** 取消跳过今天的回调 */
     onUnskipForDay?: (task: Task) => void;
-    /** 拍照验证回调：点击 "+5" 金币按钮触发 */
+    /** 拍照验证回调：点击「验证奖励」按钮触发 */
     onPhotoVerify?: (task: Task) => void;
     /** 模式：home 显示时间，urgency 显示 Start 按钮 */
     mode?: 'home' | 'urgency';
@@ -25,6 +26,7 @@ interface TaskItemProps {
 
 export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, onPhotoVerify, mode = 'home', onStart }) => {
     const { t } = useTranslation();
+    const photoVerificationCoins = getCoinReward('photo_verification');
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
     const [showSkipConfirm, setShowSkipConfirm] = useState(false);
@@ -273,7 +275,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
                         className="text-[13px] text-[#92400E] flex items-center gap-1"
                         style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                     >
-                        Verify to earn +5 <img src="/coin.png" alt="coin" className="w-4 h-4" />
+                        Verify to earn +{photoVerificationCoins} <img src="/coin.png" alt="coin" className="w-4 h-4" />
                     </span>
                 </button>
             )}

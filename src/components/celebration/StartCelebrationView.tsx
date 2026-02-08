@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CoinCounter, ConfettiEffect } from '../effects';
+import { estimateCompletionCoins } from '../../constants/coinRewards';
 
 /**
  * StartCelebrationView 组件的入参。
@@ -14,7 +15,7 @@ export interface StartCelebrationViewProps {
     onFinish: () => void;
     /** 倒计时秒数，默认 10 */
     countdownSeconds?: number;
-    /** 奖励金币数，默认 500 */
+    /** 奖励金币数，默认使用统一奖励配置 */
     coins?: number;
 }
 
@@ -39,7 +40,7 @@ export function StartCelebrationView({
     onContinue,
     onFinish,
     countdownSeconds = 10,
-    coins = 500,
+    coins = estimateCompletionCoins(true),
 }: StartCelebrationViewProps) {
     const [timeLeft, setTimeLeft] = useState(countdownSeconds);
 

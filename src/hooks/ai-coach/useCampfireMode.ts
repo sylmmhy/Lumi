@@ -212,6 +212,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
         taskInput: currentTaskDescription || '',
         userId: currentUserId || '',
         preferredLanguages: [preferredLanguage || 'en-US'],
+        chatMode: 'daily',
         localTime: (() => {
           const now = new Date();
           const hours = now.getHours();

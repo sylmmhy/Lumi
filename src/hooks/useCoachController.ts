@@ -512,6 +512,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
                 preferredLanguages: preferredLanguages.length > 0 ? preferredLanguages : undefined,
                 taskId: taskId,
                 callRecordId: currentCallRecordId ?? undefined,
+                chatMode: 'coach',
             });
             if (!started) return;
             devLog('✅ AI Coach session started successfully');

@@ -32,6 +32,8 @@ export interface StartSessionOptions {
   callRecordId?: string;
   /** 是否为重连（重连时会将对话上下文传给后端） */
   isReconnect?: boolean;
+  /** 对话模式：coach（目标导向）或 daily（陪伴聊天） */
+  chatMode?: 'coach' | 'daily';
 }
 
 /** useSessionLifecycle 的配置 */
@@ -205,7 +207,7 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
     startSessionInFlightRef.current = true;
 
     const o = optRef.current;
-    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId, isReconnect } = sessionOptions || {};
+    const { userId, customSystemInstruction, userName, preferredLanguages, taskId, callRecordId, isReconnect, chatMode } = sessionOptions || {};
     let epochAtStart = o.sessionEpochRef.current;
 
     try {
@@ -333,6 +335,7 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
                   userName,
                   preferredLanguages,
                   userId,
+                  chatMode,
                   localTime: (() => {
                     const now = new Date();
                     const hours = now.getHours();

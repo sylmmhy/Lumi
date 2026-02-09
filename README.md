@@ -1,181 +1,201 @@
-# Lumi (firego--original-web)
+# Lumi — HumanOS
 
-Lumi 是一个多平台 AI 教练应用，使用 Gemini Live 进行基于语音的任务辅导。
+> **The first AI operating system for humans.**
+> Not another reminder app. Not another chatbot wrapper.
+> An autonomous agent that perceives, plans, intervenes, and learns — to make you do what you said you would.
 
-## 🚀 快速开始
+---
 
-### 新开发者必读
+## The Vision
 
-如果你是第一次设置项目，**请先阅读**：
+Most productivity tools assume humans are rational. They give you a to-do list and hope for the best. **Lumi assumes you won't do it** — and builds an entire operating system around making sure you do.
 
-📖 **[开发者设置指南 (DEVELOPER_SETUP.md)](./DEVELOPER_SETUP.md)**
+```mermaid
+graph LR
+    P["🔍 PERCEIVE<br/><br/>HealthKit · Camera<br/>Voice · Behavior"] --> M["🧠 MODEL<br/><br/>Memory RAG<br/>6-Tag User Profile"]
+    M --> PL["📋 PLAN<br/><br/>Active Inference<br/>Goal Auto-Adjust"]
+    PL --> I["🤚 INTERVENE<br/><br/>VoIP Call · Screen Lock<br/>HomeKit · Coaching"]
+    I --> V["✅ VERIFY<br/><br/>Visual AI<br/>Photo · Pledge"]
+    V --> L["📚 LEARN<br/><br/>Memory Extraction<br/>Behavior Analysis"]
+    L --> P
 
-**⚠️ 重要**：为了让 Vercel 自动部署你的提交，需要配置本地 Git 身份：
+    style P fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style M fill:#7B68EE,stroke:#5B48CE,color:#fff
+    style PL fill:#E67E22,stroke:#C0651A,color:#fff
+    style I fill:#E74C3C,stroke:#C0392B,color:#fff
+    style V fill:#2ECC71,stroke:#27AE60,color:#fff
+    style L fill:#9B59B6,stroke:#8E44AD,color:#fff
+```
+
+The agent doesn't just remind you. It **calls you**. If you don't answer, it **locks your phone**. It watches you work through your camera. It learns your procrastination patterns. It adjusts your goals when you're struggling. It controls your lights when it's time to sleep.
+
+**This is what "AI agent" actually means.**
+
+---
+
+## Why This is Different
+
+| Feature         | Typical AI App                   | HumanOS                                                                                      |
+| --------------- | -------------------------------- | -------------------------------------------------------------------------------------------- |
+| Reminders       | Push notification you swipe away | **VoIP call** via CallKit — rings like a real phone call                                     |
+| Accountability  | Honor system                     | **AI visual verification** — camera frames analyzed by Gemini                                |
+| Consequences    | Guilt                            | **Screen Time lock** — apps blocked until you comply                                         |
+| Personalization | Chat history window              | **Tiered RAG memory** — pgvector + MRR fusion, learns your emotional triggers and motivators |
+| Goal setting    | Static targets                   | **Active Inference** — goals auto-adjust based on prediction error                           |
+| Environment     | None                             | **HomeKit** — controls your lights, sets sleep scenes                                        |
+| Health          | None                             | **HealthKit** — heart rate, sleep quality, HRV, steps                                        |
+
+---
+
+## System Architecture
+
+```mermaid
+graph TD
+    HUMAN["👤 HUMAN"] --> IOS
+
+    subgraph IOS["📱 iOS Native — Swift 5.9"]
+        direction LR
+        CK["📞 CallKit + PushKit"]
+        ST["🔒 Screen Time"]
+        HK["❤️ HealthKit"]
+        HMK["💡 HomeKit"]
+    end
+
+    IOS --> |"47 JS Bridge Handlers"| WEB
+
+    subgraph WEB["🌐 React 19 + TypeScript + Vite 7"]
+        direction LR
+        HOOKS["useAICoachSession<br/>(15+ composable hooks)"]
+        UI["5-Tab UI<br/>+ Campfire Focus"]
+    end
+
+    WEB --> |"HTTPS / WebSocket"| BACKEND
+
+    subgraph BACKEND["⚡ Supabase — 40+ Edge Functions (Deno)"]
+        direction LR
+        MEM["Memory RAG<br/>extract · retrieve · compress"]
+        PROMPT["AI Prompt Engine<br/>1205-line system instruction"]
+        PUSH["Intervention<br/>VoIP · FCM · App Lock"]
+    end
+
+    BACKEND --> DB["🗄️ PostgreSQL + pgvector<br/>30+ tables · RLS · pg_cron"]
+    BACKEND --> GEM["Gemini Live<br/>Realtime Voice + Video"]
+    BACKEND --> GPT["GPT-5.1<br/>Memory Extraction"]
+    BACKEND --> AZR["Azure OpenAI<br/>Embeddings (1536d)"]
+
+    style HUMAN fill:#F39C12,stroke:#E67E22,color:#fff
+    style IOS fill:#3498DB,stroke:#2980B9,color:#fff
+    style WEB fill:#9B59B6,stroke:#8E44AD,color:#fff
+    style BACKEND fill:#E74C3C,stroke:#C0392B,color:#fff
+    style DB fill:#2C3E50,stroke:#1A252F,color:#fff
+    style GEM fill:#4285F4,stroke:#1A73E8,color:#fff
+    style GPT fill:#10A37F,stroke:#0D8C6D,color:#fff
+    style AZR fill:#0078D4,stroke:#005A9E,color:#fff
+```
+
+---
+
+## Core Systems
+
+### Memory System — The Agent's Brain
+
+Persistent user model built on **Multi-Query RAG with MRR (Mean Reciprocal Rank) fusion** over pgvector.
+
+```mermaid
+flowchart LR
+    SPEAK["🗣️ User speaks"] --> SYNTH["LLM synthesizes<br/>3 search queries"]
+    SYNTH --> EMBED["Azure OpenAI<br/>embeddings (1536d)"]
+    EMBED --> HOT["🔴 Hot Tier<br/>7 days + PREF/EFF"]
+    EMBED --> WARM["🟡 Warm Tier<br/>7–30 days"]
+    EMBED --> COLD["🔵 Cold Tier<br/>30+ days"]
+    HOT --> MRR["MRR Fusion<br/>ranked results"]
+    WARM --> MRR
+    COLD --> MRR
+    MRR --> INJECT["💉 Hidden injection<br/>into Gemini Live"]
+
+    style SPEAK fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style SYNTH fill:#E67E22,stroke:#C0651A,color:#fff
+    style EMBED fill:#9B59B6,stroke:#8E44AD,color:#fff
+    style HOT fill:#E74C3C,stroke:#C0392B,color:#fff
+    style WARM fill:#F39C12,stroke:#E67E22,color:#fff
+    style COLD fill:#3498DB,stroke:#2980B9,color:#fff
+    style MRR fill:#1ABC9C,stroke:#16A085,color:#fff
+    style INJECT fill:#2C3E50,stroke:#1A252F,color:#fff
+```
+
+**6 memory tags:** `PREF` (AI preferences, always loaded), `EFFECTIVE` (motivators, always loaded), `PROC` (procrastination patterns), `EMO` (emotional triggers), `SOMA` (body reactions), `SAB` (self-sabotage behaviors). Memory lifecycle: Extract → Embed → Deduplicate → AI-merge → Score → Store → Tiered RAG retrieve → Compress when stale.
+
+### Goal System — Active Inference Engine
+
+Goals auto-adjust based on `prediction_error = actual_time − target_time`. 3 consecutive successes → advance (harder). 2 consecutive failures → retreat (easier). Boundary-checked against ultimate target and baseline. 7 goal types supported. Daily AI-scored reports via Gemini Flash.
+
+### Intervention System — The Agent's Hands
+
+**Escalation ladder:** each level increases friction.
+
+| Level | Intervention      | Mechanism                                               |
+| ----- | ----------------- | ------------------------------------------------------- |
+| 1     | Push notification | Standard alert                                          |
+| 2     | **VoIP call**     | CallKit incoming call UI — rings like a real phone call |
+| 3     | **Screen lock**   | Apple Screen Time API — blocks all selected apps        |
+| 4     | **Pledge gate**   | Must speak/type consequence pledge to unlock            |
+
+Plus: **Gemini Live** realtime voice coaching (WebRTC, PCM 16kHz), **camera monitoring** (JPEG frames to AI), **HomeKit** environment control, **Dynamic Island** countdown, **background nudge** escalation (90s → 180s → disconnect).
+
+### Verification & Reward
+
+**AI visual verification** (Gemini 3 Flash analyzes camera frames, outputs confidence + evidence). **Photo verification** for leaderboard integrity. **Immutable coins ledger** with weekly seasons. **Physics-based celebration** (matter.js coin drop + confetti).
+
+---
+
+## Tech Stack
+
+| Layer           | Technology                                                                     |
+| --------------- | ------------------------------------------------------------------------------ |
+| **Frontend**    | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 3                               |
+| **AI Realtime** | Gemini Live API — WebSocket, audio/video streaming, session resumption         |
+| **Backend**     | Supabase — PostgreSQL + pgvector + 40+ Deno Edge Functions                     |
+| **Memory**      | Multi-Query RAG, MRR fusion, HNSW index, tiered hot/warm/cold                  |
+| **AI Models**   | GPT-5.1 (memory extraction), Gemini Flash (scoring), Azure OpenAI (embeddings) |
+| **iOS Native**  | Swift 5.9 — CallKit, Screen Time, HealthKit, HomeKit, PushKit, Live Activity   |
+| **Push**        | APNs VoIP + Alert, FCM, OneSignal                                              |
+| **i18n**        | 6 languages (EN, ZH, JA, KO, IT, ES)                                           |
+
+
+---
+
+## Getting Started
 
 ```bash
-cd firego--original-web
-git config user.name "sylmmhy"
-git config user.email "yilunarchi@gmail.com"
+# Web
+npm install && npm run dev          # Start dev server
+npm run dev:local                   # Connect to local Supabase
+npm run dev:remote                  # Connect to cloud Supabase
+npm run build && npm run lint       # Build + lint
+
+# Environment
+npm run use:local                   # Switch to local Supabase
+npm run use:remote                  # Switch to cloud Supabase
 ```
 
-详见：[完整配置说明](./DEVELOPER_SETUP.md#方案-1-配置本地-git-身份为仓库所有者推荐)
+---
+
+## Platforms
+
+| Platform    | Status     | Stack                                                           |
+| ----------- | ---------- | --------------------------------------------------------------- |
+| **iOS**     | Production | Swift — CallKit, Screen Time, HealthKit, HomeKit, Live Activity |
+| **Web**     | Production | [meetlumi.org](https://meetlumi.org)                            |
+| **Android** | Waitlist   | Planned                                                         |
 
 ---
 
-## 📦 技术栈
+## Docs
 
-- **框架**: React 19 + TypeScript + Vite
-- **路由**: React Router DOM v7
-- **样式**: Tailwind CSS
-- **后端**: Supabase (PostgreSQL + Edge Functions)
-- **AI**: Gemini Live API（多模态 AI）
-- **部署**: Vercel
+[Architecture](./docs/architecture/) · [Key Decisions](./docs/KEY_DECISIONS.md) · [Features](./docs/features/) · [Dev Guides](./docs/dev-guide/)
 
 ---
 
-## 🛠️ 本地开发
+## License
 
-```bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 构建生产版本
-npm run build
-
-# 运行 linter
-npm run lint
-```
-
-### 切换 Supabase 环境
-
-开发时可以在本地 Supabase 和远程 Supabase 之间快速切换：
-
-```bash
-# 方式 1：只切换配置（不启动服务）
-npm run use:local   # 切换到本地 Supabase
-npm run use:remote  # 切换到远程 Supabase
-
-# 方式 2：切换并启动开发服务器（一步到位）
-npm run dev:local   # 使用本地 Supabase + 启动 Vite
-npm run dev:remote  # 使用远程 Supabase + 启动 Vite
-```
-
-| 文件 | 作用 |
-|------|------|
-| `.env.supabase-local` | 本地 Supabase 预设配置 |
-| `.env.supabase-remote` | 远程 Supabase 预设配置 |
-| `.env.local` | 当前生效的配置（切换命令会覆盖此文件） |
-
----
-
-## 📚 文档
-
-- [开发者设置指南](./DEVELOPER_SETUP.md) - 新开发者必读
-- [部署指南](./DEPLOY_GUIDE.md) - Deploy Hook 使用说明
-- [项目架构](./docs/architecture/README.md) - 完整架构文档
-- [记忆系统](./docs/architecture/memory-system.md) - 记忆系统深入解析
-- [Claude 开发指南](./CLAUDE.md) - AI 辅助开发规范
-
----
-
-## 🌐 部署
-
-- **生产环境**: https://meetlumi.org
-- **Vercel Dashboard**: https://vercel.com/dashboard
-
----
-
-## 📱 跨平台
-
-本仓库是 monorepo，包含三个互联的项目：
-
-- **firego--original-web** - React 网页应用（本目录）
-- **mindboat-ios-web-warpper** - iOS 原生壳子（WebView 封装）
-- **firego-Android** - Android 原生壳子（WebView 封装）
-
-iOS 和 Android 应用都通过 WebView 加载网页应用，Web 应用更新后，原生 App 会自动加载最新版本（无需重新构建）。
-
----
-
-## 🤝 贡献
-
-欢迎贡献！请先阅读 [开发者设置指南](./DEVELOPER_SETUP.md)。
-
----
-
-# Original Vite Template README
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Proprietary. All rights reserved.

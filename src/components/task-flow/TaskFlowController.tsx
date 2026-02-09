@@ -12,6 +12,7 @@ import {
   endLiveKitRoom,
   onLiveKitEvent,
 } from '../../lib/liveKitSettings';
+import { PlanReview, PlanGenerating, PlanError } from '../plan-review/PlanReview';
 
 type FlowStep = 'idle' | 'working' | 'startCelebration' | 'simpleExecution' | 'finish';
 
@@ -119,6 +120,15 @@ export function TaskFlowController({
       setStep('finish');
     },
   });
+
+  // 从 useAICoachSession 解构计划生成相关状态
+  const {
+    planGenerationState,
+    generatedPlan,
+    planError,
+    confirmPlan,
+    retryPlanChat,
+  } = aiCoach;
 
   // 庆祝动画控制
   const celebrationAnimation = useCelebrationAnimation({
@@ -252,6 +262,30 @@ export function TaskFlowController({
     setCompletionTime(0);
     setCelebrationFlow('success');
   }, [aiCoach, usingLiveKit, initialCountdown]);
+
+  // 计划生成状态 - 优先级最高，覆盖所有其他界面
+  if (planGenerationState === 'generating') {
+    return <PlanGenerating />;
+  }
+
+  if (planGenerationState === 'reviewing' && generatedPlan) {
+    return (
+      <PlanReview
+        plan={generatedPlan}
+        onConfirm={confirmPlan}
+        onRetry={retryPlanChat}
+      />
+    );
+  }
+
+  if (planGenerationState === 'error') {
+    return (
+      <PlanError
+        error={planError || '未知错误'}
+        onRetry={retryPlanChat}
+      />
+    );
+  }
 
   if (step === 'working') {
     // LiveKit 模式：使用原生音频，不需要摄像头和 canvas

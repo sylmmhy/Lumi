@@ -417,4 +417,19 @@
   "pledge.pleaseEnter": "以下の言葉を入力してください：",
   "pledge.enterPlaceholder": "この結果を受け入れるために上の内容を入力...",
   "pledge.timeTo": "〜の時間です"
+  "weeklyReport.title": "週次行動分析",
+  "weeklyReport.loading": "読み込み中...",
+  "weeklyReport.noData": "まだ週次レポートデータがありません。Lumiを使い続けると、来週には分析が見られます！",
+  "weeklyReport.noDataHint": "週次レポートは毎週月曜日に自動生成され、タスク、集中力、習慣などのデータに基づきます",
+  "weeklyReport.persona": "あなたのプロフィール",
+  "weeklyReport.completionRate": "完了率",
+  "weeklyReport.focusTime": "集中時間",
+  "weeklyReport.habitStreak": "習慣連続",
+  "weeklyReport.days": "日",
+  "weeklyReport.tasksCompleted": "完了済み",
+  "weeklyReport.insights": "重要な洞察",
+  "weeklyReport.recommendations": "提案",
+  "weeklyReport.highPriority": "優先度高",
+  "weeklyReport.alerts": "注意が必要",
+  "weeklyReport.viewFull": "完全なレポートを表示"
 }

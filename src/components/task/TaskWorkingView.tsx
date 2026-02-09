@@ -74,6 +74,9 @@ export interface TaskWorkingViewProps {
 
   /** 背景颜色 */
   backgroundColor?: string;
+
+  /** 唤醒 Lumi 回调（篝火模式 + Gemini 断开时显示按钮） */
+  onWakeUpLumi?: () => void;
 }
 
 /**
@@ -117,6 +120,7 @@ export function TaskWorkingView({
   secondaryButton,
   hasBottomNav = false,
   backgroundColor = '#1e1e1e',
+  onWakeUpLumi,
 }: TaskWorkingViewProps) {
   const displayTime = timeMode === 'countdown' ? time : time;
   const [fireSize, setFireSize] = useState<string>(getResponsiveFireSize());
@@ -157,6 +161,16 @@ export function TaskWorkingView({
                 Observing you...
               </span>
             </div>
+          )}
+          {/* 篝火模式：Wake up Lumi 按钮 */}
+          {onWakeUpLumi && (
+            <button
+              onClick={onWakeUpLumi}
+              className="mt-6 px-8 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-base font-semibold hover:bg-white/20 active:scale-95 transition-all"
+              style={{ fontFamily: 'Inter, sans-serif' }}
+            >
+              Wake up Lumi
+            </button>
           )}
         </div>
 
@@ -211,8 +225,8 @@ export function TaskWorkingView({
           </div>
         )}
 
-        {/* 连接中提示 (覆盖层) */}
-        {aiStatus && !aiStatus.isConnected && (
+        {/* 连接中提示 (覆盖层) — 篝火模式等待时不显示，因为断开是正常状态 */}
+        {aiStatus && !aiStatus.isConnected && !onWakeUpLumi && (
           <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-4 z-50">
             <div className="h-12 w-12 rounded-full border-4 border-white/20 border-t-brand-orange animate-spin" />
             <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full border border-white/20 shadow-lg">

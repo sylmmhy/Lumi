@@ -229,6 +229,8 @@
   "urgency.helpMeStart": "Help me start",
   "urgency.talkToLumi": "Talk to Lumi",
   "urgency.justChat": "Just have a chat with Lumi",
+  "urgency.setupHabit": "Set up a habit",
+  "urgency.setupHabitChat": "I want to set up a new habit",
 
   "leaderboard.ranking": "Ranking",
   "leaderboard.youAreTheBest": "You are the best!",
@@ -539,5 +541,11 @@
   "profile.recovery.noData": "Insufficient data",
   "profile.recovery.trend.rising": "Rising trend",
   "profile.recovery.trend.stable": "Stable",
-  "profile.recovery.trend.falling": "Falling trend"
+  "profile.recovery.trend.falling": "Falling trend",
+
+  "session.endCall": "End Call",
+  "session.completionModal.title": "Did you complete the task?",
+  "session.completionModal.description": "Please let us know if you finished the task",
+  "session.completionModal.confirmComplete": "Yes, I did it!",
+  "session.completionModal.confirmIncomplete": "No, I didn't finish"
 }

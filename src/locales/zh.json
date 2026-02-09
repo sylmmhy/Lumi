@@ -231,6 +231,8 @@
   "urgency.helpMeStart": "陪我开始",
   "urgency.talkToLumi": "和 Lumi 聊天",
   "urgency.justChat": "和 Lumi 随便聊聊",
+  "urgency.setupHabit": "设定习惯",
+  "urgency.setupHabitChat": "我想设定一个新习惯",
 
   "leaderboard.ranking": "排行榜",
   "leaderboard.youAreTheBest": "你是最棒的！",
@@ -541,5 +543,11 @@
   "profile.recovery.noData": "数据不足",
   "profile.recovery.trend.rising": "上升趋势",
   "profile.recovery.trend.stable": "稳定",
-  "profile.recovery.trend.falling": "下降趋势"
+  "profile.recovery.trend.falling": "下降趋势",
+
+  "session.endCall": "结束对话",
+  "session.completionModal.title": "任务完成了吗？",
+  "session.completionModal.description": "请告诉我们你是否完成了任务",
+  "session.completionModal.confirmComplete": "是，我完成了！",
+  "session.completionModal.confirmIncomplete": "否，我没完成"
 }

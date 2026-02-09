@@ -13,7 +13,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { devLog } from '../gemini-live/utils';
 import type { AICoachMessage } from './types';
-import { isValidUserSpeech, sanitizeBracketTags } from './utils';
+import { isValidUserSpeech, sanitizeBracketTags, cleanNoiseMarkers } from './utils';
 
 /** 转录条目（与 useGeminiLive 的 transcript 格式匹配） */
 interface TranscriptEntry {
@@ -150,8 +150,9 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
       // AI 开始说话前，先把累积的用户消息存储
       if (userSpeechBufferRef.current.trim()) {
         const fullUserMessage = userSpeechBufferRef.current.trim();
-        devLog('🎤 用户说:', fullUserMessage);
-        addMessageRef.current('user', fullUserMessage, false);
+        const cleanUserMessage = cleanNoiseMarkers(fullUserMessage);
+        devLog('🎤 用户说:', cleanUserMessage || fullUserMessage);
+        addMessageRef.current('user', cleanUserMessage || fullUserMessage, false);
 
         // 通知下游（话题检测 / 记忆检索）
         onUserMessageRef.current(fullUserMessage);
@@ -159,8 +160,9 @@ export function useTranscriptProcessor(options: UseTranscriptProcessorOptions): 
         userSpeechBufferRef.current = '';
       }
 
-      // 存储 AI 消息
-      const displayText = lastMessage.text;
+      // 存储 AI 消息（cleanNoiseMarkers 清理噪音标签，保证 UI 字幕干净）
+      const displayText = cleanNoiseMarkers(lastMessage.text);
+      if (!displayText) return; // 纯噪音消息，跳过
       addMessageRef.current('ai', displayText);
 
       // 累积到 AI 回复缓冲区（turnComplete 后由裁判统一消费）

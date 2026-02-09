@@ -5,14 +5,13 @@
  *
  * 篝火模式的核心行为：
  * 1. 进入时：AI 说告别语 → 断开 Gemini → 播放白噪音 → 启动专注计时
- * 2. 专注中：VAD 检测用户说话 → 重连 Gemini 对话 → 30s 空闲后断开
+ * 2. 专注中：用户点击 "Wake up Lumi" 按钮 → 重连 Gemini 对话 → 30s 空闲后断开
  * 3. 退出时：停止白噪音 → 用原 system prompt 重连 AI 教练
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { fetchGeminiToken } from '../useGeminiLive';
 import type { useGeminiLive as UseGeminiLiveType } from '../useGeminiLive';
-import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
 import { getSupabaseClient } from '../../lib/supabase';
 import { getVoiceName } from '../../lib/voiceSettings';
 import { devLog, devWarn } from '../gemini-live/utils';
@@ -66,8 +65,12 @@ export interface UseCampfireModeReturn {
   savedSystemInstructionRef: React.MutableRefObject<string>;
   /** 篝火模式重连状态标记（供统一裁判检查，避免重复触发 enter_campfire） */
   isReconnectingFromCampfireRef: React.MutableRefObject<boolean>;
+  /** 手动清除重连标记和自动重置定时器（供统一裁判在检测到 enter_campfire 时调用） */
+  clearReconnectingFlag: () => void;
   /** 篝火模式资源清理（供组件卸载时调用） */
   cleanupResources: () => void;
+  /** 唤醒 Lumi：用户手动点击按钮重连 Gemini（替代 VAD 自动重连） */
+  wakeUpLumi: () => void;
 }
 
 // ==========================================
@@ -97,16 +100,15 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   const campfireReconnectLockRef = useRef(false);
   const campfireIdleTimerRef = useRef<number | null>(null);
   const savedSystemInstructionRef = useRef<string>('');
-  const campfireMicStreamRef = useRef<MediaStream | null>(null);
 
   /** 🔧 修复闭包过期：标记"篝火重连刚完成，需要发送触发消息" */
   const campfireNeedsTriggerRef = useRef(false);
 
-  /** 篝火模式进入时间戳：用于 VAD 冷却期，避免 AI 音频残留触发误重连 */
-  const campfireEntryTimeRef = useRef<number>(0);
-
   /** 🔧 篝火重连状态标记：防止重连后意图检测再次触发 enter_campfire */
   const isReconnectingFromCampfireRef = useRef(false);
+
+  /** 篝火重连标记的自动重置定时器 ID */
+  const reconnectFlagResetTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ==========================================
   // 子 Hooks
@@ -117,14 +119,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
   /** 专注计时 */
   const focusTimer = useFocusTimer();
-
-  /** 篝火模式独立的 VAD 实例：在 Gemini 断开时监听麦克风
-   * minSpeechDuration=100ms：比默认 250ms 更灵敏，适配篝火模式的快速唤醒场景。
-   * 即使误触，30 秒空闲超时会自动断开 Gemini，代价很小。 */
-  const campfireVad = useVoiceActivityDetection(
-    isCampfireMode ? campfireMicStreamRef.current : null,
-    { threshold: 25, enabled: isCampfireMode && !geminiLive.isConnected, minSpeechDuration: 100 }
-  );
 
   // ==========================================
   // 空闲计时器
@@ -256,7 +250,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     const epochAtStart = sessionEpochRef.current;
 
     try {
-      devLog('🔌 [Campfire] VAD triggered, reconnecting Gemini...');
+      devLog('🔌 [Campfire] Reconnecting Gemini...');
       // 防止 sessionRef 残留导致 connect 被忽略
       geminiLive.disconnect();
 
@@ -300,6 +294,17 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
       // 🔧 设置重连状态标记，防止意图检测再次触发 enter_campfire
       isReconnectingFromCampfireRef.current = true;
+
+      // 🔧 启动自动重置定时器（10 秒后自动取消拦截）
+      // 这样既能防止重连后立即的误触发，又不会长期拦截用户真正的进入意图
+      if (reconnectFlagResetTimerRef.current) {
+        clearTimeout(reconnectFlagResetTimerRef.current);
+      }
+      reconnectFlagResetTimerRef.current = setTimeout(() => {
+        devLog('🔥 [Campfire] 重连标记已自动重置（10 秒超时）');
+        isReconnectingFromCampfireRef.current = false;
+        reconnectFlagResetTimerRef.current = null;
+      }, 10_000); // 10 秒
 
       setCampfireChatCount(prev => prev + 1);
       startCampfireIdleTimer();
@@ -365,22 +370,8 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     geminiLive.disconnect();
     devLog('🏕️ [Step 2] Gemini 已断开');
 
-    // 获取麦克风流（用于 VAD）
-    devLog('🏕️ [Step 3] 获取麦克风流...');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      campfireMicStreamRef.current = stream;
-      devLog('🏕️ [Step 3] 麦克风流已获取', {
-        active: stream.active,
-        tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })),
-      });
-    } catch (micErr) {
-      devWarn('⚠️ [Campfire] Failed to get mic stream for VAD:', micErr);
-    }
-
-    // 切换状态
-    devLog('🏕️ [Step 4] 设置 isCampfireMode = true');
-    campfireEntryTimeRef.current = Date.now();
+    // 切换状态（不再获取麦克风流，改用 "Wake up Lumi" 按钮手动重连）
+    devLog('🏕️ [Step 3] 设置 isCampfireMode = true');
     setIsCampfireMode(true);
     setCampfireChatCount(0);
 
@@ -409,13 +400,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     focusTimer.stop();
     clearCampfireIdleTimer();
 
-    // 2. 停止麦克风流
-    if (campfireMicStreamRef.current) {
-      campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-      campfireMicStreamRef.current = null;
-    }
-
-    // 3. 记录统计
+    // 2. 记录统计
     const stats: CampfireStats = {
       sessionId: campfireSessionId || '',
       taskDescription: currentTaskDescription,
@@ -487,10 +472,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     ambientAudio.stop();
     focusTimer.stop();
     clearCampfireIdleTimer();
-    if (campfireMicStreamRef.current) {
-      campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-      campfireMicStreamRef.current = null;
-    }
     setIsCampfireMode(false);
   }, [ambientAudio, focusTimer, clearCampfireIdleTimer]);
 
@@ -515,25 +496,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     }
   }, [isCampfireMode, geminiLive.isConnected, geminiLive, preferredLanguage]);
 
-  // VAD 触发 → 重连 Gemini（只在 isSpeaking 变化时执行，不依赖 currentVolume 避免刷屏）
-  useEffect(() => {
-    if (isCampfireMode && campfireVad.isSpeaking) {
-      // 🔧 进入篝火模式后 5 秒内忽略 VAD，避免 AI 音频残留被麦克风拾取触发误重连
-      // 从 2 秒增加到 5 秒：给 AudioStreamer 更长的时间清空播放队列
-      const CAMPFIRE_VAD_COOLDOWN_MS = 5000;
-      if (Date.now() - campfireEntryTimeRef.current < CAMPFIRE_VAD_COOLDOWN_MS) {
-        devLog('🔥 [Campfire VAD] 冷却期内，忽略');
-        return;
-      }
-
-      if (!campfireReconnectLockRef.current && !geminiLive.isConnected) {
-        // 只在需要重连时才显示 log，避免 isConnected=true 时刷屏
-        devLog('🔥 [Campfire VAD] Speaking detected, isConnected: false, reconnecting...');
-        campfireReconnectGemini();
-      }
-    }
-  }, [isCampfireMode, campfireVad.isSpeaking, geminiLive.isConnected, campfireReconnectGemini]);
-
   // 空闲超时 → 断开 Gemini
   useEffect(() => {
     if (isCampfireMode && geminiLive.isConnected && !geminiLive.isSpeaking && !geminiLive.isRecording) {
@@ -553,6 +515,31 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   }, [isCampfireMode, geminiLive.isConnected, ambientAudio]);
 
   /**
+   * 唤醒 Lumi：用户手动点击按钮重连 Gemini
+   * 替代 VAD 自动重连，避免环境噪音误触发
+   */
+  const wakeUpLumi = useCallback(() => {
+    if (!isCampfireMode || geminiLive.isConnected || campfireReconnectLockRef.current) {
+      devLog('🔥 [Campfire] wakeUpLumi 跳过:', { isCampfireMode, isConnected: geminiLive.isConnected, locked: campfireReconnectLockRef.current });
+      return;
+    }
+    devLog('🔥 [Campfire] Wake up Lumi! 用户手动重连...');
+    campfireReconnectGemini();
+  }, [isCampfireMode, geminiLive.isConnected, campfireReconnectGemini]);
+
+  /**
+   * 手动清除重连标记和自动重置定时器
+   * 供统一裁判在检测到 enter_campfire 时调用
+   */
+  const clearReconnectingFlag = useCallback(() => {
+    isReconnectingFromCampfireRef.current = false;
+    if (reconnectFlagResetTimerRef.current) {
+      clearTimeout(reconnectFlagResetTimerRef.current);
+      reconnectFlagResetTimerRef.current = null;
+    }
+  }, []);
+
+  /**
    * 清理篝火模式硬件资源（供组件卸载时调用）
    */
   const cleanupResources = useCallback(() => {
@@ -560,9 +547,10 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       clearTimeout(campfireIdleTimerRef.current);
       campfireIdleTimerRef.current = null;
     }
-    if (campfireMicStreamRef.current) {
-      campfireMicStreamRef.current.getTracks().forEach(t => t.stop());
-      campfireMicStreamRef.current = null;
+    // 清理重连标记自动重置定时器
+    if (reconnectFlagResetTimerRef.current) {
+      clearTimeout(reconnectFlagResetTimerRef.current);
+      reconnectFlagResetTimerRef.current = null;
     }
   }, []);
 
@@ -583,6 +571,8 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     stopCampfireResources,
     savedSystemInstructionRef,
     isReconnectingFromCampfireRef,
+    clearReconnectingFlag,
     cleanupResources,
+    wakeUpLumi,
   };
 }

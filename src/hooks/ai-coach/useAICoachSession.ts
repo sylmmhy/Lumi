@@ -8,6 +8,7 @@ import { useVirtualMessageOrchestrator } from '../virtual-messages';
 import { getSupabaseClient } from '../../lib/supabase';
 import type { VirtualMessageUserContext } from '../virtual-messages/types';
 import { devLog, devWarn } from '../gemini-live/utils';
+import { cleanNoiseMarkers } from './utils';
 import type { AICoachSessionState, UseAICoachSessionOptions } from './types';
 import { useCampfireMode } from './useCampfireMode';
 import { useSessionTimer } from './useSessionTimer';
@@ -85,9 +86,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const intentDetectionRef = useRef<{
     processAIResponse: (aiResponse: string) => void;
     addUserMessage: (message: string) => void;
+    clearHistory: () => void;
   }>({
     processAIResponse: () => {},
     addUserMessage: () => {},
+    clearHistory: () => {},
   });
 
   // 裁判 epoch：每次模式切换（campfire/habit_setup/normal/voip_push）递增，
@@ -132,6 +135,11 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       });
       // 同步到短期对话上下文
       sessionContext.addMessage('user', text);
+      // 🔧 清理噪音标签后同步完整消息给意图检测（替代之前的碎片发送）
+      const cleaned = cleanNoiseMarkers(text);
+      if (cleaned) {
+        intentDetectionRef.current.addUserMessage(cleaned);
+      }
     }, [sessionContext]),
     onAIMessage: useCallback((text: string) => {
       orchestratorRef.current.onAISpeech(text);
@@ -140,8 +148,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // 同步到短期对话上下文
       sessionContext.addMessage('ai', text);
     }, [sessionContext]),
-    onUserSpeechFragment: useCallback((text: string) => {
-      intentDetectionRef.current.addUserMessage(text);
+    onUserSpeechFragment: useCallback((_text: string) => {
+      // 不再给意图检测发碎片 — 改由 onUserMessage 发完整消息
     }, []),
   });
 
@@ -172,7 +180,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const memoryPipeline = useAsyncMemoryPipeline(currentUserIdRef.current);
 
   // ==========================================
-  // 切换到习惯设定模式：直接换 Gemini 连接，不走 lifecycle
+  // 切换到习惯设定模式：走 get-system-instruction + chatMode='setup'
+  // 复用完整记忆管道，保持上下文接力
   // ==========================================
   const switchToHabitSetupMode = useCallback(async (topic?: string) => {
     try {
@@ -186,45 +195,74 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       habitSetupActiveRef.current = true;
       // US-006: 模式切换时递增 epoch，丢弃过期异步结果
       refereeEpochRef.current += 1;
-      devLog('🔄 [习惯切换] 开始切换...', { topic, epoch: refereeEpochRef.current });
+      devLog('🔄 [习惯切换] 开始切换（新架构: get-system-instruction + setup）...', { topic, epoch: refereeEpochRef.current });
 
-      // 1. 获取习惯设定 prompt
-      const { data, error } = await supabase.functions.invoke('start-voice-chat', {
+      // 1. 打包对话上下文（上下文接力：切换前捕获快照）
+      const conversationContext = sessionContext.getContext();
+      devLog('📦 [习惯切换] 对话上下文已打包', {
+        messageCount: conversationContext?.messages?.length || 0,
+        summary: conversationContext?.summary || '无',
+      });
+
+      // 2. 通过 get-system-instruction 获取 Prompt C（带完整记忆管道）
+      const taskDescription = topic ? `Setting up habit: ${topic}` : 'Setting up a new habit';
+      const { data, error } = await supabase.functions.invoke('get-system-instruction', {
         body: {
+          taskInput: taskDescription,
+          userName: undefined, // lifecycle 会填充
+          preferredLanguages: preferredLanguagesRef.current || undefined,
           userId,
-          chatType: 'intention_compile',
-          context: { phase: 'onboarding' },
-          aiTone: 'gentle',
+          chatMode: 'setup',
+          localTime: (() => {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes} (24-hour format)`;
+          })(),
+          localDate: new Date().toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric',
+          }),
+          localDateISO: new Date().toISOString().split('T')[0],
+          // 注入对话上下文，保持记忆不磨灭
+          isReconnect: true,
+          context: conversationContext,
         },
       });
 
-      if (error || !data?.geminiConfig?.systemPrompt) {
+      if (error || !data?.systemInstruction) {
         devWarn('❌ [习惯切换] 获取 prompt 失败:', error);
+        habitSetupActiveRef.current = false;
         return;
       }
 
-      // 2. 断开当前 Gemini 并等待完全清理
+      devLog('✅ [习惯切换] 获取到 Setup Prompt', {
+        promptLength: data.systemInstruction.length,
+        memoriesCount: data.retrievedMemories?.length || 0,
+      });
+
+      // 3. 断开当前 Gemini 并等待完全清理
       geminiLive.disconnect();
       await new Promise(resolve => setTimeout(resolve, 300));
       devLog('🔄 [习惯切换] Gemini 已断开，开始重连...');
 
-      // 3. 重新连接，用习惯设定的 prompt
+      // 4. 重新连接，用习惯设定的 prompt（带完整记忆）
       const { fetchGeminiToken } = await import('../useGeminiLive');
       const { getVoiceName } = await import('../../lib/voiceSettings');
       const token = await fetchGeminiToken();
       await geminiLive.connect(
-        data.geminiConfig.systemPrompt,
+        data.systemInstruction,
         [],
         token,
         getVoiceName()
       );
 
-      // 4. 等待连接稳定后启动麦克风
+      // 5. 等待连接稳定后启动麦克风
       await new Promise(resolve => setTimeout(resolve, 500));
 
       devLog('🎤 [习惯切换] 启动麦克风...', { isRecording: geminiLive.isRecording, isConnected: geminiLive.isConnected });
       try {
-        // 强制启动麦克风，不管当前状态
         if (!geminiLive.isRecording) {
           await geminiLive.toggleMicrophone();
           devLog('✅ [习惯切换] 麦克风已启动');
@@ -235,7 +273,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         devWarn('⚠️ [习惯切换] 麦克风启动失败:', e);
       }
 
-      // 5. 告诉 AI 用户想做什么
+      // 6. 告诉 AI 用户想做什么（prompt 中已有完整流程，这里只提供 topic 提示）
       const topicHint = topic || 'a habit';
       setTimeout(() => {
         geminiLive.sendTextMessage(
@@ -244,14 +282,15 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         devLog('📤 [习惯切换] 已发送上下文给 AI');
       }, 500);
 
-      // 6. 更新保存的 system prompt
-      campfire.savedSystemInstructionRef.current = data.geminiConfig.systemPrompt;
+      // 7. 更新保存的 system prompt
+      campfire.savedSystemInstructionRef.current = data.systemInstruction;
 
-      devLog('✅ [习惯切换] 切换完成！');
+      devLog('✅ [习惯切换] 切换完成！（新架构）');
     } catch (err) {
       devWarn('❌ [习惯切换] 失败:', err);
+      habitSetupActiveRef.current = false;
     }
-  }, [geminiLive, campfire.savedSystemInstructionRef]);
+  }, [geminiLive, campfire.savedSystemInstructionRef, sessionContext]);
 
   // ==========================================
   // 统一裁判 — 唯一的 useIntentDetection 实例（US-006）
@@ -262,6 +301,26 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     chatType: 'daily_chat',
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
     enabled: isSessionActive && (!campfire.isCampfireMode || geminiLive.isConnected),
+
+    // 统一裁判上下文（用于话题检测和记忆检索）
+    getCurrentTopic: useCallback(() => {
+      const context = orchestratorRef.current.getContext();
+      return context.currentTopic?.name || null;
+    }, []),
+    getCurrentMode: useCallback(() => {
+      if (campfire.isCampfireMode) return 'campfire';
+      if (habitSetupActiveRef.current) return 'habit_setup';
+      return 'normal';
+    }, [campfire.isCampfireMode]),
+    getSilenceDuration: useCallback(() => {
+      // TODO: 从 VAD 获取用户沉默时长
+      return null;
+    }, []),
+    getTriggerType: useCallback(() => {
+      // TODO: 区分 silence 触发和 ai_response 触发
+      return 'ai_response' as const;
+    }, []),
+
     onToolResult: (result) => {
       // 工具执行完后，把结果注入回 Gemini 对话
       if (result.success && result.responseHint && geminiLive.isConnected) {
@@ -292,18 +351,20 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
               // 🔧 防止篝火模式重连后重复触发 enter_campfire
               if (campfire.isReconnectingFromCampfireRef.current) {
                 devLog(`🔥 [统一裁判] 刚从篝火模式重连，忽略 enter_campfire 检测`);
-                campfire.isReconnectingFromCampfireRef.current = false; // 重置标记
+                campfire.clearReconnectingFlag(); // 清除标记和定时器
                 return;
               }
 
               refereeEpochRef.current += 1;
               devLog(`🔥 [统一裁判] 进入篝火模式 (epoch=${refereeEpochRef.current})`);
+              intentDetectionRef.current.clearHistory(); // 🔧 清空意图检测历史，避免旧消息残留
               campfire.enterCampfireMode({ skipFarewell: true });
               return; // 模式切换后不处理其他动作
 
             case 'exit_campfire':
               refereeEpochRef.current += 1;
               devLog(`🔥 [统一裁判] 退出篝火模式 (epoch=${refereeEpochRef.current})`);
+              intentDetectionRef.current.clearHistory(); // 🔧 清空意图检测历史，避免旧消息残留
               campfire.exitCampfireMode();
               return;
 
@@ -321,7 +382,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
                 geminiLive.sendClientContent(
                   `[MODE_OVERRIDE] mode=chat\nUser doesn't want tasks right now. Switch to friend mode: stop pushing, listen and support. If user later wants to work, guide back naturally.`,
                   false,
-                  'system'
+                  'user'
                 );
               }
               return;
@@ -384,8 +445,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
                 devLog(contextMsg);
                 devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-                // 静默注入：turnComplete=false, role='system'
-                geminiLive.sendClientContent(contextMsg, false, 'system');
+                // 静默注入：turnComplete=false
+                geminiLive.sendClientContent(contextMsg, false, 'user');
                 devLog(`✅ [记忆检索] 已成功注入 ${memories.length} 条记忆`);
               } else {
                 devWarn(`⚠️ [记忆检索] Gemini 未连接，跳过记忆注入`);
@@ -418,8 +479,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     intentDetectionRef.current = {
       processAIResponse: unifiedIntentDetection.processAIResponse,
       addUserMessage: unifiedIntentDetection.addUserMessage,
+      clearHistory: unifiedIntentDetection.clearHistory,
     };
-  }, [unifiedIntentDetection.processAIResponse, unifiedIntentDetection.addUserMessage]);
+  }, [unifiedIntentDetection.processAIResponse, unifiedIntentDetection.addUserMessage, unifiedIntentDetection.clearHistory]);
 
   // ==========================================
   // 倒计时（独立 Hook）
@@ -655,6 +717,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       }
     });
     return () => setOnTurnComplete(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 故意只依赖具体方法引用，避免整个对象变化导致不必要的重注册
   }, [recordTurnComplete, setOnTurnComplete, transcript.flushAIResponseBuffer, geminiLive.sendTextMessage]);
 
   // 记录用户的最后一条消息（用于智能重试）
@@ -709,13 +772,17 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 操作
     startSession: useCallback(async (taskDescription: string, sessionOptions?: Parameters<typeof lifecycle.startSession>[1]) => {
-      // 新会话启动时重置习惯设定锁、裁判 epoch 和对话上下文
-      habitSetupActiveRef.current = false;
+      // 新会话启动时重置裁判 epoch 和对话上下文
+      // 如果是 setup 模式（通过按钮冷启动），设置习惯设定锁防止意图检测重复触发
+      habitSetupActiveRef.current = sessionOptions?.chatMode === 'setup';
       refereeEpochRef.current = 0;
       sessionContext.reset();
+      // 🔧 清空意图检测的历史记录，避免读取到之前会话的消息
+      intentDetectionRef.current.clearHistory();
       // 诊断：在启动前记录 callRecordId，用于音频异常检测
       callRecordIdForDiagRef.current = sessionOptions?.callRecordId ?? null;
       return lifecycle.startSession(taskDescription, sessionOptions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 故意只依赖 lifecycle.startSession，避免整个 lifecycle 对象变化导致重建
     }, [lifecycle.startSession, sessionContext]),
     endSession: lifecycle.endSession,
     stopAudioImmediately: lifecycle.stopAudioImmediately,
@@ -739,6 +806,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     enterCampfireMode: campfire.enterCampfireMode,
     exitCampfireMode: campfire.exitCampfireMode,
     campfireStats: campfire.campfireStats,
+    wakeUpLumi: campfire.wakeUpLumi,
 
     // 帧缓冲区（任务完成时抓取最近帧用于视觉验证）
     getRecentFrames: geminiLive.getRecentFrames,

@@ -24,16 +24,20 @@ const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.
 
 /**
  * 初始化 PostHog SDK
- * 
+ *
  * 关键设计：
  * 1. 生成永久设备用户 ID（存储在 localStorage，永不改变）
  * 2. 使用这个 ID 作为初始的 distinct_id
  * 3. 登录时通过 alias 关联账号和设备
  * 4. 实现跨设备、跨账号的身份关联
- * 
+ *
  * @returns {void}
  */
 export const initPostHog = async () => {
+  // 🚫 PostHog 已禁用 - 如需启用，删除下面这两行
+  isPostHogInitialized = true
+  return
+
   if (isPostHogInitialized) return
   if (!POSTHOG_KEY) {
     // PostHog 仅用于统计；缺失 key 时直接跳过，不影响主流程。

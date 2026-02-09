@@ -119,9 +119,9 @@ interface UseGeminiSessionReturn {
    *
    * @param content - 要注入的文本内容
    * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
-   * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
+   * @param role - 消息角色，默认 'user'（Gemini Live API 只支持 'user' 和 'model'）
    */
-  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void;
+  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user') => void;
   /** 获取当前保存的 session resumption handle（如果有） */
   resumptionHandle: string | null;
 }
@@ -325,7 +325,7 @@ export function useGeminiSession(
                     if (ctx && sessionRef.current) {
                       setTimeout(() => {
                         if (sessionRef.current) {
-                          sendClientContent(ctx, false, 'system');
+                          sendClientContent(ctx, false, 'user');
                           devLog('🔄 [Session] 恢复后注入对话上下文');
                         }
                       }, 500);
@@ -412,9 +412,9 @@ export function useGeminiSession(
    *
    * @param content - 要注入的文本内容
    * @param turnComplete - 是否触发 AI 响应，默认 false（静默注入）
-   * @param role - 消息角色，默认 'user'，可选 'system' 用于注入上下文/记忆
+   * @param role - 消息角色，默认 'user'（Gemini Live API 只支持 'user' 和 'model'，不支持 'system'）
    */
-  const sendClientContent = useCallback((content: string, turnComplete = false, role: 'user' | 'system' = 'user') => {
+  const sendClientContent = useCallback((content: string, turnComplete = false, role: 'user' = 'user') => {
     if (sessionRef.current) {
       // 尝试使用 Gemini SDK 的 sendClientContent 方法
       // @see https://ai.google.dev/api/live#BidiGenerateContentClientContent
@@ -431,7 +431,7 @@ export function useGeminiSession(
         session.sendClientContent({
           turns: [
             {
-              role,  // 使用传入的 role（'user' 或 'system'）
+              role,
               parts: [{ text: content }],
             },
           ],
@@ -444,7 +444,7 @@ export function useGeminiSession(
           client_content: {
             turns: [
               {
-                role,  // 使用传入的 role（'user' 或 'system'）
+                role,
                 parts: [{ text: content }],
               },
             ],
@@ -512,7 +512,7 @@ export function useGeminiSession(
         // 短暂延迟确保连接建立
         setTimeout(() => {
           if (sessionRef.current) {
-            sendClientContent(context, false, 'system');
+            sendClientContent(context, false, 'user');
             devLog('🔄 [Session] 对话上下文已注入');
           }
         }, 500);

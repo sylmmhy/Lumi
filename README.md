@@ -78,7 +78,7 @@ graph TD
 
     subgraph INFRA["🔧 Data & AI"]
         direction LR
-        DB["🗄️ PostgreSQL<br/>pgvector · RLS<br/>7 cron jobs"] ~~~ GEM_LIVE["Gemini Live<br/>Voice + Video"] ~~~ GEM_FLASH["Gemini Flash<br/>Scoring · TTS"] ~~~ GPT["GPT-5.1<br/>Memory"] ~~~ AZR["Azure OpenAI<br/>Embeddings 1536d"]
+        DB["🗄️ PostgreSQL<br/>pgvector · RLS<br/>7 cron jobs"] ~~~ GEM_LIVE["Gemini Live<br/>Voice + Video"] ~~~ GEM_FLASH["Gemini Flash<br/>Scoring · TTS"] ~~~ GEM3["Gemini 3 Flash<br/>Memory"] ~~~ GEM_EMB["Gemini<br/>Embeddings 1536d"]
     end
 
     style HUMAN fill:#F39C12,stroke:#E67E22,color:#fff
@@ -99,7 +99,7 @@ Persistent user model built on **Multi-Query RAG with MRR (Mean Reciprocal Rank)
 ```mermaid
 flowchart LR
     SPEAK["🗣️ User speaks"] --> SYNTH["LLM synthesizes<br/>3 search queries"]
-    SYNTH --> EMBED["Azure OpenAI<br/>embeddings (1536d)"]
+    SYNTH --> EMBED["Gemini<br/>embeddings (1536d)"]
     EMBED --> HOT["🔴 Hot Tier<br/>7 days + PREF/EFF"]
     EMBED --> WARM["🟡 Warm Tier<br/>7–30 days"]
     EMBED --> COLD["🔵 Cold Tier<br/>30+ days"]
@@ -149,7 +149,7 @@ Plus: **Gemini Live** realtime voice coaching (WebRTC, PCM 16kHz), **camera moni
 | ----------------- | ----------------------------------------------------------------------------------- |
 | **Frontend**      | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 3, 50+ composable hooks             |
 | **AI Realtime**   | Gemini Live API — WebSocket, PCM 16kHz audio/video, ephemeral tokens, VAD           |
-| **AI Models**     | GPT-5.1 (memory/reasoning), Gemini Flash (scoring/TTS), Azure OpenAI (embeddings)  |
+| **AI Models**     | Gemini 3 Flash (memory/reasoning), Gemini Flash (scoring/TTS), Gemini Embeddings   |
 | **Backend**       | Supabase — PostgreSQL + pgvector + 40+ Deno Edge Functions + 7 pg_cron jobs         |
 | **Memory**        | Multi-Query RAG, MRR fusion, HNSW index, tiered hot/warm/cold, 6 memory tags       |
 | **iOS Native**    | Swift 5.9 — CallKit, PushKit, FamilyControls, HealthKit, HomeKit, ActivityKit       |

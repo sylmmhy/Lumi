@@ -496,7 +496,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             const resolvedTaskId = persistedTask?.id ?? taskId;
             setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
-            setCurrentChatMode(taskToUse.chatMode || null);
+            setCurrentChatMode(taskToUse.chatMode || 'coach');
 
             startLiveKitRoom();
 
@@ -534,7 +534,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             const resolvedTaskId = persistedTask?.id ?? taskId;
             setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
-            setCurrentChatMode(taskToUse.chatMode || null);
+            setCurrentChatMode(taskToUse.chatMode || 'coach');
 
             if (auth.userId && !isTemporaryTaskId(resolvedTaskId)) {
                 try {

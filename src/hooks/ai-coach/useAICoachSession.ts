@@ -31,6 +31,28 @@ import { useAsyncMemoryPipeline, generateContextMessage } from '../virtual-messa
  * 篝火模式见 ./useCampfireMode.ts
  */
 
+/** 生成的计划数据类型（与后端 plan-types.ts 对齐） */
+interface GeneratedGoalPlan {
+  goalType: string;
+  goalName: string;
+  baselineTime: string;
+  ultimateTargetTime: string;
+  currentTargetTime: string;
+  advanceDirection: 'increase' | 'decrease';
+  adjustmentStep: number;
+  routines: Array<{
+    name: string;
+    durationMinutes: number;
+    scheduledTime: string;
+  }>;
+  summary: {
+    currentLevel: string;
+    firstMilestone: string;
+    ultimateGoal: string;
+    adjustmentExplain: string;
+  };
+}
+
 export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const {
     initialTime = 300, // 保留供记忆系统参考，不再用于倒计时
@@ -48,6 +70,13 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isObserving, setIsObserving] = useState(false); // AI 正在观察用户
   const [connectionError, setConnectionError] = useState<string | null>(null); // 连接错误信息
+
+  // 计划生成相关状态
+  const [planGenerationState, setPlanGenerationState] = useState<
+    'idle' | 'generating' | 'reviewing' | 'error'
+  >('idle');
+  const [generatedPlan, setGeneratedPlan] = useState<GeneratedGoalPlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   const sessionEpochRef = useRef(0); // 递增用于取消 in-flight 的 startSession / campfire reconnect
 
@@ -101,6 +130,14 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 解决意图检测滞后问题（上一轮的记忆检索在用户说新话后才完成并注入）
   const userMsgEpochRef = useRef(0);
 
+  // 独立记忆搜索：防抖定时器 + 冷却时间戳
+  const memorySearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMemorySearchTimeRef = useRef(0); // 上次成功检索的时间戳
+  const MEMORY_SEARCH_DEBOUNCE_MS = 1000; // 1秒防抖
+  const MEMORY_SEARCH_COOLDOWN_MS = 30000; // 30秒冷却
+  // ref 间接引用 triggerMemorySearch（避免 TDZ：函数定义在 memoryPipeline 之后，但 onUserMessage 在之前）
+  const triggerMemorySearchRef = useRef<(msg: string) => void>(() => {});
+
   // 已切换到习惯设定模式的锁（防止 switch_to_habit_setup 无限循环触发）
   const habitSetupActiveRef = useRef(false);
 
@@ -114,7 +151,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onUserSpeech: (text: string) => Promise<unknown>;
     onAISpeech: (text: string) => void;
     onTurnComplete: () => void;
-    getContext: () => { currentTopic: { name: string } | null };
+    getContext: () => {
+      currentTopic: { name: string } | null;
+      recentMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    };
     getVirtualMessageContext: () => VirtualMessageUserContext | null;
   }>({
     onUserSpeech: async () => null,
@@ -146,6 +186,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       const cleaned = cleanNoiseMarkers(text);
       if (cleaned) {
         intentDetectionRef.current.addUserMessage(cleaned);
+
+        // 🆕 独立记忆搜索：用户说话后直接触发，与 Gemini Live 并行
+        triggerMemorySearchRef.current(cleaned);
       }
     }, [sessionContext]),
     onAIMessage: useCallback((text: string) => {
@@ -185,6 +228,85 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // US-010: 异步记忆管道（供统一裁判的 topic_changed 触发）
   // ==========================================
   const memoryPipeline = useAsyncMemoryPipeline(currentUserIdRef.current);
+
+  // ==========================================
+  // 独立记忆搜索：用户说话后直接触发，与 Gemini Live 并行
+  // ==========================================
+  const triggerMemorySearch = useCallback((userMessage: string) => {
+    // 防御：篝火模式且未连接时不搜索
+    if (campfire.isCampfireMode && !geminiLive.isConnected) return;
+
+    // 冷却检查：上次成功检索后 30 秒内不再检索
+    const now = Date.now();
+    if (now - lastMemorySearchTimeRef.current < MEMORY_SEARCH_COOLDOWN_MS) {
+      devLog(`📚 [独立记忆] 冷却中，跳过 (距上次 ${Math.round((now - lastMemorySearchTimeRef.current) / 1000)}s)`);
+      return;
+    }
+
+    // 防抖：清除之前的定时器
+    if (memorySearchTimerRef.current) {
+      clearTimeout(memorySearchTimerRef.current);
+    }
+
+    memorySearchTimerRef.current = setTimeout(async () => {
+      const epochAtStart = refereeEpochRef.current;
+      const userEpochAtStart = userMsgEpochRef.current;
+
+      devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      devLog(`📚 [独立记忆] 用户说话触发记忆搜索...`);
+      devLog(`📌 用户消息: "${userMessage.slice(0, 80)}"`);
+      devLog(`🔢 Epoch: mode=${epochAtStart}, user=${userEpochAtStart}`);
+
+      try {
+        const memories = await memoryPipeline.fetchMemoriesForTopic(
+          userMessage, // 用户原话作为 topic
+          [],          // keywords 空，让后端自己提取
+        );
+
+        // epoch 检查 1：模式已切换
+        if (refereeEpochRef.current !== epochAtStart) {
+          devWarn(`📚 [独立记忆] 模式 epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃`);
+          return;
+        }
+
+        // epoch 检查 2：用户说了新话
+        if (userMsgEpochRef.current !== userEpochAtStart) {
+          devWarn(`📚 [独立记忆] 用户说了新话 (epoch ${userEpochAtStart} → ${userMsgEpochRef.current})，丢弃`);
+          return;
+        }
+
+        devLog(`📊 [独立记忆] 检索完成，共获取 ${memories.length} 条记忆`);
+
+        if (memories.length > 0 && geminiLive.isConnected) {
+          devLog(`📝 [独立记忆] 检索到的记忆:`);
+          memories.forEach((mem, idx) => {
+            devLog(`  ${idx + 1}. [${mem.tags?.join(', ') || 'UNKNOWN'}] ${mem.content.slice(0, 100)}${mem.content.length > 100 ? '...' : ''}`);
+          });
+
+          const contextMsg = generateContextMessage(
+            memories, userMessage, 'neutral', 0.5
+          );
+
+          devLog(`📤 [独立记忆] 注入上下文消息到 Gemini`);
+          geminiLive.sendClientContent(contextMsg, false, 'user');
+          devLog(`✅ [独立记忆] 已成功注入 ${memories.length} 条记忆`);
+
+          // 更新冷却时间戳
+          lastMemorySearchTimeRef.current = Date.now();
+        } else if (memories.length === 0) {
+          devLog(`ℹ️ [独立记忆] 未找到相关记忆`);
+        }
+      } catch (err) {
+        devWarn(`❌ [独立记忆] 检索失败:`, err);
+      }
+      devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    }, MEMORY_SEARCH_DEBOUNCE_MS);
+  }, [campfire.isCampfireMode, geminiLive.isConnected, geminiLive.sendClientContent, memoryPipeline]);
+
+  // 同步 triggerMemorySearch 到 ref（供 onUserMessage 回调使用）
+  useEffect(() => {
+    triggerMemorySearchRef.current = triggerMemorySearch;
+  }, [triggerMemorySearch]);
 
   // ==========================================
   // 切换到习惯设定模式：走 get-system-instruction + chatMode='setup'
@@ -300,6 +422,155 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [geminiLive, campfire.savedSystemInstructionRef, sessionContext]);
 
   // ==========================================
+  // 计划生成流程（三个函数）
+  // ==========================================
+
+  /**
+   * 处理异步计划生成
+   * 在 detect-intent 返回 generate_plan 时调用
+   */
+  const handleGeneratePlan = useCallback(async () => {
+    try {
+      setPlanGenerationState('generating');
+      setPlanError(null);
+
+      // 1. 从 transcript 获取对话历史（过滤虚拟消息）
+      const rawMessages = transcript.messages
+        .filter((m: any) => !m.isVirtual)
+        .map((m: any) => ({
+          role: m.role === 'ai' ? 'assistant' as const : 'user' as const,
+          content: m.content,
+        }));
+
+      if (rawMessages.length === 0) {
+        setPlanError('对话历史为空');
+        setPlanGenerationState('error');
+        return;
+      }
+
+      // 2. 合并连续同角色的消息（解决流式 AI 回复碎片化问题）
+      const realMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      for (const msg of rawMessages) {
+        const lastMsg = realMessages[realMessages.length - 1];
+        if (lastMsg && lastMsg.role === msg.role) {
+          // 同角色连续消息，拼接内容
+          lastMsg.content += msg.content;
+        } else {
+          // 不同角色或第一条消息，新增
+          realMessages.push({ role: msg.role, content: msg.content });
+        }
+      }
+
+      devLog(`📋 [GeneratePlan] 原始消息: ${rawMessages.length} 条, 合并后: ${realMessages.length} 条`);
+
+      // 3. 断开 Gemini Live
+      devLog('🔌 [GeneratePlan] 断开 Gemini Live...');
+      geminiLive.disconnect();
+
+      // 4. 调用 generate-goal-plan Edge Function
+      devLog('📋 [GeneratePlan] 调用 generate-goal-plan API...');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-goal-plan`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            userId: currentUserIdRef.current,
+            messages: realMessages,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        devLog('❌ [GeneratePlan] HTTP 错误:', response.status, errorText.substring(0, 200));
+        setPlanError(`服务器错误 (${response.status})，请重试`);
+        setPlanGenerationState('error');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!data.success || !data.plan) {
+        devLog('❌ [GeneratePlan] 生成失败:', data.error);
+        setPlanError(data.error || '生成计划失败');
+        setPlanGenerationState('error');
+        return;
+      }
+
+      // 5. 设置计划数据，切换到审查模式
+      devLog('✅ [GeneratePlan] 计划生成成功:', data.plan.goalName);
+      setGeneratedPlan(data.plan);
+      setPlanGenerationState('reviewing');
+
+    } catch (err) {
+      console.error('❌ [GeneratePlan] 错误:', err);
+      setPlanError(err instanceof Error ? err.message : '未知错误');
+      setPlanGenerationState('error');
+    }
+  }, [transcript.messages, geminiLive]);
+
+  /**
+   * 确认计划并保存
+   */
+  const confirmPlan = useCallback(async () => {
+    if (!generatedPlan) return;
+
+    try {
+      setPlanGenerationState('generating'); // 复用 generating 状态显示加载
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/save-goal-plan`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            userId: currentUserIdRef.current,
+            ...generatedPlan,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setPlanError(data.error || '保存失败');
+        setPlanGenerationState('error');
+        return;
+      }
+
+      devLog('✅ [ConfirmPlan] 保存成功:', data.goalId);
+
+      // 保存成功 → 重置状态
+      setPlanGenerationState('idle');
+      setGeneratedPlan(null);
+      habitSetupActiveRef.current = false;
+
+    } catch (err) {
+      console.error('❌ [ConfirmPlan] 保存失败:', err);
+      setPlanError(err instanceof Error ? err.message : '保存失败');
+      setPlanGenerationState('error');
+    }
+  }, [generatedPlan]);
+
+  /**
+   * 重新聊聊（放弃当前计划，重新进入习惯设定模式）
+   */
+  const retryPlanChat = useCallback(() => {
+    setPlanGenerationState('idle');
+    setGeneratedPlan(null);
+    setPlanError(null);
+    // 重新连接 Gemini，走 switchToHabitSetupMode
+    switchToHabitSetupMode();
+  }, [switchToHabitSetupMode]);
+
+  // ==========================================
   // 统一裁判 — 唯一的 useIntentDetection 实例（US-006）
   // 处理所有意图：campfire enter/exit、habit setup、chat mode、工具调用
   // ==========================================
@@ -327,6 +598,28 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // TODO: 区分 silence 触发和 ai_response 触发
       return 'ai_response' as const;
     }, []),
+    getConversationHistory: useCallback(() => {
+      const context = orchestratorRef.current.getContext();
+      const messages = context.recentMessages || [];
+
+      // 合并连续的 assistant 消息（因为 Gemini Live 流式输出会拆成多条）
+      const merged: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      for (const msg of messages) {
+        const last = merged[merged.length - 1];
+        if (last && last.role === 'assistant' && msg.role === 'assistant') {
+          // 合并到上一条
+          last.content += msg.content;
+        } else {
+          // 新消息
+          merged.push({
+            role: msg.role,
+            content: msg.content,
+          });
+        }
+      }
+
+      return merged;
+    }, []),
 
     onToolResult: (result) => {
       // 工具执行完后，把结果注入回 Gemini 对话
@@ -343,7 +636,6 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     onDetectionComplete: (result) => {
       devLog(`🎯 [统一裁判] onDetectionComplete:`, {
         tool: result.tool, confidence: result.confidence,
-        topic_changed: result.topic_changed, fetch_memories: result.fetch_memories,
         coach_note: result.coach_note?.slice(0, 40),
       });
 
@@ -402,78 +694,21 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       //           这里只记录日志；executeToolCall 结果通过 onToolResult 回调）
       // ────────────────────────────────────────
       if (result.tool && result.tool !== 'null' && result.confidence >= 0.6) {
+        // 特殊处理：generate_plan 不由 executeToolCall 处理，需要在这里手动调用
+        if (result.tool === 'generate_plan') {
+          devLog(`📋 [统一裁判] 检测到信息收集完成，开始生成计划`);
+          handleGeneratePlan();
+          return;
+        }
+
         devLog(`🎯 [统一裁判] 工具调用: ${result.tool} (置信度: ${result.confidence})`);
         // 有工具调用时，跳过低优先级动作
         return;
       }
 
       // ────────────────────────────────────────
-      // 优先级 3：话题变化 + 记忆检索（US-010）
+      // 优先级 3（已移除）：记忆检索现在由 triggerMemorySearch 在用户说话时独立触发
       // ────────────────────────────────────────
-      if (result.topic_changed && result.fetch_memories) {
-        // 防御性检查：篝火模式下不检索记忆
-        if (campfire.isCampfireMode) {
-          devLog(`📚 [统一裁判] 篝火模式中，跳过记忆检索`);
-        } else {
-          const epochAtStart = refereeEpochRef.current;
-          const userMsgEpochAtStart = userMsgEpochRef.current; // 🔧 记录用户消息 epoch
-          devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          devLog(`📚 [记忆检索] 检测到话题变化，开始检索记忆...`);
-          devLog(`📌 话题: ${result.topic_changed}`);
-          devLog(`🔍 查询条件: ${JSON.stringify(result.memory_queries || [], null, 2)}`);
-          devLog(`🔢 Mode Epoch: ${epochAtStart}, User Msg Epoch: ${userMsgEpochAtStart}`);
-
-          // 异步检索记忆 — 结果注入前检查 epoch
-          memoryPipeline.fetchMemoriesForTopic(
-            result.topic_changed,
-            result.memory_queries || [],
-          ).then((memories) => {
-            // 🔧 检查 1：模式已切换，丢弃过期结果
-            if (refereeEpochRef.current !== epochAtStart) {
-              devWarn(`📚 [记忆检索] 模式 epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃过期结果`);
-              return;
-            }
-
-            // 🔧 检查 2：用户说了新话，丢弃过时记忆（修复意图检测滞后问题）
-            if (userMsgEpochRef.current !== userMsgEpochAtStart) {
-              devWarn(`📚 [记忆检索] 检索期间用户说了新话 (epoch ${userMsgEpochAtStart} → ${userMsgEpochRef.current})，丢弃过时记忆`);
-              return;
-            }
-
-            devLog(`📊 [记忆检索] 检索完成，共获取 ${memories.length} 条记忆`);
-
-            if (memories.length > 0) {
-              devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-              devLog(`📝 [记忆检索] 检索到的记忆内容:`);
-              memories.forEach((mem, idx) => {
-                devLog(`  ${idx + 1}. [${mem.tags?.join(', ') || 'UNKNOWN'}] ${mem.content.slice(0, 100)}${mem.content.length > 100 ? '...' : ''}`);
-              });
-              devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-
-              if (geminiLive.isConnected) {
-                const contextMsg = generateContextMessage(
-                  memories, result.topic_changed!, 'neutral', 0.5
-                );
-
-                devLog(`📤 [记忆检索] 注入上下文消息到 Gemini:`);
-                devLog(contextMsg);
-                devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-
-                // 静默注入：turnComplete=false
-                geminiLive.sendClientContent(contextMsg, false, 'user');
-                devLog(`✅ [记忆检索] 已成功注入 ${memories.length} 条记忆`);
-              } else {
-                devWarn(`⚠️ [记忆检索] Gemini 未连接，跳过记忆注入`);
-              }
-            } else {
-              devLog(`ℹ️ [记忆检索] 未找到相关记忆`);
-            }
-          }).catch((err) => {
-            devWarn(`❌ [记忆检索] 检索失败:`, err);
-          });
-        }
-        // 不 return —— coach_note 理论上可以和记忆检索共存
-      }
 
       // ────────────────────────────────────────
       // 优先级 4：教练提示（coach_note）
@@ -482,7 +717,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         devLog(`📝 [统一裁判] 注入 coach_note: ${result.coach_note.slice(0, 50)}...`);
         geminiLive.sendClientContent(
           `[COACH_NOTE] ${result.coach_note}`,
-          true
+          false  // ✅ 修复：不触发 AI 回复，静默注入上下文
         );
       }
     },
@@ -661,6 +896,26 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     successRecord: successRecordRef.current,
     initialDuration: initialTime,
     preferredLanguage: preferredLanguagesRef.current?.[0],
+    getConversationHistory: useCallback(() => {
+      const context = orchestratorRef.current.getContext();
+      const messages = context.recentMessages || [];
+
+      // 合并连续的 assistant 消息（因为 Gemini Live 流式输出会拆成多条）
+      const merged: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      for (const msg of messages) {
+        const last = merged[merged.length - 1];
+        if (last && last.role === 'assistant' && msg.role === 'assistant') {
+          last.content += msg.content;
+        } else {
+          merged.push({
+            role: msg.role,
+            content: msg.content,
+          });
+        }
+      }
+
+      return merged;
+    }, []),
   });
 
   const { setOnTurnComplete } = geminiLive;
@@ -811,5 +1066,12 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
 
     // 帧缓冲区（任务完成时抓取最近帧用于视觉验证）
     getRecentFrames: geminiLive.getRecentFrames,
+
+    // 计划生成
+    planGenerationState,
+    generatedPlan,
+    planError,
+    confirmPlan,
+    retryPlanChat,
   };
 }

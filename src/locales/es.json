@@ -417,4 +417,19 @@
   "pledge.pleaseEnter": "Por favor ingresa las palabras de abajo:",
   "pledge.enterPlaceholder": "Escribe la cita para aceptar esta consecuencia...",
   "pledge.timeTo": "Es hora de"
+  "weeklyReport.title": "Análisis Semanal de Comportamiento",
+  "weeklyReport.loading": "Cargando...",
+  "weeklyReport.noData": "Aún no hay datos de informe semanal. ¡Sigue usando Lumi y verás tu análisis la próxima semana!",
+  "weeklyReport.noDataHint": "Los informes semanales se generan cada lunes según tus tareas, concentración, hábitos y más",
+  "weeklyReport.persona": "Tu Perfil",
+  "weeklyReport.completionRate": "Finalización",
+  "weeklyReport.focusTime": "Tiempo de Concentración",
+  "weeklyReport.habitStreak": "Racha de Hábitos",
+  "weeklyReport.days": "días",
+  "weeklyReport.tasksCompleted": "Completadas",
+  "weeklyReport.insights": "Perspectivas Clave",
+  "weeklyReport.recommendations": "Sugerencias",
+  "weeklyReport.highPriority": "Alta Prioridad",
+  "weeklyReport.alerts": "Necesita Atención",
+  "weeklyReport.viewFull": "Ver Informe Completo"
 }

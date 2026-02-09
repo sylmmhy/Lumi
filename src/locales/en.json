@@ -551,5 +551,21 @@
   "session.completionModal.title": "Did you complete the task?",
   "session.completionModal.description": "Please let us know if you finished the task",
   "session.completionModal.confirmComplete": "Yes, I did it!",
-  "session.completionModal.confirmIncomplete": "No, I didn't finish"
+  "session.completionModal.confirmIncomplete": "No, I didn't finish",
+
+  "weeklyReport.title": "Weekly Behavior Analysis",
+  "weeklyReport.loading": "Loading...",
+  "weeklyReport.noData": "No weekly report data yet. Keep using Lumi and you'll see your analysis next week!",
+  "weeklyReport.noDataHint": "Weekly reports are generated every Monday based on your tasks, focus, habits, and more",
+  "weeklyReport.persona": "Your Profile",
+  "weeklyReport.completionRate": "Completion",
+  "weeklyReport.focusTime": "Focus Time",
+  "weeklyReport.habitStreak": "Habit Streak",
+  "weeklyReport.days": "days",
+  "weeklyReport.tasksCompleted": "Completed",
+  "weeklyReport.insights": "Key Insights",
+  "weeklyReport.recommendations": "Suggestions",
+  "weeklyReport.highPriority": "High Priority",
+  "weeklyReport.alerts": "Needs Attention",
+  "weeklyReport.viewFull": "View Full Report"
 }

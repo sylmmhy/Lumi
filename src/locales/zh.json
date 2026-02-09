@@ -553,5 +553,21 @@
   "session.completionModal.title": "任务完成了吗？",
   "session.completionModal.description": "请告诉我们你是否完成了任务",
   "session.completionModal.confirmComplete": "是，我完成了！",
-  "session.completionModal.confirmIncomplete": "否，我没完成"
+  "session.completionModal.confirmIncomplete": "否，我没完成",
+
+  "weeklyReport.title": "本周行为分析",
+  "weeklyReport.loading": "加载中...",
+  "weeklyReport.noData": "暂无周报数据。继续使用 Lumi，下周就能看到你的行为分析啦！",
+  "weeklyReport.noDataHint": "周报每周一自动生成，基于你的任务、专注、习惯等数据",
+  "weeklyReport.persona": "你的用户画像",
+  "weeklyReport.completionRate": "完成率",
+  "weeklyReport.focusTime": "专注时长",
+  "weeklyReport.habitStreak": "习惯连续",
+  "weeklyReport.days": "天",
+  "weeklyReport.tasksCompleted": "完成任务",
+  "weeklyReport.insights": "本周发现",
+  "weeklyReport.recommendations": "建议行动",
+  "weeklyReport.highPriority": "高优先级",
+  "weeklyReport.alerts": "需要关注",
+  "weeklyReport.viewFull": "查看完整报告"
 }

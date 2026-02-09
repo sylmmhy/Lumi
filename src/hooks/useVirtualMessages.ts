@@ -68,6 +68,8 @@ export interface UseVirtualMessagesOptions {
   initialDuration?: number;
   /** 用户首选语言，用于触发词中携带语言信息，确保 AI 回复使用正确语言 */
   preferredLanguage?: string;
+  /** 获取完整对话历史（用于判断是否为首次打招呼） */
+  getConversationHistory?: () => Array<{ role: 'user' | 'assistant'; content: string }>;
   // US-011: getConversationContext 和 fetchCoachGuidance 已移除
   // coach_note 由统一裁判 (detect-intent) 生成并通过 onDetectionComplete 注入
 }
@@ -91,6 +93,7 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     successRecord,
     initialDuration = 300, // 默认5分钟
     preferredLanguage = 'en-US', // 默认英文，确保触发词携带语言信息
+    getConversationHistory,
   } = options;
 
   // Refs 用于在闭包中获取最新值
@@ -223,9 +226,33 @@ export function useVirtualMessages(options: UseVirtualMessagesOptions) {
     const currentTime = getCurrentLocalTime();
     const lang = preferredLanguage; // 🔧 携带语言信息
 
-    // 开场白消息 - 使用触发词，附带当前时间和语言
+    // 开场白消息 - 检查是否有对话历史
     if (category === 'opening') {
-      return `[GREETING] current_time=${currentTime} language=${lang}`;
+      const history = getConversationHistory?.() || [];
+      const hasHistory = history.length > 0;
+
+      if (hasHistory) {
+        // 有对话历史 - 继续之前的对话
+        // 提取最后一轮对话的简短摘要（最多 50 字符）
+        const lastUserMsg = history.filter(m => m.role === 'user').slice(-1)[0];
+        const lastAIMsg = history.filter(m => m.role === 'assistant').slice(-1)[0];
+
+        let contextSummary = '';
+        if (lastUserMsg) {
+          contextSummary = lastUserMsg.content.substring(0, 50);
+        } else if (lastAIMsg) {
+          contextSummary = lastAIMsg.content.substring(0, 50);
+        }
+
+        if (contextSummary) {
+          return `[GREETING] context=continuing last_said="${contextSummary}" current_time=${currentTime} language=${lang}`;
+        } else {
+          return `[GREETING] context=continuing current_time=${currentTime} language=${lang}`;
+        }
+      } else {
+        // 无对话历史 - 首次打招呼
+        return `[GREETING] context=first_time current_time=${currentTime} language=${lang}`;
+      }
     }
 
     const elapsedMs = Date.now() - taskStartTime;

@@ -12,6 +12,7 @@ import { GoalSection } from '../profile/GoalSection';
 import { HealthKitSection } from '../profile/HealthKitSection';
 import { BedtimeRecommendation } from '../profile/BedtimeRecommendation';
 import { WeeklySleepReport } from '../profile/WeeklySleepReport';
+import { WeeklyBehaviorReport } from '../profile/WeeklyBehaviorReport';
 import { SecondaryPageHeader } from '../common/SecondaryPageHeader';
 import { AuthContext } from '../../context/AuthContextDefinition';
 import { supabase } from '../../lib/supabase';
@@ -924,6 +925,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                 {/* Weekly Sleep Report (iOS only) */}
                 <WeeklySleepReport />
+
+                {/* Weekly Behavior Analysis Report */}
+                <WeeklyBehaviorReport />
 
                 {/* Discord Community Section */}
                 <a

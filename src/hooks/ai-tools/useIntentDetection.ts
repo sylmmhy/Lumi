@@ -61,6 +61,8 @@ interface UseIntentDetectionOptions {
   getSilenceDuration?: () => number | null;
   // 获取触发类型（ai_response | silence）
   getTriggerType?: () => 'ai_response' | 'silence';
+  // 获取完整对话历史（从 ContextTracker，带 role 和时间顺序）
+  getConversationHistory?: () => Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 interface DetectIntentResult {
@@ -72,9 +74,11 @@ interface DetectIntentResult {
   error?: string;
   // US-009: 统一裁判新增字段
   topic_changed?: string | null;
-  fetch_memories?: boolean;
-  memory_queries?: string[] | null;
   coach_note?: string | null;
+  /** @deprecated 记忆检索已独立到 triggerMemorySearch，不再由意图检测触发 */
+  fetch_memories?: boolean;
+  /** @deprecated 记忆检索已独立到 triggerMemorySearch，不再由意图检测触发 */
+  memory_queries?: string[] | null;
 }
 
 interface LastSuggestion {
@@ -103,6 +107,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     getCurrentMode,
     getSilenceDuration,
     getTriggerType,
+    getConversationHistory,
   } = options;
 
   // 会话 ID：用于生成幂等键（破坏性工具去重）
@@ -172,25 +177,46 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
    */
   const detectIntent = useCallback(async (aiResponse: string): Promise<DetectIntentResult> => {
     try {
+      // 构建请求体
+      const conversationHistory = getConversationHistory?.() || null;
+      const requestBody = {
+        userMessages: userMessagesRef.current,
+        aiResponse,
+        chatType,
+        lastSuggestion: lastSuggestionRef.current,
+        pendingHabit: pendingHabitRef.current,
+        previousAIMessages: aiMessageHistoryRef.current.slice(-3),
+        // 统一裁判需要的上下文（用于话题检测和记忆检索）
+        currentMode: getCurrentMode?.() || 'normal',
+        currentTopic: getCurrentTopic?.() || null,
+        silenceDuration: getSilenceDuration?.() || null,
+        triggerType: getTriggerType?.() || 'ai_response',
+        // 完整对话历史（从 ContextTracker 获取）
+        conversationHistory,
+      };
+
+      // 打印传入意图检测器的内容
+      console.log('🔍 [IntentDetection] ===== 传入参数 =====');
+      console.log('🔍 [IntentDetection] userMessages:', userMessagesRef.current);
+      console.log('🔍 [IntentDetection] aiResponse:', aiResponse);
+      console.log('🔍 [IntentDetection] currentMode:', requestBody.currentMode);
+      console.log('🔍 [IntentDetection] currentTopic:', requestBody.currentTopic);
+      console.log('🔍 [IntentDetection] conversationHistory:', conversationHistory ? `${conversationHistory.length} 条` : '无');
+      if (conversationHistory && conversationHistory.length > 0) {
+        console.log('🔍 [IntentDetection] conversationHistory 内容:');
+        conversationHistory.forEach((msg, idx) => {
+          console.log(`  ${idx + 1}. [${msg.role}]: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`);
+        });
+      }
+      console.log('🔍 [IntentDetection] ===========================');
+
       const response = await fetch(`${supabaseUrl}/functions/v1/detect-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`,
         },
-        body: JSON.stringify({
-          userMessages: userMessagesRef.current,
-          aiResponse,
-          chatType,
-          lastSuggestion: lastSuggestionRef.current,
-          pendingHabit: pendingHabitRef.current,
-          previousAIMessages: aiMessageHistoryRef.current.slice(-3),
-          // 统一裁判需要的上下文（用于话题检测和记忆检索）
-          currentMode: getCurrentMode?.() || 'normal',
-          currentTopic: getCurrentTopic?.() || null,
-          silenceDuration: getSilenceDuration?.() || null,
-          triggerType: getTriggerType?.() || 'ai_response',
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -207,14 +233,11 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
         args: {},
         confidence: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
-        // US-009: 错误时也返回默认值
         topic_changed: null,
-        fetch_memories: false,
-        memory_queries: null,
         coach_note: null,
       };
     }
-  }, [supabaseUrl, supabaseAnonKey, chatType, getCurrentMode, getCurrentTopic, getSilenceDuration, getTriggerType]);
+  }, [supabaseUrl, supabaseAnonKey, chatType, getCurrentMode, getCurrentTopic, getSilenceDuration, getTriggerType, getConversationHistory]);
 
   /**
    * 执行工具调用
@@ -317,13 +340,11 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           const detection = await detectIntent(currentResponse);
 
           // 🔧 过时检测保护：如果在 API 调用期间用户又说了新的话，
-          // coach_note 和记忆检索是基于旧上下文的，应该丢弃
+          // coach_note 是基于旧上下文的，应该丢弃
           const isStale = userMessageCountRef.current > msgCountAtStart;
           if (isStale) {
-            console.log(`⏭️ [IntentDetection] 检测期间有 ${userMessageCountRef.current - msgCountAtStart} 条新用户消息，丢弃过时的 coach_note 和记忆检索`);
+            console.log(`⏭️ [IntentDetection] 检测期间有 ${userMessageCountRef.current - msgCountAtStart} 条新用户消息，丢弃过时的 coach_note`);
             detection.coach_note = null;
-            detection.fetch_memories = false;
-            detection.topic_changed = null;
           }
 
           console.log('🔍 [IntentDetection] 检测结果:', detection);
@@ -337,7 +358,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           const toolName = detection.tool as string; // 已通过 hasTool 确保非 null
 
           // 这些工具由 onDetectionComplete 处理，不需要通过 executeToolCall 执行
-          const specialTools = ['switch_to_habit_setup', 'enter_campfire', 'exit_campfire', 'switch_to_chat_mode'];
+          const specialTools = ['switch_to_habit_setup', 'enter_campfire', 'exit_campfire', 'switch_to_chat_mode', 'generate_plan'];
 
           if (detection.success && hasTool && detection.confidence >= 0.6) {
             // 跳过特殊工具（它们在 onDetectionComplete 中处理）

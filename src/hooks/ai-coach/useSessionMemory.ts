@@ -161,8 +161,8 @@ export function useSessionMemory(options: UseSessionMemoryOptions): UseSessionMe
         });
       }
 
-      const wasTaskCompleted = forceTaskCompleted === true || currentTimeRemaining === 0;
-      const actualDurationMinutes = Math.round((currentInitialTime - currentTimeRemaining) / 60);
+      const wasTaskCompleted = forceTaskCompleted === true;
+      const actualDurationMinutes = Math.round(currentTimeRemaining / 60); // 正计时：timeRemaining 就是已用秒数
 
       if (import.meta.env.DEV) {
         devLog('📊 任务完成状态:', {

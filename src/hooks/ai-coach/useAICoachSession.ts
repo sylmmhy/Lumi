@@ -33,7 +33,7 @@ import { useAsyncMemoryPipeline, generateContextMessage } from '../virtual-messa
 
 export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   const {
-    initialTime = 300,
+    initialTime = 300, // 保留供记忆系统参考，不再用于倒计时
     onCountdownComplete,
     enableVirtualMessages = true,
     enableVAD = true,
@@ -484,31 +484,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   }, [unifiedIntentDetection.processAIResponse, unifiedIntentDetection.addUserMessage, unifiedIntentDetection.clearHistory]);
 
   // ==========================================
-  // 倒计时（独立 Hook）
+  // 正计时（独立 Hook，无自动结束）
   // ==========================================
 
-  /**
-   * 用 ref 存储 onCountdownComplete，避免 timer hook 因回调变化而重建 interval
-   */
-  const onCountdownCompleteRef = useRef(onCountdownComplete);
-  useEffect(() => {
-    onCountdownCompleteRef.current = onCountdownComplete;
-  }, [onCountdownComplete]);
-
-  /**
-   * 倒计时归零时的处理：保存记忆 → 清理会话 → 通知调用方
-   * 通过 ref 间接调用，确保 interval 回调总是拿到最新的函数引用
-   */
-  const handleTimerComplete = useCallback(() => {
-    void saveSessionMemoryRef.current();
-    cleanupRef.current();
-    onCountdownCompleteRef.current?.();
-  }, []);
-
-  const timer = useSessionTimer({
-    initialTime,
-    onComplete: handleTimerComplete,
-  });
+  const timer = useSessionTimer();
 
   // ==========================================
   // 记忆保存（独立 Hook）

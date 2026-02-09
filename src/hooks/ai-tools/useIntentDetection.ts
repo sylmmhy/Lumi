@@ -124,6 +124,9 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
   
   // 已触发的工具记录（防止同一会话重复触发 save_goal_plan）
   const triggeredToolsRef = useRef<Set<string>>(new Set());
+
+  // 用户消息计数器：用于检测意图检测期间是否有新用户消息（过时检测保护）
+  const userMessageCountRef = useRef(0);
   
   // 待创建的习惯名称（用于 create_simple_routine）
   const pendingHabitRef = useRef<string | null>(null);
@@ -137,6 +140,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
    */
   const addUserMessage = useCallback((message: string) => {
     userMessagesRef.current.push(message);
+    userMessageCountRef.current += 1; // 递增计数器，用于过时检测保护
     // 只保留最近 10 条
     if (userMessagesRef.current.length > 10) {
       userMessagesRef.current = userMessagesRef.current.slice(-10);
@@ -160,6 +164,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     lastSuggestionRef.current = null;
     pendingHabitRef.current = null;
     triggeredToolsRef.current.clear();
+    userMessageCountRef.current = 0;
   }, []);
 
   /**
@@ -304,10 +309,23 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
       while (currentResponse) {
         try {
           console.log('🔍 [IntentDetection] 开始检测意图...');
-          
+
+          // 记录检测开始时的用户消息计数，用于检测过时结果
+          const msgCountAtStart = userMessageCountRef.current;
+
           // 1. 调用检测 API
           const detection = await detectIntent(currentResponse);
-          
+
+          // 🔧 过时检测保护：如果在 API 调用期间用户又说了新的话，
+          // coach_note 和记忆检索是基于旧上下文的，应该丢弃
+          const isStale = userMessageCountRef.current > msgCountAtStart;
+          if (isStale) {
+            console.log(`⏭️ [IntentDetection] 检测期间有 ${userMessageCountRef.current - msgCountAtStart} 条新用户消息，丢弃过时的 coach_note 和记忆检索`);
+            detection.coach_note = null;
+            detection.fetch_memories = false;
+            detection.topic_changed = null;
+          }
+
           console.log('🔍 [IntentDetection] 检测结果:', detection);
 
           // 通知检测完成

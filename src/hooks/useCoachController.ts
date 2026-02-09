@@ -347,7 +347,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         remainingTime: 300 - completionTime, // 剩余时间用于计算奖励
     });
 
-    const sessionElapsedSeconds = Math.max(0, 300 - aiCoach.state.timeRemaining);
+    const sessionElapsedSeconds = aiCoach.state.timeRemaining; // 正计时：timeRemaining 就是 elapsedSeconds
     const canVerifyCurrentSession = sessionElapsedSeconds >= MIN_SESSION_SECONDS_FOR_VERIFICATION;
     const verificationWaitSecondsRemaining = Math.max(
         0,
@@ -675,8 +675,8 @@ export function useCoachController(options: UseCoachControllerOptions) {
                 const baseCoins = 100;
                 const timeBonus = Math.min(Math.floor(liveKitTimeRemaining / 60) * 20, 400);
                 const calculatedCoins = baseCoins + timeBonus;
-                void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete'], {
-                    task_complete: calculatedCoins,
+                void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete']).then(coins => {
+                    onTaskCompleteForStats(coins);
                 });
             }
 
@@ -687,13 +687,15 @@ export function useCoachController(options: UseCoachControllerOptions) {
             setCurrentTaskType(null);
             setCurrentChatMode(null);
 
-            // 跳转到 stats 页并触发金币动画
-            onTaskCompleteForStats();
+            // 如果没有 userId（不发金币），直接跳转
+            if (!auth.userId) {
+                onTaskCompleteForStats(0);
+            }
         } else {
             // Gemini Live 模式
             aiCoach.stopAudioImmediately();
 
-            const usedTime = 300 - aiCoach.state.timeRemaining;
+            const usedTime = aiCoach.state.timeRemaining; // 正计时：timeRemaining 就是已用秒数
             const actualDurationMinutes = Math.round(usedTime / 60);
 
             const messagesSnapshot = [...aiCoach.state.messages];
@@ -842,7 +844,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             aiCoach.stopAudioImmediately();
             setSessionVerificationResult(null);
 
-            const usedTime = 300 - aiCoach.state.timeRemaining;
+            const usedTime = aiCoach.state.timeRemaining; // 正计时：timeRemaining 就是已用秒数
             const actualDurationMinutes = Math.round(usedTime / 60);
 
             const messagesSnapshot = [...aiCoach.state.messages];

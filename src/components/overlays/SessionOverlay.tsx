@@ -277,7 +277,7 @@ export function SessionOverlay({ coach }: SessionOverlayProps) {
                     <TaskWorkingView
                         taskDescription={coach.aiCoach.state.taskDescription}
                         time={coach.aiCoach.state.timeRemaining}
-                        timeMode="countdown"
+                        timeMode="countup"
                         camera={{
                             enabled: coach.aiCoach.cameraEnabled,
                             videoRef: coach.aiCoach.videoRef,
@@ -291,12 +291,7 @@ export function SessionOverlay({ coach }: SessionOverlayProps) {
                             isObserving: coach.aiCoach.isObserving,
                         }}
                         primaryButton={{
-                            label: "I'M DOING IT!",
-                            emoji: '✅',
-                            onClick: coach.handleRequestSessionCompletion,
-                        }}
-                        secondaryButton={{
-                            label: 'END CALL',
+                            label: '结束对话',
                             emoji: '🛑',
                             onClick: coach.handleEndCall,
                         }}

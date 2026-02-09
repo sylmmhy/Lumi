@@ -613,6 +613,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             type: 'routine',
             category: 'morning',
             called: false,
+            chatMode: 'coach', // 与 UrgencyView「Help me start」一致，使用 Coach Prompt（目标导向）
         };
         handleQuickStart(task);
     }, [handleQuickStart]);

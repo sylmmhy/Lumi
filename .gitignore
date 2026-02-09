@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.supabase-local
+.env.supabase-remote
 
 # Supabase 本地开发
 supabase/.env.local

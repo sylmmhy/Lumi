@@ -23,6 +23,7 @@ import { getAITone, setAITone, getAvailableAITones, type AITone } from '../../li
 import { useTranslation } from '../../hooks/useTranslation';
 import { useScreenTime } from '../../hooks/useScreenTime';
 import { VoiceChatTest } from '../dev/VoiceChatTest';
+import { getCoinSummary, setLeaderboardOptIn } from '../../services/coinsService';
 
 interface ProfileViewProps {
     isPremium: boolean;
@@ -92,6 +93,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showAIToneModal, setShowAIToneModal] = useState(false);
     const availableAITones = getAvailableAITones();
 
+    // Leaderboard opt-in state
+    const [leaderboardOptIn, setLeaderboardOptIn] = useState<boolean>(true);
+    const [optInLoading, setOptInLoading] = useState(false);
+    const [optInDisabled, setOptInDisabled] = useState(false);
+    const [nextOptInChangeAt, setNextOptInChangeAt] = useState<string | null>(null);
+
     // 获取按性别分组的声音列表
     const maleVoices = getVoicesByGender('male');
     const femaleVoices = getVoicesByGender('female');
@@ -103,6 +110,60 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     useEffect(() => {
         setCurrentLanguages(getPreferredLanguages());
     }, [showLanguageModal, showUILanguageModal]); // Refresh when either modal closes
+
+    // Load leaderboard opt-in status
+    useEffect(() => {
+        if (!auth?.userId || isGuest) return;
+        let cancelled = false;
+        getCoinSummary(auth.userId).then((summary) => {
+            if (cancelled) return;
+            setLeaderboardOptIn(summary.leaderboard_opt_in);
+            const now = new Date();
+            const nextAllowed = new Date(summary.next_opt_in_change_allowed_at);
+            if (nextAllowed > now) {
+                setOptInDisabled(true);
+                setNextOptInChangeAt(summary.next_opt_in_change_allowed_at);
+            }
+        }).catch((err) => {
+            console.error('Failed to load coin summary:', err);
+        });
+        return () => { cancelled = true; };
+    }, [auth?.userId, isGuest]);
+
+    // Handle leaderboard opt-in toggle
+    const handleLeaderboardOptInToggle = async () => {
+        if (!auth?.userId || optInLoading || optInDisabled) return;
+        const newValue = !leaderboardOptIn;
+        setOptInLoading(true);
+        try {
+            const result = await setLeaderboardOptIn(auth.userId, newValue);
+            if (result.success) {
+                setLeaderboardOptIn(newValue);
+                // 切换成功后，本周不能再切换
+                setOptInDisabled(true);
+                // 计算下周一
+                const now = new Date();
+                const dayOfWeek = now.getUTCDay();
+                const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                const weekStart = new Date(now);
+                weekStart.setUTCDate(weekStart.getUTCDate() + diff);
+                weekStart.setUTCHours(0, 0, 0, 0);
+                const nextWeek = new Date(weekStart);
+                nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+                setNextOptInChangeAt(nextWeek.toISOString());
+            } else if (result.error) {
+                alert(result.error);
+                if (result.next_opt_in_change_allowed_at) {
+                    setOptInDisabled(true);
+                    setNextOptInChangeAt(result.next_opt_in_change_allowed_at);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to toggle leaderboard opt-in:', err);
+        } finally {
+            setOptInLoading(false);
+        }
+    };
 
     // Handle ringtone type toggle
     const handleRingtoneTypeToggle = () => {
@@ -722,6 +783,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
                         </button>
                     )}
                 </div>
+
+                {/* Leaderboard Opt-In Section */}
+                {!isGuest && (
+                    <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+                        <button
+                            onClick={handleLeaderboardOptInToggle}
+                            disabled={optInLoading || optInDisabled}
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors disabled:opacity-60"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-yellow-50 rounded-full flex items-center justify-center">
+                                    <i className="fa-solid fa-trophy text-yellow-500"></i>
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-medium text-gray-800">{t('profile.leaderboard')}</p>
+                                    <p className="text-sm text-gray-400">
+                                        {optInDisabled && nextOptInChangeAt
+                                            ? `${t('profile.leaderboardNextChange')} ${new Date(nextOptInChangeAt).toLocaleDateString()}`
+                                            : t('profile.leaderboardHint')}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {optInLoading ? (
+                                    <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                                ) : (
+                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors ${leaderboardOptIn ? 'bg-yellow-500' : 'bg-gray-300'}`}>
+                                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${leaderboardOptIn ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </div>
+                                )}
+                            </div>
+                        </button>
+                    </div>
+                )}
 
                 {/* Account Management Section - Only show for logged in users */}
                 {!isGuest && (

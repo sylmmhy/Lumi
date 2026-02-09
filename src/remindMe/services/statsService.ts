@@ -144,28 +144,48 @@ export interface WeeklyCoinEntry {
 }
 
 /**
- * 获取用户当前周金币数（从 users.weekly_coins）
+ * 获取用户当前周金币数
+ * 根据排行榜参与状态返回 public 或 private 金币
+ * 数据来源：get-coin-summary Edge Function
  *
  * @param userId - 用户 ID
- * @returns 当前周金币数
+ * @returns 当前周金币数（参与排行榜返回 public，不参与返回 private）
  */
 export async function getUserWeeklyCoins(userId: string): Promise<number> {
     if (!supabase) {
         throw new Error('Supabase client is not initialized');
     }
 
-    const { data, error } = await supabase
-        .from('users')
-        .select('weekly_coins')
-        .eq('id', userId)
-        .single();
+    try {
+        const { data, error } = await supabase.functions.invoke('get-coin-summary', {
+            body: { user_id: userId },
+        });
 
-    if (error) {
-        console.error('Failed to get user weekly coins:', error);
-        throw error;
+        if (error || !data) {
+            // 降级：直接查 users.weekly_coins
+            const { data: fallback } = await supabase
+                .from('users')
+                .select('weekly_coins')
+                .eq('id', userId)
+                .single();
+            return fallback?.weekly_coins ?? 0;
+        }
+
+        // 根据排行榜参与状态返回对应金币
+        if (data.leaderboard_opt_in) {
+            return data.weekly_public_coins ?? 0;
+        } else {
+            return data.weekly_private_coins ?? 0;
+        }
+    } catch {
+        // 降级：直接查 users.weekly_coins
+        const { data: fallback } = await supabase
+            .from('users')
+            .select('weekly_coins')
+            .eq('id', userId)
+            .single();
+        return fallback?.weekly_coins ?? 0;
     }
-
-    return data?.weekly_coins ?? 0;
 }
 
 /**

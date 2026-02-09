@@ -13,6 +13,7 @@ import { StickyHeader } from './StickyHeader';
 import { supabase } from '../../lib/supabase';
 import { PhotoVerificationModal } from '../modals/PhotoVerificationModal';
 import { useAuth } from '../../hooks/useAuth';
+import { getCoinSummary } from '../../services/coinsService';
 
 interface HomeViewProps {
     tasks: Task[];
@@ -82,6 +83,54 @@ export const HomeView: React.FC<HomeViewProps> = ({
     // Photo Verification State
     const [photoVerifyTask, setPhotoVerifyTask] = useState<Task | null>(null);
     const auth = useAuth({ requireLoginAfterOnboarding: false });
+
+    // Leaderboard opt-in state（决定是否走验证流程）
+    const [leaderboardOptIn, setLeaderboardOptInState] = useState<boolean>(true);
+
+    // 加载排行榜参与状态
+    useEffect(() => {
+        if (!auth.userId) return;
+        let cancelled = false;
+        getCoinSummary(auth.userId).then((summary) => {
+            if (!cancelled) setLeaderboardOptInState(summary.leaderboard_opt_in);
+        }).catch(() => { /* 降级默认 true */ });
+        return () => { cancelled = true; };
+    }, [auth.userId]);
+
+    /**
+     * 处理拍照验证请求
+     * - 参与排行榜：打开验证弹窗
+     * - 不参与排行榜：直接发放 private 金币，跳过验证
+     */
+    const handlePhotoVerify = async (task: Task) => {
+        if (leaderboardOptIn) {
+            // 参与排行榜：走验证流程
+            setPhotoVerifyTask(task);
+        } else {
+            // 不参与排行榜：直接发放金币，不验证
+            if (!auth.userId || !supabase) return;
+            try {
+                const { data } = await supabase.functions.invoke('award-coins', {
+                    body: {
+                        user_id: auth.userId,
+                        task_id: task.id,
+                        sources: ['task_complete'],
+                    },
+                });
+                const awarded = data?.total_coins_awarded ?? 0;
+                if (awarded > 0) {
+                    onShowCoinToast?.(awarded);
+                }
+                // 标记任务完成
+                if (onUpdateTask) {
+                    onUpdateTask({ ...task, verification_status: 'skipped' });
+                }
+                onVerifySuccess?.(awarded);
+            } catch (err) {
+                console.error('Failed to award coins (no-verify mode):', err);
+            }
+        }
+    };
 
     // Scroll State
     const [scrollTop, setScrollTop] = useState(0);
@@ -506,7 +555,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onEdit={handleEditTask}
                                         onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
-                                        onPhotoVerify={setPhotoVerifyTask}
+                                        onPhotoVerify={handlePhotoVerify}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -520,7 +569,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
-                                        onPhotoVerify={setPhotoVerifyTask}
+                                        onPhotoVerify={handlePhotoVerify}
                                         />
                                     </div>
                                 )}
@@ -535,7 +584,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
-                                        onPhotoVerify={setPhotoVerifyTask}
+                                        onPhotoVerify={handlePhotoVerify}
                                         />
                                     </div>
                                 )}
@@ -550,7 +599,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
-                                        onPhotoVerify={setPhotoVerifyTask}
+                                        onPhotoVerify={handlePhotoVerify}
                                         />
                                     </div>
                                 )}
@@ -565,7 +614,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onEdit={handleEditTask}
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
-                                        onPhotoVerify={setPhotoVerifyTask}
+                                        onPhotoVerify={handlePhotoVerify}
                                         />
                                     </div>
                                 )}
@@ -582,7 +631,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     onToggle={onToggleComplete}
                                     onDelete={onDeleteTask}
                                     onEdit={handleEditTask}
-                                    onPhotoVerify={setPhotoVerifyTask}
+                                    onPhotoVerify={handlePhotoVerify}
                                 />
                             </div>
                         )}

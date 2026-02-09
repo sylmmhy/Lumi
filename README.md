@@ -53,38 +53,39 @@ The agent doesn't just remind you. It **calls you**. If you don't answer, it **l
 graph TD
     HUMAN["👤 HUMAN"] --> IOS
 
-    subgraph IOS["📱 iOS — Swift"]
+    subgraph IOS["📱 iOS Native"]
         direction LR
-        CK["📞 CallKit + PushKit"] ~~~ ST["🔒 Screen Time"] ~~~ HK["❤️ HealthKit"] ~~~ HMK["💡 HomeKit"]
+        CK["📞 CallKit<br/>+ PushKit"] ~~~ ST["🔒 Screen Time<br/>FamilyControls"] ~~~ HK["❤️ HealthKit<br/>350+ types"] ~~~ HMK["💡 HomeKit"]
+        LA["📍 Dynamic Island<br/>Live Activity"] ~~~ AV["🎵 Sleep Music<br/>AVFoundation"] ~~~ WRT["📹 WebRTC<br/>LiveKit"] ~~~ KC["🔑 Keychain<br/>+ App Groups"]
     end
 
-    IOS --> |"47 JS Bridge Handlers"| WEB
+    IOS -->|"58 JS Bridge Handlers"| WEB
 
-    subgraph WEB["🌐 React + Vite"]
+    subgraph WEB["🌐 React 19 + Vite"]
         direction LR
-        HOOKS["useAICoachSession<br/>(15+ composable hooks)"] ~~~ UI["5-Tab UI<br/>+ Campfire Focus"]
+        COACH["🧠 AI Coach<br/>15+ composable hooks"] ~~~ VAD["🎤 VAD<br/>+ Intent Detection"] ~~~ VMSG["💬 Virtual Messages<br/>+ Memory Injection"]
+        TASK_UI["📋 Task & Goal<br/>Management"] ~~~ CAMP["🏕️ Campfire<br/>Focus Mode"] ~~~ GAME["🏆 Gamification<br/>matter.js Physics"]
     end
 
-    WEB --> |"HTTPS / WebSocket"| BACKEND
+    WEB -->|"HTTPS / WebSocket"| BACKEND
 
-    subgraph BACKEND["⚡ Supabase Edge Functions"]
+    subgraph BACKEND["⚡ 40+ Edge Functions"]
         direction LR
-        MEM["Memory RAG<br/>extract · retrieve · compress"] ~~~ PROMPT["AI Prompt Engine<br/>1205-line system prompt"] ~~~ PUSH["Intervention<br/>VoIP · FCM · App Lock"]
+        MEM_BE["🧠 Memory<br/>extract · retrieve<br/>compress · embed"] ~~~ GOAL_BE["📊 Goals<br/>Active Inference<br/>daily reports"] ~~~ PUSH_BE["📡 Push<br/>VoIP · FCM<br/>Live Activity"] ~~~ VERIFY["✅ Verify<br/>visual AI · coins<br/>leaderboard"]
     end
 
-    BACKEND --> DB["🗄️ PostgreSQL + pgvector<br/>30+ tables · RLS · pg_cron"]
-    BACKEND --> GEM["Gemini Live<br/>Realtime Voice + Video"]
-    BACKEND --> GPT["GPT-5.1<br/>Memory Extraction"]
-    BACKEND --> AZR["Azure OpenAI<br/>Embeddings (1536d)"]
+    BACKEND --> INFRA
+
+    subgraph INFRA["🔧 Data & AI"]
+        direction LR
+        DB["🗄️ PostgreSQL<br/>pgvector · RLS<br/>7 cron jobs"] ~~~ GEM_LIVE["Gemini Live<br/>Voice + Video"] ~~~ GEM_FLASH["Gemini Flash<br/>Scoring · TTS"] ~~~ GPT["GPT-5.1<br/>Memory"] ~~~ AZR["Azure OpenAI<br/>Embeddings 1536d"]
+    end
 
     style HUMAN fill:#F39C12,stroke:#E67E22,color:#fff
     style IOS fill:#3498DB,stroke:#2980B9,color:#fff
     style WEB fill:#9B59B6,stroke:#8E44AD,color:#fff
     style BACKEND fill:#E74C3C,stroke:#C0392B,color:#fff
-    style DB fill:#2C3E50,stroke:#1A252F,color:#fff
-    style GEM fill:#4285F4,stroke:#1A73E8,color:#fff
-    style GPT fill:#10A37F,stroke:#0D8C6D,color:#fff
-    style AZR fill:#0078D4,stroke:#005A9E,color:#fff
+    style INFRA fill:#1ABC9C,stroke:#16A085,color:#fff
 ```
 
 ---
@@ -144,16 +145,18 @@ Plus: **Gemini Live** realtime voice coaching (WebRTC, PCM 16kHz), **camera moni
 
 ## Tech Stack
 
-| Layer           | Technology                                                                     |
-| --------------- | ------------------------------------------------------------------------------ |
-| **Frontend**    | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 3                               |
-| **AI Realtime** | Gemini Live API — WebSocket, audio/video streaming, session resumption         |
-| **Backend**     | Supabase — PostgreSQL + pgvector + 40+ Deno Edge Functions                     |
-| **Memory**      | Multi-Query RAG, MRR fusion, HNSW index, tiered hot/warm/cold                  |
-| **AI Models**   | GPT-5.1 (memory extraction), Gemini Flash (scoring), Azure OpenAI (embeddings) |
-| **iOS Native**  | Swift 5.9 — CallKit, Screen Time, HealthKit, HomeKit, PushKit, Live Activity   |
-| **Push**        | APNs VoIP + Alert, FCM, OneSignal                                              |
-| **i18n**        | 6 languages (EN, ZH, JA, KO, IT, ES)                                           |
+| Layer             | Technology                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| **Frontend**      | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 3, 50+ composable hooks             |
+| **AI Realtime**   | Gemini Live API — WebSocket, PCM 16kHz audio/video, ephemeral tokens, VAD           |
+| **AI Models**     | GPT-5.1 (memory/reasoning), Gemini Flash (scoring/TTS), Azure OpenAI (embeddings)  |
+| **Backend**       | Supabase — PostgreSQL + pgvector + 40+ Deno Edge Functions + 7 pg_cron jobs         |
+| **Memory**        | Multi-Query RAG, MRR fusion, HNSW index, tiered hot/warm/cold, 6 memory tags       |
+| **iOS Native**    | Swift 5.9 — CallKit, PushKit, FamilyControls, HealthKit, HomeKit, ActivityKit       |
+| **iOS Extended**  | Dynamic Island, Sleep Music, WebRTC/LiveKit, Keychain, App Groups, 58 JS Bridges    |
+| **Push**          | APNs VoIP + Alert, FCM v1 (OAuth2), Live Activity push                              |
+| **Gamification**  | Immutable coins ledger, weekly seasons, leaderboard, matter.js physics celebration  |
+| **i18n**          | 6 languages (EN, ZH, JA, KO, IT, ES)                                               |
 
 
 ---

@@ -32,3 +32,5 @@ supabase/.branches
 *.njsproj
 *.sln
 *.sw?
+
+.git-backup/

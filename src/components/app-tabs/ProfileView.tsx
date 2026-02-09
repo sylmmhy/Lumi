@@ -29,6 +29,10 @@ interface ProfileViewProps {
     isPremium: boolean;
     onRequestLogin?: () => void;
     onTestPledge?: () => void;
+    /** 排行榜参与状态（由父组件 AppTabsPage 管理） */
+    leaderboardOptIn: boolean;
+    /** 更新排行榜参与状态的回调 */
+    onLeaderboardOptInChange: (value: boolean) => void;
 }
 
 /**
@@ -37,7 +41,13 @@ interface ProfileViewProps {
  * @param props.isPremium - 当前用户是否为付费用户
  * @returns Profile 页面内容
  */
-export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLogin, onTestPledge }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({
+    isPremium,
+    onRequestLogin,
+    onTestPledge,
+    leaderboardOptIn,
+    onLeaderboardOptInChange,
+}) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const auth = useContext(AuthContext);
@@ -93,8 +103,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
     const [showAIToneModal, setShowAIToneModal] = useState(false);
     const availableAITones = getAvailableAITones();
 
-    // Leaderboard opt-in state
-    const [leaderboardOptIn, setLeaderboardOptIn] = useState<boolean>(true);
+    // Leaderboard opt-in UI state（注意：leaderboardOptIn 本身现在从 props 接收）
     const [optInLoading, setOptInLoading] = useState(false);
     const [optInDisabled, setOptInDisabled] = useState(false);
     const [nextOptInChangeAt, setNextOptInChangeAt] = useState<string | null>(null);
@@ -111,13 +120,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         setCurrentLanguages(getPreferredLanguages());
     }, [showLanguageModal, showUILanguageModal]); // Refresh when either modal closes
 
-    // Load leaderboard opt-in status
+    // Load leaderboard opt-in restrictions（注意：leaderboardOptIn 值本身由 AppTabsPage 管理）
     useEffect(() => {
         if (!auth?.userId || isGuest) return;
         let cancelled = false;
         getCoinSummary(auth.userId).then((summary) => {
             if (cancelled) return;
-            setLeaderboardOptIn(summary.leaderboard_opt_in);
+            // 只检查切换限制，不设置 leaderboardOptIn 值（由 props 提供）
             const now = new Date();
             const nextAllowed = new Date(summary.next_opt_in_change_allowed_at);
             if (nextAllowed > now) {
@@ -138,7 +147,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
         try {
             const result = await setLeaderboardOptIn(auth.userId, newValue);
             if (result.success) {
-                setLeaderboardOptIn(newValue);
+                // 通知父组件更新全局状态
+                onLeaderboardOptInChange(newValue);
                 // 切换成功后，本周不能再切换
                 setOptInDisabled(true);
                 // 计算下周一

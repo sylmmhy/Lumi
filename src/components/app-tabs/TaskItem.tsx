@@ -22,9 +22,11 @@ interface TaskItemProps {
     mode?: 'home' | 'urgency';
     /** urgency 模式下点击 Start 的回调 */
     onStart?: () => void;
+    /** 排行榜参与状态：false 时隐藏所有验证相关 UI */
+    leaderboardOptIn?: boolean;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, onPhotoVerify, mode = 'home', onStart }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, onPhotoVerify, mode = 'home', onStart, leaderboardOptIn = true }) => {
     const { t } = useTranslation();
     const photoVerificationCoins = getCoinReward('photo_verification');
     const [translateX, setTranslateX] = useState(0);
@@ -259,7 +261,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
 
             {/* Verification badge - 完成任务后的拍照验证引导，显示在任务卡片下方 */}
             {/* relative z-10 确保在 skip/delete 滑动按钮（absolute inset-0）之上 */}
-            {task.completed && onPhotoVerify && (!task.verification_status || task.verification_status === 'unverified') && (
+            {/* 只在参与排行榜时显示验证引导 */}
+            {leaderboardOptIn && task.completed && onPhotoVerify && (!task.verification_status || task.verification_status === 'unverified') && (
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -281,7 +284,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, on
             )}
 
             {/* Verified badge - 已验证的静态绿色徽章 */}
-            {task.completed && task.verification_status === 'verified' && (
+            {/* 只在参与排行榜时显示已验证徽章 */}
+            {leaderboardOptIn && task.completed && task.verification_status === 'verified' && (
                 <div className="relative z-10 w-full flex items-center justify-center gap-1.5 py-2 bg-green-50 border-t border-green-200/50 rounded-b-2xl">
                     <span className="text-green-600 text-[12px]" style={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}>
                         ✓ Verified

@@ -826,7 +826,6 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
     aiTone: 'gentle',
     language: 'zh',
     idleTimeout: 30,
-    vadThreshold: 25,
     onSessionEnd: (stats) => {
       console.log('Session ended:', stats);
       alert(`专注结束！\n时长: ${Math.floor(stats.durationSeconds / 60)}分${stats.durationSeconds % 60}秒\n对话次数: ${stats.chatCount}`);
@@ -929,16 +928,13 @@ function CampfireCompanionTest({ onBack }: { onBack: () => void }) {
             {session.isAmbientPlaying ? '🔥 Sound On' : '🔇 Sound Off'}
           </button>
 
-          {/* 用户静音按钮 */}
+          {/* 唤醒 Lumi 按钮 */}
           <button
-            onClick={session.toggleMute}
-            className={`px-4 py-2 rounded-full transition-colors text-sm ${
-              session.isMuted
-                ? 'bg-red-500/80 text-white'
-                : 'bg-black/40 backdrop-blur-sm text-white hover:bg-black/60'
-            }`}
+            onClick={session.wakeUpLumi}
+            disabled={session.status !== 'focusing'}
+            className="px-4 py-2 rounded-full transition-colors text-sm bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 disabled:opacity-50"
           >
-            {session.isMuted ? '🚫 Muted' : '🎤 Mic On'}
+            🔥 Wake up Lumi
           </button>
         </div>
       </div>

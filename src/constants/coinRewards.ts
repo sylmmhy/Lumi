@@ -1,14 +1,14 @@
 /**
  * 前端金币奖励配置（与后端 award-coins 默认值保持一致）。
- * 所有奖励均控制为个位数，避免单次奖励过大。
+ * 产品规则：1 个金币 = 1 个完成的任务
  */
 export const COIN_REWARDS = {
-  task_complete: 4,
-  session_complete: 2,
-  visual_verification: 5,
-  photo_verification: 5,
-  streak_bonus: 1,
-  resistance_bonus: 2,
+  task_complete: 1,
+  session_complete: 0,
+  visual_verification: 0,
+  photo_verification: 0,
+  streak_bonus: 0,
+  resistance_bonus: 0,
 } as const;
 
 export type CoinRewardSource = keyof typeof COIN_REWARDS;

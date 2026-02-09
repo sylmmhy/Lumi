@@ -44,6 +44,14 @@ interface StatsViewProps {
     onStartTask?: (habitId: string, habitTitle: string) => void;
     /** 外部触发打卡动画的计数器（每次递增时触发 EnergyBall 动画 + 音效 + Toast） */
     externalCheckInTrigger?: number;
+    /**
+     * 即将通过外部动画添加的金币数。
+     * loadData 时会从 API 返回值中扣除此数量，避免初始加载时所有金币一起掉落。
+     * 外部 trigger 触发后应重置为 0。
+     */
+    pendingNewCoins?: number;
+    /** 通知父组件 pendingNewCoins 已消费，应重置为 0 */
+    onPendingCoinsConsumed?: () => void;
 }
 
 /**
@@ -54,7 +62,7 @@ interface StatsViewProps {
  * 2. 习惯卡片：热力图 + 里程碑进度条
  * 3. 打卡联动：打卡时水位上涨 + Toast 激励
  */
-export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger, onStartTask, externalCheckInTrigger }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshTrigger, onStartTask, externalCheckInTrigger, pendingNewCoins = 0, onPendingCoinsConsumed }) => {
     const auth = useAuth();
     const { t } = useTranslation();
 
@@ -63,6 +71,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
     const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
     const [activeTab, setActiveTab] = useState<'routine' | 'done'>('routine');
     const [isLoading, setIsLoading] = useState(true);
+
+    // 用 ref 持有 pendingNewCoins，确保异步 loadData 读到最新值
+    const pendingNewCoinsRef = useRef(pendingNewCoins);
+    pendingNewCoinsRef.current = pendingNewCoins;
 
     // 存钱罐数据（本周金币余额 from users.weekly_coins）
     const [weeklyCount, setWeeklyCount] = useState(0);
@@ -110,19 +122,16 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
         // 只在计数器递增时触发动画（首次挂载 prev === curr 不触发）
         if (curr > prev) {
-            // 阶段 1 (0ms)：金色光晕 + checkin 音效 + 黑色遮罩
+            // 阶段 1 (0ms)：金色光晕 + 黑色遮罩
             setTriggerRise(true);
-            playCheckInSound();
 
-            // 阶段 2 (800ms)：金币掉入 + coinDrop 音效 + 刷新真实 weeklyCount
-            setTimeout(async () => {
-                if (auth.userId) {
-                    try {
-                        const coins = await getUserWeeklyCoins(auth.userId);
-                        setWeeklyCount(coins);
-                    } catch { /* ignore */ }
-                }
+            // 阶段 2 (800ms)：金币掉入 + 增量更新 weeklyCount + 播放硬币音效
+            setTimeout(() => {
+                // 使用增量更新（+1）而不是绝对值，避免所有金币重新掉落
+                setWeeklyCount(prevCount => prevCount + 1);
                 playCoinDropSound();
+                // 通知父组件 pendingNewCoins 已消费
+                onPendingCoinsConsumed?.();
             }, 800);
 
             // 阶段 3 (1800ms)：Streak 弹窗
@@ -144,7 +153,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
 
             showToast();
         }
-    }, [externalCheckInTrigger, auth.userId, showToast, habits]);
+    }, [externalCheckInTrigger, auth.userId, showToast, habits, onPendingCoinsConsumed]);
 
     /**
      * 播放打卡光晕音效
@@ -236,8 +245,14 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 const completionsMap = await getAllRoutineCompletions(auth.userId);
 
                 // 3. 获取本周金币余额（存钱罐数据）
+                // 如果有 pendingNewCoins（从 HomeView 跳转过来时），
+                // 扣除该数量，让金币通过 externalCheckInTrigger 动画逐个添加
                 const coins = await getUserWeeklyCoins(auth.userId);
-                setWeeklyCount(coins);
+                const pending = pendingNewCoinsRef.current;
+                const adjustedCoins = pending > 0
+                    ? Math.max(coins - pending, 0)
+                    : coins;
+                setWeeklyCount(adjustedCoins);
 
                 // 3b. 获取历史周金币数据（周切换用）
                 // 过滤掉本周（本周已由 weeklyCount 实时显示）
@@ -330,11 +345,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                 return habit;
             }));
 
-            // 5. 更新存钱罐计数（取消打卡时刷新真实金币数）
-            if (!newStatus && auth.userId) {
-                getUserWeeklyCoins(auth.userId)
-                    .then(coins => setWeeklyCount(coins))
-                    .catch(() => setWeeklyCount(prev => Math.max(prev - 1, 0)));
+            // 5. 更新存钱罐计数（取消打卡时减少金币数）
+            if (!newStatus) {
+                setWeeklyCount(prev => Math.max(prev - 1, 0));
             }
         } catch (error) {
             console.error('Failed to toggle habit:', error);
@@ -361,17 +374,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         playCheckInSound();
         setTimeout(() => setTriggerRise(false), 3500);
 
-        // 3. 延迟 800ms 后，刷新真实金币数 + 播放硬币音效
-        setTimeout(async () => {
-            if (auth.userId) {
-                try {
-                    const coins = await getUserWeeklyCoins(auth.userId);
-                    setWeeklyCount(coins);
-                } catch {
-                    // 回退到 +1
-                    setWeeklyCount(prev => prev + 1);
-                }
-            }
+        // 3. 延迟 800ms 后，增量更新金币数 + 播放硬币音效
+        setTimeout(() => {
+            // 使用增量更新（+1），避免所有金币重新掉落
+            setWeeklyCount(prev => prev + 1);
             playCoinDropSound();
         }, 800);
 
@@ -431,26 +437,16 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
                     setTriggerRise(true);
                     playCheckInSound();
                     setTimeout(() => setTriggerRise(false), 3500);
-                    // 延迟 800ms 后刷新真实金币数 + 播放硬币音效
-                    setTimeout(async () => {
-                        if (auth.userId) {
-                            try {
-                                const coins = await getUserWeeklyCoins(auth.userId);
-                                setWeeklyCount(coins);
-                            } catch {
-                                setWeeklyCount(prev => prev + 1);
-                            }
-                        }
+                    // 延迟 800ms 后增量更新金币数 + 播放硬币音效
+                    setTimeout(() => {
+                        // 使用增量更新（+1），避免所有金币重新掉落
+                        setWeeklyCount(prev => prev + 1);
                         playCoinDropSound();
                     }, 800);
                     showToast();
                 } else {
-                    // 取消打卡时刷新真实金币数
-                    if (auth.userId) {
-                        getUserWeeklyCoins(auth.userId)
-                            .then(coins => setWeeklyCount(coins))
-                            .catch(() => setWeeklyCount(prev => Math.max(prev - 1, 0)));
-                    }
+                    // 取消打卡时减少金币数（-1）
+                    setWeeklyCount(prev => Math.max(prev - 1, 0));
                 }
             }
 

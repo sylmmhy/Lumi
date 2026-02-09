@@ -97,6 +97,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // 用于丢弃过期的异步结果（US-010 将消费此值）
   const refereeEpochRef = useRef(0);
 
+  // 用户消息 epoch：每次用户说话时递增，用于检测异步操作完成时用户是否说了新话
+  // 解决意图检测滞后问题（上一轮的记忆检索在用户说新话后才完成并注入）
+  const userMsgEpochRef = useRef(0);
+
   // 已切换到习惯设定模式的锁（防止 switch_to_habit_setup 无限循环触发）
   const habitSetupActiveRef = useRef(false);
 
@@ -130,6 +134,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // ==========================================
   const transcript = useTranscriptProcessor({
     onUserMessage: useCallback((text: string) => {
+      // 🔧 用户说话时递增 epoch，用于检测异步操作过时
+      userMsgEpochRef.current += 1;
+
       orchestratorRef.current.onUserSpeech(text).catch((err) => {
         devWarn('话题检测失败:', err);
       });
@@ -145,9 +152,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       orchestratorRef.current.onAISpeech(text);
       // 注意：不再在此处调用 processAIResponse —— 改由 turnComplete 统一触发，
       // 确保裁判拿到完整的 AI 回复而非碎片。缓冲由 useTranscriptProcessor.aiResponseBufferRef 完成。
-      // 同步到短期对话上下文
-      sessionContext.addMessage('ai', text);
-    }, [sessionContext]),
+      // 🔧 不在碎片级存入 sessionContext — AI 转录碎片太多（一次回复 10-20 个碎片），
+      // 会把用户消息挤出 maxMessages=10 的窗口。改由 turnComplete 时存完整 AI 回复。
+    }, []),
     onUserSpeechFragment: useCallback((_text: string) => {
       // 不再给意图检测发碎片 — 改由 onUserMessage 发完整消息
     }, []),
@@ -409,20 +416,27 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
           devLog(`📚 [统一裁判] 篝火模式中，跳过记忆检索`);
         } else {
           const epochAtStart = refereeEpochRef.current;
+          const userMsgEpochAtStart = userMsgEpochRef.current; // 🔧 记录用户消息 epoch
           devLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
           devLog(`📚 [记忆检索] 检测到话题变化，开始检索记忆...`);
           devLog(`📌 话题: ${result.topic_changed}`);
           devLog(`🔍 查询条件: ${JSON.stringify(result.memory_queries || [], null, 2)}`);
-          devLog(`🔢 Epoch: ${epochAtStart}`);
+          devLog(`🔢 Mode Epoch: ${epochAtStart}, User Msg Epoch: ${userMsgEpochAtStart}`);
 
           // 异步检索记忆 — 结果注入前检查 epoch
           memoryPipeline.fetchMemoriesForTopic(
             result.topic_changed,
             result.memory_queries || [],
           ).then((memories) => {
-            // epoch 检查：模式已切换，丢弃过期结果
+            // 🔧 检查 1：模式已切换，丢弃过期结果
             if (refereeEpochRef.current !== epochAtStart) {
-              devWarn(`📚 [记忆检索] epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃过期结果`);
+              devWarn(`📚 [记忆检索] 模式 epoch 已变化 (${epochAtStart} → ${refereeEpochRef.current})，丢弃过期结果`);
+              return;
+            }
+
+            // 🔧 检查 2：用户说了新话，丢弃过时记忆（修复意图检测滞后问题）
+            if (userMsgEpochRef.current !== userMsgEpochAtStart) {
+              devWarn(`📚 [记忆检索] 检索期间用户说了新话 (epoch ${userMsgEpochAtStart} → ${userMsgEpochRef.current})，丢弃过时记忆`);
               return;
             }
 
@@ -603,7 +617,10 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
     taskStartTime: timer.taskStartTime,
     sendClientContent: geminiLive.sendClientContent,
     isSpeaking: geminiLive.isSpeaking,
-    enabled: isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
+    // 🔧 Bug 3 修复：移除 !campfire.isCampfireMode 条件
+    // 进入篝火时 disconnect() → isConnected=false → 自然关闭
+    // 篝火重连时 isConnected=true → 应该启动
+    enabled: isSessionActive && geminiLive.isConnected,
     enableMemoryRetrieval: true,
     preferredLanguage: preferredLanguagesRef.current?.[0] || 'en-US',
   });
@@ -632,7 +649,9 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
   // getConversationContext 和 fetchCoachGuidance 不再需要
 
   const virtualMessages = useVirtualMessages({
-    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected && !campfire.isCampfireMode,
+    // 🔧 Bug 3 修复：移除 !campfire.isCampfireMode 条件
+    // isConnected 已足够作为启停条件：篝火 disconnect 时自动关闭，重连时自动启动
+    enabled: enableVirtualMessages && isSessionActive && geminiLive.isConnected,
     taskStartTime: timer.taskStartTime,
     isAISpeaking: geminiLive.isSpeaking,
     isUserSpeaking: vad.isSpeaking,
@@ -663,6 +682,8 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
         // ✅ 有内容 - 成功回复，重置计数器
         emptyResponseCountRef.current = 0;
         intentDetectionRef.current.processAIResponse(completeAIResponse);
+        // 🔧 将完整 AI 回复存入 sessionContext（替代碎片式存储，避免挤掉用户消息）
+        sessionContext.addMessage('ai', completeAIResponse);
       } else {
         // 🚨 空响应 - 触发智能重试
         emptyResponseCountRef.current += 1;
@@ -755,6 +776,7 @@ export function useAICoachSession(options: UseAICoachSessionOptions = {}) {
       // 如果是 setup 模式（通过按钮冷启动），设置习惯设定锁防止意图检测重复触发
       habitSetupActiveRef.current = sessionOptions?.chatMode === 'setup';
       refereeEpochRef.current = 0;
+      userMsgEpochRef.current = 0; // 🔧 重置用户消息 epoch
       sessionContext.reset();
       // 🔧 清空意图检测的历史记录，避免读取到之前会话的消息
       intentDetectionRef.current.clearHistory();

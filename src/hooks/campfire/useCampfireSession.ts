@@ -1,22 +1,20 @@
 /**
  * useCampfireSession - 篝火专注会话管理 Hook
- * 
+ *
  * 核心功能：
  * 1. 管理 Gemini Live 连接生命周期
- * 2. VAD 检测 → 自动连接
- * 3. 超时 → 自动断开
- * 4. 上下文管理（消息历史、摘要）
- * 5. 闲聊计数
- * 
+ * 2. 超时 → 自动断开
+ * 3. 上下文管理（消息历史、摘要）
+ * 4. 闲聊计数
+ *
  * 连接策略：
- * - 用户不说话时断开 Gemini（节省 15 分钟配额）
- * - 检测到用户说话时自动重连
+ * - 空闲超时后断开 Gemini（节省配额）
+ * - 用户通过手动按钮唤醒 Lumi 重连
  * - 重连时注入上下文，让 AI 能接上之前的对话
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useGeminiLive, fetchGeminiToken } from '../gemini-live';
-import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
 import { useSessionContext } from '../useSessionContext';
 import { useAmbientAudio } from './useAmbientAudio';
 import { useFocusTimer } from './useFocusTimer';
@@ -43,8 +41,6 @@ interface UseCampfireSessionOptions {
   language?: string;
   /** 无对话超时时间（秒），超时后断开 Gemini */
   idleTimeout?: number;
-  /** VAD 阈值 */
-  vadThreshold?: number;
   /** 会话结束回调 */
   onSessionEnd?: (stats: SessionStats) => void;
 }
@@ -83,14 +79,9 @@ interface UseCampfireSessionReturn {
   startSession: (taskDescription?: string) => Promise<void>;
   endSession: () => Promise<SessionStats | null>;
   setTaskDescription: (task: string) => void;
-  
-  // VAD 状态（调试用）
-  vadVolume: number;
-  isVadTriggered: boolean;
-  
-  // 用户静音控制
-  isMuted: boolean;
-  toggleMute: () => void;
+
+  // 手动唤醒
+  wakeUpLumi: () => void;
 }
 
 // ============================================================================
@@ -112,7 +103,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     aiTone = 'gentle',
     language = 'zh',
     idleTimeout = IDLE_TIMEOUT_DEFAULT,
-    vadThreshold = 25,
     onSessionEnd,
   } = options;
 
@@ -125,7 +115,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
   const [taskDescription, setTaskDescription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chatCount, setChatCount] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
 
   // 上下文管理（通用 hook）
   const sessionContext = useSessionContext({ maxMessages: 10 });
@@ -157,16 +146,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
       sessionContext.updateFromTranscript(transcript);
     },
   });
-
-  // 麦克风流（用于 VAD）
-  const [micStream, setMicStream] = useState<MediaStream | null>(null);
-
-  // VAD（在 Gemini 断开时用于检测用户说话）
-  // 用户静音时不启用 VAD
-  const vad = useVoiceActivityDetection(
-    (status === 'focusing' && !isMuted) ? micStream : null,
-    { threshold: vadThreshold, enabled: status === 'focusing' && !isMuted }
-  );
 
   // ==========================================
   // AI 说话时降低白噪音
@@ -309,21 +288,14 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
   }, [userId, sessionId, taskDescription, aiTone, language, geminiLive, startIdleTimer]);
 
   // ==========================================
-  // VAD 触发自动重连
+  // 手动唤醒 Lumi（替代 VAD 自动重连）
   // ==========================================
 
-  useEffect(() => {
-    // 只在 focusing 状态 + VAD 检测到说话 + 未静音时触发重连
-    if (status === 'focusing' && vad.isSpeaking && !reconnectLockRef.current && !isMuted) {
-      console.log('🎤 [Campfire] VAD triggered, reconnecting...');
-      connectGemini(true);
-    }
-  }, [status, vad.isSpeaking, connectGemini, isMuted]);
-
-  // 静音切换
-  const toggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
-  }, []);
+  const wakeUpLumi = useCallback(() => {
+    if (status !== 'focusing' || reconnectLockRef.current) return;
+    console.log('🔥 [Campfire] Wake up Lumi! 用户手动重连...');
+    connectGemini(true);
+  }, [status, connectGemini]);
 
   // ==========================================
   // 对话活动重置空闲计时器
@@ -393,13 +365,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     hasGreetedRef.current = false; // 重置开场白标记
 
     try {
-      // 1. 请求麦克风权限（用于后续 VAD）
-      console.log('🎤 [Campfire] Requesting microphone permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMicStream(stream);
-      console.log('✅ [Campfire] Microphone permission granted');
-
-      // 2. 开始计时
+      // 1. 开始计时
       focusTimer.start();
       console.log('⏱️ [Campfire] Timer started');
 
@@ -435,12 +401,6 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
 
     // 断开 Gemini
     geminiLive.disconnect();
-
-    // 停止麦克风
-    if (micStream) {
-      micStream.getTracks().forEach(track => track.stop());
-      setMicStream(null);
-    }
 
     // 清理计时器
     clearIdleTimer();
@@ -485,7 +445,7 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     return stats;
   }, [
     status, sessionId, taskDescription, chatCount,
-    focusTimer, ambientAudio, geminiLive, micStream,
+    focusTimer, ambientAudio, geminiLive,
     clearIdleTimer, onSessionEnd
   ]);
 
@@ -496,11 +456,8 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
   useEffect(() => {
     return () => {
       clearIdleTimer();
-      if (micStream) {
-        micStream.getTracks().forEach(track => track.stop());
-      }
     };
-  }, [clearIdleTimer, micStream]);
+  }, [clearIdleTimer]);
 
   // ==========================================
   // Return
@@ -534,13 +491,8 @@ export function useCampfireSession(options: UseCampfireSessionOptions): UseCampf
     endSession,
     setTaskDescription,
 
-    // VAD（调试用）
-    vadVolume: vad.currentVolume,
-    isVadTriggered: vad.isSpeaking,
-    
-    // 用户静音
-    isMuted,
-    toggleMute,
+    // 手动唤醒
+    wakeUpLumi,
   };
 }
 

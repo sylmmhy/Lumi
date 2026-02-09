@@ -680,7 +680,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
                 const baseCoins = 100;
                 const timeBonus = Math.min(Math.floor(liveKitTimeRemaining / 60) * 20, 400);
                 const calculatedCoins = baseCoins + timeBonus;
-                void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete']).then(coins => {
+                void awardCoins(auth.userId, currentTaskId, ['task_complete']).then(coins => {
                     onTaskCompleteForStats(coins);
                 });
             }
@@ -896,7 +896,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             // 不参与排行榜：跳过验证，直接发金币
             if (!userOptIn && userId) {
                 setSessionFinalizingMessage('Calculating your rewards...');
-                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete']);
             }
 
             // 视觉验证后再决定是否发任务完成金币
@@ -940,9 +940,9 @@ export function useCoachController(options: UseCoachControllerOptions) {
             // 仅验证通过才发 task/session 完成金币（不参与排行榜时已在上面发过）
             if (userOptIn && verificationPassed && userId) {
                 setSessionFinalizingMessage('Calculating your rewards...');
-                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete']);
             } else {
-                devLog('ℹ️ 未通过验证，不发放 task_complete/session_complete 金币', {
+                devLog('ℹ️ 未通过验证，不发放 task_complete 金币', {
                     taskId: taskIdToComplete,
                     verificationPassed,
                 });

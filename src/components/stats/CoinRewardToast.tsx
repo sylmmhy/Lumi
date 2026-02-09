@@ -38,7 +38,9 @@ export const CoinRewardToast: React.FC<CoinRewardToastProps> = ({
       // 播放金币音效
       const audio = new Audio('/coin-drop-sound.wav');
       audio.volume = 0.7;
-      audio.play().catch(() => { /* ignore */ });
+      audio.play().catch((err) => {
+        console.log('CoinRewardToast 音效播放失败:', err);
+      });
 
       const dismissTimer = setTimeout(() => {
         setVisible(false);

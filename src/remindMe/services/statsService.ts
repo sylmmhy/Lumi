@@ -156,36 +156,24 @@ export async function getUserWeeklyCoins(userId: string): Promise<number> {
         throw new Error('Supabase client is not initialized');
     }
 
-    try {
-        const { data, error } = await supabase.functions.invoke('get-coin-summary', {
-            body: { user_id: userId },
-        });
+    // 直接从 coins_ledger 聚合本周金币（真实数据源）
+    const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const weekNum = Math.ceil(((now.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
+    const seasonWeek = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 
-        if (error || !data) {
-            // 降级：直接查 users.weekly_coins
-            const { data: fallback } = await supabase
-                .from('users')
-                .select('weekly_coins')
-                .eq('id', userId)
-                .single();
-            return fallback?.weekly_coins ?? 0;
-        }
+    const { data, error } = await supabase
+        .from('coins_ledger')
+        .select('amount')
+        .eq('user_id', userId)
+        .eq('season_week', seasonWeek);
 
-        // 根据排行榜参与状态返回对应金币
-        if (data.leaderboard_opt_in) {
-            return data.weekly_public_coins ?? 0;
-        } else {
-            return data.weekly_private_coins ?? 0;
-        }
-    } catch {
-        // 降级：直接查 users.weekly_coins
-        const { data: fallback } = await supabase
-            .from('users')
-            .select('weekly_coins')
-            .eq('id', userId)
-            .single();
-        return fallback?.weekly_coins ?? 0;
+    if (error) {
+        console.error('Failed to get weekly coins from ledger:', error);
+        return 0;
     }
+
+    return (data || []).reduce((sum, row) => sum + (row.amount || 0), 0);
 }
 
 /**

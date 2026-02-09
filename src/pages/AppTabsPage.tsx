@@ -12,6 +12,8 @@ import { ConsequencePledgeConfirm } from '../components/ConsequencePledgeConfirm
 import { TaskReminderBanner } from '../components/banners/TaskReminderBanner';
 import { TaskCompletionModal } from '../components/modals/TaskCompletionModal';
 import { CoinRewardToast, useCoinRewardToast } from '../components/stats';
+import { CoinFlyAnimation } from '../components/animations/CoinFlyAnimation';
+import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -31,6 +33,7 @@ import { devLog } from '../utils/devLog';
 import { useAppTasks } from '../hooks/useAppTasks';
 import { useCoachController } from '../hooks/useCoachController';
 import { useScreenTimeController } from '../hooks/useScreenTimeController';
+import { getCoinSummary } from '../services/coinsService';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
@@ -86,6 +89,20 @@ export function AppTabsPage() {
     // 金币奖励 Toast（out-of-session 完成任务后显示）
     const { coins: coinToastAmount, showCoinToast, hideCoinToast } = useCoinRewardToast();
 
+    // 金币飞行动画状态
+    const [showCoinFlyAnimation, setShowCoinFlyAnimation] = useState(false);
+    const [coinFlyCount, setCoinFlyCount] = useState(0);
+
+    // Home 页任务完成庆祝动画状态
+    const [showWeeklyCelebration, setShowWeeklyCelebration] = useState(false);
+    const [weeklyCelebrationCoins, setWeeklyCelebrationCoins] = useState(0);
+
+    // StatsView 待动画金币数（从 API 返回值中扣除，避免重复掉落）
+    const [statsPendingNewCoins, setStatsPendingNewCoins] = useState(0);
+
+    // 排行榜参与状态（全局管理，HomeView 和 ProfileView 共享）
+    const [leaderboardOptIn, setLeaderboardOptIn] = useState<boolean>(true);
+
     // 任务 CRUD 和状态管理（提取到独立 hook）
     const appTasks = useAppTasks(auth.userId);
 
@@ -134,6 +151,26 @@ export function AppTabsPage() {
         }
     }, [navigate, tab]);
 
+    // 加载排行榜参与状态（从后端获取）
+    useEffect(() => {
+        if (!auth.userId) return;
+        let cancelled = false;
+        getCoinSummary(auth.userId)
+            .then((summary) => {
+                if (!cancelled) {
+                    setLeaderboardOptIn(summary.leaderboard_opt_in);
+                    devLog('✅ [AppTabsPage] 加载排行榜参与状态:', summary.leaderboard_opt_in);
+                }
+            })
+            .catch((err) => {
+                devLog('⚠️ [AppTabsPage] 加载排行榜状态失败，降级为默认值 true:', err);
+                // 降级默认 true
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [auth.userId]);
+
     const pendingCallbacks = {
         setPendingTask,
         setPendingAction,
@@ -151,20 +188,50 @@ export function AppTabsPage() {
     });
 
     /**
+     * 更新排行榜参与状态（由 ProfileView 调用）
+     */
+    const handleLeaderboardOptInChange = useCallback((newValue: boolean) => {
+        setLeaderboardOptIn(newValue);
+        devLog('✅ [AppTabsPage] 排行榜参与状态已更新:', newValue);
+    }, []);
+
+    /**
      * AI 会话任务完成后的回调：跳转到 stats 页。
      * 只有当本次确实发放金币（awardedCoins > 0）时，才触发金币动画。
      *
-     * 延迟 150ms 递增 trigger，确保 StatsView 先挂载（用旧值初始化 ref），
-     * 之后 trigger 变化触发动画。
+     * 流程：
+     * 1. 播放打卡音效 + 触发金币飞行动画（800ms）
+     * 2. 动画完成后跳转到 stats 页
+     * 3. stats 页触发金币掉落动画（只掉 1 个新金币）
      */
     const handleTaskCompleteForStats = useCallback((awardedCoins: number) => {
-        handleChangeView('stats');
         if (awardedCoins <= 0) {
+            // 没有金币奖励，直接跳转
+            handleChangeView('stats');
             return;
         }
+
+        // 0. 播放打卡音效（checkin-sound.mp3）
+        const checkinAudio = new Audio('/checkin-sound.mp3');
+        checkinAudio.volume = 0.7;
+        checkinAudio.play().catch(() => { /* 浏览器自动播放策略可能阻止 */ });
+
+        // 1. 记录待动画金币数，让 StatsView 初始加载时扣除这部分
+        setStatsPendingNewCoins(awardedCoins);
+
+        // 2. 显示金币飞行动画
+        setCoinFlyCount(awardedCoins);
+        setShowCoinFlyAnimation(true);
+
+        // 3. 800ms 后跳转到 stats 页并触发金币掉落动画
         setTimeout(() => {
-            setStatsCheckInTrigger(prev => prev + 1);
-        }, 150);
+            setShowCoinFlyAnimation(false);
+            handleChangeView('stats');
+            // 再延迟 500ms 触发 stats 页的金币掉落动画（等 loadData 完成）
+            setTimeout(() => {
+                setStatsCheckInTrigger(prev => prev + 1);
+            }, 500);
+        }, 800);
     }, [handleChangeView]);
 
     // AI 教练控制器（封装了会话生命周期、LiveKit、庆祝流程、URL autostart 等）
@@ -230,9 +297,31 @@ export function AppTabsPage() {
         await appTasks.addTask(newTask);
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
-    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调 */
-    const toggleComplete = useCallback((id: string) => {
-        return appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
+    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时弹出庆祝动画 */
+    const toggleComplete = useCallback(async (id: string) => {
+        const task = appTasks.tasks.find(t => t.id === id);
+        const wasCompleted = task?.completed ?? false;
+        const success = await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
+        // 从未完成 → 完成 且操作成功时，触发庆祝动画
+        if (success && !wasCompleted) {
+            // 异步获取最新金币数用于 EnergyBall 显示
+            if (auth.userId) {
+                getCoinSummary(auth.userId)
+                    .then((summary) => {
+                        setWeeklyCelebrationCoins(summary.total_coins);
+                        setShowWeeklyCelebration(true);
+                    })
+                    .catch(() => {
+                        // 获取失败也显示庆祝，使用默认值
+                        setWeeklyCelebrationCoins(1);
+                        setShowWeeklyCelebration(true);
+                    });
+            } else {
+                setWeeklyCelebrationCoins(1);
+                setShowWeeklyCelebration(true);
+            }
+        }
+        return success;
     }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
@@ -291,6 +380,17 @@ export function AppTabsPage() {
             {/* Out-of-session 完成任务后的金币奖励 Toast */}
             <CoinRewardToast coins={coinToastAmount} onClose={hideCoinToast} />
 
+            {/* 金币飞行动画（任务完成后，金币从屏幕中央飞向顶部） */}
+            <CoinFlyAnimation
+                visible={showCoinFlyAnimation}
+                startPosition={{ x: window.innerWidth / 2, y: window.innerHeight / 2 }}
+                endPosition={{ x: window.innerWidth / 2, y: 100 }}
+                coinCount={coinFlyCount}
+                onComplete={() => {
+                    setShowCoinFlyAnimation(false);
+                }}
+            />
+
             {/* AI 会话全屏遮罩（LiveKit + Gemini Live 两种模式） */}
             <SessionOverlay coach={coach} />
 
@@ -312,6 +412,7 @@ export function AppTabsPage() {
                         onRefresh={appTasks.handleRefresh}
                         onShowCoinToast={showCoinToast}
                         onVerifySuccess={handleTaskCompleteForStats}
+                        leaderboardOptIn={leaderboardOptIn}
                     />
                 )}
 
@@ -321,6 +422,8 @@ export function AppTabsPage() {
                         refreshTrigger={appTasks.statsRefreshTrigger}
                         onStartTask={coach.handleStatsStartTask}
                         externalCheckInTrigger={statsCheckInTrigger}
+                        pendingNewCoins={statsPendingNewCoins}
+                        onPendingCoinsConsumed={() => setStatsPendingNewCoins(0)}
                     />
                 )}
 
@@ -343,6 +446,8 @@ export function AppTabsPage() {
                         isPremium={isPremium}
                         onRequestLogin={() => setShowAuthModal(true)}
                         onTestPledge={screenTime.handleTestPledge}
+                        leaderboardOptIn={leaderboardOptIn}
+                        onLeaderboardOptInChange={handleLeaderboardOptInChange}
                     />
                 )}
 
@@ -474,6 +579,14 @@ export function AppTabsPage() {
                     onCancel={screenTime.handlePledgeCancel}
                 />
             )}
+
+            {/* Home 页任务完成庆祝动画（半透明黑色背景叠加在 Home 上） */}
+            <WeeklyCelebration
+                visible={showWeeklyCelebration}
+                count={weeklyCelebrationCoins}
+                onClose={() => setShowWeeklyCelebration(false)}
+                backgroundColor="rgba(0, 0, 0, 0.6)"
+            />
 
             {/* Product Tour 新用户引导蒙层 */}
             {productTour.isActive && productTour.currentStep && (

@@ -13,7 +13,6 @@ import { StickyHeader } from './StickyHeader';
 import { supabase } from '../../lib/supabase';
 import { PhotoVerificationModal } from '../modals/PhotoVerificationModal';
 import { useAuth } from '../../hooks/useAuth';
-import { getCoinSummary } from '../../services/coinsService';
 
 interface HomeViewProps {
     tasks: Task[];
@@ -32,6 +31,8 @@ interface HomeViewProps {
     onShowCoinToast?: (amount: number) => void;
     /** 验证成功后跳转 stats 页；awardedCoins > 0 时才播放 EnergyBall 动画 */
     onVerifySuccess?: (awardedCoins: number) => void;
+    /** 排行榜参与状态（由父组件 AppTabsPage 管理） */
+    leaderboardOptIn: boolean;
 }
 
 /**
@@ -48,6 +49,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onRefresh,
     onShowCoinToast,
     onVerifySuccess,
+    leaderboardOptIn,
 }) => {
     const { t } = useTranslation();
     const [taskInput, setTaskInput] = useState('');
@@ -84,23 +86,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const [photoVerifyTask, setPhotoVerifyTask] = useState<Task | null>(null);
     const auth = useAuth({ requireLoginAfterOnboarding: false });
 
-    // Leaderboard opt-in state（决定是否走验证流程）
-    const [leaderboardOptIn, setLeaderboardOptInState] = useState<boolean>(true);
-
-    // 加载排行榜参与状态
-    useEffect(() => {
-        if (!auth.userId) return;
-        let cancelled = false;
-        getCoinSummary(auth.userId).then((summary) => {
-            if (!cancelled) setLeaderboardOptInState(summary.leaderboard_opt_in);
-        }).catch(() => { /* 降级默认 true */ });
-        return () => { cancelled = true; };
-    }, [auth.userId]);
-
     /**
      * 处理拍照验证请求
      * - 参与排行榜：打开验证弹窗
      * - 不参与排行榜：直接发放 private 金币，跳过验证
+     *
+     * 注意：leaderboardOptIn 现在从 props 接收（由 AppTabsPage 全局管理）
      */
     const handlePhotoVerify = async (task: Task) => {
         if (leaderboardOptIn) {
@@ -556,6 +547,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                         onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
                                         onPhotoVerify={handlePhotoVerify}
+                                        leaderboardOptIn={leaderboardOptIn}
                                     />
                                 )}
                                 {dateGroup.noonTasks.length > 0 && (
@@ -570,6 +562,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
                                         onPhotoVerify={handlePhotoVerify}
+                                        leaderboardOptIn={leaderboardOptIn}
                                         />
                                     </div>
                                 )}
@@ -585,6 +578,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
                                         onPhotoVerify={handlePhotoVerify}
+                                        leaderboardOptIn={leaderboardOptIn}
                                         />
                                     </div>
                                 )}
@@ -600,6 +594,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
                                         onPhotoVerify={handlePhotoVerify}
+                                        leaderboardOptIn={leaderboardOptIn}
                                         />
                                     </div>
                                 )}
@@ -615,6 +610,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                             onSkipForDay={handleSkipForDay}
                                         onUnskipForDay={handleUnskipForDay}
                                         onPhotoVerify={handlePhotoVerify}
+                                        leaderboardOptIn={leaderboardOptIn}
                                         />
                                     </div>
                                 )}
@@ -632,6 +628,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                     onDelete={onDeleteTask}
                                     onEdit={handleEditTask}
                                     onPhotoVerify={handlePhotoVerify}
+                                    leaderboardOptIn={leaderboardOptIn}
                                 />
                             </div>
                         )}

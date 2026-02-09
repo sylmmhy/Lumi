@@ -16,6 +16,7 @@ import { useTaskVerification } from './useTaskVerification';
 import type { VerificationResult } from './useTaskVerification';
 import type { CoinRewardSource } from '../constants/coinRewards';
 import { isValidSupabaseUuid } from '../context/auth/nativeAuthBridge';
+import { getCoinSummary } from '../services/coinsService';
 
 const TEMPORARY_TASK_ID_PATTERN = /^\d+$/;
 
@@ -651,10 +652,14 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
     /**
      * 用户在任务完成确认弹窗中点击「是，我完成了」
-     * - 保存会话记忆到 Mem0
-     * - 结束当前 AI 会话
-     * - 跳转到 stats 页触发金币动画
-     * - 标记任务为已完成
+     *
+     * LiveKit 模式：
+     * - 结束通话并发放金币（不走视觉验证链路）
+     *
+     * Gemini Live 模式：
+     * - 保持 in-session UI 不变（只有“结束对话”）
+     * - 用户确认完成后，进入“视觉验证/跳过验证”的选择层
+     * - 真正的结算（抓帧/结束会话/验证/跳转 stats）由后续按钮处理
      */
     const handleConfirmTaskCompleteFromModal = useCallback(() => {
         // 关闭弹窗
@@ -692,76 +697,29 @@ export function useCoachController(options: UseCoachControllerOptions) {
                 onTaskCompleteForStats(0);
             }
         } else {
-            // Gemini Live 模式
-            aiCoach.stopAudioImmediately();
-
-            const usedTime = aiCoach.state.timeRemaining; // 正计时：timeRemaining 就是已用秒数
-            const actualDurationMinutes = Math.round(usedTime / 60);
-
-            const messagesSnapshot = [...aiCoach.state.messages];
-            const taskDescriptionSnapshot = aiCoach.state.taskDescription;
-            const taskIdToComplete = currentTaskId;
-            const taskTypeToComplete = currentTaskType;
-            const userId = auth.userId;
-
-            // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
-            const capturedFrames = aiCoach.getRecentFrames(5);
-            devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
-
-            aiCoach.endSession();
-
-            unlockScreenTimeIfLocked('GeminiLive.modalConfirmComplete');
-
-            setCurrentTaskId(null);
-            setCurrentTaskType(null);
-            setCurrentChatMode(null);
-
-            void saveSessionMemory({
-                messages: messagesSnapshot,
-                taskDescription: taskDescriptionSnapshot,
-                userId,
-                taskCompleted: true,
-                usedTime,
-                actualDurationMinutes,
-            });
-
-            void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
-
-            // fire-and-forget: 金币奖励（使用与庆祝动画相同的公式：100 基础 + 剩余时间奖励）
-            if (userId) {
-                const remainingTime = aiCoach.state.timeRemaining;
-                const baseCoins = 100;
-                const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
-                const calculatedCoins = baseCoins + timeBonus;
-                void awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete'], {
-                    task_complete: calculatedCoins,
-                });
+            // Gemini Live 模式：
+            // 保持 UI 不变（in-session 只有“结束对话”），但在用户确认“我完成了”后，
+            // 进入“视觉验证/跳过验证”的选择层（showVerificationChoice）。
+            //
+            // 原理：视觉验证需要在 endSession 之前抓取摄像头帧，因此这里不直接结束会话，
+            // 而是交给 handleCompleteWithVerification / handleCompleteWithoutVerification 去完成：
+            // 1) 抓帧 2) 结束会话 3) 调用 verify-task-completion 4) 跳转 stats
+            if (isSessionFinalizing) {
+                devLog('⏳ 会话结算中，忽略重复点击“是，我完成了”');
+                return;
             }
-
-            // fire-and-forget: 视觉验证（不阻塞庆祝流程）
-            if (userId && taskIdToComplete && capturedFrames.length > 0) {
-                void (async () => {
-                    try {
-                        const result = await verifyWithFrames(
-                            taskIdToComplete,
-                            taskDescriptionSnapshot,
-                            capturedFrames,
-                            userId
-                        );
-                        if (result) {
-                            setSessionVerificationResult(result);
-                            devLog('✅ 视觉验证完成:', { verified: result.verified, confidence: result.confidence });
-                        }
-                    } catch (err) {
-                        console.error('[CoachController] 视觉验证 fire-and-forget 错误:', err);
-                    }
-                })();
-            }
-
-            // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
-            onTaskCompleteForStats();
+            setShowVerificationChoice(true);
         }
-    }, [usingLiveKit, aiCoach, currentTaskId, currentTaskType, liveKitTimeRemaining, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, awardCoins, onTaskCompleteForStats]);
+    }, [
+        usingLiveKit,
+        liveKitTimeRemaining,
+        auth.userId,
+        awardCoins,
+        currentTaskId,
+        onTaskCompleteForStats,
+        unlockScreenTimeIfLocked,
+        isSessionFinalizing,
+    ]);
 
     /**
      * 用户在任务完成确认弹窗中点击「否，我没完成」
@@ -926,10 +884,25 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
             void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
 
+            // 检查排行榜参与状态，决定是否需要验证
+            let userOptIn = true;
+            if (userId) {
+                try {
+                    const summary = await getCoinSummary(userId);
+                    userOptIn = summary.leaderboard_opt_in;
+                } catch { /* 降级默认 true */ }
+            }
+
+            // 不参与排行榜：跳过验证，直接发金币
+            if (!userOptIn && userId) {
+                setSessionFinalizingMessage('Calculating your rewards...');
+                awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
+            }
+
             // 视觉验证后再决定是否发任务完成金币
             let verificationPassed = false;
             setSessionFinalizingMessage(shouldVerifyCompletion ? 'Verifying your progress...' : 'Skipping verification...');
-            if (shouldVerifyCompletion && userId && taskIdToComplete && isValidSupabaseUuid(taskIdToComplete) && capturedFrames.length > 0) {
+            if (userOptIn && shouldVerifyCompletion && userId && taskIdToComplete && isValidSupabaseUuid(taskIdToComplete) && capturedFrames.length > 0) {
                 try {
                     const result = await verifyWithFrames(
                         taskIdToComplete,
@@ -964,8 +937,8 @@ export function useCoachController(options: UseCoachControllerOptions) {
                 devLog('⚠️ 跳过视觉验证：无可用帧');
             }
 
-            // 仅验证通过才发 task/session 完成金币
-            if (verificationPassed && userId) {
+            // 仅验证通过才发 task/session 完成金币（不参与排行榜时已在上面发过）
+            if (userOptIn && verificationPassed && userId) {
                 setSessionFinalizingMessage('Calculating your rewards...');
                 awardedCoinsForStats = await awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete']);
             } else {

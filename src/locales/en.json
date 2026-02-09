@@ -396,6 +396,10 @@
   "profile.deleteAccountSuccess": "Your account has been deleted.",
   "profile.deleteAccountError": "Failed to delete account. Please try again.",
 
+  "profile.leaderboard": "Join Leaderboard",
+  "profile.leaderboardHint": "Compete with others (can change once per week)",
+  "profile.leaderboardNextChange": "Next change available:",
+
   "profile.accountManagement": "Account",
   "profile.accountManagementHint": "View and manage account info",
   "profile.email": "Email",

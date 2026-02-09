@@ -398,6 +398,10 @@
   "profile.deleteAccountSuccess": "你的账户已被删除。",
   "profile.deleteAccountError": "删除账户失败，请重试。",
 
+  "profile.leaderboard": "参与排行榜",
+  "profile.leaderboardHint": "与其他人竞争（每周可切换一次）",
+  "profile.leaderboardNextChange": "下次可切换时间：",
+
   "profile.accountManagement": "账户管理",
   "profile.accountManagementHint": "查看和管理账户信息",
   "profile.email": "邮箱",

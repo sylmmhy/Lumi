@@ -53,29 +53,23 @@ The agent doesn't just remind you. It **calls you**. If you don't answer, it **l
 graph TD
     HUMAN["👤 HUMAN"] --> IOS
 
-    subgraph IOS["📱 iOS Native — Swift 5.9"]
+    subgraph IOS["📱 iOS — Swift"]
         direction LR
-        CK["📞 CallKit + PushKit"]
-        ST["🔒 Screen Time"]
-        HK["❤️ HealthKit"]
-        HMK["💡 HomeKit"]
+        CK["📞 CallKit + PushKit"] ~~~ ST["🔒 Screen Time"] ~~~ HK["❤️ HealthKit"] ~~~ HMK["💡 HomeKit"]
     end
 
     IOS --> |"47 JS Bridge Handlers"| WEB
 
-    subgraph WEB["🌐 React 19 + TypeScript + Vite 7"]
+    subgraph WEB["🌐 React + Vite"]
         direction LR
-        HOOKS["useAICoachSession<br/>(15+ composable hooks)"]
-        UI["5-Tab UI<br/>+ Campfire Focus"]
+        HOOKS["useAICoachSession<br/>(15+ composable hooks)"] ~~~ UI["5-Tab UI<br/>+ Campfire Focus"]
     end
 
     WEB --> |"HTTPS / WebSocket"| BACKEND
 
-    subgraph BACKEND["⚡ Supabase — 40+ Edge Functions (Deno)"]
+    subgraph BACKEND["⚡ Supabase Edge Functions"]
         direction LR
-        MEM["Memory RAG<br/>extract · retrieve · compress"]
-        PROMPT["AI Prompt Engine<br/>1205-line system instruction"]
-        PUSH["Intervention<br/>VoIP · FCM · App Lock"]
+        MEM["Memory RAG<br/>extract · retrieve · compress"] ~~~ PROMPT["AI Prompt Engine<br/>1205-line system prompt"] ~~~ PUSH["Intervention<br/>VoIP · FCM · App Lock"]
     end
 
     BACKEND --> DB["🗄️ PostgreSQL + pgvector<br/>30+ tables · RLS · pg_cron"]

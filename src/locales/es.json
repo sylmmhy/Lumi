@@ -416,7 +416,7 @@
   "pledge.startRecording": "Iniciar Grabación",
   "pledge.pleaseEnter": "Por favor ingresa las palabras de abajo:",
   "pledge.enterPlaceholder": "Escribe la cita para aceptar esta consecuencia...",
-  "pledge.timeTo": "Es hora de"
+  "pledge.timeTo": "Es hora de",
   "weeklyReport.title": "Análisis Semanal de Comportamiento",
   "weeklyReport.loading": "Cargando...",
   "weeklyReport.noData": "Aún no hay datos de informe semanal. ¡Sigue usando Lumi y verás tu análisis la próxima semana!",

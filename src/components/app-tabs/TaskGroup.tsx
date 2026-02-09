@@ -13,6 +13,8 @@ interface TaskGroupProps {
   onUnskipForDay?: (task: Task) => void;
   /** 拍照验证回调 */
   onPhotoVerify?: (task: Task) => void;
+  /** 排行榜参与状态：false 时隐藏所有验证相关 UI */
+  leaderboardOptIn?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
   onSkipForDay,
   onUnskipForDay,
   onPhotoVerify,
+  leaderboardOptIn = true,
 }) => (
     <div className="animate-fade-in-up">
         {/* Section Label - Quicksand Bold */}
@@ -53,6 +56,7 @@ export const TaskGroup: React.FC<TaskGroupProps> = ({
                     onSkipForDay={onSkipForDay}
                     onUnskipForDay={onUnskipForDay}
                     onPhotoVerify={onPhotoVerify}
+                    leaderboardOptIn={leaderboardOptIn}
                 />
             ))}
         </div>

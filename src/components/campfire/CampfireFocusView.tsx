@@ -35,7 +35,6 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
     aiTone: 'gentle',
     language: 'zh',
     idleTimeout: 30,
-    vadThreshold: 25,
     onSessionEnd: (stats) => {
       console.log('Session ended:', stats);
       onEnd?.(stats);
@@ -164,7 +163,6 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
         {import.meta.env.DEV && (
           <div className="text-xs text-gray-500 mb-4 space-y-1">
             <div>对话次数: {session.chatCount}</div>
-            <div>VAD 音量: {session.vadVolume}</div>
             <div>状态: {session.status}</div>
           </div>
         )}

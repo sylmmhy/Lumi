@@ -507,6 +507,10 @@ export function useGeminiLive(options: UseGeminiLiveOptions = {}) {
     // Refs for UI
     videoRef,
     canvasRef,
+
+    // Audio streamer ref (用于动态检查播放队列状态)
+    audioStreamerRef: audioOutput.streamerRef,
+    audioContextRef: audioOutput.audioContextRef,
   };
 }
 

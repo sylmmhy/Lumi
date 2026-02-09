@@ -110,6 +110,15 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   /** 篝火重连标记的自动重置定时器 ID */
   const reconnectFlagResetTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  /** 篝火模式开始时间（用于计算专注时长） */
+  const campfireStartTimeRef = useRef<number | null>(null);
+
+  /** 进入篝火前的最后话题钩子（用于重连时个性化问候） */
+  const lastTopicHookRef = useRef<string>('');
+
+  /** 🔧 Bug 2 修复：保存进入篝火前的对话消息（用于重连时附加到触发消息） */
+  const savedConversationMessagesRef = useRef<Array<{ role: 'user' | 'ai'; text: string }>>([]);
+
   // ==========================================
   // 子 Hooks
   // ==========================================
@@ -191,7 +200,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   }, [campfireSessionId, currentUserId, currentTaskDescription, preferredLanguage, getSessionContext]);
 
   /**
-   * 调用 get-system-instruction 获取正常的 AI 教练 system prompt（用于 VAD 重连和退出篝火）
+   * 调用 get-system-instruction 获取正常的 AI 教练 system prompt（用于重连和退出篝火）
    * 和首次启动时用的是同一个后端接口，保证 AI 行为完全一致
    */
   const fetchReconnectInstruction = useCallback(async (): Promise<string | null> => {
@@ -238,11 +247,11 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   }, [currentUserId, currentTaskDescription, preferredLanguage, getSessionContext]);
 
   // ==========================================
-  // VAD 触发重连
+  // 手动唤醒重连
   // ==========================================
 
   /**
-   * 篝火模式 VAD 触发 → 重连 Gemini
+   * 篝火模式重连 Gemini（由手动 "Wake up Lumi" 按钮触发）
    */
   const campfireReconnectGemini = useCallback(async () => {
     if (campfireReconnectLockRef.current) return;
@@ -268,6 +277,12 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
         return;
       }
 
+      // 🔧 修复竞态：必须在 connect() 之前设置 ref 标记
+      // 原因：connect() 内部 setIsConnected(true) 会触发 useEffect，
+      // 如果 ref 在 connect() 之后才设置，useEffect 执行时 ref 还是 false，
+      // 而 ref 的变化不会重新触发 useEffect，导致 [CAMPFIRE_RECONNECT] 永远不会发送
+      campfireNeedsTriggerRef.current = true;
+
       await geminiLive.connect(
         systemInstruction,
         [],
@@ -287,11 +302,6 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
         }
       }
 
-      // 🔧 修复闭包过期：不在这里直接调用 sendTextMessage
-      // 因为 sendTextMessage 是 useCallback，闭包里的 sessionIsConnected 还是旧值 false
-      // 改为设置 ref 标记，由 useEffect 在 isConnected 变 true 后发送
-      campfireNeedsTriggerRef.current = true;
-
       // 🔧 设置重连状态标记，防止意图检测再次触发 enter_campfire
       isReconnectingFromCampfireRef.current = true;
 
@@ -309,6 +319,7 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       setCampfireChatCount(prev => prev + 1);
       startCampfireIdleTimer();
     } catch (err) {
+      campfireNeedsTriggerRef.current = false; // 连接失败，重置标记
       devWarn('❌ [Campfire] Reconnect failed:', err);
     } finally {
       campfireReconnectLockRef.current = false;
@@ -333,15 +344,48 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
       // 意图检测触发：AI 已经说了告别语，等它说完就断开
       devLog('🏕️ [Step 1] 等待 AI 说完...');
       await new Promise<void>((resolve) => {
+        const startTime = Date.now();
         const check = setInterval(() => {
+          // 检查 isSpeaking 状态
           if (!geminiLive.isSpeaking) {
-            clearInterval(check);
-            // 🔧 额外等待 1.5 秒，确保 AudioStreamer 播放队列清空
-            // 原因：interrupted 信号会让 isSpeaking = false，但音频可能还在播放
-            devLog('🏕️ [Step 1] isSpeaking = false，额外等待 1.5 秒确保音频播放完成...');
-            setTimeout(resolve, 1500);
+            // 🔧 动态检查 AudioStreamer 的播放队列（方案 B）
+            const streamer = geminiLive.audioStreamerRef?.current;
+            const context = geminiLive.audioContextRef?.current;
+
+            if (streamer && context) {
+              // 访问 AudioStreamer 的私有属性（通过类型断言）
+              const audioQueue = (streamer as any).audioQueue as Float32Array[];
+              const scheduledTime = (streamer as any).scheduledTime as number;
+              const queueLength = audioQueue?.length || 0;
+              const remainingTime = Math.max(0, scheduledTime - context.currentTime);
+
+              devLog(`🏕️ [Step 1] AudioStreamer 状态: queueLength=${queueLength}, remainingTime=${remainingTime.toFixed(2)}s`);
+
+              // 如果队列为空且没有剩余音频，可以断开
+              if (queueLength === 0 && remainingTime <= 0.1) {
+                clearInterval(check);
+                devLog('🏕️ [Step 1] AudioStreamer 播放队列已清空 ✅');
+                resolve();
+                return;
+              }
+
+              // 如果已经等待超过 5 秒，强制继续（超时保护）
+              const elapsed = Date.now() - startTime;
+              if (elapsed > 5000) {
+                clearInterval(check);
+                devLog(`🏕️ [Step 1] 超时保护触发（${elapsed}ms），强制继续`);
+                resolve();
+                return;
+              }
+            } else {
+              // 如果没有 AudioStreamer ref，使用固定延迟兜底
+              clearInterval(check);
+              devLog('🏕️ [Step 1] isSpeaking = false，无 AudioStreamer ref，延迟 1.5 秒兜底...');
+              setTimeout(resolve, 1500);
+            }
           }
         }, 300);
+        // 最大等待 5 秒（超时保护）
         setTimeout(() => { clearInterval(check); resolve(); }, 5000);
       });
       devLog('🏕️ [Step 1] AI 已说完（或超时）');
@@ -352,14 +396,48 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
 
       devLog('🏕️ [Step 1] 等待告别语说完...');
       await new Promise<void>((resolve) => {
+        const startTime = Date.now();
         const check = setInterval(() => {
+          // 检查 isSpeaking 状态
           if (!geminiLive.isSpeaking) {
-            clearInterval(check);
-            // 🔧 额外等待 1.5 秒，确保 AudioStreamer 播放队列清空
-            devLog('🏕️ [Step 1] isSpeaking = false，额外等待 1.5 秒确保音频播放完成...');
-            setTimeout(resolve, 1500);
+            // 🔧 动态检查 AudioStreamer 的播放队列（方案 B）
+            const streamer = geminiLive.audioStreamerRef?.current;
+            const context = geminiLive.audioContextRef?.current;
+
+            if (streamer && context) {
+              // 访问 AudioStreamer 的私有属性（通过类型断言）
+              const audioQueue = (streamer as any).audioQueue as Float32Array[];
+              const scheduledTime = (streamer as any).scheduledTime as number;
+              const queueLength = audioQueue?.length || 0;
+              const remainingTime = Math.max(0, scheduledTime - context.currentTime);
+
+              devLog(`🏕️ [Step 1] AudioStreamer 状态: queueLength=${queueLength}, remainingTime=${remainingTime.toFixed(2)}s`);
+
+              // 如果队列为空且没有剩余音频，可以断开
+              if (queueLength === 0 && remainingTime <= 0.1) {
+                clearInterval(check);
+                devLog('🏕️ [Step 1] AudioStreamer 播放队列已清空 ✅');
+                resolve();
+                return;
+              }
+
+              // 如果已经等待超过 5 秒，强制继续（超时保护）
+              const elapsed = Date.now() - startTime;
+              if (elapsed > 5000) {
+                clearInterval(check);
+                devLog(`🏕️ [Step 1] 超时保护触发（${elapsed}ms），强制继续`);
+                resolve();
+                return;
+              }
+            } else {
+              // 如果没有 AudioStreamer ref，使用固定延迟兜底
+              clearInterval(check);
+              devLog('🏕️ [Step 1] isSpeaking = false，无 AudioStreamer ref，延迟 1.5 秒兜底...');
+              setTimeout(resolve, 1500);
+            }
           }
         }, 300);
+        // 最大等待 5 秒（超时保护）
         setTimeout(() => { clearInterval(check); resolve(); }, 5000);
       });
       devLog('🏕️ [Step 1] 告别语已说完（或超时）');
@@ -374,6 +452,53 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
     devLog('🏕️ [Step 3] 设置 isCampfireMode = true');
     setIsCampfireMode(true);
     setCampfireChatCount(0);
+
+    // 🔧 记录篝火模式开始时间（用于重连时计算专注时长）
+    campfireStartTimeRef.current = Date.now();
+
+    // 🔧 Bug 2 修复：保存进入篝火前的完整对话消息
+    const sessionContext = getSessionContext ? getSessionContext() : null;
+    if (sessionContext && sessionContext.messages.length > 0) {
+      savedConversationMessagesRef.current = sessionContext.messages.map(m => ({
+        role: m.role,
+        text: m.text,
+      }));
+      devLog('🏕️ [Step 3.5] 保存对话消息用于重连:', savedConversationMessagesRef.current.length, '条');
+    }
+
+    // 🔧 提取最后的话题钩子（用于重连时个性化问候）
+    if (sessionContext) {
+      devLog('🏕️ [Step 3.5] 原始 sessionContext:', {
+        totalMessages: sessionContext.messages.length,
+        messages: sessionContext.messages,
+        topics: sessionContext.topics
+      });
+
+      // 策略 1：优先使用最近的用户消息
+      // 🔧 先 filter 再 slice：避免 AI 碎片（每个转录碎片都存一条）把用户消息挤出窗口
+      const recentUserMessages = sessionContext.messages
+        .filter(m => m.role === 'user')
+        .slice(-3)
+        .map(m => m.text);
+
+      // 策略 2：如果有话题标签，也可以作为钩子
+      const topicHook = sessionContext.topics.length > 0
+        ? sessionContext.topics[sessionContext.topics.length - 1]
+        : '';
+
+      // 优先使用最近的用户消息，其次使用话题标签
+      lastTopicHookRef.current = recentUserMessages[recentUserMessages.length - 1] || topicHook || currentTaskDescription;
+
+      devLog('🏕️ [Step 3.5] 提取话题钩子:', {
+        hook: lastTopicHookRef.current,
+        recentUserMessages,
+        topics: sessionContext.topics
+      });
+    } else {
+      // 如果没有上下文，使用任务描述作为钩子
+      lastTopicHookRef.current = currentTaskDescription;
+      devLog('🏕️ [Step 3.5] 无对话上下文，使用任务描述作为钩子:', lastTopicHookRef.current);
+    }
 
     // 启动白噪音和计时器
     ambientAudio.play();
@@ -486,11 +611,51 @@ export function useCampfireMode(options: UseCampfireModeOptions): UseCampfireMod
   // 导致消息被丢弃。useEffect 在 isConnected 变化后执行，拿到的是最新的 sendTextMessage。
   useEffect(() => {
     if (isCampfireMode && geminiLive.isConnected && campfireNeedsTriggerRef.current) {
-      campfireNeedsTriggerRef.current = false;
-      // 延迟 500ms 确保连接完全稳定（与 dev 版本一致）
+      // 🔧 Bug 1 修复：不在这里重置 ref，移到 timer 回调内部
+      // 原因：useEffect 可能因 geminiLive 对象引用变化（麦克风启动）而 cleanup + 重执行，
+      // 如果在这里立即重置，cleanup 后重新执行时 ref 已经是 false，消息永远不会发送
       const timer = setTimeout(() => {
+        if (!campfireNeedsTriggerRef.current) return; // 防止重复发送
+        campfireNeedsTriggerRef.current = false;
+
         devLog('📤 [Campfire] Sending reconnect trigger message...');
-        geminiLive.sendTextMessage(`[RECONNECT] The user was taking a focus break and just came back. Continue the conversation naturally.`);
+        const currentTime = (() => {
+          const now = new Date();
+          const hours = now.getHours();
+          const minutes = now.getMinutes().toString().padStart(2, '0');
+          return `${hours}:${minutes}`;
+        })();
+        const lang = preferredLanguage || 'en-US';
+
+        // 🔧 计算专注时长（分钟数）
+        const focusDuration = campfireStartTimeRef.current
+          ? Math.floor((Date.now() - campfireStartTimeRef.current) / 60000)
+          : 0;
+
+        // 🔧 获取话题钩子（进入篝火前提取的）
+        const lastTopic = lastTopicHookRef.current || 'the task';
+
+        // 🔧 Bug 2 修复：附加对话历史，让 AI 知道之前聊了什么
+        const savedMessages = savedConversationMessagesRef.current;
+        let conversationHistory = '';
+        if (savedMessages.length > 0) {
+          // 取最近 6 条消息（3 轮对话），避免消息过长
+          const recentMessages = savedMessages.slice(-6);
+          conversationHistory = '\nconversation_before_campfire:\n' +
+            recentMessages.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.text}`).join('\n');
+        }
+
+        geminiLive.sendTextMessage(
+          `[CAMPFIRE_RECONNECT] last_topic="${lastTopic}" focus_duration=${focusDuration}min current_time=${currentTime} language=${lang}${conversationHistory}`
+        );
+
+        devLog('📤 [Campfire] Reconnect message sent:', {
+          lastTopic,
+          focusDuration,
+          currentTime,
+          language: lang,
+          conversationHistoryLength: savedMessages.length,
+        });
       }, 500);
       return () => clearTimeout(timer);
     }

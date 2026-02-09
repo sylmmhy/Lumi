@@ -51,9 +51,9 @@ interface UseVirtualMessageOrchestratorOptions extends Omit<VirtualMessageOrches
    * 来自 useGeminiLive.sendClientContent
    * @param content - 要发送的内容
    * @param turnComplete - true=触发AI响应, false=静默（但会阻塞后续输入，不推荐）
-   * @param role - 'user' 或 'system'，用 'system' 注入记忆上下文
+   * @param role - 消息角色，默认 'user'（Gemini Live API 只支持 'user'）
    */
-  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user' | 'system') => void
+  sendClientContent: (content: string, turnComplete?: boolean, role?: 'user') => void
   /**
    * AI 是否正在说话
    * 来自 useGeminiLive.isSpeaking

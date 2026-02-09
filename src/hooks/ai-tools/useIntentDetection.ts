@@ -49,6 +49,18 @@ interface UseIntentDetectionOptions {
   enabled?: boolean;
   // 防抖时间（毫秒），避免频繁检测
   debounceMs?: number;
+
+  // ============================================================
+  // 统一裁判需要的上下文信息（用于话题检测和记忆检索）
+  // ============================================================
+  // 获取当前话题（用于检测话题变化）
+  getCurrentTopic?: () => string | null;
+  // 获取当前模式（normal | campfire | voip_push | habit_setup）
+  getCurrentMode?: () => string;
+  // 获取用户沉默时长（秒）
+  getSilenceDuration?: () => number | null;
+  // 获取触发类型（ai_response | silence）
+  getTriggerType?: () => 'ai_response' | 'silence';
 }
 
 interface DetectIntentResult {
@@ -86,6 +98,11 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
     onDetectionComplete,
     enabled = true,
     debounceMs = 500,
+    // 统一裁判上下文
+    getCurrentTopic,
+    getCurrentMode,
+    getSilenceDuration,
+    getTriggerType,
   } = options;
 
   // 会话 ID：用于生成幂等键（破坏性工具去重）
@@ -163,6 +180,11 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
           lastSuggestion: lastSuggestionRef.current,
           pendingHabit: pendingHabitRef.current,
           previousAIMessages: aiMessageHistoryRef.current.slice(-3),
+          // 统一裁判需要的上下文（用于话题检测和记忆检索）
+          currentMode: getCurrentMode?.() || 'normal',
+          currentTopic: getCurrentTopic?.() || null,
+          silenceDuration: getSilenceDuration?.() || null,
+          triggerType: getTriggerType?.() || 'ai_response',
         }),
       });
 
@@ -187,7 +209,7 @@ export function useIntentDetection(options: UseIntentDetectionOptions) {
         coach_note: null,
       };
     }
-  }, [supabaseUrl, supabaseAnonKey, chatType]);
+  }, [supabaseUrl, supabaseAnonKey, chatType, getCurrentMode, getCurrentTopic, getSilenceDuration, getTriggerType]);
 
   /**
    * 执行工具调用

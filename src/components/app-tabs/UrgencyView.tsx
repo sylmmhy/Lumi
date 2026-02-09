@@ -22,6 +22,7 @@ interface CustomTaskFormProps {
     onQuickFill: (text: string) => void;
     onRegisterSubmit?: (handler: (() => void) | null) => void;
     onTalkToLumi?: () => void;
+    onSetupHabit?: () => void;
 }
 
 /**
@@ -36,6 +37,7 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
     onQuickFill,
     onRegisterSubmit,
     onTalkToLumi,
+    onSetupHabit,
 }) => {
     const { t } = useTranslation();
     const [showEmptyWarning, setShowEmptyWarning] = useState(false);
@@ -113,6 +115,16 @@ const CustomTaskForm: React.FC<CustomTaskFormProps> = ({
                     {t('urgency.talkToLumi')}
                 </button>
             )}
+
+            {/* 设定习惯按钮 - 进入 Prompt C (习惯设定模式) */}
+            {onSetupHabit && (
+                <button
+                    onClick={onSetupHabit}
+                    className="w-full max-w-[320px] font-sansita italic font-bold text-[18px] px-8 py-2.5 rounded-[100px] border border-[rgba(190,190,190,0.2)] bg-white text-gray-700 shadow-md transform transition-all duration-300 hover:scale-105 active:scale-95 mt-3"
+                >
+                    {t('urgency.setupHabit')}
+                </button>
+            )}
         </div>
     );
 };
@@ -147,6 +159,24 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
         });
         setCustomTask('');
     }, [customTask, onStartTask]);
+
+    /**
+     * 处理"设定习惯"按钮点击 - 进入习惯设定 Prompt C，结构化步骤引导
+     */
+    const handleSetupHabit = useCallback(() => {
+        onStartTask({
+            id: Date.now().toString(),
+            text: t('urgency.setupHabitChat'),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            displayTime: 'Now',
+            date: getLocalDateString(),
+            completed: false,
+            type: 'todo',
+            category: 'morning',
+            called: false,
+            chatMode: 'setup', // 习惯设定使用 Prompt C（结构化引导）
+        });
+    }, [onStartTask, t]);
 
     /**
      * 处理"Talk to Lumi"按钮点击 - 直接发起和 AI 的闲聊，不需要绑定具体任务
@@ -201,6 +231,7 @@ export const UrgencyView: React.FC<UrgencyViewProps> = ({ onStartTask, onRegiste
                         onQuickFill={setCustomTask}
                         onRegisterSubmit={onRegisterHelpMeStart}
                         onTalkToLumi={handleTalkToLumi}
+                        onSetupHabit={handleSetupHabit}
                     />
                 </div>
             </div>

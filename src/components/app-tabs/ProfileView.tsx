@@ -8,6 +8,7 @@ import { LanguageSelectionModal } from '../modals/LanguageSelectionModal';
 import { UILanguageSelectionModal } from '../modals/UILanguageSelectionModal';
 import { PermissionsSection } from '../profile/PermissionsSection';
 import { MemoriesSection } from '../profile/MemoriesSection';
+import { GoalSection } from '../profile/GoalSection';
 import { HealthKitSection } from '../profile/HealthKitSection';
 import { BedtimeRecommendation } from '../profile/BedtimeRecommendation';
 import { WeeklySleepReport } from '../profile/WeeklySleepReport';
@@ -806,6 +807,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ isPremium, onRequestLo
 
                 {/* AI Memories Section */}
                 <MemoriesSection />
+
+                {/* My Goals Section */}
+                <GoalSection />
 
                 {/* HealthKit Data Section (iOS only) */}
                 <HealthKitSection />

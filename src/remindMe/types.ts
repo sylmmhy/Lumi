@@ -78,7 +78,7 @@ export interface Task {
    * 对话模式：coach（目标导向）或 daily（陪伴聊天）
    * 仅在启动 AI 会话时使用，不保存到数据库
    */
-  chatMode?: 'coach' | 'daily'
+  chatMode?: 'coach' | 'daily' | 'setup'
 }
 
 export const TaskType = {

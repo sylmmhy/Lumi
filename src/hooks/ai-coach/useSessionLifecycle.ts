@@ -32,8 +32,8 @@ export interface StartSessionOptions {
   callRecordId?: string;
   /** 是否为重连（重连时会将对话上下文传给后端） */
   isReconnect?: boolean;
-  /** 对话模式：coach（目标导向）或 daily（陪伴聊天） */
-  chatMode?: 'coach' | 'daily';
+  /** 对话模式：coach（目标导向）、daily（陪伴聊天）或 setup（习惯设定 Prompt C） */
+  chatMode?: 'coach' | 'daily' | 'setup';
 }
 
 /** useSessionLifecycle 的配置 */
@@ -518,7 +518,6 @@ export function useSessionLifecycle(options: UseSessionLifecycleOptions): UseSes
       o.geminiLive.disconnect();
       o.campfire.cleanupResources();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

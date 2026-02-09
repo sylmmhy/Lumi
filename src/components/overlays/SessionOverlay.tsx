@@ -1,4 +1,5 @@
 import { TaskWorkingView } from '../task/TaskWorkingView';
+import { TaskCompletionModal } from './TaskCompletionModal';
 import type { useCoachController } from '../../hooks/useCoachController';
 import '../effects/effects.css';
 
@@ -30,6 +31,9 @@ interface SessionOverlayProps {
         | 'handleCompleteWithoutVerification'
         | 'handleEndAICoachSession'
         | 'handleEndCall'
+        | 'showTaskCompletionModal'
+        | 'handleConfirmTaskCompleteFromModal'
+        | 'handleConfirmTaskIncompleteFromModal'
     >;
 }
 
@@ -258,11 +262,6 @@ export function SessionOverlay({ coach }: SessionOverlayProps) {
                         isObserving: false,
                     }}
                     primaryButton={{
-                        label: "I'M DOING IT!",
-                        emoji: '✅',
-                        onClick: coach.handleLiveKitPrimaryClick,
-                    }}
-                    secondaryButton={{
                         label: 'END CALL',
                         emoji: '🛑',
                         onClick: coach.handleLiveKitSecondaryClick,
@@ -302,9 +301,18 @@ export function SessionOverlay({ coach }: SessionOverlayProps) {
                             onClick: coach.handleEndCall,
                         }}
                         hasBottomNav={false}
+                        onWakeUpLumi={coach.aiCoach.isCampfireMode && !coach.aiCoach.isConnected ? coach.aiCoach.wakeUpLumi : undefined}
                     />
                 </>
             )}
+
+            {/* 任务完成确认弹窗 */}
+            <TaskCompletionModal
+                isOpen={coach.showTaskCompletionModal}
+                onConfirmComplete={coach.handleConfirmTaskCompleteFromModal}
+                onConfirmIncomplete={coach.handleConfirmTaskIncompleteFromModal}
+                taskDescription={coach.aiCoach.state.taskDescription}
+            />
         </>
     );
 }

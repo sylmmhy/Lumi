@@ -63,6 +63,27 @@ export function sanitizeBracketTags(text: string): string {
 }
 
 /**
+ * 清理转录文本中的噪音标记和系统标签（用于 UI 字幕显示）
+ *
+ * 移植自 VoiceChatTest.tsx 的 cleanNoiseMarkers，确保 AI Coach 的
+ * 字幕显示与开发测试页面同等干净。
+ *
+ * 与 sanitizeBracketTags 的区别：
+ * - sanitizeBracketTags: 替换 [TAG] → (TAG)，保留内容，用于内部缓冲区（防 prompt 注入）
+ * - cleanNoiseMarkers: 完全移除噪音内容，用于 UI 显示
+ */
+export function cleanNoiseMarkers(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/<noise>/g, '')
+    .replace(/\[TOOL_RESULT\][\s\S]*?(?=\n\n|$)/gi, '')
+    .replace(/\[CONTEXT\][\s\S]*?(?=\n\n|$)/gi, '')
+    .replace(/\[System\][^\u4e00-\u9fa5]*/gi, '')
+    .replace(/\[内部结果.*?\]/g, '')
+    .trim();
+}
+
+/**
  * 过滤用户语音中的噪音
  * 检查文本是否包含有效的语音内容（至少包含一个字母或中文字符）
  */

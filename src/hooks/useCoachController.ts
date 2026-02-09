@@ -149,11 +149,17 @@ export function useCoachController(options: UseCoachControllerOptions) {
     const [sessionFinalizingMessage, setSessionFinalizingMessage] = useState(DEFAULT_SESSION_FINALIZING_MESSAGE);
     const pendingTaskPersistRef = useRef<Map<string, Promise<Task | null>>>(new Map());
     const persistedTempTaskRef = useRef<Map<string, Task>>(new Map());
+    const [currentChatMode, setCurrentChatMode] = useState<'coach' | 'daily' | 'setup' | null>(null);
 
     // ==========================================
     // 通话追踪
     // ==========================================
     const [currentCallRecordId, setCurrentCallRecordId] = useState<string | null>(null);
+
+    // ==========================================
+    // 任务完成确认弹窗
+    // ==========================================
+    const [showTaskCompletionModal, setShowTaskCompletionModal] = useState(false);
 
     // ==========================================
     // 视觉验证
@@ -367,6 +373,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             }
             setCurrentTaskId(null);
             setCurrentTaskType(null);
+            setCurrentChatMode(null);
             setShowCelebration(false);
         }
     }, [auth.isLoggedIn, aiCoach.isSessionActive, aiCoach.isConnecting, aiCoach.cameraEnabled, aiCoach]);
@@ -488,6 +495,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             const resolvedTaskId = persistedTask?.id ?? taskId;
             setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
+            setCurrentChatMode(taskToUse.chatMode || null);
 
             startLiveKitRoom();
 
@@ -508,7 +516,8 @@ export function useCoachController(options: UseCoachControllerOptions) {
             const preferredLanguages = getPreferredLanguages();
             // 解析 chatMode：优先使用 task.chatMode，未指定时默认为 'coach'
             const chatMode = task.chatMode || 'coach';
-            devLog(`🎭 [chatMode] ${task.chatMode ? `任务指定: ${task.chatMode}` : '未指定，使用默认: coach'} → 最终使用: ${chatMode === 'coach' ? 'Coach Prompt（目标导向）' : 'Daily Chat Prompt（日常陪伴）'}`);
+            const chatModeLabels: Record<string, string> = { coach: 'Coach Prompt（目标导向）', daily: 'Daily Chat Prompt（日常陪伴）', setup: 'Setup Prompt（习惯设定）' };
+            devLog(`🎭 [chatMode] ${task.chatMode ? `任务指定: ${task.chatMode}` : '未指定，使用默认: coach'} → 最终使用: ${chatModeLabels[chatMode] || chatMode}`);
             const started = await aiCoach.startSession(taskToUse.text, {
                 userId: auth.userId ?? undefined,
                 userName: auth.userName ?? undefined,
@@ -524,6 +533,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
             const resolvedTaskId = persistedTask?.id ?? taskId;
             setCurrentTaskId(resolvedTaskId);
             setCurrentTaskType(taskToUse.type || null);
+            setCurrentChatMode(taskToUse.chatMode || null);
 
             if (auth.userId && !isTemporaryTaskId(resolvedTaskId)) {
                 try {
@@ -607,31 +617,194 @@ export function useCoachController(options: UseCoachControllerOptions) {
     }, [handleQuickStart]);
 
     /**
-     * 用户点击「END CALL」按钮：结束通话但不标记任务完成
-     * - 立即停止音频播放
-     * - 结束会话释放资源
-     * - 后台保存记忆（不阻塞 UI）
+     * 用户点击「结束对话」按钮
+     * - 如果是具体任务（chatMode === 'coach'），打开任务完成确认弹窗
+     * - 如果是聊天或设定习惯（chatMode === 'daily' 或 'setup'），直接结束对话
      */
     const handleEndCall = useCallback(() => {
-        aiCoach.stopAudioImmediately();
+        // 只有在执行具体任务时才询问是否完成
+        if (currentChatMode === 'coach') {
+            setShowTaskCompletionModal(true);
+        } else {
+            // 聊天或设定习惯模式，直接结束对话
+            aiCoach.stopAudioImmediately();
 
-        const messagesSnapshot = [...aiCoach.state.messages];
-        const taskDescriptionSnapshot = aiCoach.state.taskDescription;
-        aiCoach.endSession();
+            const messagesSnapshot = [...aiCoach.state.messages];
+            const taskDescriptionSnapshot = aiCoach.state.taskDescription;
+            aiCoach.endSession();
 
-        setCurrentTaskId(null);
-        setCurrentTaskType(null);
-        setShowVerificationChoice(false);
-        setIsSessionFinalizing(false);
-        setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
+            setShowVerificationChoice(false);
+            setIsSessionFinalizing(false);
+            setSessionFinalizingMessage(DEFAULT_SESSION_FINALIZING_MESSAGE);
 
-        void saveSessionMemory({
-            messages: messagesSnapshot,
-            taskDescription: taskDescriptionSnapshot,
-            userId: auth.userId,
-            taskCompleted: false,
-        });
-    }, [aiCoach, auth.userId]);
+            void saveSessionMemory({
+                messages: messagesSnapshot,
+                taskDescription: taskDescriptionSnapshot,
+                userId: auth.userId,
+                taskCompleted: false,
+            });
+        }
+    }, [currentChatMode, aiCoach, auth.userId]);
+
+    /**
+     * 用户在任务完成确认弹窗中点击「是，我完成了」
+     * - 保存会话记忆到 Mem0
+     * - 结束当前 AI 会话
+     * - 跳转到 stats 页触发金币动画
+     * - 标记任务为已完成
+     */
+    const handleConfirmTaskCompleteFromModal = useCallback(() => {
+        // 关闭弹窗
+        setShowTaskCompletionModal(false);
+
+        // 判断是 LiveKit 模式还是 Gemini Live 模式
+        if (usingLiveKit) {
+            // LiveKit 模式
+            endLiveKitRoom();
+            if (liveKitTimerRef.current) {
+                clearInterval(liveKitTimerRef.current);
+                liveKitTimerRef.current = null;
+            }
+            unlockScreenTimeIfLocked('LiveKit.modalConfirmComplete');
+
+            // fire-and-forget: 金币奖励（LiveKit 模式使用 liveKitTimeRemaining 计算）
+            if (auth.userId) {
+                const baseCoins = 100;
+                const timeBonus = Math.min(Math.floor(liveKitTimeRemaining / 60) * 20, 400);
+                const calculatedCoins = baseCoins + timeBonus;
+                void awardCoins(auth.userId, currentTaskId, ['task_complete', 'session_complete'], {
+                    task_complete: calculatedCoins,
+                });
+            }
+
+            setUsingLiveKit(false);
+            setLiveKitConnected(false);
+            setLiveKitTimeRemaining(300);
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
+
+            // 跳转到 stats 页并触发金币动画
+            onTaskCompleteForStats();
+        } else {
+            // Gemini Live 模式
+            aiCoach.stopAudioImmediately();
+
+            const usedTime = 300 - aiCoach.state.timeRemaining;
+            const actualDurationMinutes = Math.round(usedTime / 60);
+
+            const messagesSnapshot = [...aiCoach.state.messages];
+            const taskDescriptionSnapshot = aiCoach.state.taskDescription;
+            const taskIdToComplete = currentTaskId;
+            const taskTypeToComplete = currentTaskType;
+            const userId = auth.userId;
+
+            // 关键：在 endSession 前抓取帧（因为 endSession 会关闭摄像头）
+            const capturedFrames = aiCoach.getRecentFrames(5);
+            devLog(`📸 抓取了 ${capturedFrames.length} 帧用于视觉验证`);
+
+            aiCoach.endSession();
+
+            unlockScreenTimeIfLocked('GeminiLive.modalConfirmComplete');
+
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
+
+            void saveSessionMemory({
+                messages: messagesSnapshot,
+                taskDescription: taskDescriptionSnapshot,
+                userId,
+                taskCompleted: true,
+                usedTime,
+                actualDurationMinutes,
+            });
+
+            void appTasks.markTaskAsCompleted(taskIdToComplete, actualDurationMinutes, taskTypeToComplete);
+
+            // fire-and-forget: 金币奖励（使用与庆祝动画相同的公式：100 基础 + 剩余时间奖励）
+            if (userId) {
+                const remainingTime = aiCoach.state.timeRemaining;
+                const baseCoins = 100;
+                const timeBonus = Math.min(Math.floor(remainingTime / 60) * 20, 400);
+                const calculatedCoins = baseCoins + timeBonus;
+                void awardCoins(userId, taskIdToComplete, ['task_complete', 'session_complete'], {
+                    task_complete: calculatedCoins,
+                });
+            }
+
+            // fire-and-forget: 视觉验证（不阻塞庆祝流程）
+            if (userId && taskIdToComplete && capturedFrames.length > 0) {
+                void (async () => {
+                    try {
+                        const result = await verifyWithFrames(
+                            taskIdToComplete,
+                            taskDescriptionSnapshot,
+                            capturedFrames,
+                            userId
+                        );
+                        if (result) {
+                            setSessionVerificationResult(result);
+                            devLog('✅ 视觉验证完成:', { verified: result.verified, confidence: result.confidence });
+                        }
+                    } catch (err) {
+                        console.error('[CoachController] 视觉验证 fire-and-forget 错误:', err);
+                    }
+                })();
+            }
+
+            // 跳转到 stats 页并触发金币动画（统一使用 stats 的金币记录系统）
+            onTaskCompleteForStats();
+        }
+    }, [usingLiveKit, aiCoach, currentTaskId, currentTaskType, liveKitTimeRemaining, appTasks, auth.userId, unlockScreenTimeIfLocked, verifyWithFrames, awardCoins, onTaskCompleteForStats]);
+
+    /**
+     * 用户在任务完成确认弹窗中点击「否，我没完成」
+     * - 直接结束会话，不标记任务为已完成
+     * - 不显示庆祝动画
+     * - 后台保存记忆（不阻塞 UI）
+     */
+    const handleConfirmTaskIncompleteFromModal = useCallback(() => {
+        // 关闭弹窗
+        setShowTaskCompletionModal(false);
+
+        // 判断是 LiveKit 模式还是 Gemini Live 模式
+        if (usingLiveKit) {
+            // LiveKit 模式
+            endLiveKitRoom();
+            if (liveKitTimerRef.current) {
+                clearInterval(liveKitTimerRef.current);
+                liveKitTimerRef.current = null;
+            }
+            setUsingLiveKit(false);
+            setLiveKitConnected(false);
+            setLiveKitTimeRemaining(300);
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
+        } else {
+            // Gemini Live 模式
+            aiCoach.stopAudioImmediately();
+
+            const messagesSnapshot = [...aiCoach.state.messages];
+            const taskDescriptionSnapshot = aiCoach.state.taskDescription;
+            aiCoach.endSession();
+
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
+
+            void saveSessionMemory({
+                messages: messagesSnapshot,
+                taskDescription: taskDescriptionSnapshot,
+                userId: auth.userId,
+                taskCompleted: false,
+            });
+        }
+    }, [usingLiveKit, aiCoach, auth.userId]);
 
     /**
      * 打开“完成方式”选择弹层，让用户决定是否进行视觉验证。
@@ -688,6 +861,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
             setCurrentTaskId(null);
             setCurrentTaskType(null);
+            setCurrentChatMode(null);
 
             void saveSessionMemory({
                 messages: messagesSnapshot,
@@ -853,6 +1027,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskDescription('');
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+        setCurrentChatMode(null);
 
         // 此路径没有视觉验证结果，不发 task_complete 金币
         onTaskCompleteForStats(0);
@@ -876,6 +1051,7 @@ export function useCoachController(options: UseCoachControllerOptions) {
         setCurrentTaskDescription('');
         setCurrentTaskId(null);
         setCurrentTaskType(null);
+        setCurrentChatMode(null);
         setSessionVerificationResult(null);
         setShowVerificationChoice(false);
         setIsSessionFinalizing(false);
@@ -907,17 +1083,28 @@ export function useCoachController(options: UseCoachControllerOptions) {
 
     /**
      * LiveKit 模式副按钮「END CALL」：结束通话并返回
+     * - 如果是具体任务（chatMode === 'coach'），打开任务完成确认弹窗
+     * - 如果是聊天或设定习惯（chatMode === 'daily' 或 'setup'），直接结束通话
      */
     const handleLiveKitSecondaryClick = useCallback(() => {
-        endLiveKitRoom();
-        if (liveKitTimerRef.current) {
-            clearInterval(liveKitTimerRef.current);
-            liveKitTimerRef.current = null;
+        // 只有在执行具体任务时才询问是否完成
+        if (currentChatMode === 'coach') {
+            setShowTaskCompletionModal(true);
+        } else {
+            // 聊天或设定习惯模式，直接结束通话
+            endLiveKitRoom();
+            if (liveKitTimerRef.current) {
+                clearInterval(liveKitTimerRef.current);
+                liveKitTimerRef.current = null;
+            }
+            setUsingLiveKit(false);
+            setLiveKitConnected(false);
+            setLiveKitTimeRemaining(300);
+            setCurrentTaskId(null);
+            setCurrentTaskType(null);
+            setCurrentChatMode(null);
         }
-        setUsingLiveKit(false);
-        setLiveKitConnected(false);
-        setLiveKitTimeRemaining(300);
-    }, []);
+    }, [currentChatMode]);
 
     // ==========================================
     // 副作用：URL 参数自动启动任务
@@ -1104,6 +1291,11 @@ export function useCoachController(options: UseCoachControllerOptions) {
         handleConfirmTaskComplete,
         handleConfirmTaskIncomplete,
         handleCloseCelebration,
+
+        // 任务完成确认弹窗
+        showTaskCompletionModal,
+        handleConfirmTaskCompleteFromModal,
+        handleConfirmTaskIncompleteFromModal,
 
         // LiveKit 按钮回调
         handleLiveKitPrimaryClick,

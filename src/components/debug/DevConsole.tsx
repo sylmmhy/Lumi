@@ -101,21 +101,25 @@ export function DevConsole() {
 
   // 添加日志条目
   const addLog = useCallback((type: LogEntry['type'], args: unknown[]) => {
-    setLogs(prev => {
-      const newLogs = [
-        ...prev,
-        {
-          id: ++logIdRef.current,
-          type,
-          timestamp: new Date(),
-          args,
+    // 使用 queueMicrotask 异步更新状态，避免在其他组件渲染期间同步更新
+    // 这样可以防止 "Cannot update a component while rendering a different component" 警告
+    queueMicrotask(() => {
+      setLogs(prev => {
+        const newLogs = [
+          ...prev,
+          {
+            id: ++logIdRef.current,
+            type,
+            timestamp: new Date(),
+            args,
+          }
+        ]
+        // 限制日志条数
+        if (newLogs.length > MAX_LOGS) {
+          return newLogs.slice(-MAX_LOGS)
         }
-      ]
-      // 限制日志条数
-      if (newLogs.length > MAX_LOGS) {
-        return newLogs.slice(-MAX_LOGS)
-      }
-      return newLogs
+        return newLogs
+      })
     })
   }, [])
 

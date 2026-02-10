@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { DEFAULT_APP_PATH } from './constants/routes'
@@ -6,10 +6,6 @@ import { AppTabsPage } from './pages/AppTabsPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { HabitOnboardingPage } from './pages/onboarding/HabitOnboardingPage'
-import { DevTestPage } from './pages/DevTestPage'
-import { LandingPageWrapper } from './pages/LandingPageWrapper'
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
-import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { CampfireFocusPage } from './pages/CampfireFocusPage'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
@@ -17,6 +13,16 @@ import { PermissionProvider } from './context/PermissionContext'
 import { DevConsole } from './components/debug/DevConsole'
 import { initAmplitude } from './lib/amplitude'
 import { initPostHog } from './lib/posthog'
+
+/**
+ * 非核心页面懒加载：只在访问对应路由时才加载模块。
+ * 在 Vite dev 模式下，减少初始 HTTP 请求数量，降低本地 WiFi + HTTPS 并发请求导致的网络故障概率。
+ * CampfireFocusPage 保持静态导入，因为来电流程（CallKit）可能直接加载 /campfire 路由。
+ */
+const LandingPageWrapper = lazy(() => import('./pages/LandingPageWrapper').then(m => ({ default: m.LandingPageWrapper })))
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })))
+const TermsOfUsePage = lazy(() => import('./pages/TermsOfUsePage').then(m => ({ default: m.TermsOfUsePage })))
+const DevTestPage = lazy(() => import('./pages/DevTestPage').then(m => ({ default: m.DevTestPage })))
 
 /**
  * 延迟初始化分析工具，不阻塞首屏渲染
@@ -74,6 +80,8 @@ function App() {
     <LanguageProvider>
       <AuthProvider>
         <PermissionProvider>
+        {/* Suspense 包裹懒加载路由，fallback={null} 因为 iOS 端有自己的 loading overlay */}
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           {/* 开发测试页面 - 仅在 DEV 模式下可用 */}
@@ -90,6 +98,7 @@ function App() {
           <Route path="/campfire" element={<CampfireFocusPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         {/* WebView 调试控制台 - 仅在原生 App 或开发模式下显示 */}
         <DevConsole />
         </PermissionProvider>

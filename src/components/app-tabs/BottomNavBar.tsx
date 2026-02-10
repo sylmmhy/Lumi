@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { AppTab } from '../../constants/routes';
 import { usePermission } from '../../hooks/usePermission';
 import { PermissionAlertModal } from '../modals/PermissionAlertModal';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface BottomNavBarProps {
     currentView: AppTab;
@@ -18,6 +19,7 @@ interface BottomNavBarProps {
  * 4. 点击红点时弹出权限提示弹窗
  */
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChange }) => {
+    const { t } = useTranslation();
     // 获取权限状态
     const { shouldShowBadge } = usePermission();
     // 控制权限提示弹窗的显示
@@ -43,13 +45,13 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
         <div className="flex-1 flex justify-around">
             <NavIcon
                 icon="fa-phone"
-                label="Calls"
+                label={t('nav.calls')}
                 active={currentView === 'home'}
                 onClick={() => onChange('home')}
             />
             <NavIcon
                 icon="fa-chart-line"
-                label="Progress"
+                label={t('nav.progress')}
                 active={currentView === 'stats'}
                 onClick={() => onChange('stats')}
             />
@@ -74,13 +76,13 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onChang
         <div className="flex-1 flex justify-around">
             <NavIcon
                 icon="fa-trophy"
-                label="Rank"
+                label={t('nav.rank')}
                 active={currentView === 'leaderboard'}
                 onClick={() => onChange('leaderboard')}
             />
             <NavIcon
                 icon="fa-user"
-                label="Me"
+                label={t('nav.me')}
                 active={currentView === 'profile'}
                 onClick={handleProfileClick}
                 showBadge={shouldShowBadge}

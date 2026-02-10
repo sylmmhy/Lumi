@@ -1,8 +1,10 @@
 /**
  * FocusEndModal - 专注结束弹窗
- * 
+ *
  * 显示专注统计信息
  */
+
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface SessionStats {
   sessionId: string;
@@ -17,17 +19,18 @@ interface FocusEndModalProps {
 }
 
 export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
+  const { t } = useTranslation();
   if (!stats) return null;
 
   // 格式化时长
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
+
     if (hours > 0) {
-      return `${hours} 小时 ${minutes} 分钟`;
+      return `${hours} ${t('campfire.hours')} ${minutes} ${t('campfire.minutes')}`;
     }
-    return `${minutes} 分钟`;
+    return `${minutes} ${t('campfire.minutes')}`;
   };
 
   return (
@@ -37,10 +40,10 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
         <div className="text-center mb-6">
           <div className="text-6xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-yellow-400 mb-2" style={{ fontFamily: 'Sansita, sans-serif' }}>
-            专注完成！
+            {t('campfire.focusComplete')}
           </h2>
           <p className="text-gray-400 text-sm">
-            做得很好，继续保持～
+            {t('campfire.keepItUp')}
           </p>
         </div>
 
@@ -48,7 +51,7 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
         <div className="space-y-4 mb-6">
           {/* 专注时长 */}
           <div className="bg-gray-900/50 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">专注时长</div>
+            <div className="text-gray-400 text-sm mb-1">{t('campfire.focusDuration')}</div>
             <div className="text-2xl font-bold text-yellow-400">
               {formatDuration(stats.durationSeconds)}
             </div>
@@ -57,7 +60,7 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
           {/* 任务描述 */}
           {stats.taskDescription && (
             <div className="bg-gray-900/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm mb-1">专注任务</div>
+              <div className="text-gray-400 text-sm mb-1">{t('campfire.focusTask')}</div>
               <div className="text-white">
                 {stats.taskDescription}
               </div>
@@ -66,7 +69,7 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
 
           {/* 对话统计 */}
           <div className="bg-gray-900/50 rounded-lg p-4">
-            <div className="text-gray-400 text-sm mb-1">对话次数</div>
+            <div className="text-gray-400 text-sm mb-1">{t('campfire.chatCount')}</div>
             <div className="text-xl font-bold text-white">
               {stats.chatCount}
             </div>
@@ -78,7 +81,7 @@ export function FocusEndModal({ stats, onClose }: FocusEndModalProps) {
           onClick={onClose}
           className="w-full py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold rounded-xl transition-all"
         >
-          完成
+          {t('campfire.done')}
         </button>
       </div>
     </div>

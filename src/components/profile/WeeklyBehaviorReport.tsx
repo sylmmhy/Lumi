@@ -53,10 +53,10 @@ export const WeeklyBehaviorReport: React.FC = () => {
               {t('weeklyReport.title') || '本周行为分析'}
             </h3>
             <p className="text-xs text-gray-600 mb-4">
-              暂无周报数据。继续使用 Lumi，下周就能看到你的行为分析啦！
+              {t('weeklyReport.noData')}
             </p>
             <div className="text-xs text-gray-500 bg-white/60 rounded-lg px-3 py-2">
-              💡 周报每周一自动生成，基于你的任务、专注、习惯等数据
+              {t('weeklyReport.noDataHint')}
             </div>
           </div>
         </div>

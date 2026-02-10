@@ -387,7 +387,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, embedded = false, redire
           type="button"
           className="absolute right-3 top-3 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
           onClick={onClose}
-          aria-label="关闭登录弹窗"
+          aria-label={t('common.closeModal')}
         >
           ×
         </button>

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface Testimonial {
     quote: string;
@@ -14,28 +15,29 @@ interface Testimonial {
 const getAvatarUrl = (seed: string) =>
     `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
-const testimonials: Testimonial[] = [
-    {
-        quote: "I struggle a lot with sleeping on time and waking up when I plan to. Lumi doesn't force anything — it just checks in at the right moment. That small nudge has helped me go to bed earlier and start my mornings without overthinking.",
-        name: "Early User",
-        role: "Sleep & Wake Routine",
-        avatar: getAvatarUrl("sleep-user")
-    },
-    {
-        quote: "Most days I know what I should be doing, I just don't start. Lumi helps me break that freeze. When it checks in, I'm more likely to get up, cook on time, and finish basic chores instead of postponing everything.",
-        name: "Beta User",
-        role: "Focus & Meals",
-        avatar: getAvatarUrl("meals-user")
-    },
-    {
-        quote: "What I like about Lumi is that it doesn't try to manage my whole day. It just helps me begin. That's been enough to make simple routines like waking up early or eating on time feel more doable.",
-        name: "Early Tester",
-        role: "Habit Formation",
-        avatar: getAvatarUrl("habit-user")
-    }
-];
-
 export const LandingTestimonials: React.FC = () => {
+    const { t } = useTranslation();
+
+    const testimonials: Testimonial[] = useMemo(() => [
+        {
+            quote: t('landing.testimonials.quote1'),
+            name: t('landing.testimonials.name1'),
+            role: t('landing.testimonials.role1'),
+            avatar: getAvatarUrl("sleep-user")
+        },
+        {
+            quote: t('landing.testimonials.quote2'),
+            name: t('landing.testimonials.name2'),
+            role: t('landing.testimonials.role2'),
+            avatar: getAvatarUrl("meals-user")
+        },
+        {
+            quote: t('landing.testimonials.quote3'),
+            name: t('landing.testimonials.name3'),
+            role: t('landing.testimonials.role3'),
+            avatar: getAvatarUrl("habit-user")
+        }
+    ], [t]);
     return (
         <section
             className="py-24 px-6 relative overflow-hidden"
@@ -51,10 +53,10 @@ export const LandingTestimonials: React.FC = () => {
                 {/* Section Title */}
                 <div className="text-center mb-20">
                     <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 tracking-tight">
-                        Users are building consistency —<br />and seeing real progress
+                        {t('landing.testimonials.heading')}
                     </h2>
                     <p className="text-lg text-gray-500 font-medium mb-6">
-                        Early user feedback from beta testers
+                        {t('landing.testimonials.subtitle')}
                     </p>
                     <div className="w-20 h-1.5 bg-[#2545BD] mx-auto rounded-full opacity-20" />
                 </div>

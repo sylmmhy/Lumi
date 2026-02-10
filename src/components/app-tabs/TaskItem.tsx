@@ -28,7 +28,7 @@ interface TaskItemProps {
 
 export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onEdit, onSkipForDay, onUnskipForDay, onPhotoVerify, mode = 'home', onStart, leaderboardOptIn = true }) => {
     const { t } = useTranslation();
-    const photoVerificationCoins = getCoinReward('photo_verification');
+    const photoVerificationCoins = getCoinReward('task_complete');
     const [translateX, setTranslateX] = useState(0);
     const [confettiTrigger, setConfettiTrigger] = useState(0);
     const [showSkipConfirm, setShowSkipConfirm] = useState(false);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { trackEvent } from '../../lib/amplitude';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export interface BetaRequestModalProps {
   /** 是否展示弹窗 */
@@ -19,6 +20,7 @@ export interface BetaRequestModalProps {
  * @returns {JSX.Element | null} 弹窗组件
  */
 export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -43,17 +45,17 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
   const handleSubmit = async () => {
     // 验证邮箱
     if (!email.trim()) {
-      setErrorMessage('Please enter your email address');
+      setErrorMessage(t('landing.beta.emptyError'));
       return;
     }
 
     if (!isValidEmail(email)) {
-      setErrorMessage('Please enter a valid email address');
+      setErrorMessage(t('landing.beta.invalidError'));
       return;
     }
 
     if (!supabase) {
-      setErrorMessage('Service unavailable. Please try again later.');
+      setErrorMessage(t('landing.beta.serviceError'));
       return;
     }
 
@@ -69,7 +71,7 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
         .limit(1);
 
       if (existing && existing.length > 0) {
-        setErrorMessage('This email is already on our waitlist!');
+        setErrorMessage(t('landing.beta.duplicateError'));
         setIsSubmitting(false);
         return;
       }
@@ -96,7 +98,7 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
       setEmail('');
     } catch (error: unknown) {
       console.error('Error submitting beta request:', error);
-      setErrorMessage('Failed to submit. Please try again.');
+      setErrorMessage(t('landing.beta.submitError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +134,7 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
           type="button"
           className="absolute right-3 top-3 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition z-10"
           onClick={handleClose}
-          aria-label="关闭弹窗"
+          aria-label={t('common.closeModal')}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -151,24 +153,24 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">You're on the list!</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{t('landing.beta.successTitle')}</h3>
               <p className="text-gray-600 mb-6">
-                We'll notify you when Lumi is ready for you.
+                {t('landing.beta.successMessage')}
               </p>
               <button
                 onClick={handleClose}
                 className="px-8 py-3 bg-[#2545BD] text-white font-semibold rounded-full hover:bg-[#1e3a9f] transition-all"
               >
-                Got it!
+                {t('landing.beta.gotIt')}
               </button>
             </div>
           ) : (
             // 输入表单
             <>
               <div className="text-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Join the Beta Waitlist</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{t('landing.beta.title')}</h3>
                 <p className="text-gray-600">
-                  Be the first to experience Lumi when we launch!
+                  {t('landing.beta.subtitle')}
                 </p>
               </div>
 
@@ -182,7 +184,7 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
                       setErrorMessage('');
                     }}
                     onKeyDown={handleKeyDown}
-                    placeholder="Enter your email"
+                    placeholder={t('landing.beta.emailPlaceholder')}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2545BD] focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                     disabled={isSubmitting}
                     autoFocus
@@ -203,16 +205,16 @@ export function BetaRequestModal({ isOpen, onClose }: BetaRequestModalProps) {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      Joining...
+                      {t('landing.beta.joining')}
                     </>
                   ) : (
-                    'Join Waitlist'
+                    t('landing.beta.joinWaitlist')
                   )}
                 </button>
               </div>
 
               <p className="mt-4 text-xs text-center text-gray-400">
-                We respect your privacy. No spam, ever.
+                {t('landing.beta.privacyNote')}
               </p>
             </>
           )}

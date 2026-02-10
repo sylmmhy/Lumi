@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Feature1 from '../../assets/1.png';
 import Feature2 from '../../assets/2.png';
 import Feature3 from '../../assets/3.png';
 import Feature4 from '../../assets/4.png';
 import Feature5 from '../../assets/5.png';
+import { useTranslation } from '../../hooks/useTranslation';
 
 /**
  * 落地页功能卡片的数据结构
@@ -18,53 +19,6 @@ interface Feature {
 }
 
 /**
- * 功能卡片配置
- * 用于驱动 Tab、卡片内容与图像展示。
- */
-const features: Feature[] = [
-    {
-        id: 'body-double',
-        tab: 'AI Body Double',
-        title: 'Meet Lumi, Your AI Body Double',
-        description: "Lumi acts as a real-time accountability partner that checks in when it's time to act. Instead of reminders you can ignore, Lumi helps users initiate routines and follow through — without guilt or pressure.",
-        image: Feature1,
-        bgColor: '#E6EFFF'
-    },
-    {
-        id: 'awareness',
-        tab: 'Smart Insights',
-        title: 'Understand Your Avoidance Patterns',
-        description: "Lumi learns when and where routines break down, and surfaces insights that help users recognize avoidance early. By identifying repeat friction points, Lumi helps users adjust routines before inconsistency turns into abandonment.",
-        image: Feature2,
-        bgColor: '#FFF2E6'
-    },
-    {
-        id: 'habits',
-        tab: 'Habit Tracking',
-        title: 'Set a Habit. Lumi Will Check In.',
-        description: "Lumi turns habit tracking into habit execution. Users set routines, and Lumi checks in at the right moments to create accountability and consistency — turning good intentions into repeat behavior instead of forgotten lists.",
-        image: Feature3,
-        bgColor: '#EBF5FF'
-    },
-    {
-        id: 'checkin',
-        tab: 'Video Check-In',
-        title: 'Quick Check-Ins That Trigger Action',
-        description: "Short video check-ins create a sense of presence and accountability — similar to body doubling — helping users start routines when motivation is low. Designed to be fast, lightweight, and frictionless.",
-        image: Feature4,
-        bgColor: '#FEEBED'
-    },
-    {
-        id: 'streak',
-        tab: 'Progress Tracking',
-        title: 'Make Consistency Visible',
-        description: "Lumi tracks streaks and progress to reinforce consistency over time. Clear visual feedback helps users stay engaged, recognize momentum, and build habits that last — not just short-term motivation.",
-        image: Feature5,
-        bgColor: '#ECFDF5'
-    }
-];
-
-/**
  * 卡片宽度（像素）
  * 仅用于桌面端横向滚动时的计算基准。
  */
@@ -75,6 +29,54 @@ const CARD_WIDTH = 900;
  * 桌面端使用横向滚动卡片；移动端使用纵向平铺，避免横滑操作。
  */
 export const LandingFeatures: React.FC = () => {
+    const { t } = useTranslation();
+
+    /**
+     * 功能卡片配置
+     * 用于驱动 Tab、卡片内容与图像展示。
+     */
+    const features: Feature[] = useMemo(() => [
+        {
+            id: 'body-double',
+            tab: t('landing.features.bodyDouble.tab'),
+            title: t('landing.features.bodyDouble.title'),
+            description: t('landing.features.bodyDouble.description'),
+            image: Feature1,
+            bgColor: '#E6EFFF'
+        },
+        {
+            id: 'awareness',
+            tab: t('landing.features.awareness.tab'),
+            title: t('landing.features.awareness.title'),
+            description: t('landing.features.awareness.description'),
+            image: Feature2,
+            bgColor: '#FFF2E6'
+        },
+        {
+            id: 'habits',
+            tab: t('landing.features.habits.tab'),
+            title: t('landing.features.habits.title'),
+            description: t('landing.features.habits.description'),
+            image: Feature3,
+            bgColor: '#EBF5FF'
+        },
+        {
+            id: 'checkin',
+            tab: t('landing.features.checkin.tab'),
+            title: t('landing.features.checkin.title'),
+            description: t('landing.features.checkin.description'),
+            image: Feature4,
+            bgColor: '#FEEBED'
+        },
+        {
+            id: 'streak',
+            tab: t('landing.features.streak.tab'),
+            title: t('landing.features.streak.title'),
+            description: t('landing.features.streak.description'),
+            image: Feature5,
+            bgColor: '#ECFDF5'
+        }
+    ], [t]);
     /** 当前激活的功能卡片索引（用于桌面端导航与指示器） */
     const [activeIndex, setActiveIndex] = useState(0);
     /** 横向滚动容器引用（桌面端用于居中与滚动定位） */

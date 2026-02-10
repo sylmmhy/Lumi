@@ -12,6 +12,7 @@
 import { TalkingFire } from '../ai/TalkingFire';
 import { useCampfireSession } from '../../hooks/campfire';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface SessionStats {
   sessionId: string;
@@ -25,6 +26,7 @@ interface CampfireFocusViewProps {
 }
 
 export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
+  const { t } = useTranslation();
   const { userId } = useAuth();
   
   // 开发模式下如果没有登录，使用测试 ID
@@ -47,17 +49,17 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
       case 'idle':
         return '';
       case 'starting':
-        return '🔌 连接中...';
+        return `🔌 ${t('campfire.status.connecting')}`;
       case 'focusing':
-        return '🔥 专注中';
+        return `🔥 ${t('campfire.status.focusing')}`;
       case 'connecting':
-        return '🎤 正在听...';
+        return `🎤 ${t('campfire.status.listening')}`;
       case 'active':
-        return '💬 对话中';
+        return `💬 ${t('campfire.status.chatting')}`;
       case 'ending':
-        return '✨ 结束中...';
+        return `✨ ${t('campfire.status.ending')}`;
       case 'ended':
-        return '✅ 已结束';
+        return `✅ ${t('campfire.status.ended')}`;
       default:
         return '';
     }
@@ -87,13 +89,13 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
       <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] via-[#1a0f0a] to-[#0a0a0a] flex flex-col items-center justify-center p-6">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-yellow-400 mb-4" style={{ fontFamily: 'Sansita, sans-serif' }}>
-            🔥 篝火专注模式
+            🔥 {t('campfire.title')}
           </h1>
           <p className="text-gray-400 text-lg mb-2">
-            安静陪伴，专注工作
+            {t('campfire.subtitle')}
           </p>
           <p className="text-gray-500 text-sm">
-            需要时随时可以和我说话
+            {t('campfire.hint')}
           </p>
         </div>
 
@@ -101,7 +103,7 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
           onClick={handleStart}
           className="px-8 py-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold rounded-xl transition-all shadow-lg text-lg"
         >
-          开始专注
+          {t('campfire.start')}
         </button>
       </div>
     );
@@ -116,7 +118,7 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
           onClick={handleEnd}
           className="text-gray-400 hover:text-white transition-colors"
         >
-          ← 返回
+          ← {t('campfire.back')}
         </button>
 
         <div className="flex items-center gap-4">
@@ -155,7 +157,7 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
             {session.formattedTime}
           </div>
           <div className="text-gray-400 text-sm">
-            专注中
+            {t('campfire.focusing')}
           </div>
         </div>
 
@@ -173,7 +175,7 @@ export function CampfireFocusView({ onEnd }: CampfireFocusViewProps) {
           disabled={session.status === 'ending' || session.status === 'ended'}
           className="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {session.status === 'ending' ? '结束中...' : '结束专注'}
+          {session.status === 'ending' ? t('campfire.endingButton') : t('campfire.endFocus')}
         </button>
       </div>
 

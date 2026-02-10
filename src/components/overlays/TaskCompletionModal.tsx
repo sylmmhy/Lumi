@@ -5,6 +5,8 @@
  * 用户必须选择"是"或"否"才能继续
  */
 
+import { useTranslation } from '../../hooks/useTranslation';
+
 interface TaskCompletionModalProps {
   /** 是否显示弹窗 */
   isOpen: boolean;
@@ -22,6 +24,7 @@ export function TaskCompletionModal({
   onConfirmIncomplete,
   taskDescription,
 }: TaskCompletionModalProps) {
+  const { t } = useTranslation();
   if (!isOpen) return null;
 
   return (
@@ -30,7 +33,7 @@ export function TaskCompletionModal({
         {/* 标题 */}
         <div className="mb-6 text-center">
           <div className="mb-2 text-5xl">🎯</div>
-          <h2 className="mb-2 text-2xl font-bold text-white">任务完成了吗？</h2>
+          <h2 className="mb-2 text-2xl font-bold text-white">{t('session.completionModal.title')}</h2>
           {taskDescription && (
             <p className="text-sm text-gray-400">
               {taskDescription}
@@ -40,7 +43,7 @@ export function TaskCompletionModal({
 
         {/* 说明文字 */}
         <p className="mb-6 text-center text-gray-300">
-          请告诉我们你是否完成了任务
+          {t('session.completionModal.description')}
         </p>
 
         {/* 按钮组 */}
@@ -61,7 +64,7 @@ export function TaskCompletionModal({
                 fontSize: '16px',
               }}
             >
-              是，我完成了！
+              {t('session.completionModal.confirmComplete')}
             </span>
           </button>
 
@@ -81,7 +84,7 @@ export function TaskCompletionModal({
                 fontSize: '16px',
               }}
             >
-              否，我没完成
+              {t('session.completionModal.confirmIncomplete')}
             </span>
           </button>
         </div>

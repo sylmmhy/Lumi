@@ -5,6 +5,8 @@
  * 用户可以确认保存或选择重新聊聊
  */
 
+import { useTranslation } from '../../hooks/useTranslation';
+
 interface PlanRoutine {
   name: string;
   durationMinutes: number;
@@ -53,6 +55,7 @@ function getGoalEmoji(goalType: string): string {
 }
 
 export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanReviewProps) {
+  const { t } = useTranslation();
   const emoji = getGoalEmoji(plan.goalType);
 
   return (
@@ -69,15 +72,15 @@ export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanRevie
       <div className="bg-[#2a2a2a] rounded-2xl p-5 mb-4">
         <div className="space-y-3 text-sm">
           <div className="flex justify-between items-center">
-            <span className="text-white/60">现在</span>
+            <span className="text-white/60">{t('planReview.current')}</span>
             <span className="font-medium">{plan.summary.currentLevel}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-white/60">第一步</span>
+            <span className="text-white/60">{t('planReview.firstStep')}</span>
             <span className="font-medium text-[#FFC92A]">{plan.summary.firstMilestone}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-white/60">最终目标</span>
+            <span className="text-white/60">{t('planReview.ultimateGoal')}</span>
             <span className="font-medium">{plan.summary.ultimateGoal}</span>
           </div>
           <div className="border-t border-white/10 pt-3 mt-3">
@@ -89,7 +92,7 @@ export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanRevie
       {/* 时间表（如果有 routines） */}
       {plan.routines.length > 0 && (
         <div className="bg-[#2a2a2a] rounded-2xl p-5 mb-4">
-          <h2 className="text-sm font-bold text-white/80 mb-4">准备步骤</h2>
+          <h2 className="text-sm font-bold text-white/80 mb-4">{t('planReview.prepSteps')}</h2>
           <div className="space-y-3">
             {plan.routines.map((routine, i) => (
               <div key={i} className="flex items-center gap-3">
@@ -116,7 +119,7 @@ export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanRevie
           disabled={isSubmitting}
           className="w-full bg-gradient-to-t from-[#ffd039] to-[#feb827] border border-[#ffe28a] rounded-xl py-4 font-bold text-black shadow-[0_5px_0_0_#D34A22] active:translate-y-[2px] active:shadow-[0_3px_0_0_#D34A22] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {isSubmitting ? '保存中...' : '确认计划'}
+          {isSubmitting ? t('planReview.saving') : t('planReview.confirmPlan')}
         </button>
 
         <button
@@ -124,7 +127,7 @@ export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanRevie
           disabled={isSubmitting}
           className="w-full border-2 border-white/20 rounded-xl py-3 text-sm text-white/70 disabled:opacity-50 transition-all"
         >
-          重新聊聊
+          {t('planReview.retry')}
         </button>
       </div>
     </div>
@@ -135,14 +138,15 @@ export function PlanReview({ plan, onConfirm, onRetry, isSubmitting }: PlanRevie
  * PlanGenerating - 计划生成中的加载状态
  */
 export function PlanGenerating() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-[#1e1e1e] text-white flex flex-col items-center justify-center p-6">
       <div className="animate-pulse text-4xl mb-6">📋</div>
       <h2 className="text-lg font-bold text-[#FFC92A] mb-2">
-        正在生成你的习惯计划...
+        {t('planReview.generating')}
       </h2>
       <p className="text-sm text-white/50">
-        根据我们的对话，为你设计最合理的渐进式方案
+        {t('planReview.generatingHint')}
       </p>
     </div>
   );
@@ -152,16 +156,17 @@ export function PlanGenerating() {
  * PlanError - 计划生成失败状态
  */
 export function PlanError({ error, onRetry }: { error: string; onRetry: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-[#1e1e1e] text-white flex flex-col items-center justify-center p-6">
       <div className="text-4xl mb-6">😅</div>
-      <h2 className="text-lg font-bold mb-2">生成计划时出了点问题</h2>
+      <h2 className="text-lg font-bold mb-2">{t('planReview.error')}</h2>
       <p className="text-sm text-white/50 mb-8 text-center">{error}</p>
       <button
         onClick={onRetry}
         className="bg-gradient-to-t from-[#ffd039] to-[#feb827] border border-[#ffe28a] rounded-xl px-8 py-3 font-bold text-black shadow-[0_5px_0_0_#D34A22] active:translate-y-[2px] active:shadow-[0_3px_0_0_#D34A22]"
       >
-        重新聊聊
+        {t('planReview.retry')}
       </button>
     </div>
   );

@@ -7,11 +7,11 @@
  * - 底部：每周打卡进度（周一到周日的7个圆圈，完成显示金币）
  */
 
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getLocalDateString } from '../../utils/timeUtils';
 import { calculateCurrentStreak } from './heatmapHelpers';
-import { LanguageContext } from '../../context/LanguageContextDefinition';
+import { useTranslation } from '../../hooks/useTranslation';
 import type { Habit } from './types';
 
 interface StatsCardProps {
@@ -28,57 +28,39 @@ interface StatsCardProps {
 }
 
 /**
- * 检测字符串是否包含中文字符
- * @param text - 要检测的字符串
- * @returns 是否包含中文字符
- */
-const containsChinese = (text: string): boolean => {
-    // 匹配中文字符范围（包括常用汉字、扩展汉字等）
-    return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(text);
-};
-
-/**
  * 默认的轻量化启动引导语
- * 根据习惯标题的语言自动选择对应语言的引导语
+ * 使用 i18n 翻译函数根据习惯标题关键词匹配对应引导语
  *
  * @param title - 习惯标题
+ * @param t - 翻译函数
  * @returns 对应语言的引导语
  */
-const getDefaultSubtitle = (title: string): string => {
+const getDefaultSubtitle = (title: string, t: (key: string) => string): string => {
     const lowerTitle = title.toLowerCase();
-    const isChinese = containsChinese(title);
 
-    // 阅读相关
     if (lowerTitle.includes('阅读') || lowerTitle.includes('read')) {
-        return isChinese ? '读 1 页也算赢' : 'Reading 1 page counts as a win';
+        return t('stats.subtitle.reading');
     }
-    // 运动相关
     if (lowerTitle.includes('运动') || lowerTitle.includes('workout') || lowerTitle.includes('exercise')) {
-        return isChinese ? '动 5 分钟也算赢' : '5 minutes of movement counts';
+        return t('stats.subtitle.exercise');
     }
-    // 冥想相关
     if (lowerTitle.includes('冥想') || lowerTitle.includes('meditat')) {
-        return isChinese ? '静坐 1 分钟也算赢' : '1 minute of stillness counts';
+        return t('stats.subtitle.meditation');
     }
-    // 写作相关
     if (lowerTitle.includes('写') || lowerTitle.includes('write') || lowerTitle.includes('journal')) {
-        return isChinese ? '写 1 句话也算赢' : 'Writing 1 sentence counts';
+        return t('stats.subtitle.writing');
     }
-    // 学习相关
     if (lowerTitle.includes('学') || lowerTitle.includes('learn') || lowerTitle.includes('study')) {
-        return isChinese ? '学 5 分钟也算赢' : '5 minutes of learning counts';
+        return t('stats.subtitle.learning');
     }
-    // 睡眠相关
     if (lowerTitle.includes('睡') || lowerTitle.includes('sleep') || lowerTitle.includes('bed')) {
-        return isChinese ? '准时躺下就算赢' : 'Getting to bed on time is a win';
+        return t('stats.subtitle.sleep');
     }
-    // 早起相关
     if (lowerTitle.includes('起') || lowerTitle.includes('wake') || lowerTitle.includes('morning')) {
-        return isChinese ? '睁眼就是胜利' : 'Opening your eyes is victory';
+        return t('stats.subtitle.wake');
     }
 
-    // 默认引导语
-    return isChinese ? '开始就是胜利' : 'Starting is winning';
+    return t('stats.subtitle.default');
 };
 
 /**
@@ -103,11 +85,6 @@ const getThisWeekDays = (): string[] => {
 };
 
 /**
- * 周几的简称（用于显示）
- */
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
-
-/**
  * 能量启动卡片
  */
 export const StatsCard: React.FC<StatsCardProps> = ({
@@ -119,7 +96,13 @@ export const StatsCard: React.FC<StatsCardProps> = ({
 }) => {
     const todayKey = getLocalDateString();
     const isTodayDone = !!habit.history[todayKey];
-    const { t } = useContext(LanguageContext);
+    const { t } = useTranslation();
+
+    // 周几标签（从 i18n 获取）
+    const weekdayLabels = [
+        t('stats.mon'), t('stats.tue'), t('stats.wed'), t('stats.thu'),
+        t('stats.fri'), t('stats.sat'), t('stats.sun')
+    ];
 
     // 动画状态
     const [isPressed, setIsPressed] = useState(false);
@@ -128,7 +111,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
     // 获取引导语
-    const subtitle = habit.subtitle || getDefaultSubtitle(habit.title);
+    const subtitle = habit.subtitle || getDefaultSubtitle(habit.title, t);
 
     // 获取本周的打卡进度
     const thisWeekDays = getThisWeekDays();
@@ -211,7 +194,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                                     color: '#B8860B',
                                 }}
                             >
-                                🔥 {streakDays}{containsChinese(habit.title) ? '天' : 'd'}
+                                🔥 {streakDays}{t('stats.streakDayUnit')}
                             </span>
                         )}
                     </h3>
@@ -282,7 +265,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                                     isToday ? 'text-amber-500' : 'text-gray-400'
                                 }`}
                             >
-                                {WEEKDAY_LABELS[index]}
+                                {weekdayLabels[index]}
                             </span>
                             {/* 打卡状态圆圈 - 今天的可点击 */}
                             <div

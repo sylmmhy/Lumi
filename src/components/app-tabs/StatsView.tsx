@@ -178,7 +178,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-sleep',
             title: t('stats.goToBed'),
-            subtitle: '准时躺下就算赢',
+            subtitle: t('stats.subtitle.sleep'),
             timeLabel: '10:30 pm',
             time: '22:30',
             theme: 'pink',
@@ -188,7 +188,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-wake',
             title: t('stats.wakeUp'),
-            subtitle: '睁眼就是胜利',
+            subtitle: t('stats.subtitle.wake'),
             timeLabel: '7:00 am',
             time: '07:00',
             theme: 'gold',
@@ -198,7 +198,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ onToggleComplete, refreshT
         {
             id: 'example-workout',
             title: t('stats.workout'),
-            subtitle: '动 5 分钟也算赢',
+            subtitle: t('stats.subtitle.exercise'),
             timeLabel: '6:30 pm',
             time: '18:30',
             theme: 'blue',

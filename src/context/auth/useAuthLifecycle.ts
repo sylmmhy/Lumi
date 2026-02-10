@@ -1019,62 +1019,71 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
 
         // 异步查询 hasCompletedHabitOnboarding 和同步用户资料，完成后再设置 isSessionValidated
         void (async () => {
-          let userName: string | null = null;
-          let userPicture: string | null = null;
-          let hasCompletedHabitOnboarding = false;
+          try {
+            let userName: string | null = null;
+            let userPicture: string | null = null;
+            let hasCompletedHabitOnboarding = false;
 
-          // 【原生 App 优化】在原生 App 中跳过数据库查询
-          if (inNativeApp) {
-            await syncUserProfileToStorage(client, session.user.id);
-            userName = localStorage.getItem('user_name')
-              || session.user.user_metadata?.full_name
-              || session.user.user_metadata?.name
-              || null;
-            userPicture = localStorage.getItem('user_picture')
-              || session.user.user_metadata?.avatar_url
-              || null;
-            const isOnOnboardingPage = window.location.pathname.includes('habit-onboarding');
-            hasCompletedHabitOnboarding = !isOnOnboardingPage;
-            console.log('📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
-          } else {
-            // 非原生环境：使用统一的登录后同步管道
-            console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
-            const queryStartTime = Date.now();
-            const result = await syncAfterLogin({
-              client,
-              session,
-              userId: session.user.id,
-              source: 'onAuthStateChange',
-            });
-            userName = result.userName;
-            userPicture = result.userPicture;
-            hasCompletedHabitOnboarding = result.hasCompletedHabitOnboarding;
-            const queryDuration = Date.now() - queryStartTime;
-            console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
-          }
-
-          // 查询完成后，同时设置 isSessionValidated、hasCompletedHabitOnboarding 和用户资料
-          setAuthState(prev => {
-            // 确保 userId 没有变化（防止竞态条件）
-            // 但如果 prev.userId 为 null 而 session 有效，强制设置（修复极端竞态场景）
-            if (prev.userId && prev.userId !== session.user.id) {
-              console.log('🔄 onAuthStateChange: userId 已变化，跳过此次更新');
-              return prev;
+            // 【原生 App 优化】在原生 App 中跳过数据库查询
+            if (inNativeApp) {
+              await syncUserProfileToStorage(client, session.user.id);
+              userName = localStorage.getItem('user_name')
+                || session.user.user_metadata?.full_name
+                || session.user.user_metadata?.name
+                || null;
+              userPicture = localStorage.getItem('user_picture')
+                || session.user.user_metadata?.avatar_url
+                || null;
+              const isOnOnboardingPage = window.location.pathname.includes('habit-onboarding');
+              hasCompletedHabitOnboarding = !isOnOnboardingPage;
+              console.log('📱 onAuthStateChange: 原生 App 环境，跳过数据库查询，从 URL 推断 hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
+            } else {
+              // 非原生环境：使用统一的登录后同步管道
+              console.log('🔄 onAuthStateChange: 开始查询 hasCompletedHabitOnboarding...');
+              const queryStartTime = Date.now();
+              const result = await syncAfterLogin({
+                client,
+                session,
+                userId: session.user.id,
+                source: 'onAuthStateChange',
+              });
+              userName = result.userName;
+              userPicture = result.userPicture;
+              hasCompletedHabitOnboarding = result.hasCompletedHabitOnboarding;
+              const queryDuration = Date.now() - queryStartTime;
+              console.log(`✅ onAuthStateChange: hasCompletedHabitOnboarding = ${hasCompletedHabitOnboarding} (耗时 ${queryDuration}ms)`);
             }
-            return {
-              ...prev,
-              isLoggedIn: true,
-              userId: session.user.id,
-              userName,
-              userPicture,
-              hasCompletedHabitOnboarding,
-              isSessionValidated: true,
-            };
-          });
 
-          // 标记 onAuthStateChange 处理完成
-          isOnAuthStateChangeProcessingRef.current = false;
-          console.log('✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
+            // 查询完成后，同时设置 isSessionValidated、hasCompletedHabitOnboarding 和用户资料
+            setAuthState(prev => {
+              // 确保 userId 没有变化（防止竞态条件）
+              // 但如果 prev.userId 为 null 而 session 有效，强制设置（修复极端竞态场景）
+              if (prev.userId && prev.userId !== session.user.id) {
+                console.log('🔄 onAuthStateChange: userId 已变化，跳过此次更新');
+                return prev;
+              }
+              return {
+                ...prev,
+                isLoggedIn: true,
+                userId: session.user.id,
+                userName,
+                userPicture,
+                hasCompletedHabitOnboarding,
+                isSessionValidated: true,
+              };
+            });
+
+            console.log('✅ onAuthStateChange: 处理完成, hasCompletedHabitOnboarding =', hasCompletedHabitOnboarding);
+          } catch (err) {
+            // 即使同步失败也必须标记 isSessionValidated = true，否则页面永远卡在加载态
+            console.error('❌ onAuthStateChange: 异步同步失败，强制标记会话已验证:', err);
+            setAuthState(prev => ({
+              ...prev,
+              isSessionValidated: true,
+            }));
+          } finally {
+            isOnAuthStateChangeProcessingRef.current = false;
+          }
         })();
 
         // 通知原生端登录成功，以便上传 FCM Token
@@ -1257,6 +1266,47 @@ export function useAuthLifecycle(params: UseAuthLifecycleParams): UseAuthLifecyc
   // ==========================================
 
   useEffect(() => { void handleOAuthCallback(); }, [handleOAuthCallback]);
+
+  // ==========================================
+  // 兜底保护：防止 isSessionValidated 长时间卡在 false
+  // 场景：iOS app 从后台恢复时，onAuthStateChange 的异步管道可能因网络问题失败，
+  // 导致 isSessionValidated 永远停留在 false，页面一直显示 "Lumi is loading"。
+  // 即使 Fix 1 的 try/catch 也没捕获到的极端情况下，此兜底保护确保用户不会永远卡住。
+  //
+  // 机制：每 5 秒检查一次，如果发现 isLoggedIn=true 且 isSessionValidated=false，
+  // 记录首次发现时间。只有当该状态**持续超过 10 秒**才强制恢复，
+  // 避免在正常异步查询进行中（通常 < 3 秒）误触发。
+  // ==========================================
+
+  useEffect(() => {
+    const CHECK_INTERVAL_MS = 5_000;
+    const STUCK_THRESHOLD_MS = 10_000;
+    let stuckSince: number | null = null;
+
+    const intervalId = setInterval(() => {
+      setAuthState(prev => {
+        if (prev.isLoggedIn && !prev.isSessionValidated) {
+          const now = Date.now();
+          if (stuckSince === null) {
+            // 首次检测到卡死状态，记录时间戳，暂不干预
+            stuckSince = now;
+          } else if (now - stuckSince >= STUCK_THRESHOLD_MS) {
+            // 持续卡死超过阈值，强制恢复
+            console.warn(`⏰ isSessionValidated 兜底保护触发：已卡死 ${Math.round((now - stuckSince) / 1000)}秒，强制标记为已验证`);
+            stuckSince = null;
+            return { ...prev, isSessionValidated: true };
+          }
+          // 尚未超过阈值，继续等待正常流程完成
+          return prev;
+        }
+        // 状态正常（未登录或已验证），重置追踪
+        stuckSince = null;
+        return prev; // 返回 prev 引用不触发 re-render
+      });
+    }, CHECK_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [setAuthState]);
 
   // ==========================================
   // 返回

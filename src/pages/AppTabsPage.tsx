@@ -13,7 +13,6 @@ import { TaskReminderBanner } from '../components/banners/TaskReminderBanner';
 import { TaskCompletionModal } from '../components/modals/TaskCompletionModal';
 import { CoinRewardToast, useCoinRewardToast } from '../components/stats';
 import { CoinFlyAnimation } from '../components/animations/CoinFlyAnimation';
-import { WeeklyCelebration } from '../components/celebration/WeeklyCelebration';
 
 // Extracted Components
 import { HomeView } from '../components/app-tabs/HomeView';
@@ -34,6 +33,7 @@ import { useAppTasks } from '../hooks/useAppTasks';
 import { useCoachController } from '../hooks/useCoachController';
 import { useScreenTimeController } from '../hooks/useScreenTimeController';
 import { getCoinSummary } from '../services/coinsService';
+import { supabase } from '../lib/supabase';
 
 const isAppTab = (value: string | undefined): value is AppTab => APP_TABS.includes(value as AppTab);
 
@@ -92,10 +92,6 @@ export function AppTabsPage() {
     // 金币飞行动画状态
     const [showCoinFlyAnimation, setShowCoinFlyAnimation] = useState(false);
     const [coinFlyCount, setCoinFlyCount] = useState(0);
-
-    // Home 页任务完成庆祝动画状态
-    const [showWeeklyCelebration, setShowWeeklyCelebration] = useState(false);
-    const [weeklyCelebrationCoins, setWeeklyCelebrationCoins] = useState(0);
 
     // StatsView 待动画金币数（从 API 返回值中扣除，避免重复掉落）
     const [statsPendingNewCoins, setStatsPendingNewCoins] = useState(0);
@@ -297,32 +293,41 @@ export function AppTabsPage() {
         await appTasks.addTask(newTask);
     }, [auth.isSessionValidated, auth.userId, appTasks]);
 
-    /** toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调，完成时弹出庆祝动画 */
+    /**
+     * toggleComplete 包装器：传入 unlockScreenTimeIfLocked 回调。
+     *
+     * 金币发放策略（按排行榜参与状态区分）：
+     * - 排行榜 ON：勾选只标记完成，金币在用户点击"Verify"通过后才发放。
+     * - 排行榜 OFF：勾选即发金币 + CoinRewardToast，提供即时正向反馈。
+     *
+     * TaskItem 自带 confetti 效果，两种路径都有一致的视觉庆祝。
+     */
     const toggleComplete = useCallback(async (id: string) => {
         const task = appTasks.tasks.find(t => t.id === id);
         const wasCompleted = task?.completed ?? false;
         const success = await appTasks.toggleComplete(id, auth.userId, screenTime.unlockScreenTimeIfLocked);
-        // 从未完成 → 完成 且操作成功时，触发庆祝动画
-        if (success && !wasCompleted) {
-            // 异步获取最新金币数用于 EnergyBall 显示
-            if (auth.userId) {
-                getCoinSummary(auth.userId)
-                    .then((summary) => {
-                        setWeeklyCelebrationCoins(summary.total_coins);
-                        setShowWeeklyCelebration(true);
-                    })
-                    .catch(() => {
-                        // 获取失败也显示庆祝，使用默认值
-                        setWeeklyCelebrationCoins(1);
-                        setShowWeeklyCelebration(true);
-                    });
-            } else {
-                setWeeklyCelebrationCoins(1);
-                setShowWeeklyCelebration(true);
+
+        // 未完成 → 完成 且不参与排行榜：直接发金币 + Toast
+        if (success && !wasCompleted && !leaderboardOptIn && auth.userId && supabase) {
+            try {
+                const { data } = await supabase.functions.invoke('award-coins', {
+                    body: {
+                        user_id: auth.userId,
+                        task_id: id,
+                        sources: ['task_complete'],
+                    },
+                });
+                const awarded = data?.total_coins_awarded ?? 0;
+                if (awarded > 0) {
+                    showCoinToast(awarded);
+                }
+            } catch (err) {
+                console.error('[toggleComplete] Failed to award coins (no-leaderboard):', err);
             }
         }
+
         return success;
-    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked]);
+    }, [appTasks, auth.userId, screenTime.unlockScreenTimeIfLocked, leaderboardOptIn, showCoinToast]);
 
     /** handleStatsToggle 包装器：传入 unlockScreenTimeIfLocked 回调 */
     const handleStatsToggle = useCallback((id: string, completed: boolean) => {
@@ -580,13 +585,6 @@ export function AppTabsPage() {
                 />
             )}
 
-            {/* Home 页任务完成庆祝动画（半透明黑色背景叠加在 Home 上） */}
-            <WeeklyCelebration
-                visible={showWeeklyCelebration}
-                count={weeklyCelebrationCoins}
-                onClose={() => setShowWeeklyCelebration(false)}
-                backgroundColor="rgba(0, 0, 0, 0.6)"
-            />
 
             {/* Product Tour 新用户引导蒙层 */}
             {productTour.isActive && productTour.currentStep && (
